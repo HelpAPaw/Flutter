@@ -1,0 +1,144 @@
+import 'package:flutter/material.dart';
+import 'package:help_a_paw/src/pages/home.dart';
+import 'package:help_a_paw/src/pages/register.dart';
+import 'package:help_a_paw/src/utils/firebase_auth.dart';
+import '../services/constants.dart' as global;
+import '../showdialogs/message.dart';
+import '../showdialogs/show_progress.dart';
+import '../styles/colors.dart';
+import '../utils/user_validation.dart';
+
+class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
+
+  @override
+  _LoginPageState createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final _formKey = GlobalKey<FormState>();
+  late String email;
+  late String password;
+  UserValidation userValidation = UserValidation();
+  FirebaseAuthentication auth = FirebaseAuthentication();
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  _validateAndSave() async {
+    // validate login form
+    if (_formKey.currentState!.validate()) {
+      _formKey.currentState?.save();
+      showProgressDialog(context, 'Please wait', true);
+      auth.login(email, password).then((value) async {
+        if (value != null && !value.user.emailVerified) {
+          showProgressDialog(context, '', false);
+          await dialogWithMessageAndCustomButton(
+            context,
+            'Error',
+            'A confirmation link has been sent on your email. Please click it to complete your email verification',
+            "OK", leftBtnMessage: '',
+          );
+        } else {
+          showProgressDialog(context, '', false);
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (BuildContext context) => const HomePage(title: 'Help a Paw')),
+            ModalRoute.withName(global.homeRoute),
+          );
+        }
+      }).catchError((e) {
+        showProgressDialog(context, '', false);
+        dialogWithMessageAndCustomButton(context, 'Error', e.message, "OK",
+            leftBtnMessage: 'CONTACT SUPPORT');
+      });
+    } else {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: WillPopScope(
+        onWillPop: () async {
+          return true;
+        },
+        child: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(22.0),
+              child: Form(
+                key: _formKey,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      const Center(
+                        child: Image(
+                          height: 100,
+                          image: AssetImage("assets/images/logo.jpg"),
+                        ),
+                      ),
+                      TextFormField(
+                        onSaved: (value) => email = value!,
+                        validator: userValidation.validateEmail,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(
+                          labelText: "Email",
+                          floatingLabelBehavior: FloatingLabelBehavior.auto,
+                        ),
+                      ),
+                      TextFormField(
+                        onSaved: (value) => password = value!,
+                        validator: userValidation.validatePassword,
+                        obscureText: true,
+                        decoration: const InputDecoration(
+                          labelText: "Password",
+                        ),
+                      ),
+                      const SizedBox(
+                        height: 10,
+                      ),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          child: const Text(
+                            "LOGIN",
+                          ),
+                          onPressed: () => _validateAndSave(),
+                        ),
+                      ),
+                      const SizedBox(
+                        height: 20,
+                      ),
+                      const Text("No account yet?"),
+                      TextButton(
+                        child: const Text(
+                          "REGISTER",
+                          style: TextStyle(color: primaryColor),
+                        ),
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                                builder: (context) => const RegisterPage(),
+                                settings:
+                                const RouteSettings(name: global.registerRoute)),
+                          );
+                        },
+                      )
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
