@@ -42,7 +42,7 @@ class _RegisterPageState extends State<RegisterPage> {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState?.save();
       showProgressDialog(context, 'Please wait', true);
-      Users user = Users()
+      User user = User()
         ..email = email.value.text
         ..name = name.value.text
         ..phoneNumber = phoneNumber.value.text
@@ -54,7 +54,8 @@ class _RegisterPageState extends State<RegisterPage> {
             context,
             'Success',
             'A confirmation link has been sent on your email. Please click it to complete your registration',
-            "OK", leftBtnMessage: '',
+            "OK",
+            leftBtnMessage: '',
           );
           SharedPreferences prefs = await SharedPreferences.getInstance();
           prefs.setBool(global.loggedIn, true);
@@ -151,7 +152,8 @@ class _RegisterPageState extends State<RegisterPage> {
                       GestureDetector(
                         onTap: () {
                           dialogWithMessageAndCustomButton(
-                              context, whyTitleMessage, whyMessage, "I SEE", leftBtnMessage: '');
+                              context, whyTitleMessage, whyMessage, "I SEE",
+                              leftBtnMessage: '');
                         },
                         child: Text(
                           "Why?",
@@ -171,7 +173,7 @@ class _RegisterPageState extends State<RegisterPage> {
                     child: ElevatedButton(
                       style: ButtonStyle(
                           backgroundColor:
-                          MaterialStateProperty.all<Color>(Colors.orange)),
+                              MaterialStateProperty.all<Color>(Colors.orange)),
                       onPressed: () => _validateAndSave(),
                       child: const Text(
                         "REGISTER",
@@ -189,8 +191,8 @@ class _RegisterPageState extends State<RegisterPage> {
                             context,
                             MaterialPageRoute(
                                 builder: (context) => const LoginPage(),
-                                settings:
-                                const RouteSettings(name: global.loginRoute)));
+                                settings: const RouteSettings(
+                                    name: global.loginRoute)));
                       },
                       child: const Text(
                         "LOGIN",

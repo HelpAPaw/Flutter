@@ -1,18 +1,13 @@
-class Users {
+class User {
   String? email;
   String? uid;
   String? name;
   String? password;
   String? phoneNumber;
 
-  Users(
-      {this.email,
-        this.uid,
-        this.name,
-        this.password,
-        this.phoneNumber});
+  User({this.email, this.uid, this.name, this.password, this.phoneNumber});
 
-  factory Users.fromJson(Map<dynamic, dynamic> json) => Users(
+  factory User.fromJson(Map<dynamic, dynamic> json) => User(
       email: json['email'],
       uid: json['uid'],
       name: json['name'],
