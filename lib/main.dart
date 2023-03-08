@@ -86,7 +86,7 @@ class _MyHomePageState extends State<MyHomePage> {
         title: Text(widget.title),
         // backgroundColor: Colors.orange[700],
       ),
-      drawer: const MyDrawer(
+      drawer: MyDrawer(
         userName: 'Help A Paw',
         userImage: 'assets/images/paww.png',
       ),

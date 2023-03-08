@@ -1,16 +1,12 @@
 import 'package:flutter/material.dart';
 
-class MyDrawer extends StatefulWidget {
+class MyDrawer extends StatelessWidget {
   final String userName;
   final String userImage;
 
-  const MyDrawer({super.key, required this.userName, required this.userImage});
+  MyDrawer({Key? key, required this.userName, required this.userImage})
+      : super(key: key);
 
-  @override
-  MyDrawerState createState() => MyDrawerState();
-}
-
-class MyDrawerState extends State<MyDrawer> {
   final List<String> items = [
     'Profile',
     'My Signals',
@@ -22,10 +18,11 @@ class MyDrawerState extends State<MyDrawer> {
     'About',
     'Share'
   ];
+
   @override
   Widget build(BuildContext context) {
-    var widthSize = MediaQuery.of(context).size.width;
-    var heightSize = MediaQuery.of(context).size.height;
+    final widthSize = MediaQuery.of(context).size.width;
+    final heightSize = MediaQuery.of(context).size.height;
     return SafeArea(
       child: Drawer(
         backgroundColor: Colors.orange,
@@ -34,19 +31,18 @@ class MyDrawerState extends State<MyDrawer> {
             Container(
               color: Colors.white,
               height: heightSize * 0.25,
-              width: widthSize * 1,
+              width: widthSize,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.max,
                 children: [
-                  Container(
-                    alignment: Alignment.center,
+                  SizedBox(
                     width: widthSize * 0.8,
                     height: heightSize * 0.17,
-                    child: Image.asset(widget.userImage),
+                    child: Image.asset(userImage),
                   ),
+                  const SizedBox(height: 10),
                   Text(
-                    widget.userName,
+                    userName,
                     style: const TextStyle(fontSize: 18, color: Colors.orange),
                     textAlign: TextAlign.center,
                   ),
