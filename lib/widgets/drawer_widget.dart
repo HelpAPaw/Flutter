@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:help_a_paw/about/about.dart';
 
 class MyDrawer extends StatelessWidget {
   final String userName;
@@ -7,17 +8,17 @@ class MyDrawer extends StatelessWidget {
   MyDrawer({Key? key, required this.userName, required this.userImage})
       : super(key: key);
 
-  final List<String> items = [
-    'Profile',
-    'My Signals',
-    'My Notifications',
-    'FAQS',
-    'Settings',
-    'Feedback',
-    'Privacy Policy',
-    'About',
-    'Share'
-  ];
+  final Map<String, Widget> screensMap = {
+    'Profile': const ProfileScreen(),
+    'My Signals': const MySignalsScreen(),
+    'My Notifications': const MyNotificationsScreen(),
+    'FAQS': const FAQSScreen(),
+    'Settings': const SettingsScreen(),
+    'Feedback': const FeedbackScreen(),
+    'Privacy Policy': const PrivacyPolicyScreen(),
+    'About': const AboutScreen(),
+    'Share': const ShareScreen(),
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -51,15 +52,21 @@ class MyDrawer extends StatelessWidget {
             ),
             Expanded(
               child: ListView.builder(
-                itemCount: items.length,
+                itemCount: screensMap.length,
                 itemBuilder: (BuildContext context, int index) {
+                  String item = screensMap.keys.toList()[index];
                   return ListTile(
                     title: Text(
-                      items[index],
+                      item,
                       style: const TextStyle(fontSize: 18, color: Colors.white),
                     ),
                     onTap: () {
                       // Handle item tap here
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => screensMap[item]!),
+                      );
                     },
                   );
                 },
@@ -69,5 +76,77 @@ class MyDrawer extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class ShareScreen extends StatelessWidget {
+  const ShareScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Text('ShareScreen');
+  }
+}
+
+class PrivacyPolicyScreen extends StatelessWidget {
+  const PrivacyPolicyScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Text('PrivacyPolicyScreen');
+  }
+}
+
+class FeedbackScreen extends StatelessWidget {
+  const FeedbackScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Text('FeedbackScreen');
+  }
+}
+
+class SettingsScreen extends StatelessWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Text('SettingsScreen');
+  }
+}
+
+class FAQSScreen extends StatelessWidget {
+  const FAQSScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Text('FAQSScreen');
+  }
+}
+
+class MyNotificationsScreen extends StatelessWidget {
+  const MyNotificationsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Text('MyNotificationsScreen');
+  }
+}
+
+class MySignalsScreen extends StatelessWidget {
+  const MySignalsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Text('MySignalsScreen');
+  }
+}
+
+class ProfileScreen extends StatelessWidget {
+  const ProfileScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Text('ProfileScreen');
   }
 }
