@@ -1,6 +1,6 @@
 {
-    "name": "help_a_paw",
-    "short_name": "help_a_paw",
+    "name": "Help a Paw",
+    "short_name": "Help a Paw",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
