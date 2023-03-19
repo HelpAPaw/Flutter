@@ -24,6 +24,10 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title),
+        leading: IconButton(
+          onPressed: () {},
+          icon: const Icon(Icons.menu),
+        ),
         // backgroundColor: Colors.orange[700],
       ),
       body: GoogleMap(
