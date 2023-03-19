@@ -44,12 +44,15 @@ class _LoginPageState extends State<LoginPage> {
             context,
             'Error',
             'A confirmation link has been sent on your email. Please click it to complete your email verification',
-            "OK", leftBtnMessage: '',
+            "OK",
+            leftBtnMessage: '',
           );
         } else {
           showProgressDialog(context, '', false);
           Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (BuildContext context) => const HomePage(title: 'Help a Paw')),
+            MaterialPageRoute(
+                builder: (BuildContext context) =>
+                    const HomePage(title: 'Help a Paw')),
             ModalRoute.withName(global.homeRoute),
           );
         }
@@ -126,9 +129,43 @@ class _LoginPageState extends State<LoginPage> {
                           Navigator.of(context).push(
                             MaterialPageRoute(
                                 builder: (context) => const RegisterPage(),
-                                settings:
-                                const RouteSettings(name: global.registerRoute)),
+                                settings: const RouteSettings(
+                                    name: global.registerRoute)),
                           );
+                        },
+                      ),
+                      const SizedBox(
+                        height: 20,
+                      ),
+                      const Text("or"),
+                      ElevatedButton.icon(
+                        icon: const Image(
+                            height: 20,
+                            image:
+                                AssetImage("assets/images/google_button.jpg")),
+                        label: const Text(
+                          "Sign In",
+                        ),
+                        onPressed: () {
+                          showProgressDialog(context, 'Please wait', true);
+                          auth.signInWithGoogle().then((value) async {
+                            if (value != null) {
+                              showProgressDialog(context, '', false);
+                              Navigator.of(context).pushAndRemoveUntil(
+                                MaterialPageRoute(
+                                    builder: (BuildContext context) =>
+                                        const HomePage(title: 'Help a Paw')),
+                                ModalRoute.withName(global.homeRoute),
+                              );
+                            } else {
+                              showProgressDialog(context, '', false);
+                            }
+                          }).catchError((e) {
+                            showProgressDialog(context, '', false);
+                            dialogWithMessageAndCustomButton(
+                                context, 'Error', e.message, "OK",
+                                leftBtnMessage: 'CONTACT SUPPORT');
+                          });
                         },
                       )
                     ],
