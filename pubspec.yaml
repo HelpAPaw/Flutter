@@ -30,7 +30,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-assets:
+  assets:
     - assets/images/ic_paw.png
     - assets/images/logo.jpg
     - assets/images/white-logo.png
