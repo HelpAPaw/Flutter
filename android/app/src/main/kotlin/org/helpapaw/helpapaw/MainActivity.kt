@@ -1,4 +1,4 @@
-package com.example.help_a_paw
+package org.helpapaw.helpapaw
 
 import io.flutter.embedding.android.FlutterActivity
 
