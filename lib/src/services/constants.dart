@@ -5,6 +5,6 @@ const String registerRoute = '/register';
 
 //COMMON
 const String loggedIn = 'isLoggedIn';
-const String userDisplayName = "displayName";
-const String userEmail = "email";
-const String userNumber = "phone_number";
+const String displayName = "displayName";
+const String email = "email";
+const String phoneNumber = "phone_number";

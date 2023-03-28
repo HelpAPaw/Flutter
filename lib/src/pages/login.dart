@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:help_a_paw/src/pages/home.dart';
 import 'package:help_a_paw/src/pages/register.dart';
 import 'package:help_a_paw/src/utils/firebase_auth.dart';
+import 'package:social_login_buttons/social_login_buttons.dart';
 import '../services/constants.dart' as global;
 import '../showdialogs/message.dart';
 import '../showdialogs/show_progress.dart';
@@ -138,14 +139,15 @@ class _LoginPageState extends State<LoginPage> {
                         height: 20,
                       ),
                       const Text("or"),
-                      ElevatedButton.icon(
-                        icon: const Image(
-                            height: 20,
-                            image:
-                                AssetImage("assets/images/google_button.jpg")),
-                        label: const Text(
-                          "Sign In",
-                        ),
+                      SocialLoginButton(
+                        height: 30,
+                        fontSize: 12,
+                        imageWidth: 17,
+                        backgroundColor: Colors.black,
+                        textColor: Colors.grey,
+                        width: 130,
+                        text: 'Sign In',
+                        buttonType: SocialLoginButtonType.google,
                         onPressed: () {
                           showProgressDialog(context, 'Please wait', true);
                           auth.signInWithGoogle().then((value) async {
@@ -167,7 +169,7 @@ class _LoginPageState extends State<LoginPage> {
                                 leftBtnMessage: 'CONTACT SUPPORT');
                           });
                         },
-                      )
+                      ),
                     ],
                   ),
                 ),
