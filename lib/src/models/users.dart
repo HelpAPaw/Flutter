@@ -1,13 +1,14 @@
-class User {
+class UserDetails {
   String? email;
   String? uid;
   String? name;
   String? password;
   String? phoneNumber;
 
-  User({this.email, this.uid, this.name, this.password, this.phoneNumber});
+  UserDetails(
+      {this.email, this.uid, this.name, this.password, this.phoneNumber});
 
-  factory User.fromJson(Map<dynamic, dynamic> json) => User(
+  factory UserDetails.fromJson(Map<String, dynamic> json) => UserDetails(
       email: json['email'],
       uid: json['uid'],
       name: json['name'],

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:help_a_paw/src/pages/home.dart';
 import 'package:help_a_paw/src/pages/login.dart';
-import '../controllers/user_controller.dart';
+import 'package:help_a_paw/src/utils/user_validation.dart';
 import '../services/constants.dart' as global;
 
 class SplashScreen extends StatelessWidget {
@@ -15,11 +15,14 @@ class SplashScreen extends StatelessWidget {
     ]);
 
     Future.delayed(const Duration(seconds: 2), () async {
-      bool isLoggedIn = await UserController().isUserLoggedIn;
+      bool isLoggedIn = await UserValidation().checkUserLogin();
       Navigator.of(context).push(
         MaterialPageRoute(
-            builder: (context) => isLoggedIn ? const HomePage(title: 'Help a Paw') : const LoginPage(),
-            settings: RouteSettings(name: isLoggedIn ? global.homeRoute : global.loginRoute)),
+            builder: (context) => isLoggedIn
+                ? const HomePage(title: 'Help a Paw')
+                : const LoginPage(),
+            settings: RouteSettings(
+                name: isLoggedIn ? global.homeRoute : global.loginRoute)),
       );
     });
 
