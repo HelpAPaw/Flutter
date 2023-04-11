@@ -21,6 +21,8 @@ class SplashScreen extends StatelessWidget {
             builder: (context) => isLoggedIn ? const HomePage(title: 'Help a Paw') : const LoginPage(),
             settings: RouteSettings(name: isLoggedIn ? global.homeRoute : global.loginRoute)),
       );
+       // Remove all the screens from the stack until the first screen (SplashScreen)
+      Navigator.of(context).popUntil((route) => route.isFirst);
     });
 
     return Scaffold(
