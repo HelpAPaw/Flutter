@@ -18,9 +18,7 @@ class SplashScreen extends StatelessWidget {
       bool isLoggedIn = await UserValidation().checkUserLogin();
       Navigator.of(context).push(
         MaterialPageRoute(
-            builder: (context) => isLoggedIn
-                ? const HomePage(title: 'Help a Paw')
-                : const LoginPage(),
+            builder: (context) => const HomePage(title: 'Help a Paw'),
             settings: RouteSettings(
                 name: isLoggedIn ? global.homeRoute : global.loginRoute)),
       );
