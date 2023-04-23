@@ -23,8 +23,7 @@ class FirebaseAuthentication {
         'name': person.name,
         'email': user.email
       };
-      UserDetails details = UserDetails.fromJson(userdetails);
-      await addUser(details);
+      await addUser(userdetails);
       return newUser;
     } catch (e) {
       return Future.error(e.toString());
@@ -46,8 +45,6 @@ class FirebaseAuthentication {
   /* User Google Login/Register Event **/
   Future<User?> signInWithGoogle() async {
     User? user;
-
-    final GoogleSignIn googleSignIn = GoogleSignIn();
 
     final GoogleSignInAccount? googleSignInAccount =
         await googleSignIn.signIn();
@@ -71,8 +68,7 @@ class FirebaseAuthentication {
           'name': user.displayName,
           'email': user.email
         };
-        UserDetails details = UserDetails.fromJson(userdetails);
-        await addUser(details);
+        await addUser(userdetails);
       } on FirebaseAuthException catch (e) {
         return Future.error(e);
       }
@@ -81,10 +77,11 @@ class FirebaseAuthentication {
   }
 
   /* Store User Details in Firestore **/
-  Future<void> addUser(UserDetails user) {
+  Future<void> addUser(user) {
+    UserDetails details = UserDetails.fromJson(user);
     return users
-        .doc(user.uid)
-        .set({'name': user.name, 'email': user.email, 'uid': user.uid})
+        .doc(details.uid)
+        .set({'name': details.name, 'email': details.email, 'uid': details.uid})
         .then((value) => "User Added")
         .catchError((error) => error);
   }
