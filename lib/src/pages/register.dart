@@ -42,7 +42,7 @@ class _RegisterPageState extends State<RegisterPage> {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState?.save();
       showProgressDialog(context, 'Please wait', true);
-      User user = User()
+      UserDetails user = UserDetails()
         ..email = email.value.text
         ..name = name.value.text
         ..phoneNumber = phoneNumber.value.text

@@ -2,16 +2,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/constants.dart' as global;
 
 class UserController {
-  late SharedPreferences _prefs;
+  final Future<SharedPreferences> _prefs = SharedPreferences.getInstance();
 
-  Future<bool> get isUserLoggedIn async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    bool isLoggedIn = prefs.getBool(global.loggedIn) ?? false;
-    return isLoggedIn ? true : false;
-  }
-
-  void setUserPrefs() async {
-    _prefs = await SharedPreferences.getInstance();
-    _prefs.setBool(global.loggedIn, true);
+  /* store user details in local*/
+  void setUserPrefs(user) async {
+    final SharedPreferences prefs = await _prefs;
+    prefs.setBool(global.loggedIn, true);
+    prefs.setString(global.displayName, user.displayName ?? '');
   }
 }

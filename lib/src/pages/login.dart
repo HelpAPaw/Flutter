@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:help_a_paw/src/pages/home.dart';
 import 'package:help_a_paw/src/pages/register.dart';
 import 'package:help_a_paw/src/utils/firebase_auth.dart';
+import 'package:social_login_buttons/social_login_buttons.dart';
 import '../services/constants.dart' as global;
 import '../showdialogs/message.dart';
 import '../showdialogs/show_progress.dart';
@@ -44,12 +45,15 @@ class _LoginPageState extends State<LoginPage> {
             context,
             'Error',
             'A confirmation link has been sent on your email. Please click it to complete your email verification',
-            "OK", leftBtnMessage: '',
+            "OK",
+            leftBtnMessage: '',
           );
         } else {
           showProgressDialog(context, '', false);
           Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (BuildContext context) => const HomePage(title: 'Help a Paw')),
+            MaterialPageRoute(
+                builder: (BuildContext context) =>
+                    const HomePage(title: 'Help a Paw')),
             ModalRoute.withName(global.homeRoute),
           );
         }
@@ -126,11 +130,46 @@ class _LoginPageState extends State<LoginPage> {
                           Navigator.of(context).push(
                             MaterialPageRoute(
                                 builder: (context) => const RegisterPage(),
-                                settings:
-                                const RouteSettings(name: global.registerRoute)),
+                                settings: const RouteSettings(
+                                    name: global.registerRoute)),
                           );
                         },
-                      )
+                      ),
+                      const SizedBox(
+                        height: 20,
+                      ),
+                      const Text("or"),
+                      SocialLoginButton(
+                        height: 30,
+                        fontSize: 12,
+                        imageWidth: 17,
+                        backgroundColor: Colors.black,
+                        textColor: Colors.grey,
+                        width: 130,
+                        text: 'Sign In',
+                        buttonType: SocialLoginButtonType.google,
+                        onPressed: () {
+                          showProgressDialog(context, 'Please wait', true);
+                          auth.signInWithGoogle().then((value) async {
+                            if (value != null) {
+                              showProgressDialog(context, '', false);
+                              Navigator.of(context).pushAndRemoveUntil(
+                                MaterialPageRoute(
+                                    builder: (BuildContext context) =>
+                                        const HomePage(title: 'Help a Paw')),
+                                ModalRoute.withName(global.homeRoute),
+                              );
+                            } else {
+                              showProgressDialog(context, '', false);
+                            }
+                          }).catchError((e) {
+                            showProgressDialog(context, '', false);
+                            dialogWithMessageAndCustomButton(
+                                context, 'Error', e.message, "OK",
+                                leftBtnMessage: 'CONTACT SUPPORT');
+                          });
+                        },
+                      ),
                     ],
                   ),
                 ),

@@ -20,6 +20,10 @@ dependencies:
   shared_preferences: ^2.0.17
   firebase_auth: ^4.2.8
   firebase_core: ^2.6.1
+  google_sign_in: ^6.0.2
+  url_launcher: ^6.1.10
+  social_login_buttons: ^1.0.7
+  cloud_firestore: ^4.4.5
 
 dev_dependencies:
   flutter_test:
