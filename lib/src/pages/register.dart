@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:help_a_paw/src/pages/login.dart';
 import 'package:help_a_paw/src/utils/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/users.dart';
+import '../../data/models/users.dart';
 import '../services/constants.dart' as global;
 import '../showdialogs/message.dart';
 import '../showdialogs/show_progress.dart';

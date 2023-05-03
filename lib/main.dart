@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:help_a_paw/presentation/home_screen/home_screen.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:help_a_paw/business_model/user_bloc/user_bloc.dart';
 import 'package:help_a_paw/utility/app_router.dart';
 import 'firebase_options.dart';
 
 bool shouldUseFirebaseEmulator = false;
 
-void main() async{
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
@@ -20,24 +20,27 @@ void main() async{
   runApp(MyApp(
     appRouter: AppRouter(),
   ));
-
 }
+
 class MyApp extends StatelessWidget {
 
-  const MyApp({required this.appRouter,Key? key}) : super(key: key);
+  const MyApp({required this.appRouter, Key? key}) : super(key: key);
 
   final AppRouter appRouter;
 
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Help a Paw',
-      theme: ThemeData(
-        primarySwatch: Colors.orange,
+    return BlocProvider<UserBloc>(
+      create: (context) => UserBloc(),
+      child: MaterialApp(
+        title: 'Help a Paw',
+        theme: ThemeData(
+          primarySwatch: Colors.orange,
+        ),
+        debugShowCheckedModeBanner: false,
+        onGenerateRoute: appRouter.onGenerateRoute,
       ),
-      debugShowCheckedModeBanner: false,
-      onGenerateRoute: appRouter.onGenerateRoute,
     );
   }
 }

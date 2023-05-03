@@ -24,6 +24,7 @@ dependencies:
   url_launcher: ^6.1.10
   social_login_buttons: ^1.0.7
   cloud_firestore: ^4.4.5
+  equatable: ^2.0.5
 
 dev_dependencies:
   flutter_test:
