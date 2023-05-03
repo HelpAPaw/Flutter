@@ -1,4 +1,3 @@
-
 class UserDetails {
   String? email;
   String? uid;
