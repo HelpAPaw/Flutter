@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:help_a_paw/about/about.dart';
+
+import '../../about/about.dart';
 
 class MyDrawer extends StatelessWidget {
   final String userName;
