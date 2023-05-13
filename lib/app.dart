@@ -1,41 +1,28 @@
 import 'package:flutter/material.dart';
-import 'package:help_a_paw/src/pages/home.dart';
-import 'package:help_a_paw/src/pages/login.dart';
-import 'package:help_a_paw/src/pages/register.dart';
-import 'package:help_a_paw/src/pages/splash.dart';
-import 'package:help_a_paw/src/styles/theme.dart';
-import './src/services/constants.dart' as global;
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:help_a_paw/utility/app_router.dart';
+import 'business_model/user_bloc/user_bloc.dart';
 
-class App extends StatefulWidget {
-  const App({super.key});
+class MyApp extends StatelessWidget {
 
+  const MyApp({required this.appRouter, Key? key}) : super(key: key);
+
+  final AppRouter appRouter;
+
+  // This widget is the root of your application.
   @override
-  AppState createState() => AppState();
-}
-
-class AppState extends State<App> {
-
-  @override
-  void initState() {
-    super.initState();
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
-  }
-
-  @override
-  Widget build(context) {
-    return MaterialApp(
-      home: const SplashScreen(),
-      theme: appTheme(context),
-      debugShowCheckedModeBanner: false,
-      routes: {
-        global.homeRoute: (context) => const HomePage(title: 'Help a Paw'),
-        global.loginRoute: (context) => const LoginPage(),
-        global.registerRoute: (context) => const RegisterPage(),
-      },
+  Widget build(BuildContext context) {
+    return BlocProvider<UserBloc>(
+      create: (context) => UserBloc(),
+      child: MaterialApp(
+        title: 'Help a Paw',
+        theme: ThemeData(
+          primarySwatch: Colors.orange,
+        ),
+        debugShowCheckedModeBanner: false,
+        onGenerateRoute: appRouter.onGenerateRoute,
+      ),
     );
   }
 }
+

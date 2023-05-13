@@ -3,6 +3,7 @@ import 'package:help_a_paw/src/pages/home.dart';
 import 'package:help_a_paw/src/pages/register.dart';
 import 'package:help_a_paw/src/utils/firebase_auth.dart';
 import 'package:social_login_buttons/social_login_buttons.dart';
+import '../../utility/app_router_routes.dart';
 import '../services/constants.dart' as global;
 import '../showdialogs/message.dart';
 import '../showdialogs/show_progress.dart';
@@ -50,12 +51,7 @@ class _LoginPageState extends State<LoginPage> {
           );
         } else {
           showProgressDialog(context, '', false);
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(
-                builder: (BuildContext context) =>
-                    const HomePage(title: 'Help a Paw')),
-            ModalRoute.withName(global.homeRoute),
-          );
+          Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.homeScreen, (route) => false);
         }
       }).catchError((e) {
         showProgressDialog(context, '', false);
@@ -127,12 +123,7 @@ class _LoginPageState extends State<LoginPage> {
                           style: TextStyle(color: primaryColor),
                         ),
                         onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                                builder: (context) => const RegisterPage(),
-                                settings: const RouteSettings(
-                                    name: global.registerRoute)),
-                          );
+                          Navigator.of(context).pushNamed(AppRoutes.registerRoute);
                         },
                       ),
                       const SizedBox(
@@ -153,12 +144,7 @@ class _LoginPageState extends State<LoginPage> {
                           auth.signInWithGoogle().then((value) async {
                             if (value != null) {
                               showProgressDialog(context, '', false);
-                              Navigator.of(context).pushAndRemoveUntil(
-                                MaterialPageRoute(
-                                    builder: (BuildContext context) =>
-                                        const HomePage(title: 'Help a Paw')),
-                                ModalRoute.withName(global.homeRoute),
-                              );
+                              Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.homeScreen, (route) => false);
                             } else {
                               showProgressDialog(context, '', false);
                             }
