@@ -16,9 +16,9 @@ class SplashScreen extends StatelessWidget {
     ]);
 
     Future.delayed(const Duration(seconds: 2), () async {
-      bool isLoggedIn = await UserValidation().checkUserLogin();
+      // bool isLoggedIn = await UserValidation().checkUserLogin();
 
-      Navigator.of(context).pushNamed(isLoggedIn ? AppRoutes.homeScreen : AppRoutes.loginRoute);
+      Navigator.of(context).pushNamed(AppRoutes.homeScreen);
     });
 
     return Scaffold(
