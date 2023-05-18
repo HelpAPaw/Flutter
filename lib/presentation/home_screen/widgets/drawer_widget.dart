@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:help_a_paw/presentation/about/about.dart';
+import 'package:help_a_paw/presentation/faq/faq.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
 typedef VoidCallbackWithContext = void Function(BuildContext);
@@ -25,7 +26,9 @@ class MyDrawer extends StatelessWidget {
       'Profile': (BuildContext context) => {},
       'My Signals': (BuildContext context) => {},
       'My Notifications': (BuildContext context) => {},
-      'FAQS': (BuildContext context) => {},
+      'FAQS': (BuildContext context) => {
+            handleNavigation(context, const FAQSScreen()),
+          },
       'Settings': (BuildContext context) => {},
       'Feedback': (BuildContext context) => {
             launchUrlString("mailto:$emailTo"),
@@ -128,14 +131,14 @@ class SettingsScreen extends StatelessWidget {
   }
 }
 
-class FAQSScreen extends StatelessWidget {
-  const FAQSScreen({super.key});
+// class FAQSScreen extends StatelessWidget {
+//   const FAQSScreen({super.key});
 
-  @override
-  Widget build(BuildContext context) {
-    return const Text('FAQSScreen');
-  }
-}
+//   @override
+//   Widget build(BuildContext context) {
+//     return const Text('FAQSScreen');
+//   }
+// }
 
 class MyNotificationsScreen extends StatelessWidget {
   const MyNotificationsScreen({super.key});
