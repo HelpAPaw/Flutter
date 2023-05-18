@@ -36,10 +36,4 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/images/ic_paw.png
-    - assets/images/logo.jpg
-    - assets/images/white-logo.png
-    - assets/images/pin-1.jpg
-    - assets/images/pin-2.jpg
-    - assets/images/pin-3.jpg
-    - assets/images/ic-facebook.png
+    - assets/images/

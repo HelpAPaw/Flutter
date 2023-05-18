@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:help_a_paw/utility/app_router.dart';
-import 'business_model/user_bloc/user_bloc.dart';
+import 'bussines_model/user/user_bloc.dart';
 
 class MyApp extends StatelessWidget {
-
   const MyApp({required this.appRouter, Key? key}) : super(key: key);
 
   final AppRouter appRouter;
@@ -25,4 +24,3 @@ class MyApp extends StatelessWidget {
     );
   }
 }
-

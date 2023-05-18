@@ -3,7 +3,7 @@ import 'colors.dart';
 
 ThemeData appTheme(BuildContext context) => ThemeData(
   primaryColor: primaryColor,
-  accentColor: Colors.orange,
+  hintColor: Colors.orange,
   appBarTheme: const AppBarTheme(
     iconTheme: IconThemeData(
       color: Colors.white,

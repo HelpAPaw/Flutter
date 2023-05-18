@@ -1,25 +1,42 @@
 import 'package:flutter/material.dart';
+import 'package:help_a_paw/presentation/about/about.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 
-import '../../about/about.dart';
+typedef VoidCallbackWithContext = void Function(BuildContext);
+
+const String emailTo = "help.a.paw@outlook.com";
 
 class MyDrawer extends StatelessWidget {
   final String userName;
   final String userImage;
 
-  MyDrawer({Key? key, required this.userName, required this.userImage})
+  const MyDrawer({Key? key, required this.userName, required this.userImage})
       : super(key: key);
 
-  final Map<String, Widget> screensMap = {
-    'Profile': const ProfileScreen(),
-    'My Signals': const MySignalsScreen(),
-    'My Notifications': const MyNotificationsScreen(),
-    'FAQS': const FAQSScreen(),
-    'Settings': const SettingsScreen(),
-    'Feedback': const FeedbackScreen(),
-    'Privacy Policy': const PrivacyPolicyScreen(),
-    'About': const AboutScreen(),
-    'Share': const ShareScreen(),
-  };
+  void handleNavigation(BuildContext context, Widget screen) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => screen),
+    );
+  }
+
+  Map<String, Function(BuildContext)> get screensMap {
+    return {
+      'Profile': (BuildContext context) => {},
+      'My Signals': (BuildContext context) => {},
+      'My Notifications': (BuildContext context) => {},
+      'FAQS': (BuildContext context) => {},
+      'Settings': (BuildContext context) => {},
+      'Feedback': (BuildContext context) => {
+            launchUrlString("mailto:$emailTo"),
+          },
+      'Privacy Policy': (BuildContext context) => {},
+      'About': (BuildContext context) {
+        handleNavigation(context, const AboutScreen());
+      },
+      'Share': (BuildContext context) => {},
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -62,12 +79,7 @@ class MyDrawer extends StatelessWidget {
                       style: const TextStyle(fontSize: 18, color: Colors.white),
                     ),
                     onTap: () {
-                      // Handle item tap here
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => screensMap[item]!),
-                      );
+                      screensMap[item]!(context);
                     },
                   );
                 },
