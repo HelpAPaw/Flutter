@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:help_a_paw/src/pages/login.dart';
 import 'package:help_a_paw/src/utils/firebase_auth.dart';
+import 'package:help_a_paw/utility/app_router_routes.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/users.dart';
+import '../../data/models/users.dart';
 import '../services/constants.dart' as global;
 import '../showdialogs/message.dart';
 import '../showdialogs/show_progress.dart';
@@ -59,11 +60,7 @@ class _RegisterPageState extends State<RegisterPage> {
           );
           SharedPreferences prefs = await SharedPreferences.getInstance();
           prefs.setBool(global.loggedIn, true);
-          Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (context) => LoginPage(),
-                  settings: const RouteSettings(name: global.loginRoute)));
+          Navigator.of(context).pushNamed(AppRoutes.loginRoute);
         } else {
           showProgressDialog(context, '', false);
         }
@@ -187,12 +184,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   const Text("Already a member?"),
                   TextButton(
                       onPressed: () {
-                        Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(
-                                builder: (context) => const LoginPage(),
-                                settings: const RouteSettings(
-                                    name: global.loginRoute)));
+                        Navigator.of(context).pushReplacementNamed(AppRoutes.loginRoute);
                       },
                       child: const Text(
                         "LOGIN",

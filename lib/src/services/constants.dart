@@ -1,7 +1,4 @@
-// ROUTES
-const String homeRoute = '/home';
-const String loginRoute = '/login';
-const String registerRoute = '/register';
+
 
 //COMMON
 const String loggedIn = 'isLoggedIn';
