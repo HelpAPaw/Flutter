@@ -22,7 +22,9 @@ dependencies:
   google_maps_flutter: ^2.2.1
   google_maps_flutter_web: ^0.4.0+3
   google_sign_in: ^6.0.2
+  hydrated_bloc: ^9.1.0
   intl: ^0.18.0
+  path_provider: ^2.0.15
   permission_handler: ^10.2.0
   shared_preferences: ^2.0.17
   social_login_buttons: ^1.0.7
