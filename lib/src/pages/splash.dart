@@ -18,11 +18,11 @@ class SplashScreen extends StatelessWidget {
       Navigator.of(context).pushNamed(AppRoutes.homeScreen);
     });
 
-    return Scaffold(
+    return const Scaffold(
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: const <Widget>[
+          children: <Widget>[
             Image(
               image: AssetImage("assets/images/logo.jpg"),
               height: 100,
