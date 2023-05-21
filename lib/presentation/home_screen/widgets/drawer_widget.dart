@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../faqs/faqs.dart';
 import '../../about/about.dart';
 
 class MyDrawer extends StatelessWidget {
@@ -116,14 +117,7 @@ class SettingsScreen extends StatelessWidget {
   }
 }
 
-class FAQSScreen extends StatelessWidget {
-  const FAQSScreen({super.key});
 
-  @override
-  Widget build(BuildContext context) {
-    return const Text('FAQSScreen');
-  }
-}
 
 class MyNotificationsScreen extends StatelessWidget {
   const MyNotificationsScreen({super.key});
