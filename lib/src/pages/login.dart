@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:help_a_paw/src/pages/home.dart';
-import 'package:help_a_paw/src/pages/register.dart';
 import 'package:help_a_paw/src/utils/firebase_auth.dart';
 import 'package:social_login_buttons/social_login_buttons.dart';
 import '../../utility/app_router_routes.dart';
-import '../services/constants.dart' as global;
 import '../showdialogs/message.dart';
 import '../showdialogs/show_progress.dart';
 import '../styles/colors.dart';

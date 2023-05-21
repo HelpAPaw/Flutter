@@ -24,6 +24,7 @@ dependencies:
   google_sign_in: ^6.0.2
   hydrated_bloc: ^9.1.0
   intl: ^0.18.0
+  location: ^4.4.0
   path_provider: ^2.0.15
   permission_handler: ^10.2.0
   shared_preferences: ^2.0.17
@@ -40,10 +41,4 @@ flutter:
   generate: true
 
   assets:
-    - assets/images/ic_paw.png
-    - assets/images/logo.jpg
-    - assets/images/white-logo.png
-    - assets/images/pin-1.jpg
-    - assets/images/pin-2.jpg
-    - assets/images/pin-3.jpg
-    - assets/images/ic-facebook.png
+    - assets/images/

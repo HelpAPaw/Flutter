@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:help_a_paw/src/pages/home.dart';
-import 'package:help_a_paw/src/pages/login.dart';
 import 'package:help_a_paw/src/utils/user_validation.dart';
 import 'package:help_a_paw/utility/app_router_routes.dart';
-import '../services/constants.dart' as global;
 
 class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});
