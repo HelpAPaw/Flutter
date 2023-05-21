@@ -5,15 +5,19 @@ class FAQSScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final widthSize = MediaQuery.of(context).size.width;
-    final heightSize = MediaQuery.of(context).size.height;
     return Scaffold(
-      appBar: _buildAppBar(context),
-      body: _buildBody(widthSize, heightSize, context),
+      appBar: _BuildFAQAppBar(),
+      body: const _BuildFAQBody(),
     );
   }
+}
 
-  AppBar _buildAppBar(BuildContext context) {
+class _BuildFAQAppBar extends StatelessWidget implements PreferredSizeWidget {
+  @override
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+
+  @override
+  Widget build(BuildContext context) {
     return AppBar(
       centerTitle: true,
       leading: IconButton(
@@ -33,14 +37,20 @@ class FAQSScreen extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _buildBody(double widthSize, double heightSize, BuildContext context) {
+class _BuildFAQBody extends StatelessWidget {
+  const _BuildFAQBody();
+
+  @override
+  Widget build(BuildContext context) {
+    final widthSize = MediaQuery.of(context).size.width;
     return SafeArea(
       child: ListView(
         padding: EdgeInsets.symmetric(horizontal: widthSize * 0.05),
         children: faqsData
             .map(
-              (item) => _buildFaqItem(
+              (item) => _BuildFAQItem(
                 title: item['title'],
                 content: item['content'],
               ),
@@ -49,11 +59,15 @@ class FAQSScreen extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _buildFaqItem({
-    required String title,
-    required String content,
-  }) {
+class _BuildFAQItem extends StatelessWidget {
+  final String title;
+  final String content;
+  const _BuildFAQItem({required this.title, required this.content});
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(top: 16.0),
       child: Column(
