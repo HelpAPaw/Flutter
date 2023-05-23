@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -14,6 +15,7 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  await EasyLocalization.ensureInitialized();
 
   HydratedBloc.storage = await HydratedStorage.build(
     storageDirectory: await getApplicationDocumentsDirectory(),
@@ -22,7 +24,16 @@ void main() async {
   if (shouldUseFirebaseEmulator) {
     await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
   }
-  runApp(MyApp(
-    appRouter: AppRouter(),
-  ));
+  runApp(
+    EasyLocalization(
+        supportedLocales: const [
+          Locale('en', 'US'),
+          Locale('bg', 'BG'),
+        ],
+        path: 'assets/localization',
+        fallbackLocale: const Locale('en', 'US'),
+        child: MyApp(
+          appRouter: AppRouter(),
+        )),
+  );
 }

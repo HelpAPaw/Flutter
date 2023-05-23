@@ -1,9 +1,8 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:help_a_paw/bussines_model/user/user_bloc.dart';
 import 'package:help_a_paw/utility/app_router.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 
 class MyApp extends StatelessWidget {
   const MyApp({required this.appRouter, Key? key}) : super(key: key);
@@ -16,20 +15,13 @@ class MyApp extends StatelessWidget {
     return BlocProvider<UserBloc>(
       create: (context) => UserBloc(),
       child: MaterialApp(
-        localizationsDelegates: const [
-          AppLocalizations.delegate,
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        supportedLocales: const [
-          Locale('en', ''),
-          Locale('bg', ''),
-        ],
         title: 'Help a Paw',
         theme: ThemeData(
           primarySwatch: Colors.orange,
         ),
+        localizationsDelegates: context.localizationDelegates,
+        supportedLocales: context.supportedLocales,
+        locale: context.locale,
         debugShowCheckedModeBanner: false,
         onGenerateRoute: appRouter.onGenerateRoute,
       ),

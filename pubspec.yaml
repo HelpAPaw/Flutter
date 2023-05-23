@@ -11,14 +11,13 @@ environment:
 dependencies:
   cloud_firestore: ^4.4.5
   cupertino_icons: ^1.0.2
+  easy_localization: ^3.0.2
   equatable: ^2.0.5
   firebase_auth: ^4.2.8
   firebase_core: ^2.6.1
   flutter:
     sdk: flutter
   flutter_bloc: ^8.1.1
-  flutter_localizations:
-    sdk: flutter
   google_maps_flutter: ^2.2.1
   google_maps_flutter_web: ^0.4.0+3
   google_sign_in: ^6.0.2
@@ -38,7 +37,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  generate: true
 
   assets:
     - assets/images/
+    - assets/localization/

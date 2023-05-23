@@ -42,14 +42,7 @@
   "txt_signal_added_successfully": "Сигналът беше успешно добавен!",
   "txt_logout_succeeded": "Успешно се отписахте.",
   "txt_logout_failed_because": "Отписването не бе успешно поради: {cause}.",
-  "@txt_logout_failed_because": {
-    "placeholder": {
-      "cause": {
-        "type": "String",
-        "example": "You not logged in"
-      }
-    }
-  },
+
   "txt_logout_failed": "Отписването не бе успешно",
   "txt_navigate_to": "Навигирай ме",
   "txt_save": "Запази",
@@ -63,14 +56,7 @@
   "txt_delete_signal_dialog": "Сигурни ли сте, че искате да изтриете сигнала?",
   "txt_comments": "Коментари",
   "txt_signal_from": "Сигналът е подаден от {status}",
-  "@txt_signal_from": {
-    "placolder": {
-      "status": {
-        "type": "String",
-        "example": "Somebody on the way"
-      }
-    }
-  },
+
   "txt_comment_hint": "Напишете коментар",
   "txt_error_empty_comment": "Коментарът не може да бъде празен!",
   "txt_no_comments": "Все още няма коментари.",
@@ -91,10 +77,7 @@
   "error_facebook_not_installed": "Фейсбуук не е инсталиран",
   "text_my_signals": "Моите сигнали",
   "no_signals_message": "Нямате никакви сигнали.",
-  "my_signal_items": [
-    "Подадени сигнали",
-    "Коментирани сигнали"
-  ],
+  "my_signal_items": ["Подадени сигнали", "Коментирани сигнали"],
   "text_my_notifications": "Моите Известия",
   "no_notifications_message": "Вие нямате известия",
   "txt_delete_notifications_dialog": "Сигурни ли сте, че искате да изтриете всички известия?",
@@ -106,31 +89,14 @@
   "text_settings": "Настройки",
   "text_privacy_policy": "Политика за поверителност",
   "txt_user_changed_status_to": "{user} промени статуса на {status}",
-  "@txt_user_changed_status_to": {
-    "placeholder": {
-      "user": {
-        "type": "String",
-        "example": "Kevin"
-      },
-      "status": {
-        "type": "String",
-        "example": "Somebody on the way"
-      }
-    }
-  },
+
   "txt_new_status_icon": "Икона на новия статус",
   "string_about_title": "Относно",
   "string_about_contact": "Свържете се с нас",
   "string_about_milen": "© Милен Маринов 2022",
   "string_share_text": "Харесва ли ви приложението? Споделете го с приятели!",
   "string_share_app_text": "Открих страхотно приложение за помощ на животни в беда: {url}",
-  "@string_share_app_text": {
-    "placeholders": {
-      "url": {
-        "type": "String"
-      }
-    }
-  },
+
   "string_share_app_reminder_title": "Споделете приложението!",
   "string_share_app_reminder_message": "Забелязахме, че често изполвате приложението. Искате ли да го споделите с приятели?",
   "string_share_button": "Сподели",
@@ -167,22 +133,17 @@
   "txt_radius_description": "Областта около текущото Ви местоположение във всеки един момент, за която искате да бъдете известявани в случай на нови сигнали.",
   "txt_signal_timeout": "ВРЕМЕТРАЕНЕ НА СИГНАЛИТЕ",
   "txt_timeout_description": "Колко да са стари сигналите, за които бивате известявани",
-  "radius_output": "{radius, plural, =1 {1 километра} other {{radius} километър}}",
-  "@radius_output": {
-    "placeholders": {
-      "radius": {
-        "type": "int"
-      }
-    }
+
+  "radius_output": {
+    "one": "{} километра",
+    "other": "{} километър"
   },
-  "timeout_output": "{day, plural, =1 {1 дни} other {{day} ден}}",
-  "@timeout_output": {
-    "placeholders": {
-      "day": {
-        "type": "int"
-      }
-    }
+
+  "timeout_output": {
+    "one": "{} дни",
+    "other": "{} ден"
   },
+
   "txt_success": "Успех",
   "txt_error": "Грешка",
   "txt_unknown_error_occurred": "Възникна неизвестна грешка",
@@ -214,22 +175,9 @@
   "txt_filter_signal_types": "Филтрирай",
   "txt_active_filter": "Има активен филтър",
   "txt_signal_type": "Тип на сигнала: {signal}",
-  "@txt_signal_type": {
-    "placeholders": {
-      "signal": {
-        "type": "String",
-        "example": "Help Needed"
-      }
-    }
-  },
+
   "txt_type": "Type: {type}",
-  "@txt_type": {
-    "placeholders": {
-      "type": {
-        "type": "String"
-      }
-    }
-  },
+
   "content_description_add_signal": "Добави сигнал",
   "content_show_clinics": "Покажи ветеринарните клиники",
   "content_hide_clinics": "Скрий ветеринарните клиники",
