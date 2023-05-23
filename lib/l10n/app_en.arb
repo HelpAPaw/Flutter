@@ -1,1 +1,255 @@
-{}
+{
+  "txt_invalid_email": "Invalid email.",
+  "txt_invalid_password": "The password is too short.",
+  "txt_invalid_password_confirmation": "The two entered passwords are not the same.",
+  "txt_email_hint": "Email",
+  "txt_password_hint": "Password",
+  "txt_password_confirmation_hint": "Confirm Password",
+  "txt_login": "Login",
+  "txt_no_account_yet": "No account yet?",
+  "txt_user_profile_title": "Profile",
+  "txt_delete_account": "Delete account",
+  "txt_delete_account_dialog": "Are you sure you want to delete your account?",
+  "txt_register": "Register",
+  "txt_already_a_member": "Already a member?",
+  "txt_phone_number": "Phone Number",
+  "txt_name": "Name",
+  "txt_name_required": "The name is required!",
+  "txt_why": "Why?",
+  "drawer_open": "Open navigation drawer",
+  "drawer_close": "Close navigation drawer",
+  "txt_log_in": "Log In",
+  "txt_log_out": "Log Out",
+  "txt_no_internet": "No Internet connection!",
+  "txt_signals_map": "Signals Map",
+  "txt_why_want_phone": "Why do you want my phone number?",
+  "txt_why_phone_description": "Entering your phone number is not required for registration. However, we strongly encourage you to fill it so you can be quickly reached if a volunteer needs information about a signal that you submitted.",
+  "txt_i_see": "I see",
+  "txt_location_permission_not_granted": "Location permissions not granted!",
+  "txt_signal_description": "Signal description",
+  "txt_signal_phone": "Your phone",
+  "txt_send": "Send",
+  "txt_take_photo": "Take Photo",
+  "txt_choose_existing": "Choose Existing",
+  "permission_not_granted": "Permission was not granted!",
+  "txt_storage_permissions_for_camera": "Sorry we could not open the camera without your permission.",
+  "txt_storage_permissions_for_gallery": "Sorry we could not open the gallery without your permission.",
+  "txt_location_permissions_for_map": "Sorry we could not get your location without your permission.",
+  "txt_status_help_needed": "Status: Help needed",
+  "txt_status_somebody_on_the_way": "Status: Somebody on the way",
+  "txt_status_solved": "Status: Solved",
+  "txt_description_required": "Signal description is required!",
+  "txt_signal_added_successfully": "Signal successfully added!",
+  "txt_logout_succeeded": "You successfully logged out.",
+  "txt_logout_failed_because": "Logout failed because: {cause}.",
+  "@txt_logout_failed_because": {
+    "placeholder": {
+      "cause": {
+        "type": "String",
+        "example": "You not logged in"
+      }
+    }
+  },
+  "txt_logout_failed": "Logout failed",
+  "txt_navigate_to": "Navigate me",
+  "txt_save": "Save",
+  "txt_cancel": "Cancel",
+  "txt_signal_details_title": "Signal Details",
+  "txt_signal_was_deleted": "The signal was deleted!",
+  "txt_upload_photo": "Upload photo",
+  "txt_share": "Share",
+  "txt_edit_title": "Edit",
+  "txt_delete_signal": "Delete",
+  "txt_delete_signal_dialog": "Are you sure you want to delete the signal?",
+  "txt_comments": "Comments",
+  "txt_signal_from": "Signal from {status}",
+  "@txt_signal_from": {
+    "placolder": {
+      "status": {
+        "type": "String",
+        "example": "Somebody on the way"
+      }
+    }
+  },
+  "txt_comment_hint": "Enter a comment",
+  "txt_error_empty_comment": "Comment should not be empty!",
+  "txt_no_comments": "There are no comments yet.",
+  "txt_signal_photo_description": "Signal Photo",
+  "txt_progress_indicator_description": "Progress indicator",
+  "txt_somebody_on_the_way": "Somebody on the way",
+  "txt_solved": "Solved",
+  "txt_help_needed": "Help needed",
+  "txt_status": "Status",
+  "txt_refresh": "Refresh",
+  "txt_filter_signals": "Filter signals",
+  "txt_status_updated": "Status successfully updated!",
+  "txt_you_help_is_needed": "Your help is needed!",
+  "txt_somebody_is_on_the_way": "Somebody is on the way",
+  "txt_new_signal": "New signal",
+  "txt_new_comment": "New comment",
+  "txt_new_status": "New status",
+  "error_facebook_not_installed": "Facebook not installed",
+  "text_my_signals": "My Signals",
+  "no_signals_message": "You do not have any signals.",
+  "my_signal_items": [
+    "Submitted Signals",
+    "Commented Signals"
+  ],
+  "text_my_notifications": "My Notifications",
+  "no_notifications_message": "You do not have notifications",
+  "txt_delete_notifications_dialog": "Are you sure you want to delete all the notifications?",
+  "text_faqs": "FAQs",
+  "text_about": "About",
+  "text_share": "Share",
+  "text_feedback": "Feedback",
+  "txt_faqs_view_title": "FAQs",
+  "text_settings": "Settings",
+  "text_privacy_policy": "Privacy Policy",
+  "txt_user_changed_status_to": "{user} changed the status to {status}",
+  "@txt_user_changed_status_to": {
+    "placeholder": {
+      "user": {
+        "type": "String",
+        "example": "Kevin"
+      },
+      "status": {
+        "type": "String",
+        "example": "Somebody on the way"
+      }
+    }
+  },
+  "txt_new_status_icon": "New status icon",
+  "string_about_title": "About",
+  "string_about_contact": "Contact us",
+  "string_about_milen": "© Milen Marinov 2022",
+  "string_share_text": "Do you like the application? Share it with your friends!",
+  "string_share_app_text": "I found a great app for helping animals in need: {url}",
+  "@string_share_app_text": {
+    "placeholders": {
+      "url": {
+        "type": "String"
+      }
+    }
+  },
+  "string_share_app_reminder_title": "Share the application!",
+  "string_share_app_reminder_message": "We've noticed that you often use the application. Do you want to share it with your friends?",
+  "string_share_button": "Share",
+  "string_share_later": "Later",
+  "string_support_email": "help.a.paw@outlook.com",
+  "string_share_link": "https://helpapaw.app.link/install",
+  "string_mail_chooser_title": "help.a.paw@outlook.com",
+  "error_empty_signal_response": "Got empty response! Signal not present anymore!?",
+  "txt_channel_description_help_needed": "Shows signals for animals near you that are in (urgent) need of help",
+  "txt_channel_description_somebody_on_the_way": "Shows signals for which help is on the way but are still not solved",
+  "txt_or": "or",
+  "faqs_data": [
+    {
+      "title": "How does this app work?",
+      "content": "If you see a stray animal that needs help but for some reason cannot provide the help yourself you can submit a signal that marks the place and describes the situation. Other people that are nearby will receive a notification about it. Hopefully someone will react to the signal and help the animal."
+    },
+    {
+      "title": "Who are the people that will help those animals?",
+      "content": "Help A Paw connects a network of volunteers that care about animals - just like you!"
+    },
+    {
+      "title": "How does the status of the signal change?",
+      "content": "When a signal is submitted it starts with status 'Help needed'. When somebody decides to answer the signal, he/she changes the status to 'Somebody on the way' so that other people know. If for example, the person arrives at the place but needs some assistance, the status can be changed back to 'Help needed'. When the animal finally receives the needed help, the signal is marked as 'Solved'. Signals are color-coded in red, orange, and green according to their status."
+    },
+    {
+      "title": "Does this app track my location?",
+      "content": "No, Your location is obtained and used only locally on your device. It will not be recorded on a server or used for any other purpose besides notifying you of animals in need in your area."
+    }
+  ],
+  "privacy_policy_dialog_title": "Privacy Policy",
+  "accept": "Accept",
+  "decline": "Decline",
+  "txt_radius": "RADIUS",
+  "txt_radius_description": "The area around your current location at any moment that you want to be notified if new signals appear.",
+  "txt_signal_timeout": "SIGNAL TIMEOUT",
+  "txt_timeout_description": "How old signals you want to be notified about",
+  "radius_output": "{radius, plural, =1 {1 kilometer} other {{radius} kilometers}}",
+  "@radius_output": {
+    "placeholders": {
+      "radius": {
+        "type": "int"
+      }
+    }
+  },
+  "timeout_output": "{day, plural, =1 {1 day} other {{day} days}}",
+  "@timeout_output": {
+    "placeholders": {
+      "day": {
+        "type": "int"
+      }
+    }
+  },
+  "txt_success": "Success",
+  "txt_error": "Error",
+  "txt_unknown_error_occurred": "Unknown error occurred",
+  "txt_registration_successful": "A confirmation link has been sent on your email. Please click it to complete your registration.",
+  "content_description_app_logo": "App logo",
+  "txt_error_getting_privacy_policy": "Could not get Privacy Policy!",
+  "txt_login_successful": "Login successful!",
+  "txt_registration_required": "Registration required",
+  "txt_only_registered_users_can_submit_signals": "Only registered users can submit signals",
+  "txt_only_registered_users_can_comment": "Only registered users can write comments",
+  "txt_only_registered_users_can_change_status": "Only registered users can change signal status",
+  "txt_only_registered_users_can_see_my_signals": "Only registered users can see this section",
+  "txt_confirm_password_reset": "If you have already registered but have forgotten your password you can reset it. Do you want to continue?",
+  "txt_password_reset_successful": "We sent you an email with a link from which you can reset your password",
+  "txt_yes": "Yes",
+  "txt_no": "No",
+  "shared_preferences_for_app": "defaultSharedPreferences",
+  "txt_logged_user_not_found": "Logged in user not found!",
+  "signal_types_items": [
+    "Emergency",
+    "Lost or Found",
+    "Blood donation",
+    "Homeless",
+    "Unneutered animals",
+    "Wild animals",
+    "Other"
+  ],
+  "txt_filter_signal_types_description": "Choose signal types you want to view",
+  "txt_filter_signal_types": "Filter",
+  "txt_active_filter": "There is an active filter",
+  "txt_signal_type": "Signal type: {signal}",
+  "@txt_signal_type": {
+    "placeholders": {
+      "signal": {
+        "type": "String",
+        "example": "Help Needed"
+      }
+    }
+  },
+  "txt_type": "Type: {type}",
+  "@txt_type": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "content_description_add_signal": "Add signal",
+  "content_show_clinics": "Show veterinary clinics",
+  "content_hide_clinics": "Hide veterinary clinics",
+  "txt_vet_clinic_details_title": "Vet Clinic Details",
+  "lbl_vet_clinic_details_address": "Address:",
+  "lbl_vet_clinic_details_phone": "Phone:",
+  "lbl_vet_clinic_details_more_info": "More info:",
+  "txt_open_in_google_maps": "Open in Google Maps",
+  "txt_type_settings": "TYPES",
+  "txt_type_settings_description": "Signal types you want to be notified about",
+  "string_signal_type_settings_title": "Signal Types",
+  "txt_forgot_password": "Forgot password?",
+  "txt_permission_needed": "Permission needed",
+  "txt_foreground_location_rationale": "If you want to be notified about signals near you the app needs to know your location",
+  "txt_i_want_this_feature": "I want this feature",
+  "txt_no_thanks": "No thanks",
+  "txt_background_location_rationale": "If you want to be notified about signals near you even when your location changes significantly while not using the app, it needs to access your location in the background",
+  "txt_disable_hibernation": "Disable hibernation",
+  "txt_disable_hibernation_explanation": "Help a Paw is only used when needed. Therefore there can be prolonged periods in which you don't interact with the app. However, in order to continue checking for new signals around you, it needs to keep its permissions even if the system considers it 'unused'. So, if you want to continue receiving notifications about new signals, disable the option 'Remove permissions if app is unused'.",
+  "txt_delete_button": "Delete",
+  "txt_cancel_button": "Cancel",
+  "txt_no_navigation_app": "No navigation app found"
+}
