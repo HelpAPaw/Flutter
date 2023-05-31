@@ -47,3 +47,6 @@ jobs:
       
     - name: Upgrade Packages
       run: flutter pub upgrade
+      
+    - name: Run Test
+      run: flutter test test/widget_test.dart
