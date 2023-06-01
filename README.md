@@ -1,3 +1,13 @@
+<a href="https://github.com/HelpAPaw/Flutter">
+  <h1 align="center">
+    <picture>
+      <img src="https://github.com/HelpAPaw/Flutter/blob/main/assets/images/logo.jpg">
+    </picture>
+  </h1>
+</a>
+
+[![Flutter Action Workflow](https://github.com/HelpAPaw/Flutter/actions/workflows/flutter.yml/badge.svg)](https://github.com/HelpAPaw/Flutter/actions/workflows/flutter.yml)
+
 # help_a_paw
 
 Help A Paw in Flutter
