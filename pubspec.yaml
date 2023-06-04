@@ -36,18 +36,18 @@ dependencies:
   adaptive_navigation: ^0.0.9
   animations: ^2.0.7
   cloud_firestore: ^4.4.5
-  equatable: ^2.0.5
+  equatable: ^2.0.5 # Remove (Not Suitable for Production)
   firebase_auth: ^4.2.8
   firebase_core: ^2.6.1
   firebase_ui_auth: ^1.4.2
-  flutter_bloc: ^8.1.1
+  flutter_bloc: ^8.1.1 # Remove (Async Inherited and Stateful Widgets)
   go_router: ^6.0.9
   google_maps_flutter: ^2.2.1
-  google_maps_flutter_web: ^0.4.0
+  google_maps_flutter_web: ^0.4.0 # Remove (Google Maps Flutter Includes This Package)
   google_sign_in: ^6.0.2
-  permission_handler: ^10.2.0
+  permission_handler: ^10.2.0 # Remove (Google Maps Flutter Platform Embedding)
   shared_preferences: ^2.0.17
-  social_login_buttons: ^1.0.7
+  social_login_buttons: ^1.0.7 # Remove (Firebase UI Auth)
   url_launcher: ^6.1.10
 
 
