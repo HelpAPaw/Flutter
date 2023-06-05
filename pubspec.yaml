@@ -45,7 +45,7 @@ dependencies:
   google_maps_flutter: ^2.2.1
   google_maps_flutter_web: ^0.4.0 # Remove (Google Maps Flutter Includes This Package)
   google_sign_in: ^6.0.2
-  permission_handler: ^10.2.0 # Remove (Google Maps Flutter Platform Embedding)
+  permission_handler: ^10.2.0 # Remove (Google Maps Flutter Platform Embedding, URL Launcher Deep Linking)
   shared_preferences: ^2.0.17
   social_login_buttons: ^1.0.7 # Remove (Firebase UI Auth)
   url_launcher: ^6.1.10
