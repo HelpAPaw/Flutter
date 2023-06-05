@@ -14,7 +14,7 @@
 
 # Help A Paw
 
-Help A Paw in Flutter
+Help a Paw is a free mobile application that let's you send emergency signals about animals in need. As a result volunteers nearby (app users just like you!) will receive a notification and could provide help.
 
 ## Getting Started
 
