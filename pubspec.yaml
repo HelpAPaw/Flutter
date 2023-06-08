@@ -71,6 +71,8 @@ flutter:
   assets:
     - lib/assets/
     - lib/assets/paw/
+    - lib/assets/icon/
+    - lib/assets/textbook/
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
