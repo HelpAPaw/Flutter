@@ -10,7 +10,7 @@
     "prefer_related_applications": false,
     "icons": [
         {
-            "src": "icons/canned_food.png",
+            "src": "icons/kitty_super.png",
             "sizes": "16x16",
             "type": "image/png"
         },
