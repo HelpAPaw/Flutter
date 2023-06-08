@@ -1,6 +1,6 @@
+[Flutter]: https://docs.flutter.dev/
 [Code Lab]: https://docs.flutter.dev/get-started/codelab
 [Cookbook]: https://docs.flutter.dev/cookbook
-[Flutter]: https://docs.flutter.dev/
 
 <a href="https://github.com/HelpAPaw/Flutter">
   <h1 align="center">
@@ -17,8 +17,6 @@
 Help a Paw is a free mobile application that let's you send emergency signals about animals in need. As a result volunteers nearby (app users just like you!) will receive a notification and could provide help.
 
 ## Getting Started
-
-This project is a starting point for a Flutter application.
 
 A few resources to get you started if this is your first Flutter project:
 
