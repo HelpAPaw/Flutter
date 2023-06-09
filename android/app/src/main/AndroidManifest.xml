@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <meta-data android:name="com.google.android.geo.com.google.android.geo.API_KEY"
+        android:value="AIzaSyC9rEqolZ2VygmUBHaIqp_m7sQqipyt_Lc"/>
     <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="Help a Paw"
