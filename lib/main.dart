@@ -9,7 +9,7 @@ import 'firebase_options.dart';
 bool shouldUseFirebaseEmulator = false;
 
 void main() async {
-  await dotenv.load(fileName: "assets/.env");
+  await dotenv.load(fileName: ".env");
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
