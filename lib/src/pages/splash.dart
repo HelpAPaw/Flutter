@@ -1,10 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:help_a_paw/src/pages/home.dart';
-import 'package:help_a_paw/src/pages/login.dart';
-import 'package:help_a_paw/src/utils/user_validation.dart';
 import 'package:help_a_paw/utility/app_router_routes.dart';
-import '../services/constants.dart' as global;
 
 class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});
@@ -21,11 +17,11 @@ class SplashScreen extends StatelessWidget {
       Navigator.of(context).pushNamed(AppRoutes.homeScreen);
     });
 
-    return Scaffold(
+    return const Scaffold(
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: const <Widget>[
+          children: <Widget>[
             Image(
               image: AssetImage("assets/images/logo.jpg"),
               height: 100,

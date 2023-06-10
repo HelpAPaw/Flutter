@@ -55,10 +55,10 @@ class DrawerMenuState extends State<DrawerMenu> {
               padding: const EdgeInsets.all(0),
               child: Container(
                 color: Colors.white,
-                child: Center(
+                child: const Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
-                    children: const <Widget>[
+                    children: <Widget>[
                       Image(
                         image: AssetImage(
                           "assets/images/logo.jpg",
