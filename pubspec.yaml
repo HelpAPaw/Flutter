@@ -25,6 +25,8 @@ dependencies:
   social_login_buttons: ^1.0.7
   cloud_firestore: ^4.4.5
   equatable: ^2.0.5
+  flutter_dotenv: ^5.1.0
+  dotenv: ^4.1.0
 
 dev_dependencies:
   flutter_test:
@@ -44,3 +46,4 @@ flutter:
     - assets/images/pin-3.jpg
     - assets/images/ic-facebook.png
     - assets/images/paww.png
+    - .env
