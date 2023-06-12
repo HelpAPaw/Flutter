@@ -46,6 +46,7 @@ class _HelpAPawState extends State<HelpAPaw> {
   Widget build(BuildContext context) {
     return MaterialApp.router(
       theme: ThemeData(
+          primaryColor: Colors.orange.shade900,
           primaryColorDark: Colors.blueGrey.shade900,
           primaryColorLight: Colors.orange,
           useMaterial3: true

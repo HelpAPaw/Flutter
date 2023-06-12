@@ -7,9 +7,15 @@
         android:label="Help a Paw"
         android:name="${applicationName}"
         android:icon="@mipmap/help_a_paw_res">
+        <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+        </queries>
         <activity
             android:name=".MainActivity"
-            android:exported="false"
+            android:exported="true"
             android:launchMode="singleTop"
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
