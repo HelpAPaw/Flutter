@@ -1,12 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="dev.help_a_paw.help_a_paw">
-    <meta-data android:name="com.google.android.geo.com.google.android.geo.API_KEY"
-        android:value="AIzaSyC9rEqolZ2VygmUBHaIqp_m7sQqipyt_Lc"/>
     <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="Help a Paw"
         android:name="${applicationName}"
         android:icon="@mipmap/help_a_paw_res">
+        <meta-data android:name="com.google.android.geo.com.google.android.geo.API_KEY"
+            android:value="AIzaSyC9rEqolZ2VygmUBHaIqp_m7sQqipyt_Lc"/>
         <activity
             android:name=".MainActivity"
             android:exported="true"
