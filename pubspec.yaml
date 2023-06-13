@@ -14,7 +14,7 @@ dependencies:
 
   cupertino_icons: ^1.0.2
   google_maps_flutter: ^2.2.1
-  google_maps_flutter_web: ^0.4.0+3
+  google_maps_flutter_web: ^0.5.0+1
   permission_handler: ^10.2.0
   flutter_bloc: ^8.1.1
   shared_preferences: ^2.0.17
@@ -25,6 +25,8 @@ dependencies:
   social_login_buttons: ^1.0.7
   cloud_firestore: ^4.4.5
   equatable: ^2.0.5
+  flutter_dotenv: ^5.1.0
+  dotenv: ^4.1.0
 
 dev_dependencies:
   flutter_test:
@@ -43,3 +45,5 @@ flutter:
     - assets/images/pin-2.jpg
     - assets/images/pin-3.jpg
     - assets/images/ic-facebook.png
+    - assets/images/paww.png
+    - .env
