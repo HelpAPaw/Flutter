@@ -37,15 +37,15 @@ dependencies:
   adaptive_components: ^0.0.9
   adaptive_navigation: ^0.0.9
   animations: ^2.0.7
-  cloud_firestore: ^4.8.0
-  firebase_auth: ^4.6.2
-  firebase_ui_auth: ^1.4.2
-  firebase_ui_firestore: ^1.5.2
+  cloud_firestore: ^4.8.0 # In Progress
+  firebase_auth: ^4.6.2 # In Progress
+  firebase_ui_auth: ^1.4.2 # In Progress
+  firebase_ui_firestore: ^1.5.2 # In Progress
   go_router: ^8.0.1
   google_maps_flutter: ^2.3.0
   google_sign_in: ^6.1.4
   shared_preferences: ^2.1.1
-  url_launcher: ^6.1.11
+  url_launcher: ^6.1.11 # May be Removed
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
