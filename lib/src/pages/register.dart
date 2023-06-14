@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:help_a_paw/src/utils/firebase_auth.dart';
 import 'package:help_a_paw/utility/app_router_routes.dart';
+// ignore: depend_on_referenced_packages
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../data/models/users.dart';
 import '../services/constants.dart' as global;
@@ -12,6 +13,7 @@ class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
 
   @override
+  // ignore: library_private_types_in_public_api
   _RegisterPageState createState() => _RegisterPageState();
 }
 
@@ -59,6 +61,7 @@ class _RegisterPageState extends State<RegisterPage> {
           );
           SharedPreferences prefs = await SharedPreferences.getInstance();
           prefs.setBool(global.loggedIn, true);
+          // ignore: use_build_context_synchronously
           Navigator.of(context).pushNamed(AppRoutes.loginRoute);
         } else {
           showProgressDialog(context, '', false);
@@ -73,7 +76,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
   String? validateConfirmPassword(value) {
     if (value.length == 0) return 'Password cannot be blank';
-    if (password.value.text != value) {
+    if (password.value.text.isNotEmpty && password.value.text != value) {
       return 'The two entered passwords are not same';
     } else {
       return null;
@@ -183,7 +186,8 @@ class _RegisterPageState extends State<RegisterPage> {
                   const Text("Already a member?"),
                   TextButton(
                       onPressed: () {
-                        Navigator.of(context).pushReplacementNamed(AppRoutes.loginRoute);
+                        Navigator.of(context)
+                            .pushReplacementNamed(AppRoutes.loginRoute);
                       },
                       child: const Text(
                         "LOGIN",

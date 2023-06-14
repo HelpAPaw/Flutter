@@ -13,20 +13,18 @@ Future dialogWithMessageAndCustomButton(
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: <Widget>[
-              if (leftBtnMessage != null)
-                TextButton(
-                  child: Text(
-                    leftBtnMessage,
-                    style: const TextStyle(color: Colors.orange),
-                  ),
-                  onPressed: () {
-                    Navigator.of(context).pop(true);
-                  },
+              TextButton(
+                child: Text(
+                  leftBtnMessage,
+                  style: const TextStyle(color: Colors.orange),
                 ),
-              if (leftBtnMessage != null)
-                const SizedBox(
-                  width: 50,
-                ),
+                onPressed: () {
+                  Navigator.of(context).pop(true);
+                },
+              ),
+              const SizedBox(
+                width: 50,
+              ),
               TextButton(
                 child: Text(
                   rightBtnMessage,

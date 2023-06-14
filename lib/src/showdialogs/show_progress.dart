@@ -13,7 +13,7 @@ showProgressDialog(BuildContext context, String title, bool show) {
                 children: <Widget>[
                   const CircularProgressIndicator(
                       valueColor:
-                      AlwaysStoppedAnimation<Color>(Colors.orangeAccent)),
+                          AlwaysStoppedAnimation<Color>(Colors.orangeAccent)),
                   const Padding(
                     padding: EdgeInsets.only(left: 15),
                   ),
@@ -32,6 +32,7 @@ showProgressDialog(BuildContext context, String title, bool show) {
       Navigator.pop(context);
     }
   } catch (e) {
+    // ignore: avoid_print
     print(e.toString());
   }
 }

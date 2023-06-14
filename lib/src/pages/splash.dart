@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import 'package:help_a_paw/utility/app_router_routes.dart';
 
 class SplashScreen extends StatelessWidget {

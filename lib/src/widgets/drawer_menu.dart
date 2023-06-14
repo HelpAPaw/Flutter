@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:help_a_paw/src/pages/login.dart';
+// ignore: depend_on_referenced_packages
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../showdialogs/message.dart';
@@ -24,6 +25,7 @@ class DrawerMenuState extends State<DrawerMenu> {
   //send feedback
   final String emailTo = "help.a.paw@outlook.com";
 
+  // ignore: deprecated_member_use
   void sendEmail(String email) => launch("mailto:$email");
 
   @override

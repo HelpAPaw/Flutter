@@ -11,6 +11,7 @@ class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
   @override
+  // ignore: library_private_types_in_public_api
   _LoginPageState createState() => _LoginPageState();
 }
 
@@ -48,7 +49,8 @@ class _LoginPageState extends State<LoginPage> {
           );
         } else {
           showProgressDialog(context, '', false);
-          Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.homeScreen, (route) => false);
+          Navigator.of(context)
+              .pushNamedAndRemoveUntil(AppRoutes.homeScreen, (route) => false);
         }
       }).catchError((e) {
         showProgressDialog(context, '', false);
@@ -120,7 +122,8 @@ class _LoginPageState extends State<LoginPage> {
                           style: TextStyle(color: primaryColor),
                         ),
                         onPressed: () {
-                          Navigator.of(context).pushNamed(AppRoutes.registerRoute);
+                          Navigator.of(context)
+                              .pushNamed(AppRoutes.registerRoute);
                         },
                       ),
                       const SizedBox(
@@ -141,7 +144,8 @@ class _LoginPageState extends State<LoginPage> {
                           auth.signInWithGoogle().then((value) async {
                             if (value != null) {
                               showProgressDialog(context, '', false);
-                              Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.homeScreen, (route) => false);
+                              Navigator.of(context).pushNamedAndRemoveUntil(
+                                  AppRoutes.homeScreen, (route) => false);
                             } else {
                               showProgressDialog(context, '', false);
                             }
