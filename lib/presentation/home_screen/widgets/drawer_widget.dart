@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:help_a_paw/presentation/about/about.dart';
 import 'package:help_a_paw/presentation/faq/faq.dart';
 import 'package:url_launcher/url_launcher_string.dart';
+import '../../faqs/faqs.dart';
+
 
 typedef VoidCallbackWithContext = void Function(BuildContext);
 
@@ -130,6 +132,8 @@ class SettingsScreen extends StatelessWidget {
     return const Text('SettingsScreen');
   }
 }
+
+
 
 class MyNotificationsScreen extends StatelessWidget {
   const MyNotificationsScreen({super.key});

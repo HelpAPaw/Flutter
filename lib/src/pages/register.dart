@@ -73,7 +73,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
   String? validateConfirmPassword(value) {
     if (value.length == 0) return 'Password cannot be blank';
-    if (password.value.text.isNotEmpty && password.value.text != value) {
+    if (password.value.text != value) {
       return 'The two entered passwords are not same';
     } else {
       return null;

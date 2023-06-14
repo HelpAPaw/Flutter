@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:help_a_paw/src/utils/user_validation.dart';
 import 'package:help_a_paw/utility/app_router_routes.dart';
 
 class SplashScreen extends StatelessWidget {
@@ -13,9 +12,9 @@ class SplashScreen extends StatelessWidget {
     ]);
 
     Future.delayed(const Duration(seconds: 2), () async {
-      bool isLoggedIn = await UserValidation().checkUserLogin();
+      // bool isLoggedIn = await UserValidation().checkUserLogin();
 
-      Navigator.of(context).pushNamed(isLoggedIn ? AppRoutes.homeScreen : AppRoutes.loginRoute);
+      Navigator.of(context).pushNamed(AppRoutes.homeScreen);
     });
 
     return const Scaffold(
