@@ -44,7 +44,9 @@ dependencies:
   go_router: ^8.0.1
   google_maps_flutter: ^2.3.0
   google_sign_in: ^6.1.4
+  http: ^1.0.0
   shared_preferences: ^2.1.1
+  shelf: ^1.4.1
   url_launcher: ^6.1.11 # May be Removed
 
   # The following adds the Cupertino Icons font to your application.
