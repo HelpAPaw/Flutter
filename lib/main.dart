@@ -5,7 +5,7 @@ import 'package:help_a_paw/src/widgets/about_page.dart';
 import 'package:help_a_paw/src/widgets/home_route.dart';
 import 'package:help_a_paw/src/widgets/in_dev.dart';
 
-void main() {
+void main() async {
   runApp(const HelpAPaw());
   usePathUrlStrategy();
 }
