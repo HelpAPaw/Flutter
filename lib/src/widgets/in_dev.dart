@@ -15,9 +15,13 @@ class InDev extends StatefulWidget {
 }
 
 class _InDevState extends State<InDev> {
+  final Uri gitHubSource = Uri(
+    host: 'github.com',
+    path: 'HelpAPaw/Flutter',
+    scheme: 'https',
+  );
   final List<PanelItem> _itemList = generateItems(1);
   Future<void>? _browserLaunched;
-
   Future<void> _launchInBrowser(Uri url) async {
     if (!await launchUrl(url, mode: LaunchMode.externalApplication,)) {
       throw Exception('Launch Failed: $url');
@@ -27,11 +31,6 @@ class _InDevState extends State<InDev> {
   // In Development Widgets
   @override
   Widget build(BuildContext context) {
-    final Uri gitHubSource = Uri(
-      host: 'github.com',
-      path: 'HelpAPaw/Flutter',
-      scheme: 'https',
-    );
     FutureBuilder<void>(future: _browserLaunched, builder: _launchStatus);
     return Scaffold(
       appBar: AdaptiveAppBar(
