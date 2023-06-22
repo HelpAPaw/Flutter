@@ -80,6 +80,7 @@ class _HelpAPawState extends State<HelpAPaw> {
           primaryColor: Colors.orange.shade900,
           primaryColorDark: Colors.blueGrey.shade900,
           primaryColorLight: Colors.orange,
+          primarySwatch: Colors.orange,
           useMaterial3: true
       ),
       routerConfig: _router,
