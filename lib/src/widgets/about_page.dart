@@ -22,6 +22,7 @@ class _AboutPageState extends State<AboutPage> {
   );
   final List<PanelItem> _itemList = generateItems(1);
   Future<void>? _browserLaunched;
+
   Future<void> _launchInBrowser(Uri url) async {
     if (!await launchUrl(url, mode: LaunchMode.externalApplication,)) {
       throw Exception('Launch Failed: $url');

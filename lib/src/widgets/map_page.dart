@@ -13,7 +13,6 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   final Completer<GoogleMapController> _mapScreenController = Completer<GoogleMapController>();
-
   static const CameraPosition _initialMapScreenPosition = CameraPosition(
     target: LatLng(37.42796133580664, -122.085749655962),
     zoom: 14.4746,
