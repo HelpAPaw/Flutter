@@ -52,7 +52,16 @@ class _HomeRouteState extends State<HomeRoute> {
         child: ListView(
           children: <Widget>[
             DrawerHeader(
-              child: Image.asset('lib/assets/icon/pet/3d_paw_128.png'),
+              child: Image.asset('lib/assets/icon/pet/3d_paw_64.png'),
+            ),
+            ListTile(
+              leading: Image.asset('lib/assets/icon/log_in.png'),
+              onTap: () => {
+                context.go('/in_dev'),
+                selectedTile(0),
+              },
+              selected: _selectedTile == 0,
+              title: const Text('Sign In'),
             ),
             ListTile(
               leading: Image.asset('lib/assets/icon/people_paw.png'),
