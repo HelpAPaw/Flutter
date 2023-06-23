@@ -14,29 +14,6 @@ Future<void> main() async {
   await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
   final auth = FirebaseAuth.instanceFor(app: Firebase.app(), persistence: Persistence.LOCAL);
   await auth.setPersistence(Persistence.LOCAL);
-  FirebaseAuth.instance.authStateChanges().listen((User? user) {
-    if (user == null) {
-      throw Exception('User is currently signed out!');
-    } else {
-      throw Exception('User is signed in!');
-    }
-  });
-  FirebaseAuth.instance.idTokenChanges().listen((User? user) {
-    if (user == null) {
-      throw Exception('User is currently signed out!');
-    } else {
-      throw Exception('User is signed in!');
-    }
-  });
-  FirebaseAuth.instance
-      .userChanges()
-      .listen((User? user) {
-    if (user == null) {
-      throw Exception('User is currently signed out!');
-    } else {
-      throw Exception('User is signed in!');
-    }
-  });
   runApp(const HelpAPaw());
   usePathUrlStrategy();
   WidgetsFlutterBinding.ensureInitialized();
