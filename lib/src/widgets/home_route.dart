@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:adaptive_components/adaptive_components.dart';
 import 'package:adaptive_navigation/adaptive_navigation.dart';
@@ -17,7 +18,7 @@ class _HomeRouteState extends State<HomeRoute> {
   int _selectedNavigation = 0;
   int _selectedTile = 0;
 
-  void selectedTile(int index) {
+  Future<void> selectedTile(int index) async {
     setState(() {
       _selectedTile = index;
     });
