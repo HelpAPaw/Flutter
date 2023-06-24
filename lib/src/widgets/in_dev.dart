@@ -15,12 +15,12 @@ class InDev extends StatefulWidget {
 }
 
 class _InDevState extends State<InDev> {
+  final List<PanelItem> _itemList = generateItems(1);
   final Uri gitHubSource = Uri(
     host: 'github.com',
     path: 'HelpAPaw/Flutter',
     scheme: 'https',
   );
-  final List<PanelItem> _itemList = generateItems(1);
   Future<void>? _browserLaunched;
 
   Future<void> _launchInBrowser(Uri url) async {

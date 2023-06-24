@@ -15,14 +15,13 @@ class HomeRoute extends StatefulWidget {
 }
 
 class _HomeRouteState extends State<HomeRoute> {
-  int _selectedNavigation = 0;
-  int _selectedTile = 0;
-
   Future<void> selectedTile(int index) async {
     setState(() {
       _selectedTile = index;
     });
   }
+  int _selectedNavigation = 0;
+  int _selectedTile = 0;
 
   // Home Route Widgets
   @override
