@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 
+// User Management Configuration
 class UserModel {
   final String contactNumber;
   final String emailAddress;
@@ -18,7 +19,6 @@ class UserModel {
     required this.uid,
   });
 
-// User Management Configuration
 Future<UserModel> manageUsers() async {
   await FirebaseAuth.instance.setLanguageCode("en");
   await FirebaseAuth.instance.sendPasswordResetEmail(email: emailAddress);
