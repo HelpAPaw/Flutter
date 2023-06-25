@@ -24,7 +24,10 @@ class _InDevState extends State<InDev> {
   Future<void>? _browserLaunched;
 
   Future<void> _launchInBrowser(Uri url) async {
-    if (!await launchUrl(url, mode: LaunchMode.externalApplication,)) {
+    if (!await launchUrl(
+      url,
+      mode: LaunchMode.externalApplication,
+    )) {
       throw Exception('Launch Failed: $url');
     }
   }
@@ -38,64 +41,61 @@ class _InDevState extends State<InDev> {
         elevation: 6,
         leading: BackButton(
             onPressed: () => {
-              context.go('/home'),
-            }),
+                  context.go('/home'),
+                }),
         title: const Text('About'),
       ),
       body: AdaptiveContainer(
         child: ListView(
-            children: <Widget>[
-              Column(
-                children: <Widget>[
-                  Image.asset('lib/assets/in_development.png'),
-                  ExpansionPanelList.radio(
-                    elevation: 6,
-                    children: _itemList.map<ExpansionPanelRadio>((PanelItem itemList) {
-                      return ExpansionPanelRadio(
-                        canTapOnHeader: true,
-                        value: itemList.identity,
-                        headerBuilder: (BuildContext context, bool isExpanded) {
-                          return const ListTile(
-                            leading: Icon(Icons.book_rounded),
-                            subtitle: Text('Feature is in Development'),
-                            title: Text('Life Cycle'),
-                          );},
-                        body: ButtonBar(
-                          alignment: MainAxisAlignment.end,
-                          children: <Widget>[
-                            ElevatedButton(
-                              child: const Text('GitHub Source'),
-                              onPressed: () => showDialog<String>(
-                                context: context,
-                                builder: (BuildContext context) => AlertDialog(
-                                  content: const Text('Launch in Browser'),
-                                  elevation: 6,
-                                  icon: const Icon(Icons.open_in_browser_rounded),
-                                  title: const Text('Launch Mode'),
-                                  actions: <Widget>[
-                                    ElevatedButton(
-                                      child: const Text('Cancel'),
-                                      onPressed: () => Navigator.pop(context, 'Cancel'),
-                                    ),
-                                    ElevatedButton(
-                                      child: const Text('OK'),
-                                      onPressed: () => setState(() {
-                                        Navigator.pop(context, 'OK');
-                                        _browserLaunched = _launchInBrowser(gitHubSource);
-                                      }),
-                                    ),
-                                  ],
-                                ),
+          children: <Widget>[
+            Image.asset('lib/assets/in_development.png'),
+            ExpansionPanelList.radio(
+              elevation: 6,
+              children: _itemList.map<ExpansionPanelRadio>((PanelItem itemList) {
+                return ExpansionPanelRadio(
+                  canTapOnHeader: true,
+                  value: itemList.identity,
+                  headerBuilder: (BuildContext context, bool isExpanded) {
+                    return const ListTile(
+                      leading: Icon(Icons.book_rounded),
+                      subtitle: Text('Feature is in Development'),
+                      title: Text('Life Cycle'),
+                    );
+                  },
+                  body: ButtonBar(
+                    alignment: MainAxisAlignment.end,
+                    children: <Widget>[
+                      ElevatedButton(
+                        child: const Text('GitHub Source'),
+                        onPressed: () => showDialog<String>(
+                          context: context,
+                          builder: (BuildContext context) => AlertDialog(
+                            content: const Text('Launch in Browser'),
+                            elevation: 6,
+                            icon: const Icon(Icons.open_in_browser_rounded),
+                            title: const Text('Launch Mode'),
+                            actions: <Widget>[
+                              ElevatedButton(
+                                child: const Text('Cancel'),
+                                onPressed: () => Navigator.pop(context, 'Cancel'),
                               ),
-                            ),
-                          ],
+                              ElevatedButton(
+                                child: const Text('OK'),
+                                onPressed: () => setState(() {
+                                  Navigator.pop(context, 'OK');
+                                  _browserLaunched = _launchInBrowser(gitHubSource);
+                                }),
+                              ),
+                            ],
+                          ),
                         ),
-                      );
-                    }).toList(),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ]
+                );
+              }).toList(),
+            ),
+          ],
         ),
       ),
     );
