@@ -24,10 +24,7 @@ class _InDevState extends State<InDev> {
   Future<void>? _browserLaunched;
 
   Future<void> _launchInBrowser(Uri url) async {
-    if (!await launchUrl(
-      url,
-      mode: LaunchMode.externalApplication,
-    )) {
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication,)) {
       throw Exception('Launch Failed: $url');
     }
   }
