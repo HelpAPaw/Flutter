@@ -38,8 +38,8 @@ class _InDevState extends State<InDev> {
         elevation: 6,
         leading: BackButton(
             onPressed: () => {
-                  context.go('/home'),
-                }),
+              context.go('/home'),
+            }),
         title: const Text('About'),
       ),
       body: AdaptiveContainer(
