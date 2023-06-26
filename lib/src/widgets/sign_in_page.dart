@@ -22,20 +22,18 @@ class _SignInPageState extends State<SignInPage> {
         elevation: 6,
         leading: BackButton(
             onPressed: () => {
-              context.go('/home'),
-            }),
+                  context.go('/home'),
+                }),
         title: const Text('Sign In'),
       ),
       body: AdaptiveContainer(
-        child: ListView(
-            children: const <Widget>[
-              Column(
-                children: <Widget>[
-                  CircleAvatar(),
-                ],
-              ),
-            ]
-        ),
+        child: ListView(children: const <Widget>[
+          Column(
+            children: <Widget>[
+              CircleAvatar(),
+            ],
+          ),
+        ]),
       ),
     );
   }

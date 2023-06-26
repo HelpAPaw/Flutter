@@ -57,7 +57,7 @@ class _HomeRouteState extends State<HomeRoute> {
             ListTile(
               leading: Image.asset('lib/assets/icon/log_in.png'),
               onTap: () => {
-                context.go('/in_dev'),
+                context.go('/sign_in'),
                 selectedTile(0),
               },
               selected: _selectedTile == 0,
