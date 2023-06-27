@@ -37,12 +37,4 @@ class _SignInPageState extends State<SignInPage> {
       ),
     );
   }
-
-  Widget _launchStatus(BuildContext context, AsyncSnapshot<void> snapshot) {
-    if (snapshot.hasError) {
-      throw Exception('Error: ${snapshot.error}');
-    } else {
-      throw Exception('Launched: $snapshot');
-    }
-  }
 }
