@@ -53,15 +53,8 @@ final GoRouter _router = GoRouter(
   ],
 );
 
-class HelpAPaw extends StatefulWidget {
+class HelpAPaw extends StatelessWidget {
   const HelpAPaw({super.key});
-
-  // Help A Paw State
-  @override
-  State<HelpAPaw> createState() => _HelpAPawState();
-}
-
-class _HelpAPawState extends State<HelpAPaw> {
 
   // Help A Paw Widgets
   @override
