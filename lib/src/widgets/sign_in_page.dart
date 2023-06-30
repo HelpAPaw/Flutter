@@ -13,6 +13,19 @@ class SignInPage extends StatefulWidget {
 }
 
 class _SignInPageState extends State<SignInPage> {
+  late TextEditingController _signInText;
+
+  @override
+  void initState() {
+    super.initState();
+    _signInText = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _signInText.dispose();
+    super.dispose();
+  }
 
   // Sign In Page Widgets
   @override
@@ -27,13 +40,30 @@ class _SignInPageState extends State<SignInPage> {
         title: const Text('Sign In'),
       ),
       body: AdaptiveContainer(
-        child: ListView(children: const <Widget>[
-          Column(
-            children: <Widget>[
-              CircleAvatar(),
-            ],
-          ),
-        ]),
+        child: ListView(
+          children: <Widget>[
+            const CircleAvatar(
+              radius: 60,
+            ),
+            TextField(
+              controller: _signInText,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                labelText: 'Username',
+              ),
+              showCursor: true,
+            ),
+            TextField(
+              controller: _signInText,
+              obscureText: true,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                labelText: 'Password',
+              ),
+              showCursor: true,
+            ),
+          ],
+        ),
       ),
     );
   }

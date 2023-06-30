@@ -41,7 +41,7 @@ final GoRouter _router = GoRouter(
       builder: (BuildContext context, GoRouterState state) => const AboutPage(),
     ),
     GoRoute(
-      name: 'about',
+      name: 'sign_in',
       path: '/sign_in',
       builder: (BuildContext context, GoRouterState state) => const SignInPage(),
     ),

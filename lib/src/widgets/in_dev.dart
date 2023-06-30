@@ -40,7 +40,7 @@ class _InDevState extends State<InDev> {
             onPressed: () => {
               context.go('/home'),
             }),
-        title: const Text('About'),
+        title: const Text('Development'),
       ),
       body: AdaptiveContainer(
         child: ListView(
