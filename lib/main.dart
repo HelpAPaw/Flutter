@@ -4,7 +4,6 @@ import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:go_router/go_router.dart';
-import 'package:logging/logging.dart';
 import 'package:help_a_paw/src/config/firebase_options.dart';
 import 'package:help_a_paw/src/widgets/about_page.dart';
 import 'package:help_a_paw/src/widgets/home_route.dart';
@@ -16,11 +15,6 @@ Future<void> main() async {
   await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
   final auth = FirebaseAuth.instanceFor(app: Firebase.app(), persistence: Persistence.LOCAL);
   await auth.setPersistence(Persistence.LOCAL);
-  final log = Logger('Logger');
-  Logger.root.level = Level.ALL;
-  Logger.root.onRecord.listen((record) {
-    log.info('${record.level.name}: ${record.time}: ${record.message}');
-  });
   runApp(const HelpAPaw());
   usePathUrlStrategy();
   WidgetsFlutterBinding.ensureInitialized();
