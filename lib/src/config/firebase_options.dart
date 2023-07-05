@@ -25,10 +25,7 @@ class DefaultFirebaseOptions {
       case TargetPlatform.iOS:
         return ios;
       case TargetPlatform.macOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for macos - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return macos;
       case TargetPlatform.windows:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for windows - '
@@ -47,29 +44,40 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyBoB7K9lV8yt432J7XymbNWryQ2SXbZPzk',
-    appId: '1:757136327951:web:c1bd49f5a3beb6310f2a7a',
-    messagingSenderId: '757136327951',
-    projectId: 'help-a-paw-dev',
-    authDomain: 'help-a-paw-dev.firebaseapp.com',
-    storageBucket: 'help-a-paw-dev.appspot.com',
+    apiKey: 'AIzaSyCenIfiB049mdIJkWC9G7E_NAdBw9dJ8ug',
+    appId: '1:820468452348:web:7b665be1519be3903f0079',
+    messagingSenderId: '820468452348',
+    projectId: 'flutter-fire-373a7',
+    authDomain: 'flutter-fire-373a7.firebaseapp.com',
+    storageBucket: 'flutter-fire-373a7.appspot.com',
+    measurementId: 'G-RS2GXQEFNL',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyDFn3Cexv_aWaSIQ6w4i53YQJf-j5_EsNk',
-    appId: '1:757136327951:android:be094e7052a38f6e0f2a7a',
-    messagingSenderId: '757136327951',
-    projectId: 'help-a-paw-dev',
-    storageBucket: 'help-a-paw-dev.appspot.com',
+    apiKey: 'AIzaSyB6qDmwTI0e1TCd-oekgIHv7r2wUJsZ2AM',
+    appId: '1:820468452348:android:6723be9ed5d3ecbe3f0079',
+    messagingSenderId: '820468452348',
+    projectId: 'flutter-fire-373a7',
+    storageBucket: 'flutter-fire-373a7.appspot.com',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyDX000zOUB-F2qL4Wcf-pas3q3ThyHAOVc',
-    appId: '1:757136327951:ios:1a56d4871b9a39fa0f2a7a',
-    messagingSenderId: '757136327951',
-    projectId: 'help-a-paw-dev',
-    storageBucket: 'help-a-paw-dev.appspot.com',
-    iosClientId: '757136327951-9hkvaklhc08pdcc8lfi5vd53c8c61391.apps.googleusercontent.com',
-    iosBundleId: 'com.helpapaw.helpapaw',
+    apiKey: 'AIzaSyClIATrAbrQR6V9TUaKAzOenUEDy3YVePc',
+    appId: '1:820468452348:ios:46814f32837c8d913f0079',
+    messagingSenderId: '820468452348',
+    projectId: 'flutter-fire-373a7',
+    storageBucket: 'flutter-fire-373a7.appspot.com',
+    iosClientId: '820468452348-m97ok7j0i3qn636lihk3nk2i03qfgjt5.apps.googleusercontent.com',
+    iosBundleId: 'dev.helpapaw.helpAPaw',
+  );
+
+  static const FirebaseOptions macos = FirebaseOptions(
+    apiKey: 'AIzaSyClIATrAbrQR6V9TUaKAzOenUEDy3YVePc',
+    appId: '1:820468452348:ios:5f8ff04042f7f3b03f0079',
+    messagingSenderId: '820468452348',
+    projectId: 'flutter-fire-373a7',
+    storageBucket: 'flutter-fire-373a7.appspot.com',
+    iosClientId: '820468452348-ohr43tlrndcf2bte4m4counar07vebcs.apps.googleusercontent.com',
+    iosBundleId: 'dev.helpapaw.helpAPaw.RunnerTests',
   );
 }

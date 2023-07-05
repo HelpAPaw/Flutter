@@ -45,6 +45,7 @@ dependencies:
   go_router: ^8.0.5
   google_sign_in: ^6.1.4
   google_maps_flutter: ^2.3.1
+  http: ^1.0.0
   flutter_markdown: ^0.6.15+1
   url_launcher: ^6.1.11
 
