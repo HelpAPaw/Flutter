@@ -1,10 +1,11 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+
 import 'package:adaptive_components/adaptive_components.dart';
 import 'package:adaptive_navigation/adaptive_navigation.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:help_a_paw/src/state/panel_list.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class InDev extends StatefulWidget {
   const InDev({super.key});
@@ -24,7 +25,10 @@ class _InDevState extends State<InDev> {
   Future<void>? _browserLaunched;
 
   Future<void> _launchInBrowser(Uri url) async {
-    if (!await launchUrl(url, mode: LaunchMode.externalApplication,)) {
+    if (!await launchUrl(
+      url,
+      mode: LaunchMode.externalApplication,
+    )) {
       throw Exception('Launch Failed: $url');
     }
   }
@@ -38,8 +42,8 @@ class _InDevState extends State<InDev> {
         elevation: 6,
         leading: BackButton(
             onPressed: () => {
-              context.go('/home'),
-            }),
+                  context.go('/home'),
+                }),
         title: const Text('Development'),
       ),
       body: AdaptiveContainer(
@@ -48,7 +52,8 @@ class _InDevState extends State<InDev> {
             Image.asset('lib/assets/in_development.png'),
             ExpansionPanelList.radio(
               elevation: 6,
-              children: _itemList.map<ExpansionPanelRadio>((PanelItem itemList) {
+              children:
+                  _itemList.map<ExpansionPanelRadio>((PanelItem itemList) {
                 return ExpansionPanelRadio(
                   canTapOnHeader: true,
                   value: itemList.identity,
@@ -74,13 +79,15 @@ class _InDevState extends State<InDev> {
                             actions: <Widget>[
                               ElevatedButton(
                                 child: const Text('Cancel'),
-                                onPressed: () => Navigator.pop(context, 'Cancel'),
+                                onPressed: () =>
+                                    Navigator.pop(context, 'Cancel'),
                               ),
                               ElevatedButton(
                                 child: const Text('OK'),
                                 onPressed: () => setState(() {
                                   Navigator.pop(context, 'OK');
-                                  _browserLaunched = _launchInBrowser(gitHubSource);
+                                  _browserLaunched =
+                                      _launchInBrowser(gitHubSource);
                                 }),
                               ),
                             ],

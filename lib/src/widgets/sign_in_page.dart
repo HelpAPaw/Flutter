@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'dart:convert' show json;
-import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
+
 import 'package:adaptive_components/adaptive_components.dart';
 import 'package:adaptive_navigation/adaptive_navigation.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
@@ -130,8 +131,8 @@ class _SignInPageState extends State<SignInPage> {
           elevation: 6,
           leading: BackButton(
               onPressed: () => {
-                context.go('/home'),
-              }),
+                    context.go('/home'),
+                  }),
           title: const Text('Sign In'),
         ),
         body: AdaptiveContainer(
@@ -174,8 +175,8 @@ class _SignInPageState extends State<SignInPage> {
           elevation: 6,
           leading: BackButton(
               onPressed: () => {
-                context.go('/home'),
-              }),
+                    context.go('/home'),
+                  }),
           title: const Text('Sign In'),
         ),
         body: AdaptiveContainer(

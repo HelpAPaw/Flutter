@@ -1,10 +1,11 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+
 import 'package:adaptive_components/adaptive_components.dart';
 import 'package:adaptive_navigation/adaptive_navigation.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:help_a_paw/src/widgets/map_page.dart';
 import 'package:help_a_paw/src/widgets/in_dev.dart';
+import 'package:help_a_paw/src/widgets/map_page.dart';
 
 class HomeRoute extends StatefulWidget {
   const HomeRoute({super.key});
@@ -20,6 +21,7 @@ class _HomeRouteState extends State<HomeRoute> {
       _selectedTile = index;
     });
   }
+
   int _selectedNavigation = 0;
   int _selectedTile = 0;
 
@@ -34,13 +36,8 @@ class _HomeRouteState extends State<HomeRoute> {
               IconButton(
                   icon: const Icon(Icons.circle_notifications_outlined),
                   onPressed: () => {
-                    context.go('/in_dev'),
-                  }),
-              IconButton(
-                  icon: const Icon(Icons.info_outline_rounded),
-                  onPressed: () => {
-                    context.go('/about_paw'),
-                  }),
+                        context.go('/in_dev'),
+                      }),
             ],
           ),
         ],
@@ -97,7 +94,8 @@ class _HomeRouteState extends State<HomeRoute> {
         onDestinationSelected: (int index) {
           setState(() {
             _selectedNavigation = index;
-          });},
+          });
+        },
         selectedIndex: _selectedNavigation,
         destinations: const <NavigationDestination>[
           NavigationDestination(

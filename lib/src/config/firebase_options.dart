@@ -67,7 +67,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '820468452348',
     projectId: 'flutter-fire-373a7',
     storageBucket: 'flutter-fire-373a7.appspot.com',
-    iosClientId: '820468452348-m97ok7j0i3qn636lihk3nk2i03qfgjt5.apps.googleusercontent.com',
+    iosClientId:
+        '820468452348-m97ok7j0i3qn636lihk3nk2i03qfgjt5.apps.googleusercontent.com',
     iosBundleId: 'dev.helpapaw.helpAPaw',
   );
 
@@ -77,7 +78,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '820468452348',
     projectId: 'flutter-fire-373a7',
     storageBucket: 'flutter-fire-373a7.appspot.com',
-    iosClientId: '820468452348-ohr43tlrndcf2bte4m4counar07vebcs.apps.googleusercontent.com',
+    iosClientId:
+        '820468452348-ohr43tlrndcf2bte4m4counar07vebcs.apps.googleusercontent.com',
     iosBundleId: 'dev.helpapaw.helpAPaw.RunnerTests',
   );
 }

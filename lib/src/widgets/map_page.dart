@@ -1,6 +1,7 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+
 import 'package:adaptive_components/adaptive_components.dart';
+import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class MapScreen extends StatefulWidget {
@@ -12,13 +13,13 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  final Completer<GoogleMapController> _mapScreenController = Completer<GoogleMapController>();
+  final Completer<GoogleMapController> _mapScreenController =
+      Completer<GoogleMapController>();
   static const CameraPosition _initialMapScreenPosition = CameraPosition(
       bearing: 192.8334901395799,
       target: LatLng(37.43296265331129, -122.08832357078792),
       tilt: 59.440717697143555,
-      zoom: 19.151926040649414
-  );
+      zoom: 19.151926040649414);
 
   // Map Page Widgets
   @override
