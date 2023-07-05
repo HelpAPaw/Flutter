@@ -111,3 +111,7 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/custom-fonts/#from-packages
+fonts:
+  - family: SocialIcons
+    fonts:
+      - asset: packages/firebase_ui_auth/fonts/SocialIcons.ttf
