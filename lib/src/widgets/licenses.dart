@@ -67,8 +67,8 @@ class _LicensesState extends State<Licenses> {
                   headerBuilder: (BuildContext context, bool isExpanded) {
                     return const ListTile(
                       leading: Icon(Icons.book_rounded),
-                      subtitle: Text('Feature is in Development'),
-                      title: Text('Life Cycle'),
+                      subtitle: Text('Github Source and Our Website'),
+                      title: Text('Source Site'),
                     );
                   },
                   body: ButtonBar(
