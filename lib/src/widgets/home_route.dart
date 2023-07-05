@@ -73,33 +73,6 @@ class _HomeRouteState extends State<HomeRoute> {
               title: const Text('Profile'),
             ),
             ListTile(
-              leading: Image.asset('lib/assets/icon/faq.png'),
-              onTap: () => {
-                context.go('/in_dev'),
-                selectedTile(1),
-              },
-              selected: _selectedTile == 1,
-              title: const Text('FAQ'),
-            ),
-            ListTile(
-              leading: Image.asset('lib/assets/icon/feedback.png'),
-              onTap: () => {
-                context.go('/in_dev'),
-                selectedTile(2),
-              },
-              selected: _selectedTile == 2,
-              title: const Text('Feedback'),
-            ),
-            ListTile(
-              leading: Image.asset('lib/assets/icon/privacy.png'),
-              onTap: () => {
-                context.go('/in_dev'),
-                selectedTile(3),
-              },
-              selected: _selectedTile == 3,
-              title: const Text('Privacy'),
-            ),
-            ListTile(
               leading: Image.asset('lib/assets/icon/settings.png'),
               onTap: () => {
                 context.go('/in_dev'),
@@ -107,6 +80,15 @@ class _HomeRouteState extends State<HomeRoute> {
               },
               selected: _selectedTile == 4,
               title: const Text('Settings'),
+            ),
+            ListTile(
+              leading: Image.asset('lib/assets/icon/privacy.png'),
+              onTap: () => {
+                context.go('/licenses'),
+                selectedTile(3),
+              },
+              selected: _selectedTile == 3,
+              title: const Text('Licenses'),
             ),
           ],
         ),

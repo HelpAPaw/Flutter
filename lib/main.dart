@@ -8,6 +8,7 @@ import 'package:help_a_paw/src/config/firebase_options.dart';
 import 'package:help_a_paw/src/widgets/about_page.dart';
 import 'package:help_a_paw/src/widgets/home_route.dart';
 import 'package:help_a_paw/src/widgets/in_dev.dart';
+import 'package:help_a_paw/src/widgets/licenses.dart';
 import 'package:help_a_paw/src/widgets/sign_in_page.dart';
 
 Future<void> main() async {
@@ -33,6 +34,11 @@ final GoRouter _router = GoRouter(
       name: 'about',
       path: '/about_paw',
       builder: (BuildContext context, GoRouterState state) => const AboutPage(),
+    ),
+    GoRoute(
+      name: 'licenses',
+      path: '/licenses',
+      builder: (BuildContext context, GoRouterState state) => const Licenses(),
     ),
     GoRoute(
       name: 'sign_in',
