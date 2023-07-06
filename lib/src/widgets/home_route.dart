@@ -38,6 +38,11 @@ class _HomeRouteState extends State<HomeRoute> {
                   onPressed: () => {
                         context.go('/in_dev'),
                       }),
+              IconButton(
+                  icon: const Icon(Icons.info_outline_rounded),
+                  onPressed: () => {
+                        context.go('/licenses'),
+                      }),
             ],
           ),
         ],
@@ -77,15 +82,6 @@ class _HomeRouteState extends State<HomeRoute> {
               },
               selected: _selectedTile == 4,
               title: const Text('Settings'),
-            ),
-            ListTile(
-              leading: Image.asset('lib/assets/icon/privacy.png'),
-              onTap: () => {
-                context.go('/licenses'),
-                selectedTile(3),
-              },
-              selected: _selectedTile == 3,
-              title: const Text('Licenses'),
             ),
           ],
         ),

@@ -1,0 +1,23 @@
+{
+    "name": "help_a_paw",
+    "short_name": "help_a_paw",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#0175C2",
+    "theme_color": "#0175C2",
+    "description": "Send emergency signals about animals in need.",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "icons/kitty_super.png",
+            "sizes": "16x16",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/help_a_paw_res.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        }
+    ]
+}
