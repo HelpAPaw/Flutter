@@ -6,7 +6,7 @@
         android:name="${applicationName}"
         android:icon="@mipmap/help_a_paw_res">
         <meta-data android:name="com.google.android.geo.com.google.android.geo.API_KEY"
-            android:value="AIzaSyC9rEqolZ2VygmUBHaIqp_m7sQqipyt_Lc"/>
+            android:value="AIzaSyDou7r2jHuI6E1tmehazSvi6DSxy_j9RXE"/>
         <activity
             android:name=".MainActivity"
             android:exported="true"
