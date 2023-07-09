@@ -43,11 +43,18 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-# Firebase related
+# Firebase and Google Cloud related
 .firebaserc
+database.rules.json
+firebase.json
+firestore.indexes.json
+firestore.rules
 android/app/google-services.json
+android/app/src/main/AndroidManifest.xml
 ios/firebase_app_id_file.json
+ios/Runner/AppDelegate.swift
 ios/Runner/GoogleService-Info.plist
-lib/config/firebase_options.dart
+lib/src/config/firebase_options.dart
 macos/firebase_app_id_file.json
 macos/Runner/GoogleService-Info.plist
+web/index.html
