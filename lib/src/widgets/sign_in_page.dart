@@ -145,6 +145,26 @@ class _SignInPageState extends State<SignInPage> {
                 title: Text(user.displayName ?? ''),
                 subtitle: Text(user.email),
               ),
+              const TextField(
+                obscureText: false,
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'E-Mail',
+                ),
+                maxLength: 64,
+                maxLines: 4,
+                minLines: 2,
+              ),
+              TextField(
+                obscureText: true,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'Password',
+                ),
+                maxLength: 64,
+                maxLines: 4,
+                minLines: 2,
+              ),
               const Text('Signed in successfully.'),
               if (_isAuthorized) ...<Widget>[
                 Text(_contactText),
@@ -183,6 +203,26 @@ class _SignInPageState extends State<SignInPage> {
           child: ListView(
             children: <Widget>[
               const Text('You are not currently signed in.'),
+              const TextField(
+                obscureText: false,
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'E-Mail',
+                ),
+                maxLength: 64,
+                maxLines: 4,
+                minLines: 2,
+              ),
+              TextField(
+                obscureText: true,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'Password',
+                ),
+                maxLength: 64,
+                maxLines: 4,
+                minLines: 2,
+              ),
               IconButton(
                 icon: const Icon(Icons.assignment),
                 onPressed: _handleSignIn,
