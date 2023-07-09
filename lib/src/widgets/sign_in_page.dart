@@ -154,6 +154,7 @@ class _SignInPageState extends State<SignInPage> {
                 maxLength: 64,
                 maxLines: 4,
                 minLines: 2,
+                showCursor: true,
               ),
               TextField(
                 obscureText: true,
@@ -164,6 +165,7 @@ class _SignInPageState extends State<SignInPage> {
                 maxLength: 64,
                 maxLines: 4,
                 minLines: 2,
+                showCursor: true,
               ),
               const Text('Signed in successfully.'),
               if (_isAuthorized) ...<Widget>[
@@ -212,6 +214,7 @@ class _SignInPageState extends State<SignInPage> {
                 maxLength: 64,
                 maxLines: 4,
                 minLines: 2,
+                showCursor: true,
               ),
               TextField(
                 obscureText: true,
@@ -222,6 +225,7 @@ class _SignInPageState extends State<SignInPage> {
                 maxLength: 64,
                 maxLines: 4,
                 minLines: 2,
+                showCursor: true,
               ),
               IconButton(
                 icon: const Icon(Icons.assignment),
