@@ -250,7 +250,7 @@ packages:
     source: hosted
     version: "1.5.4"
   firebase_ui_localizations:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: firebase_ui_localizations
       sha256: b13be7432af3eed2ff6f2ed1c55a9afc32ffa7376fcada9e16be055fad6415ed
@@ -265,6 +265,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.4"
+  firebase_ui_oauth_google:
+    dependency: "direct main"
+    description:
+      name: firebase_ui_oauth_google
+      sha256: a622b9dbb658809d82a18575a2aa46166ca35f0c640ced509efe3819ca29cbe1
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.2.4"
   firebase_ui_shared:
     dependency: transitive
     description:
@@ -461,7 +469,7 @@ packages:
     source: sdk
     version: "0.0.0"
   intl:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: intl
       sha256: a3715e3bc90294e971cb7dc063fbf3cd9ee0ebf8604ffeafabd9e6f16abbdbe6
