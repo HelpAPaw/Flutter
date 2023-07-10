@@ -30,8 +30,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_localizations:
-    sdk: flutter
   flutter_web_plugins:
     sdk: flutter
   adaptive_components: ^0.0.9
@@ -49,6 +47,7 @@ dependencies:
   google_maps_flutter: ^2.3.1
   google_sign_in: ^6.1.4
   http: ^1.1.0
+  intl: ^0.18.0
   url_launcher: ^6.1.12
 
   # The following adds the Cupertino Icons font to your application.
