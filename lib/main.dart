@@ -15,11 +15,11 @@ import 'package:help_a_paw/src/widgets/licenses.dart';
 import 'package:help_a_paw/src/widgets/sign_in_page.dart';
 
 final actionCodeSettings = ActionCodeSettings(
-  url: 'https://flutter-fire-373a7.firebaseapp.com',
-  handleCodeInApp: true,
   androidMinimumVersion: '0.2.0',
   androidPackageName: 'dev.help_a_paw.help_a_paw',
+  handleCodeInApp: true,
   iOSBundleId: 'dev.helpapaw.helpAPaw',
+  url: 'https://flutter-fire-373a7.firebaseapp.com',
 );
 final emailLinkProviderConfig = EmailLinkAuthProvider(
   actionCodeSettings: actionCodeSettings,
