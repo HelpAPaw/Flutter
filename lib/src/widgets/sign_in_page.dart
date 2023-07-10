@@ -136,59 +136,66 @@ class _SignInPageState extends State<SignInPage> {
           title: const Text('Sign In'),
         ),
         body: AdaptiveContainer(
-          child: ListView(
-            children: <Widget>[
-              ListTile(
-                leading: GoogleUserCircleAvatar(
-                  identity: user,
+          child: ListView(children: <Widget>[
+            Card(
+              elevation: 6,
+              child: Column(children: <Widget>[
+                ListView(
+                  children: <Widget>[
+                    ListTile(
+                      leading: GoogleUserCircleAvatar(
+                        identity: user,
+                      ),
+                      title: Text(user.displayName ?? ''),
+                      subtitle: Text(user.email),
+                    ),
+                    const TextField(
+                      obscureText: false,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(),
+                        labelText: 'E-Mail',
+                      ),
+                      maxLength: 64,
+                      maxLines: 4,
+                      minLines: 2,
+                      showCursor: true,
+                    ),
+                    TextField(
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        labelText: 'Password',
+                      ),
+                      maxLength: 64,
+                      maxLines: 4,
+                      minLines: 2,
+                      showCursor: true,
+                    ),
+                    const Text('Signed in successfully.'),
+                    if (_isAuthorized) ...<Widget>[
+                      Text(_contactText),
+                      ElevatedButton(
+                        child: const Text('REFRESH'),
+                        onPressed: () => _handleGetContact(user),
+                      ),
+                    ],
+                    if (!_isAuthorized) ...<Widget>[
+                      const Text(
+                          'Additional permissions needed to read your contacts.'),
+                      ElevatedButton(
+                        onPressed: _handleAuthorizeScopes,
+                        child: const Text('REQUEST PERMISSIONS'),
+                      ),
+                    ],
+                    ElevatedButton(
+                      onPressed: _handleSignOut,
+                      child: const Text('SIGN OUT'),
+                    ),
+                  ],
                 ),
-                title: Text(user.displayName ?? ''),
-                subtitle: Text(user.email),
-              ),
-              const TextField(
-                obscureText: false,
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'E-Mail',
-                ),
-                maxLength: 64,
-                maxLines: 4,
-                minLines: 2,
-                showCursor: true,
-              ),
-              TextField(
-                obscureText: true,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Password',
-                ),
-                maxLength: 64,
-                maxLines: 4,
-                minLines: 2,
-                showCursor: true,
-              ),
-              const Text('Signed in successfully.'),
-              if (_isAuthorized) ...<Widget>[
-                Text(_contactText),
-                ElevatedButton(
-                  child: const Text('REFRESH'),
-                  onPressed: () => _handleGetContact(user),
-                ),
-              ],
-              if (!_isAuthorized) ...<Widget>[
-                const Text(
-                    'Additional permissions needed to read your contacts.'),
-                ElevatedButton(
-                  onPressed: _handleAuthorizeScopes,
-                  child: const Text('REQUEST PERMISSIONS'),
-                ),
-              ],
-              ElevatedButton(
-                onPressed: _handleSignOut,
-                child: const Text('SIGN OUT'),
-              ),
-            ],
-          ),
+              ]),
+            ),
+          ]),
         ),
       );
     } else {
@@ -202,37 +209,44 @@ class _SignInPageState extends State<SignInPage> {
           title: const Text('Sign In'),
         ),
         body: AdaptiveContainer(
-          child: ListView(
-            children: <Widget>[
-              const Text('You are not currently signed in.'),
-              const TextField(
-                obscureText: false,
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'E-Mail',
+          child: ListView(children: <Widget>[
+            Card(
+              elevation: 6,
+              child: Column(children: <Widget>[
+                ListView(
+                  children: <Widget>[
+                    const Text('You are not currently signed in.'),
+                    const TextField(
+                      obscureText: false,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(),
+                        labelText: 'E-Mail',
+                      ),
+                      maxLength: 64,
+                      maxLines: 4,
+                      minLines: 2,
+                      showCursor: true,
+                    ),
+                    TextField(
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        labelText: 'Password',
+                      ),
+                      maxLength: 64,
+                      maxLines: 4,
+                      minLines: 2,
+                      showCursor: true,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.assignment),
+                      onPressed: _handleSignIn,
+                    ),
+                  ],
                 ),
-                maxLength: 64,
-                maxLines: 4,
-                minLines: 2,
-                showCursor: true,
-              ),
-              TextField(
-                obscureText: true,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Password',
-                ),
-                maxLength: 64,
-                maxLines: 4,
-                minLines: 2,
-                showCursor: true,
-              ),
-              IconButton(
-                icon: const Icon(Icons.assignment),
-                onPressed: _handleSignIn,
-              ),
-            ],
-          ),
+              ]),
+            ),
+          ]),
         ),
       );
     }
