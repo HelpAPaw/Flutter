@@ -5,12 +5,12 @@
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "Send emergency signals about animals in need.",
+    "description": "Send emergency signals about animals in need",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
         {
-            "src": "icons/kitty_super.png",
+            "src": "icons/shiba_inu.png",
             "sizes": "16x16",
             "type": "image/png"
         },

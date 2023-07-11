@@ -4,8 +4,9 @@ import 'package:firebase_auth/firebase_auth.dart'
     hide PhoneAuthProvider, EmailAuthProvider;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_ui_auth/firebase_ui_auth.dart';
-import 'package:firebase_ui_oauth_google/firebase_ui_oauth_google.dart';
+import 'package:firebase_ui_localizations/firebase_ui_localizations.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/src/config/firebase_options.dart';
@@ -15,7 +16,7 @@ import 'package:help_a_paw/src/widgets/licenses.dart';
 import 'package:help_a_paw/src/widgets/sign_in_page.dart';
 
 final actionCodeSettings = ActionCodeSettings(
-  androidMinimumVersion: '0.2.0',
+  androidMinimumVersion: '4.4',
   androidPackageName: 'dev.help_a_paw.help_a_paw',
   handleCodeInApp: true,
   iOSBundleId: 'dev.helpapaw.helpAPaw',
@@ -37,9 +38,6 @@ Future<void> main() async {
     EmailAuthProvider(),
     emailLinkProviderConfig,
     PhoneAuthProvider(),
-    GoogleProvider(
-        clientId:
-            '820468452348-mqqb9tdir81togv2crgk6bdt738t8ece.apps.googleusercontent.com'),
   ]);
   runApp(const HelpAPaw());
   usePathUrlStrategy();
@@ -87,6 +85,12 @@ class HelpAPaw extends StatelessWidget {
           primaryColorLight: Colors.orange,
           primarySwatch: Colors.orange,
           useMaterial3: true),
+      locale: const Locale('en'),
+      localizationsDelegates: [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        FirebaseUILocalizations.delegate,
+      ],
       routerConfig: _router,
     );
   }
