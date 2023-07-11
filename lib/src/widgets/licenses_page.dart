@@ -30,7 +30,7 @@ class _LicensesPageState extends State<LicensesPage> {
       url,
       mode: LaunchMode.externalApplication,
     )) {
-      throw Exception('Launch Failed: $url');
+      return debugPrint('Launch Failed: $url');
     }
   }
 

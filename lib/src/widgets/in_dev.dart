@@ -27,7 +27,7 @@ class _InDevState extends State<InDev> {
       url,
       mode: LaunchMode.externalApplication,
     )) {
-      throw Exception('Launch Failed: $url');
+      return debugPrint('Launch Failed: $url');
     }
   }
 
