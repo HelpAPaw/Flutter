@@ -1,23 +1,26 @@
-import 'dart:async';
-
 import 'package:adaptive_components/adaptive_components.dart';
 import 'package:adaptive_navigation/adaptive_navigation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-class InDev extends StatefulWidget {
-  const InDev({super.key});
+class LicensesPage extends StatefulWidget {
+  const LicensesPage({super.key});
 
-  // In Development State
+  // Licenses State
   @override
-  State<InDev> createState() => _InDevState();
+  State<LicensesPage> createState() => _LicensesPageState();
 }
 
-class _InDevState extends State<InDev> {
+class _LicensesPageState extends State<LicensesPage> {
   final Uri gitHubSource = Uri(
     host: 'github.com',
     path: 'HelpAPaw/Flutter',
+    scheme: 'https',
+  );
+  final Uri ourSite = Uri(
+    host: 'www.helpapaw.org',
+    path: 'index_en.html',
     scheme: 'https',
   );
   Future<void>? _browserLaunched;
@@ -31,7 +34,7 @@ class _InDevState extends State<InDev> {
     }
   }
 
-  // In Development Widgets
+  // Licenses Widgets
   @override
   Widget build(BuildContext context) {
     FutureBuilder<void>(future: _browserLaunched, builder: _launchStatus);
@@ -42,11 +45,15 @@ class _InDevState extends State<InDev> {
             onPressed: () => {
                   context.go('/home'),
                 }),
-        title: const Text('Development'),
+        title: const Text('Licenses'),
       ),
       body: AdaptiveContainer(
         child: ListView(children: <Widget>[
-          Image.asset('lib/assets/in_development.png'),
+          const AboutDialog(
+            applicationName: 'Help a Paw',
+            applicationLegalese: 'BSD 3-Clause "New" or "Revised" License',
+            applicationVersion: '0.2.0',
+          ),
           ButtonBar(
             alignment: MainAxisAlignment.end,
             children: <Widget>[
@@ -75,8 +82,33 @@ class _InDevState extends State<InDev> {
                   ),
                 ),
               ),
+              ElevatedButton(
+                child: const Text('Our Site'),
+                onPressed: () => showDialog<String>(
+                  context: context,
+                  builder: (BuildContext context) => AlertDialog(
+                    content: const Text('Launch in Browser'),
+                    elevation: 6,
+                    icon: const Icon(Icons.open_in_browser_rounded),
+                    title: const Text('Launch Mode'),
+                    actions: <Widget>[
+                      ElevatedButton(
+                        child: const Text('Cancel'),
+                        onPressed: () => Navigator.pop(context, 'Cancel'),
+                      ),
+                      ElevatedButton(
+                        child: const Text('OK'),
+                        onPressed: () => setState(() {
+                          Navigator.pop(context, 'OK');
+                          _browserLaunched = _launchInBrowser(ourSite);
+                        }),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
-          )
+          ),
         ]),
       ),
     );
