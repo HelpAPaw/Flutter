@@ -75,6 +75,15 @@ class _HomeRouteState extends State<HomeRoute> {
               title: const Text('Profile'),
             ),
             ListTile(
+              leading: Image.asset('lib/assets/icon/webdev.png'),
+              onTap: () => {
+                context.go('/in_dev'),
+                selectedTile(4),
+              },
+              selected: _selectedTile == 4,
+              title: const Text('Our Site'),
+            ),
+            ListTile(
               leading: Image.asset('lib/assets/icon/settings.png'),
               onTap: () => {
                 context.go('/in_dev'),

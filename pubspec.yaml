@@ -37,11 +37,10 @@ dependencies:
   adaptive_components: ^0.0.9
   adaptive_navigation: ^0.0.9
   animations: ^2.0.7
-  cloud_firestore: ^4.8.2
   firebase_auth: ^4.6.3
   firebase_core: ^2.14.0
+  firebase_messaging: ^14.6.4
   firebase_ui_auth: ^1.5.0
-  firebase_ui_firestore: ^1.5.4
   firebase_ui_localizations: ^1.5.0
   firebase_ui_oauth: ^1.4.4
   firebase_ui_oauth_google: ^1.2.4
