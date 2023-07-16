@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "820468452348",
+    "firebase_url": "https://flutter-fire-373a7-default-rtdb.firebaseio.com",
+    "project_id": "flutter-fire-373a7",
+    "storage_bucket": "flutter-fire-373a7.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:820468452348:android:6723be9ed5d3ecbe3f0079",
+        "android_client_info": {
+          "package_name": "dev.help_a_paw.help_a_paw"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "820468452348-mqqb9tdir81togv2crgk6bdt738t8ece.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD-mpO4iSojfKkFW0SPUsPpqQ7Gq5Gadc4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "820468452348-brpvdl5s791agkrpf1ps6dneg1b3asjc.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "820468452348-m97ok7j0i3qn636lihk3nk2i03qfgjt5.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "dev.helpapaw.helpAPaw"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
