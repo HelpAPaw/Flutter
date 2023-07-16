@@ -9,8 +9,6 @@
 .history
 .svn/
 migrate_working_dir/
-.env
-.vscode
 
 # IntelliJ related
 *.iml
@@ -34,9 +32,6 @@ migrate_working_dir/
 .pub/
 /build/
 
-# Web related
-lib/generated_plugin_registrant.dart
-
 # Symbolication related
 app.*.symbols
 
@@ -47,6 +42,20 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
-/android/app/google-services-prod.json
-/ios/firebase_app_id_file_prod.json
-/lib/firebase_options_prod.dart
+
+# Firebase and Google Cloud related
+/.firebaserc
+/database.rules.json
+/firebase.json
+/firestore.indexes.json
+/firestore.rules
+/android/app/google-services.json
+/android/app/src/main/AndroidManifest.xml
+/ios/firebase_app_id_file.json
+/ios/Runner/AppDelegate.swift
+/ios/Runner/GoogleService-Info.plist
+/lib/src/config/firebase_auth_config.dart
+/lib/src/config/firebase_options.dart
+/macos/firebase_app_id_file.json
+/macos/Runner/GoogleService-Info.plist
+/web/index.html
