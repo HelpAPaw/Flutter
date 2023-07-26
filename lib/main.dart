@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart'
     hide PhoneAuthProvider, EmailAuthProvider;
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_ui_auth/firebase_ui_auth.dart';
 import 'package:firebase_ui_localizations/firebase_ui_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -22,9 +21,6 @@ final actionCodeSettings = ActionCodeSettings(
   iOSBundleId: 'dev.helpapaw.helpAPaw',
   url: 'https://flutter-fire-373a7.firebaseapp.com',
 );
-final emailLinkProviderConfig = EmailLinkAuthProvider(
-  actionCodeSettings: actionCodeSettings,
-);
 
 Future<void> main() async {
   await Firebase.initializeApp(
@@ -34,11 +30,6 @@ Future<void> main() async {
   final auth = FirebaseAuth.instanceFor(
       app: Firebase.app(), persistence: Persistence.LOCAL);
   await auth.setPersistence(Persistence.LOCAL);
-  FirebaseUIAuth.configureProviders([
-    EmailAuthProvider(),
-    emailLinkProviderConfig,
-    PhoneAuthProvider(),
-  ]);
   runApp(const HelpAPaw());
   usePathUrlStrategy();
   WidgetsFlutterBinding.ensureInitialized();
@@ -80,12 +71,7 @@ class HelpAPaw extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      theme: ThemeData(
-          primaryColor: Colors.orange.shade900,
-          primaryColorDark: Colors.blueGrey.shade900,
-          primaryColorLight: Colors.orange,
-          primarySwatch: Colors.orange,
-          useMaterial3: true),
+      theme: ThemeData(primarySwatch: Colors.orange, useMaterial3: true),
       locale: const Locale('en'),
       localizationsDelegates: [
         GlobalMaterialLocalizations.delegate,
