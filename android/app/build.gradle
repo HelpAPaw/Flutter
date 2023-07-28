@@ -72,8 +72,8 @@ flutter {
 
 dependencies {
     implementation "androidx.core:core-ktx:1.10.1"
-    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.0"
-    implementation "org.jetbrains.kotlin:kotlin-test:1.9.0"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.8.0"
+    implementation "org.jetbrains.kotlin:kotlin-test:1.8.0"
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines:1.7.1"
     implementation "org.jetbrains.kotlinx:kotlinx-datetime:0.4.0"
     implementation "org.jetbrains.kotlinx:kotlinx-serialization:1.5.1"
