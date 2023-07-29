@@ -54,7 +54,6 @@ app.*.map.json
 /ios/firebase_app_id_file.json
 /ios/Runner/AppDelegate.swift
 /ios/Runner/GoogleService-Info.plist
-/lib/src/config/firebase_auth_config.dart
 /lib/src/config/firebase_options.dart
 /macos/firebase_app_id_file.json
 /macos/Runner/GoogleService-Info.plist
