@@ -176,7 +176,7 @@ class _SignInPageState extends State<SignInPage> {
           elevation: 6,
           leading: BackButton(
               onPressed: () => {
-                    context.go('/sign_in'),
+                    context.go('/home'),
                   }),
           title: const Text('Sign In'),
         ),
