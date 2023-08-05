@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:easy_localization/easy_localization.dart';
 import 'package:firebase_auth/firebase_auth.dart'
     hide PhoneAuthProvider, EmailAuthProvider;
 import 'package:firebase_core/firebase_core.dart';
@@ -24,6 +25,7 @@ final actionCodeSettings = ActionCodeSettings(
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await EasyLocalization.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -31,7 +33,18 @@ Future<void> main() async {
   //final auth = FirebaseAuth.instanceFor(
   //    app: Firebase.app(), persistence: Persistence.LOCAL);
   // await auth.setPersistence(Persistence.LOCAL);
-  runApp(const HelpAPaw());
+  runApp(
+    EasyLocalization(
+      supportedLocales: const [
+        Locale('en', ''),
+        Locale('bg', 'BG'),
+      ],
+      path: 'lib/assets/locale',
+      fallbackLocale: const Locale('bg', 'BG'),
+      // startLocale:
+      child: const HelpAPaw(),
+    ),
+  );
   usePathUrlStrategy();
 }
 
@@ -72,11 +85,13 @@ class HelpAPaw extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp.router(
       theme: ThemeData(primarySwatch: Colors.orange, useMaterial3: true),
-      locale: const Locale('en'),
+      locale: context.locale,
+      supportedLocales: context.supportedLocales,
       localizationsDelegates: [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         FirebaseUILocalizations.delegate,
+        ...context.localizationDelegates
       ],
       routerConfig: _router,
     );
