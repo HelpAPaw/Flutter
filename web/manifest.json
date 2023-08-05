@@ -1,35 +1,23 @@
 {
-    "name": "Help a Paw",
-    "short_name": "Help a Paw",
+    "name": "help_a_paw",
+    "short_name": "help_a_paw",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "Help A Paw in Flutter",
+    "description": "Send emergency signals about animals in need",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
         {
-            "src": "icons/Icon-192.png",
-            "sizes": "192x192",
+            "src": "icons/shiba_inu.png",
+            "sizes": "16x16",
             "type": "image/png"
         },
         {
-            "src": "icons/Icon-512.png",
-            "sizes": "512x512",
-            "type": "image/png"
-        },
-        {
-            "src": "icons/Icon-maskable-192.png",
+            "src": "icons/help_a_paw_res.png",
             "sizes": "192x192",
-            "type": "image/png",
-            "purpose": "maskable"
-        },
-        {
-            "src": "icons/Icon-maskable-512.png",
-            "sizes": "512x512",
-            "type": "image/png",
-            "purpose": "maskable"
+            "type": "image/png"
         }
     ]
 }

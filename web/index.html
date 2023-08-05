@@ -18,18 +18,16 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="Help A Paw in Flutter">
+  <meta name="description" content="Send emergency signals about animals in need">
 
   <!-- iOS meta tags & icons -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="help_a_paw">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <link rel="apple-touch-icon" href="icons/help_a_paw_res.png">
 
   <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
-
-  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBWtGcNoFURPqOGSzdRQq0jTom0eFICaNg"></script>
+  <link rel="icon" type="image/png" href="icons/shiba_inu.png"/>
 
   <title>help_a_paw</title>
   <link rel="manifest" href="manifest.json">
@@ -40,6 +38,10 @@
   </script>
   <!-- This script adds the flutter initialization JS code -->
   <script src="flutter.js" defer></script>
+  <script
+          src="https://maps.googleapis.com/maps/api/js?key=AIzaSyC5yJ8wBdPNMRcRyli3jVZEB72_6eu1Ja4&libraries=drawing,geometry,visualization">
+  </script>
+  <meta name="google-signin-client_id" content="820468452348-mqqb9tdir81togv2crgk6bdt738t8ece.apps.googleusercontent.com">
 </head>
 <body>
   <script>
@@ -48,11 +50,12 @@
       _flutter.loader.loadEntrypoint({
         serviceWorker: {
           serviceWorkerVersion: serviceWorkerVersion,
+        },
+        onEntrypointLoaded: function(engineInitializer) {
+          engineInitializer.initializeEngine().then(function(appRunner) {
+            appRunner.runApp();
+          });
         }
-      }).then(function(engineInitializer) {
-        return engineInitializer.initializeEngine();
-      }).then(function(appRunner) {
-        return appRunner.runApp();
       });
     });
   </script>
