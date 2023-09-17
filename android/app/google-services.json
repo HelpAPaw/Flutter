@@ -1,41 +1,78 @@
 {
   "project_info": {
-    "project_number": "820468452348",
-    "firebase_url": "https://flutter-fire-373a7-default-rtdb.firebaseio.com",
-    "project_id": "flutter-fire-373a7",
-    "storage_bucket": "flutter-fire-373a7.appspot.com"
+    "project_number": "757136327951",
+    "project_id": "help-a-paw-dev",
+    "storage_bucket": "help-a-paw-dev.appspot.com"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:820468452348:android:6723be9ed5d3ecbe3f0079",
+        "mobilesdk_app_id": "1:757136327951:android:be094e7052a38f6e0f2a7a",
         "android_client_info": {
-          "package_name": "dev.help_a_paw.help_a_paw"
+          "package_name": "org.helpapaw.helpapaw"
         }
       },
       "oauth_client": [
         {
-          "client_id": "820468452348-mqqb9tdir81togv2crgk6bdt738t8ece.apps.googleusercontent.com",
+          "client_id": "757136327951-fmhd4r61sddnkvbcknaf76b7u28rr7aa.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyD-mpO4iSojfKkFW0SPUsPpqQ7Gq5Gadc4"
+          "current_key": "AIzaSyDFn3Cexv_aWaSIQ6w4i53YQJf-j5_EsNk"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "820468452348-brpvdl5s791agkrpf1ps6dneg1b3asjc.apps.googleusercontent.com",
+              "client_id": "757136327951-fmhd4r61sddnkvbcknaf76b7u28rr7aa.apps.googleusercontent.com",
               "client_type": 3
             },
             {
-              "client_id": "820468452348-m97ok7j0i3qn636lihk3nk2i03qfgjt5.apps.googleusercontent.com",
+              "client_id": "757136327951-9hkvaklhc08pdcc8lfi5vd53c8c61391.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "dev.helpapaw.helpAPaw"
+                "bundle_id": "com.helpapaw.helpapaw",
+                "app_store_id": "1234893764"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:757136327951:android:68ecae00ee63d1f60f2a7a",
+        "android_client_info": {
+          "package_name": "org.helpapaw.helpapaw.debug"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "757136327951-fmhd4r61sddnkvbcknaf76b7u28rr7aa.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDFn3Cexv_aWaSIQ6w4i53YQJf-j5_EsNk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "757136327951-fmhd4r61sddnkvbcknaf76b7u28rr7aa.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "757136327951-9hkvaklhc08pdcc8lfi5vd53c8c61391.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.helpapaw.helpapaw",
+                "app_store_id": "1234893764"
               }
             }
           ]
