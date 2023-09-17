@@ -75,3 +75,5 @@ app.*.map.json
 /macos/Flutter/ephemeral/flutter_export_environment.sh
 /macos/Flutter/ephemeral/Flutter-Generated.xcconfig
 /android/app/google-services-prod.json
+/lib/src/config/firebase_options_prod.dart
+/android/local.properties
