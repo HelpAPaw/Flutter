@@ -14,14 +14,6 @@ import 'package:help_a_paw/src/widgets/in_dev.dart';
 import 'package:help_a_paw/src/widgets/licenses_page.dart';
 import 'package:help_a_paw/src/widgets/sign_in_page.dart';
 
-final actionCodeSettings = ActionCodeSettings(
-  androidMinimumVersion: '4.4',
-  androidPackageName: 'dev.help_a_paw.help_a_paw',
-  handleCodeInApp: true,
-  iOSBundleId: 'dev.helpapaw.helpAPaw',
-  url: 'https://flutter-fire-373a7.firebaseapp.com',
-);
-
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
