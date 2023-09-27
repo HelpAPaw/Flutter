@@ -16,7 +16,7 @@ jobs:
     steps:
     
     - name: Checkout Repository
-      uses: actions/checkout@v4.0.0
+      uses: actions/checkout@v4.1.1
 
     - name: Install Flutter
       run: sudo snap install flutter --classic

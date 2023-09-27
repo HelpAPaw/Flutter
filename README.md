@@ -6,8 +6,8 @@
   </h1>
 </a>
 
-[![Flutter Action Workflow](https://github.com/HelpAPaw/Flutter/actions/workflows/flutter.yml/badge.svg)](https://github.com/HelpAPaw/Flutter/actions/workflows/flutter.yml)
+[![Flutter Workflow](https://github.com/HelpAPaw/Flutter/actions/workflows/flutter.yml/badge.svg)](https://github.com/HelpAPaw/Flutter/actions/workflows/flutter.yml)
 
 # Help A Paw
 
-Help a Paw is a free mobile application that let's you send emergency signals about animals in need. As a result volunteers nearby (app users just like you!) will receive a notification and could provide help.
+Help a Paw is a free mobile application that let's you send emergency signals about animals in need. As a result volunteers nearby (application users just like you!) will receive a notification and could provide help.
