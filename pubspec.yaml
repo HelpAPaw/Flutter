@@ -21,7 +21,6 @@ dependencies:
   http: ^1.1.0
   intl: ^0.18.1
   os_detect: ^2.0.1
-  two_dimensional_scrollables: ^0.0.2
   url_launcher: ^6.1.14
   webview_flutter: ^4.3.0
 
