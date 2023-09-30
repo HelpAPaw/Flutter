@@ -8,8 +8,8 @@ dependencies:
   adaptive_components: ^0.0.9
   adaptive_navigation: ^0.0.9
   animations: ^2.0.8
-  cupertino_icons: ^1.0.6
   cloud_firestore: ^4.9.2
+  cupertino_icons: ^1.0.6
   firebase_app_check: ^0.2.0
   firebase_auth: ^4.10.0
   firebase_core: ^2.16.0
