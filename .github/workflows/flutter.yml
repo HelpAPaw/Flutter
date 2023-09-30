@@ -16,31 +16,25 @@ jobs:
     steps:
     
     - name: Checkout Repository
-      uses: actions/checkout@v3
-      
-    - name: Set up Dart
-      uses: dart-lang/setup-dart@v1.5.0
-      
+      uses: actions/checkout@v4.0.0
+
     - name: Install Flutter
       run: sudo snap install flutter --classic
+
+    - name: Run Doctor
+      run: flutter doctor
       
     - name: Analyze Package
       run: flutter analyze lib
 
     - name: Environment Information
       run: dart info
-      
-    - name: Fix Package
+   
+    - name: Fix Package Dry Run 
       run: dart fix lib --dry-run
    
-    - name: Fix Package
+    - name: Fix Package Apply
       run: dart fix lib --apply
-      
-    - name: Format Package 
-      run: dart format lib
-      
-    - name: Get Packages
-      run: flutter pub get
       
     - name: Dependency Graph
       run: flutter pub deps
@@ -49,4 +43,4 @@ jobs:
       run: flutter pub upgrade
       
     - name: Run Test
-      run: flutter test test/widget_test.dart
+      run: flutter test
