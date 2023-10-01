@@ -43,11 +43,6 @@ flutter:
     - lib/assets/icon/pet/
   uses-material-design: true
 
-fonts:
-  - family: SocialIcons
-    fonts:
-      - asset: packages/firebase_ui_auth/fonts/SocialIcons.ttf
-
 name: help_a_paw
 publish_to: 'none' 
 version: 0.2.0
