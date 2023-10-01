@@ -3,17 +3,16 @@ import 'package:adaptive_navigation/adaptive_navigation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-class InDev extends StatefulWidget {
-  const InDev({super.key});
+class LicensesPage extends StatefulWidget {
+  const LicensesPage({super.key});
 
-  // In Development State
+  // Licenses State
   @override
-  State<InDev> createState() => _InDevState();
+  State<LicensesPage> createState() => _LicensesPageState();
 }
 
-class _InDevState extends State<InDev> {
-
-  // In Development Widgets
+class _LicensesPageState extends State<LicensesPage> {
+  // Licenses Widgets
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -23,11 +22,15 @@ class _InDevState extends State<InDev> {
             onPressed: () => {
                   context.go('/home'),
                 }),
-        title: const Text('Development'),
+        title: const Text('Licenses'),
       ),
       body: AdaptiveContainer(
-        child: ListView(children: <Widget>[
-          Image.asset('lib/assets/in_development.png'),
+        child: ListView(children: const <Widget>[
+          AboutDialog(
+            applicationName: 'Help a Paw',
+            applicationLegalese: 'BSD 3-Clause "New" or "Revised" License',
+            applicationVersion: '0.2.0',
+          ),
         ]),
       ),
     );
