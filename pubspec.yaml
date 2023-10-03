@@ -20,9 +20,7 @@ dependencies:
   google_sign_in: ^6.1.5
   http: ^1.1.0
   intl: ^0.18.1
-  os_detect: ^2.0.1
   url_launcher: ^6.1.14
-  webview_flutter: ^4.3.0
 
 description: Send emergency signals about animals in need
 
