@@ -28,8 +28,8 @@ class _InDevState extends State<InDev> {
         ),
       ),
       body: AdaptiveContainer(
-        child: ListView(children: <Widget>[
-          Image.asset('lib/assets/in_development.png'),
+        child: ListView(children: const <Widget>[
+          Text('In development')
         ]),
       ),
     );
