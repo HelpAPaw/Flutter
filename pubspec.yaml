@@ -1,3 +1,7 @@
+name: help_a_paw
+publish_to: 'none' 
+version: 0.2.0
+
 dependencies:
   flutter:
     sdk: flutter
@@ -40,7 +44,3 @@ flutter:
     - lib/assets/icon/
     - lib/assets/icon/pet/
   uses-material-design: true
-
-name: help_a_paw
-publish_to: 'none' 
-version: 0.2.0
