@@ -11,6 +11,7 @@ import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/src/config/firebase_options.dart';
 import 'package:help_a_paw/src/widgets/home_route.dart';
 import 'package:help_a_paw/src/widgets/in_dev.dart';
+import 'package:help_a_paw/src/widgets/licenses_page.dart';
 import 'package:help_a_paw/src/widgets/sign_in_page.dart';
 
 Future<void> main() async {
@@ -36,6 +37,12 @@ final GoRouter _router = GoRouter(
       builder: (BuildContext context, GoRouterState state) => const HomeRoute(),
     ),
     GoRoute(
+      name: 'licenses',
+      path: '/licenses',
+      builder: (BuildContext context, GoRouterState state) =>
+          const LicensesPage(),
+    ),
+    GoRoute(
       name: 'sign_in',
       path: '/sign_in',
       builder: (BuildContext context, GoRouterState state) =>
@@ -56,13 +63,7 @@ class HelpAPaw extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.orange,
-            brightness: Brightness.light,
-          ),
-          useMaterial3: true
-      ),
+      theme: ThemeData(primarySwatch: Colors.orange, useMaterial3: true),
       locale: const Locale('en'),
       localizationsDelegates: [
         GlobalMaterialLocalizations.delegate,
