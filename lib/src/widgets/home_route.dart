@@ -24,6 +24,7 @@ class _HomeRouteState extends State<HomeRoute> {
 
   int _selectedNavigation = 0;
   int _selectedTile = 0;
+  bool _isLoggedIn = false;
 
   // Home Route Widgets
   @override
@@ -34,39 +35,47 @@ class _HomeRouteState extends State<HomeRoute> {
           ButtonBar(
             children: <Widget>[
               IconButton(
-                  icon: const Icon(Icons.circle_notifications_outlined),
+                  icon: const Icon(Icons.filter_list_outlined),
                   onPressed: () => {
-                        context.go('/in_dev'),
+                        //TODO: implement
                       }),
               IconButton(
-                  icon: const Icon(Icons.info_outline_rounded),
+                //TODO: import custom icon
+                  icon: const Icon(Icons.local_hospital),
                   onPressed: () => {
-                        context.go('/licenses'),
-                      }),
+                    //TODO: implement
+                  }),
+              IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: () => {
+                    //TODO: implement
+                  }),
             ],
           ),
         ],
         elevation: 6,
-        title: const Text('Home'),
+        title: const Text('Help a Paw'),
       ),
       drawer: Drawer(
         elevation: 6,
         child: ListView(
           children: <Widget>[
             DrawerHeader(
-              child: Image.asset('lib/assets/icon/pet/3d_paw_64.png'),
+              child: Image.asset('lib/assets/logo.png'),
             ),
+            //TODO: show either 'Sign in' or 'Profile'
+            !_isLoggedIn ?
             ListTile(
-              leading: Image.asset('lib/assets/icon/log_in.png'),
+              leading: const Icon(Icons.login),
               onTap: () => {
                 context.go('/sign_in'),
                 selectedTile(0),
               },
               selected: _selectedTile == 0,
               title: const Text('Sign In'),
-            ),
+            ) :
             ListTile(
-              leading: Image.asset('lib/assets/icon/people_paw.png'),
+              leading: const Icon(Icons.account_circle),
               onTap: () => {
                 context.go('/in_dev'),
                 selectedTile(0),
@@ -75,7 +84,61 @@ class _HomeRouteState extends State<HomeRoute> {
               title: const Text('Profile'),
             ),
             ListTile(
-              leading: Image.asset('lib/assets/icon/webdev.png'),
+              leading: const Icon(Icons.pin_drop),
+              onTap: () => {
+                context.go('/in_dev'),
+                selectedTile(4),
+              },
+              selected: _selectedTile == 4,
+              title: const Text('My Signals'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.notifications),
+              onTap: () => {
+                context.go('/in_dev'),
+                selectedTile(4),
+              },
+              selected: _selectedTile == 4,
+              title: const Text('My Notifications'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.question_mark),
+              onTap: () => {
+                context.go('/in_dev'),
+                selectedTile(4),
+              },
+              selected: _selectedTile == 4,
+              title: const Text('FAQs'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.settings),
+              onTap: () => {
+                context.go('/in_dev'),
+                selectedTile(4),
+              },
+              selected: _selectedTile == 4,
+              title: const Text('Settings'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.feedback),
+              onTap: () => {
+                context.go('/in_dev'),
+                selectedTile(4),
+              },
+              selected: _selectedTile == 4,
+              title: const Text('Feedback'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.privacy_tip),
+              onTap: () => {
+                context.go('/in_dev'),
+                selectedTile(4),
+              },
+              selected: _selectedTile == 4,
+              title: const Text('Privacy Policy'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.link),
               onTap: () => {
                 context.go('/in_dev'),
                 selectedTile(4),
@@ -84,36 +147,25 @@ class _HomeRouteState extends State<HomeRoute> {
               title: const Text('Our Site'),
             ),
             ListTile(
-              leading: Image.asset('lib/assets/icon/settings.png'),
+              leading: const Icon(Icons.info),
               onTap: () => {
                 context.go('/in_dev'),
                 selectedTile(4),
               },
               selected: _selectedTile == 4,
-              title: const Text('Settings'),
+              title: const Text('About'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.share),
+              onTap: () => {
+                context.go('/in_dev'),
+                selectedTile(4),
+              },
+              selected: _selectedTile == 4,
+              title: const Text('Share'),
             ),
           ],
         ),
-      ),
-      bottomNavigationBar: NavigationBar(
-        onDestinationSelected: (int index) {
-          setState(() {
-            _selectedNavigation = index;
-          });
-        },
-        selectedIndex: _selectedNavigation,
-        destinations: const <NavigationDestination>[
-          NavigationDestination(
-            icon: Icon(Icons.map_outlined),
-            label: 'Map',
-            selectedIcon: Icon(Icons.map_rounded),
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.maps_ugc_outlined),
-            label: 'Signals',
-            selectedIcon: Icon(Icons.maps_ugc),
-          ),
-        ],
       ),
       body: <Widget>[
         AdaptiveContainer(
@@ -123,6 +175,14 @@ class _HomeRouteState extends State<HomeRoute> {
           child: const InDev(),
         ),
       ][_selectedNavigation],
+      floatingActionButton: FloatingActionButton(
+        shape: const CircleBorder(),
+        onPressed: () {
+          //TODO: implement
+        },
+        child: const Icon(Icons.add),
+
+      ),
     );
   }
 }
