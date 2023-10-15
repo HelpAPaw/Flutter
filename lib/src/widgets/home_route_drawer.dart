@@ -189,7 +189,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
               enableFeedback: true,
               leading: const Icon(Icons.info),
               onTap: () => {
-                context.go('/paw_browser'),
+                context.go('/in_dev'),
                 setState(() {
                   _homeRouteTile = 9;
                 }),
@@ -204,7 +204,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
               enableFeedback: true,
               leading: const Icon(Icons.share),
               onTap: () => {
-                context.go('/paw_browser'),
+                context.go('/in_dev'),
                 setState(() {
                   _homeRouteTile = 10;
                 }),
