@@ -78,6 +78,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
               ),
             ),
             ListTile(
+              enableFeedback: true,
               leading: const Icon(Icons.pin_drop),
               onTap: () => {
                 context.go('/in_dev'),
@@ -92,6 +93,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
               ),
             ),
             ListTile(
+              enableFeedback: true,
               leading: const Icon(Icons.notifications),
               onTap: () => {
                 context.go('/in_dev'),
@@ -106,6 +108,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
               ),
             ),
             ListTile(
+              enableFeedback: true,
               leading: const Icon(Icons.question_mark),
               onTap: () => {
                 context.go('/in_dev'),
@@ -120,6 +123,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
               ),
             ),
             ListTile(
+              enableFeedback: true,
               leading: const Icon(Icons.settings),
               onTap: () => {
                 context.go('/in_dev'),
@@ -134,6 +138,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
               ),
             ),
             ListTile(
+              enableFeedback: true,
               leading: const Icon(Icons.feedback),
               onTap: () => {
                 context.go('/in_dev'),
@@ -148,6 +153,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
               ),
             ),
             ListTile(
+              enableFeedback: true,
               leading: const Icon(Icons.privacy_tip),
               onTap: () => {
                 context.go('/in_dev'),
@@ -180,6 +186,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
               ),
             ),
             ListTile(
+              enableFeedback: true,
               leading: const Icon(Icons.info),
               onTap: () => {
                 context.go('/paw_browser'),
@@ -194,6 +201,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
               ),
             ),
             ListTile(
+              enableFeedback: true,
               leading: const Icon(Icons.share),
               onTap: () => {
                 context.go('/paw_browser'),
