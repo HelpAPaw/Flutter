@@ -80,10 +80,13 @@ class _HomeRouteState extends State<HomeRoute> {
       ),
       drawer: const HomeRouteDrawer(),
       floatingActionButton: FloatingActionButton(
+        elevation: 6,
+        enableFeedback: true,
         shape: const CircleBorder(),
         onPressed: () {
           //TODO: implement
         },
+        tooltip: 'TODO: implement'
         child: const Icon(Icons.add),
       ),
     );
