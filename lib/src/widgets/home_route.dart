@@ -45,7 +45,7 @@ class _HomeRouteState extends State<HomeRoute> {
           ),
         ],
         elevation: 6,
-        title: const Text('Home'),
+        title: const Text('Help a Paw'),
       ),
       body: <Widget>[
         AdaptiveContainer(
