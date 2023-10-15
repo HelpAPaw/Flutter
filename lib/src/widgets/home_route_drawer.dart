@@ -15,6 +15,7 @@ class HomeRouteDrawer extends StatefulWidget {
 }
 
 class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
+  bool _isLoggedIn = false;
   Future<void>? _browserLaunched;
   int _homeRouteTile = 0;
 
@@ -44,6 +45,8 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             DrawerHeader(
               child: Image.asset('lib/assets/logo.png'),
             ),
+            //TODO: show either 'Sign in' or 'Profile'
+            !_isLoggedIn ?
             ListTile(
               enableFeedback: true,
               leading: const Icon(Icons.login),
