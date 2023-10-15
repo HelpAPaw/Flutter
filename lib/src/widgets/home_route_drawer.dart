@@ -42,11 +42,11 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
         child: ListView(
           children: <Widget>[
             DrawerHeader(
-              child: Image.asset('lib/assets/icon/pet/3d_paw_64.png'),
+              child: Image.asset('lib/assets/logo.png'),
             ),
             ListTile(
               enableFeedback: true,
-              leading: Image.asset('lib/assets/icon/log_in.png'),
+              leading: const Icon(Icons.login),
               onTap: () => {
                 context.go('/sign_in'),
                 setState(() {
@@ -61,7 +61,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             ),
             ListTile(
               enableFeedback: true,
-              leading: Image.asset('lib/assets/icon/people_paw.png'),
+              leading: const Icon(Icons.account_circle),
               onTap: () => {
                 context.go('/in_dev'),
                 setState(() {
@@ -162,7 +162,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
               browserLaunchedAspect: _browserLaunched,
               child: ListTile(
                 enableFeedback: true,
-                leading: Image.asset('lib/assets/icon/webdev.png'),
+                leading: const Icon(Icons.link),
                 onTap: () => {
                   setState(() {
                     _homeRouteTile = 8;
