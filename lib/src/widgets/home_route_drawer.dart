@@ -15,7 +15,7 @@ class HomeRouteDrawer extends StatefulWidget {
 }
 
 class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
-  bool _isLoggedIn = false;
+  final bool _isLoggedIn = false;
   Future<void>? _browserLaunched;
   int _homeRouteTile = 0;
 
@@ -46,37 +46,37 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
               child: Image.asset('lib/assets/logo.png'),
             ),
             //TODO: show either 'Sign in' or 'Profile'
-            !_isLoggedIn ?
-            ListTile(
-              enableFeedback: true,
-              leading: const Icon(Icons.login),
-              onTap: () => {
-                context.go('/sign_in'),
-                setState(() {
-                  _homeRouteTile = 0;
-                }),
-              },
-              selected: _homeRouteTile == 0,
-              title: const Text(
-                'Sign In',
-                softWrap: true,
-              ),
-            ) :
-            ListTile(
-              enableFeedback: true,
-              leading: const Icon(Icons.account_circle),
-              onTap: () => {
-                context.go('/in_dev'),
-                setState(() {
-                  _homeRouteTile = 1;
-                }),
-              },
-              selected: _homeRouteTile == 1,
-              title: const Text(
-                'Profile',
-                softWrap: true,
-              ),
-            ),
+            !_isLoggedIn
+                ? ListTile(
+                    enableFeedback: true,
+                    leading: const Icon(Icons.login),
+                    onTap: () => {
+                      context.go('/sign_in'),
+                      setState(() {
+                        _homeRouteTile = 0;
+                      }),
+                    },
+                    selected: _homeRouteTile == 0,
+                    title: const Text(
+                      'Sign In',
+                      softWrap: true,
+                    ),
+                  )
+                : ListTile(
+                    enableFeedback: true,
+                    leading: const Icon(Icons.account_circle),
+                    onTap: () => {
+                      context.go('/in_dev'),
+                      setState(() {
+                        _homeRouteTile = 1;
+                      }),
+                    },
+                    selected: _homeRouteTile == 1,
+                    title: const Text(
+                      'Profile',
+                      softWrap: true,
+                    ),
+                  ),
             ListTile(
               enableFeedback: true,
               leading: const Icon(Icons.pin_drop),
