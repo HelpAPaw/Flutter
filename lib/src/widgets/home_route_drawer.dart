@@ -61,7 +61,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
                 'Sign In',
                 softWrap: true,
               ),
-            ),
+            ) :
             ListTile(
               enableFeedback: true,
               leading: const Icon(Icons.account_circle),
