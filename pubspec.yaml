@@ -13,19 +13,19 @@ dependencies:
   adaptive_components: ^0.0.9
   adaptive_navigation: ^0.0.9
   animations: ^2.0.8
-  cloud_firestore: ^4.11.0
+  cloud_firestore: ^4.12.0
   cupertino_icons: ^1.0.6
-  firebase_app_check: ^0.2.1+1
-  firebase_auth: ^4.11.1
-  firebase_core: ^2.19.0
-  firebase_in_app_messaging: ^0.7.4+1
-  firebase_messaging: ^14.7.1
+  firebase_app_check: ^0.2.1+2
+  firebase_auth: ^4.12.0
+  firebase_core: ^2.20.0
+  firebase_in_app_messaging: ^0.7.4+2
+  firebase_messaging: ^14.7.2
   go_router: ^12.0.0
   google_maps_flutter: ^2.5.0
   google_sign_in: ^6.1.5
   http: ^1.1.0
   intl: ^0.18.1
-  url_launcher: ^6.1.14
+  url_launcher: ^6.2.0
 
 dev_dependencies:
   flutter_test:
