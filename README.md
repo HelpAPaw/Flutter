@@ -6,7 +6,7 @@
   </h1>
 </a>
 
-[![Flutter Action Workflow](https://github.com/HelpAPaw/Flutter/actions/workflows/flutter.yml/badge.svg)](https://github.com/HelpAPaw/Flutter/actions/workflows/flutter.yml)
+[![Flutter Workflow](https://github.com/HelpAPaw/Flutter/actions/workflows/flutter.yml/badge.svg)](https://github.com/HelpAPaw/Flutter/actions/workflows/flutter.yml)
 
 # Help A Paw
 
