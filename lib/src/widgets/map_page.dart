@@ -2,6 +2,7 @@ import 'package:adaptive_components/adaptive_components.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:go_router/go_router.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -42,6 +43,9 @@ class _MapScreenState extends State<MapScreen> {
                 infoWindow: InfoWindow(
                   title: data['title'],
                   snippet: data['description'],
+                  onTap: () {
+                    context.push('/signal_details/${signalDocument.id}');
+                  }
                 ),
               );
             }).toSet();

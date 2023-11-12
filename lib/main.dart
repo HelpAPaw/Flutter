@@ -11,6 +11,7 @@ import 'package:help_a_paw/src/config/firebase_options.dart';
 import 'package:help_a_paw/src/widgets/home_route.dart';
 import 'package:help_a_paw/src/widgets/in_dev.dart';
 import 'package:help_a_paw/src/widgets/sign_in_page.dart';
+import 'package:help_a_paw/src/widgets/signal_details_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,6 +40,11 @@ final GoRouter _router = GoRouter(
       path: '/sign_in',
       builder: (BuildContext context, GoRouterState state) =>
           const SignInPage(),
+    ),
+    GoRoute(
+      name: 'signal_details',
+      path: '/signal_details/:signalId',
+      builder: (BuildContext context, GoRouterState state) => SignalDetailsScreen(signalId: state.pathParameters['signalId']!),
     ),
     GoRoute(
       name: 'in_development',
