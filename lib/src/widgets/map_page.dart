@@ -17,6 +17,13 @@ class _MapScreenState extends State<MapScreen> {
   FirebaseFirestore.instance.collection('signals').snapshots();
   final LatLng _center = const LatLng(-33.86, 151.20);
   late GoogleMapController _mapController;
+  BitmapDescriptor? redPin;
+  BitmapDescriptor? orangePin;
+  BitmapDescriptor? greenPin;
+
+  _MapScreenState() {
+    _loadPins();
+  }
 
   // Map Page Widgets
   @override
@@ -47,6 +54,7 @@ class _MapScreenState extends State<MapScreen> {
                     context.push('/signal_details/${signalDocument.id}');
                   }
                 ),
+                icon: _getSignalPin(data['status']),
               );
             }).toSet();
           }
@@ -72,4 +80,28 @@ class _MapScreenState extends State<MapScreen> {
         }
     );
   }
+
+  _loadPins() async {
+    redPin = await _loadPin('red');
+    orangePin = await _loadPin('orange');
+    greenPin = await _loadPin('green');
+  }
+
+  Future<BitmapDescriptor> _loadPin(String color) async {
+    return BitmapDescriptor.fromAssetImage(
+        const ImageConfiguration(size: Size(24, 24)),
+        'assets/icons/pin_$color.png'
+    );
+  }
+
+  BitmapDescriptor _getSignalPin(int status) {
+      BitmapDescriptor? pin;
+      switch(status) {
+        case 0: pin = redPin;
+        case 1: pin = orangePin;
+        case 2: pin = greenPin;
+      }
+
+      return pin ?? BitmapDescriptor.defaultMarker;
+    }
 }
