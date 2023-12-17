@@ -45,7 +45,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
       child: ListView(
         children: <Widget>[
           DrawerHeader(
-            child: Image.asset('lib/assets/logo.png'),
+            child: Image.asset('assets/logo.png'),
           ),
           //TODO: show either 'Sign in' or 'Profile'
           !_isLoggedIn

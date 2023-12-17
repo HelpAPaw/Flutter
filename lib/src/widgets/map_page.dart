@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:go_router/go_router.dart';
 
+import 'home_route_drawer.dart';
+
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
 
@@ -76,6 +78,48 @@ class _MapScreenState extends State<MapScreen> {
                 markers: signalMarkers,
               ),
             ),
+            appBar: AppBar(
+              title: const Text('Help a Paw'),
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+              // elevation: 6,
+              actions: <Widget>[
+                ButtonBar(
+                  children: <Widget>[
+                    IconButton(
+                        icon: const Icon(Icons.filter_list_outlined),
+                        onPressed: () => {
+                          //TODO: implement
+                        }),
+                    IconButton(
+                      //TODO: import custom icon
+                        icon: const Icon(Icons.local_hospital),
+                        onPressed: () => {
+                          //TODO: implement
+                        }),
+                    IconButton(
+                        icon: const Icon(Icons.refresh),
+                        onPressed: () => {
+                          //TODO: implement
+                        }),
+                  ],
+                ),
+              ],
+            ),
+            drawer: const HomeRouteDrawer(),
+            floatingActionButton: FloatingActionButton(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+              elevation: 6,
+              enableFeedback: true,
+              shape: const CircleBorder(),
+              onPressed: () {
+                //TODO: implement
+              },
+              tooltip: 'TODO: implement',
+              child: const Icon(Icons.add),
+            ),
+            floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat
           );
         }
     );
