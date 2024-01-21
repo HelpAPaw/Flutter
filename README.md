@@ -9,7 +9,7 @@
 <a href="https://github.com/HelpAPaw/Flutter">
   <h1 align="center">
     <picture>
-      <img src="https://github.com/HelpAPaw/Flutter/blob/dev/web/icons/help_a_paw_res.png">
+      <img src="https://github.com/HelpAPaw/Flutter/blob/dev/web/icons/help_a_paw_res.png" alt="">
     </picture>
   </h1>
 </a>
