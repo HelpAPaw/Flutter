@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:go_router/go_router.dart';
 
+import '../models/signal.dart';
 import 'home_route_drawer.dart';
 
 class MapScreen extends StatefulWidget {
@@ -22,6 +23,11 @@ class _MapScreenState extends State<MapScreen> {
   BitmapDescriptor? redPin;
   BitmapDescriptor? orangePin;
   BitmapDescriptor? greenPin;
+  bool _isAddingNewSignal = false;
+  final _newSignalTitleController = TextEditingController();
+  final _newSignalDescriptionController = TextEditingController();
+  final _newSignalPhoneNumberController = TextEditingController();
+  int _newSignalType = 0;
 
   _MapScreenState() {
     _loadPins();
@@ -63,19 +69,133 @@ class _MapScreenState extends State<MapScreen> {
 
           return Scaffold(
             body: AdaptiveContainer(
-              child: GoogleMap(
-                initialCameraPosition: CameraPosition(
-                    bearing: 0.0,
-                    target: _center,
-                    tilt: 0.0,
-                    zoom: 11.0
-                ),
-                onMapCreated: (GoogleMapController controller) {
-                  _mapController = controller;
-                },
-                zoomControlsEnabled: false,
-                myLocationEnabled: true,
-                markers: signalMarkers,
+              child: Stack(
+                children: [
+                  GoogleMap(
+                    initialCameraPosition: CameraPosition(
+                        bearing: 0.0,
+                        target: _center,
+                        tilt: 0.0,
+                        zoom: 11.0
+                    ),
+                    onMapCreated: (GoogleMapController controller) {
+                      _mapController = controller;
+                    },
+                    zoomControlsEnabled: false,
+                    myLocationEnabled: true,
+                    markers: signalMarkers,
+                  ),
+                  if (_isAddingNewSignal) const IgnorePointer(
+                    child: Center(
+                      child: Icon(Icons.gps_fixed, size: 50.0), // replace with your target icon
+                    ),
+                  ),
+                  if (_isAddingNewSignal) Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10.0),
+                            border: Border.all(color: Colors.grey, width: 1.0),
+                          ),
+                          child: Row(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.camera_alt),
+                                onPressed: () {
+                                  // TODO: Implement camera button functionality
+                                },
+                              ),
+                              Expanded(
+                                child: Column(
+                                  children: [
+                                    TextField(
+                                      controller: _newSignalTitleController,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Title',
+                                      ),
+                                      textCapitalization: TextCapitalization.sentences,
+                                    ),
+                                    TextField(
+                                      controller: _newSignalDescriptionController,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Description',
+                                      ),
+                                      textCapitalization: TextCapitalization.sentences,
+                                    ),
+                                    TextField(
+                                      controller: _newSignalPhoneNumberController,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Phone Number',
+                                      ),
+                                      keyboardType: TextInputType.phone,
+                                    ),
+                                    DropdownButton<String>(
+                                      isExpanded: true,
+                                      value: Signal.signalTypes[_newSignalType],
+                                      items: Signal.signalTypes
+                                          .map<DropdownMenuItem<String>>((String value) {
+                                        return DropdownMenuItem<String>(
+                                          value: value,
+                                          child: Text(value),
+                                        );
+                                      }).toList(),
+                                      onChanged: (String? newValue) {
+                                        if (newValue != null) {
+                                          setState(() {
+                                            _newSignalType = Signal.signalTypes.indexOf(newValue);
+                                          });
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.send),
+                                onPressed: () async {
+                                  // Get the visible region of the map
+                                  final visibleRegion = await _mapController.getVisibleRegion();
+
+                                  // Calculate the center of the visible region
+                                  final centerLatitude = (visibleRegion.northeast.latitude + visibleRegion.southwest.latitude) / 2;
+                                  final centerLongitude = (visibleRegion.northeast.longitude + visibleRegion.southwest.longitude) / 2;
+
+
+                                  var newSignal = Signal(
+                                    title: _newSignalTitleController.text,
+                                    description: _newSignalDescriptionController.text,
+                                    phoneNumber: _newSignalPhoneNumberController.text,
+                                    signalType: _newSignalType,
+                                    location: GeoPoint(centerLatitude, centerLongitude),
+                                  );
+
+                                  await FirebaseFirestore.instance.collection('signals').add(newSignal.toJson());
+
+                                  // Clear the text fields and dropdown
+                                  _newSignalTitleController.clear();
+                                  _newSignalDescriptionController.clear();
+                                  _newSignalPhoneNumberController.clear();
+                                  _newSignalType = 0;
+
+                                  // Hide the new signal block
+                                  setState(() {
+                                    _isAddingNewSignal = false;
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             appBar: AppBar(
@@ -114,7 +234,9 @@ class _MapScreenState extends State<MapScreen> {
               enableFeedback: true,
               shape: const CircleBorder(),
               onPressed: () {
-                //TODO: implement
+                setState(() {
+                  _isAddingNewSignal = !_isAddingNewSignal;
+                });
               },
               tooltip: 'TODO: implement',
               child: const Icon(Icons.add),

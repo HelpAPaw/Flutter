@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../models/signal.dart';
+
 class SignalDetailsScreen extends StatefulWidget {
   const SignalDetailsScreen({super.key, required this.signalId});
 
@@ -76,7 +78,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                           // Image.asset('assets/logo.png'),
                           Text(signalData['title'], style: const TextStyle(fontSize: 30), textAlign: TextAlign.center,),
                           Text(signalData['description'], style: const TextStyle(fontSize: 20), textAlign: TextAlign.center,),
-                          Text("Signal type: ${_getSignalType(signalData["type"])}"),
+                          Text("Signal type: ${Signal.getSignalTypeName(signalData["type"])}"),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -301,16 +303,16 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     );
   }
 
-  //TODO: extract to separate file
-  _getSignalType(int type) {
-    switch(type) {
-      case 0: return 'Emergency';
-      case 1: return 'Lost or Found';
-      case 2: return 'Blood donation';
-      case 3: return 'Homeless';
-      case 4: return 'Unneutered animals';
-      case 5: return 'Wild animals';
-      default: return 'Other';
-    }
-  }
+  // //TODO: extract to separate file
+  // _getSignalType(int type) {
+  //   switch(type) {
+  //     case 0: return 'Emergency';
+  //     case 1: return 'Lost or Found';
+  //     case 2: return 'Blood donation';
+  //     case 3: return 'Homeless';
+  //     case 4: return 'Unneutered animals';
+  //     case 5: return 'Wild animals';
+  //     default: return 'Other';
+  //   }
+  // }
 }
