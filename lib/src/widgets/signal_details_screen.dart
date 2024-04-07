@@ -25,7 +25,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     _signalStream ??= FirebaseFirestore.instance.collection('signals').doc(widget.signalId).snapshots();
-    Map<String, dynamic> signalData;
+    Signal signal;
 
     return StreamBuilder(stream: _signalStream, builder: (BuildContext context, AsyncSnapshot<DocumentSnapshot> snapshot) {
       if (snapshot.hasError) {
@@ -35,10 +35,10 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         //TODO
         return const CircularProgressIndicator();
       } else {
-        signalData = snapshot.data!.data() as Map<String, dynamic>;
+        final signalData = snapshot.data!.data() as Map<String, dynamic>;
+        signal = Signal.fromJson(signalData);
         if (reporterName.isEmpty) {
-          DocumentReference reporterRef = signalData['reporter'];
-          reporterRef.get().then((DocumentSnapshot reporterSnapshot) {
+          signal.reporter.get().then((DocumentSnapshot reporterSnapshot) {
             if (reporterSnapshot.exists) {
               Map<String, dynamic> reporterData = reporterSnapshot.data() as Map<String, dynamic>;
               setState(() {
@@ -78,13 +78,13 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                         children: <Widget>[
                           const Icon(Icons.adb),
                           // Image.asset('assets/logo.png'),
-                          Text(signalData['title'], style: const TextStyle(fontSize: 30), textAlign: TextAlign.center,),
-                          Text(signalData['description'], style: const TextStyle(fontSize: 20), textAlign: TextAlign.center,),
-                          Text("Signal type: ${Signal.getSignalTypeName(signalData["type"])}"),
+                          Text(signal.title, style: const TextStyle(fontSize: 30), textAlign: TextAlign.center,),
+                          Text(signal.description, style: const TextStyle(fontSize: 20), textAlign: TextAlign.center,),
+                          Text("Signal type: ${Signal.getSignalTypeName(signal.signalType)}"),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(DateFormat.yMd().add_jm().format(signalData['createdAt'].toDate())),
+                              Text(DateFormat.yMd().add_jm().format(signal.createdAt.toDate())),
                               //show user name from reporter field which is a reference to the users collection
                               Text(reporterName)
                             ],
@@ -95,7 +95,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                               TextButton.icon(
                                 onPressed: () async {
                                   // Open navigation app with signal location
-                                  GeoPoint location = signalData['location'];
+                                  GeoPoint location = signal.location['geopoint'];
                                   Uri url = Uri.parse('geo:${location.latitude},${location.longitude}');
                                   if (await canLaunchUrl(url)) {
                                     launchUrl(url);
@@ -118,21 +118,20 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                               ),
                               TextButton.icon(
                                 onPressed: () async {
-                                  String phoneNumber = signalData['contactPhone'];
-                                  Uri phoneUri = Uri(scheme: 'tel', path: phoneNumber);
+                                  Uri phoneUri = Uri(scheme: 'tel', path: signal.contactPhone);
                                   if (await canLaunchUrl(phoneUri)) {
                                     launchUrl(phoneUri);
                                   } else {
                                     // Show an alert to the user without using context
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                        content: Text('Cannot call $phoneNumber, please try to connect manually.'),
+                                        content: Text('Cannot call ${signal.contactPhone}, please try to connect manually.'),
                                       ),
                                     );
                                   }
                                 },
                                 icon: const Icon(Icons.phone),
-                                label: Text(signalData['contactPhone']),
+                                label: Text(signal.contactPhone),
                                 style: ButtonStyle(
                                   foregroundColor: MaterialStateProperty.all<Color>(Colors.white),
                                   backgroundColor: MaterialStateProperty.all<Color>(Colors.orange),
@@ -146,7 +145,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                             // expand to fill width
                             itemHeight: 64,
                             isExpanded: true,
-                            value: signalData['status'],
+                            value: signal.status,
                               items: [
                                 DropdownMenuItem(
                                   value: 0,

@@ -5,7 +5,10 @@ class Signal {
   final String description;
   final String phoneNumber;
   final int signalType;
-  final GeoPoint location;
+  final Map<String, dynamic> location;
+  final DocumentReference reporter;
+  final String contactPhone;
+  final createdAt;
   int status = 0;
 
   Signal({
@@ -14,6 +17,9 @@ class Signal {
     required this.phoneNumber,
     required this.signalType,
     required this.location,
+    required this.reporter,
+    required this.contactPhone,
+    required this.createdAt,
     this.status = 0,
   });
 
@@ -24,6 +30,9 @@ class Signal {
       'phoneNumber': phoneNumber,
       'signalType': signalType,
       'location': location,
+      'reporter': reporter,
+      'contactPhone': contactPhone,
+      'createdAt': createdAt,
       'status': status,
     };
   }
@@ -35,6 +44,9 @@ class Signal {
       phoneNumber: json['phoneNumber'],
       signalType: json['signalType'],
       location: json['location'],
+      reporter: json['reporter'],
+      contactPhone: json['contactPhone'],
+      createdAt: json['createdAt'],
       status: json['status'],
     );
   }

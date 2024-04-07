@@ -1,6 +1,7 @@
 import 'package:adaptive_components/adaptive_components.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:geoflutterfire2/geoflutterfire2.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:go_router/go_router.dart';
 
@@ -16,10 +17,15 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  //TODO: filter by user's location
-  final Stream<QuerySnapshot> _signalsStream =
-  FirebaseFirestore.instance.collection('signals').snapshots();
+  final geoFlutterFire = GeoFlutterFire();
+  final signalsRef = FirebaseFirestore.instance.collection('signals');
+  //TODO: replace center with user's location
+  final center = GeoFirePoint(-33.86, 151.20);
   final LatLng _center = const LatLng(-33.86, 151.20);
+  final radius = 100.0; // radius in kilometers
+  final field = 'location'; // field that contains the GeoPoint
+  late Stream<List<DocumentSnapshot<Object?>>> _signalsStream;
+
   late GoogleMapController _mapController;
   BitmapDescriptor? redPin;
   BitmapDescriptor? orangePin;
@@ -32,27 +38,33 @@ class _MapScreenState extends State<MapScreen> {
 
   _MapScreenState() {
     _loadPins();
+    _signalsStream = geoFlutterFire.collection(collectionRef: signalsRef).within(
+      center: center,
+      radius: radius,
+      field: field,
+      strictMode: true,
+    );
   }
 
   // Map Page Widgets
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
+    return StreamBuilder<List<DocumentSnapshot>>(
         stream: _signalsStream,
-        builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
+        builder: (BuildContext context, AsyncSnapshot<List<DocumentSnapshot>> snapshot) {
           Set<Marker> signalMarkers = {};
 
           if (snapshot.hasError) {
             //TODO
-            // return const Text('Something went wrong');
+            return const Text('Something went wrong');
           } else if (snapshot.connectionState == ConnectionState.waiting) {
             //TODO
             // return const Text("Loading");
           } else {
-            var signals = snapshot.data!.docs;
+            var signals = snapshot.data!;
             signalMarkers = signals.map<Marker>((signalDocument) {
               Map<String, dynamic> data = signalDocument.data()! as Map<String, dynamic>;
-              GeoPoint location = data['location'];
+              GeoPoint location = data['location']['geopoint'];
               return Marker(
                 markerId: MarkerId(signalDocument.id),
                 position: LatLng(location.latitude, location.longitude),
@@ -167,13 +179,16 @@ class _MapScreenState extends State<MapScreen> {
                                   final centerLatitude = (visibleRegion.northeast.latitude + visibleRegion.southwest.latitude) / 2;
                                   final centerLongitude = (visibleRegion.northeast.longitude + visibleRegion.southwest.longitude) / 2;
 
-
-                                  var newSignal = Signal(
+                                  GeoFirePoint signalLocation = geoFlutterFire.point(latitude: centerLatitude, longitude: centerLongitude);
+                                  final newSignal = Signal(
                                     title: _newSignalTitleController.text,
                                     description: _newSignalDescriptionController.text,
                                     phoneNumber: _newSignalPhoneNumberController.text,
                                     signalType: _newSignalType,
-                                    location: GeoPoint(centerLatitude, centerLongitude),
+                                    reporter: FirebaseFirestore.instance.collection('users').doc('milen-marinov'),
+                                    contactPhone: '0123456789',
+                                    location: signalLocation.data,
+                                    createdAt: FieldValue.serverTimestamp(),
                                   );
 
                                   await FirebaseFirestore.instance.collection('signals').add(newSignal.toJson());
