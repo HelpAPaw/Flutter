@@ -16,6 +16,7 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
+  //TODO: filter by user's location
   final Stream<QuerySnapshot> _signalsStream =
   FirebaseFirestore.instance.collection('signals').snapshots();
   final LatLng _center = const LatLng(-33.86, 151.20);

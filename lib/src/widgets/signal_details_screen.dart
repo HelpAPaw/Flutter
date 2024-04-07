@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/signal.dart';
 
@@ -59,7 +60,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                 IconButton(
                   icon: const Icon(Icons.share),
                   onPressed: () => {
-                    context.go('/in_dev'),
+                    context.push('/in_dev'),
                   },
                 ),
               ],
@@ -68,6 +69,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
               child: Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: Stack(
+                  fit: StackFit.expand,
                   children: [
                     SingleChildScrollView(
                       controller: _scrollController,
@@ -91,8 +93,20 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               TextButton.icon(
-                                onPressed: () => {
-                                  context.go('/in_dev'),
+                                onPressed: () async {
+                                  // Open navigation app with signal location
+                                  GeoPoint location = signalData['location'];
+                                  Uri url = Uri.parse('geo:${location.latitude},${location.longitude}');
+                                  if (await canLaunchUrl(url)) {
+                                    launchUrl(url);
+                                  } else {
+                                    // Show alert to the user
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Cannot navigate to signal location, please try to do so manually.'),
+                                      ),
+                                    );
+                                  }
                                 },
                                 icon: const Icon(Icons.directions),
                                 label: const Text('Navigate Me'),
@@ -103,8 +117,19 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                 )
                               ),
                               TextButton.icon(
-                                onPressed: () => {
-                                  context.go('/in_dev'),
+                                onPressed: () async {
+                                  String phoneNumber = signalData['contactPhone'];
+                                  Uri phoneUri = Uri(scheme: 'tel', path: phoneNumber);
+                                  if (await canLaunchUrl(phoneUri)) {
+                                    launchUrl(phoneUri);
+                                  } else {
+                                    // Show an alert to the user without using context
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Cannot call $phoneNumber, please try to connect manually.'),
+                                      ),
+                                    );
+                                  }
                                 },
                                 icon: const Icon(Icons.phone),
                                 label: Text(signalData['contactPhone']),
@@ -302,17 +327,4 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       curve: Curves.easeOut,
     );
   }
-
-  // //TODO: extract to separate file
-  // _getSignalType(int type) {
-  //   switch(type) {
-  //     case 0: return 'Emergency';
-  //     case 1: return 'Lost or Found';
-  //     case 2: return 'Blood donation';
-  //     case 3: return 'Homeless';
-  //     case 4: return 'Unneutered animals';
-  //     case 5: return 'Wild animals';
-  //     default: return 'Other';
-  //   }
-  // }
 }
