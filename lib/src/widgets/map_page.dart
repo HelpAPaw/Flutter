@@ -2,6 +2,7 @@ import 'package:adaptive_components/adaptive_components.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:geoflutterfire2/geoflutterfire2.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:go_router/go_router.dart';
 
@@ -19,9 +20,7 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   final geoFlutterFire = GeoFlutterFire();
   final signalsRef = FirebaseFirestore.instance.collection('signals');
-  //TODO: replace center with user's location
-  final center = GeoFirePoint(-33.86, 151.20);
-  final LatLng _center = const LatLng(-33.86, 151.20);
+  var center = GeoFirePoint(0, 0);
   final radius = 100.0; // radius in kilometers
   final field = 'location'; // field that contains the GeoPoint
   late Stream<List<DocumentSnapshot<Object?>>> _signalsStream;
@@ -44,6 +43,58 @@ class _MapScreenState extends State<MapScreen> {
       field: field,
       strictMode: true,
     );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _getUserLocation();
+  }
+
+  Future<void> _getUserLocation() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    // Check if location services are enabled
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      // Location services are not enabled, request the user to enable them
+      return Future.error('Location services are disabled.');
+    }
+
+    // Check for location permissions
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        // Permissions are denied, request the user to grant permissions
+        return Future.error('Location permissions are denied.');
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      // Permissions are denied forever, handle appropriately
+      return Future.error('Location permissions are permanently denied.');
+    }
+
+    // Get the user's current location
+    Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+    _updateMapLocation(position);
+  }
+
+  void _updateMapLocation(Position position) {
+    final userLocation = LatLng(position.latitude, position.longitude);
+    _mapController.animateCamera(CameraUpdate.newLatLng(userLocation));
+
+    setState(() {
+      center = geoFlutterFire.point(latitude: position.latitude, longitude: position.longitude);
+      _signalsStream = geoFlutterFire.collection(collectionRef: signalsRef).within(
+        center: center,
+        radius: radius,
+        field: field,
+        strictMode: true,
+      );
+    });
   }
 
   // Map Page Widgets
@@ -87,14 +138,14 @@ class _MapScreenState extends State<MapScreen> {
                   GoogleMap(
                     initialCameraPosition: CameraPosition(
                         bearing: 0.0,
-                        target: _center,
+                        target: LatLng(center.latitude, center.longitude),
                         tilt: 0.0,
                         zoom: 11.0
                     ),
                     onMapCreated: (GoogleMapController controller) {
                       _mapController = controller;
                     },
-                    zoomControlsEnabled: false,
+                    zoomControlsEnabled: true,
                     myLocationEnabled: true,
                     markers: signalMarkers,
                   ),
