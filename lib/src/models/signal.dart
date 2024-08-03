@@ -39,15 +39,15 @@ class Signal {
 
   factory Signal.fromJson(Map<String, dynamic> json) {
     return Signal(
-      title: json['title'],
-      description: json['description'],
-      phoneNumber: json['phoneNumber'],
-      signalType: json['signalType'],
-      location: json['location'],
-      reporter: json['reporter'],
-      contactPhone: json['contactPhone'],
-      createdAt: json['createdAt'],
-      status: json['status'],
+      title: json['title'] ?? '',
+      description: json['description'] ?? '',
+      phoneNumber: json['phoneNumber'] ?? '',
+      signalType: json['signalType'] ?? 0,
+      location: json['location'] ?? {},
+      reporter: json['reporter'] ?? FirebaseFirestore.instance.collection('users').doc('unknown'),
+      contactPhone: json['contactPhone'] ?? '',
+      createdAt: json['createdAt'] ?? Timestamp.now(),
+      status: json['status'] ?? 0,
     );
   }
 
