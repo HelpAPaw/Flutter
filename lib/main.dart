@@ -18,7 +18,7 @@ Future<void> main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
+  // await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
   //final auth = FirebaseAuth.instanceFor(
   //    app: Firebase.app(), persistence: Persistence.LOCAL);
   // await auth.setPersistence(Persistence.LOCAL);
@@ -38,8 +38,7 @@ final GoRouter _router = GoRouter(
     GoRoute(
       name: 'sign_in',
       path: '/sign_in',
-      builder: (BuildContext context, GoRouterState state) =>
-          const SignInPage(),
+      builder: (BuildContext context, GoRouterState state) => const SignInPage(),
     ),
     GoRoute(
       name: 'signal_details',

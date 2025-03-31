@@ -1,8 +1,8 @@
 import 'package:adaptive_components/adaptive_components.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:geoflutterfire2/geoflutterfire2.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:go_router/go_router.dart';
 
@@ -20,7 +20,7 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   final geoFlutterFire = GeoFlutterFire();
   final signalsRef = FirebaseFirestore.instance.collection('signals');
-  var center = GeoFirePoint(0, 0);
+  var center = const GeoFirePoint(GeoPoint(0, 0));
   final radius = 100.0; // radius in kilometers
   final field = 'location'; // field that contains the GeoPoint
   late Stream<List<DocumentSnapshot<Object?>>> _signalsStream;
@@ -37,12 +37,13 @@ class _MapScreenState extends State<MapScreen> {
 
   _MapScreenState() {
     _loadPins();
-    _signalsStream = geoFlutterFire.collection(collectionRef: signalsRef).within(
-      center: center,
-      radius: radius,
-      field: field,
-      strictMode: true,
-    );
+    _signalsStream = GeoCollectionReference(signalsRef).subscribeWithin(center: center, radiusInKm: radius, field: 'location', geopointFrom: geopointFrom)
+    // _signalsStream = geoFlutterFire.collection(collectionRef: signalsRef).within(
+    //   center: center,
+    //   radius: radius,
+    //   field: field,
+    //   strictMode: true,
+    // );
   }
 
   @override
