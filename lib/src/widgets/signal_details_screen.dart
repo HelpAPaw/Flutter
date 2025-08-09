@@ -84,7 +84,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(DateFormat.yMd().add_jm().format(signal.createdAt.toDate())),
+                              Text(DateFormat.yMd().add_jm().format((signal.createdAt as Timestamp).toDate())),
                               //show user name from reporter field which is a reference to the users collection
                               Text(reporterName)
                             ],
@@ -112,8 +112,8 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                 label: const Text('Navigate Me'),
                                 //TODO: extract button style
                                 style: ButtonStyle(
-                                  foregroundColor: MaterialStateProperty.all<Color>(Colors.white),
-                                  backgroundColor: MaterialStateProperty.all<Color>(Colors.orange),
+                                  foregroundColor: WidgetStateProperty.all<Color>(Colors.white),
+                                  backgroundColor: WidgetStateProperty.all<Color>(Colors.orange),
                                 )
                               ),
                               TextButton.icon(
@@ -133,8 +133,8 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                 icon: const Icon(Icons.phone),
                                 label: Text(signal.contactPhone),
                                 style: ButtonStyle(
-                                  foregroundColor: MaterialStateProperty.all<Color>(Colors.white),
-                                  backgroundColor: MaterialStateProperty.all<Color>(Colors.orange),
+                                  foregroundColor: WidgetStateProperty.all<Color>(Colors.white),
+                                  backgroundColor: WidgetStateProperty.all<Color>(Colors.orange),
                                 )
                               ),
                             ],

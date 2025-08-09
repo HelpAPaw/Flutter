@@ -8,7 +8,7 @@ class Signal {
   final Map<String, dynamic> location;
   final DocumentReference reporter;
   final String contactPhone;
-  final createdAt;
+  final dynamic createdAt;
   int status = 0;
 
   Signal({

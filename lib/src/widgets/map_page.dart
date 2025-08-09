@@ -2,8 +2,8 @@ import 'package:adaptive_components/adaptive_components.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 import 'package:go_router/go_router.dart';
 
 import '../models/signal.dart';
@@ -18,7 +18,6 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  final geoFlutterFire = GeoFlutterFire();
   final signalsRef = FirebaseFirestore.instance.collection('signals');
   var center = const GeoFirePoint(GeoPoint(0, 0));
   final radius = 100.0; // radius in kilometers
@@ -37,13 +36,13 @@ class _MapScreenState extends State<MapScreen> {
 
   _MapScreenState() {
     _loadPins();
-    _signalsStream = GeoCollectionReference(signalsRef).subscribeWithin(center: center, radiusInKm: radius, field: 'location', geopointFrom: geopointFrom)
-    // _signalsStream = geoFlutterFire.collection(collectionRef: signalsRef).within(
-    //   center: center,
-    //   radius: radius,
-    //   field: field,
-    //   strictMode: true,
-    // );
+    _signalsStream = GeoCollectionReference(signalsRef)
+        .subscribeWithin(
+          center: center, 
+          radiusInKm: radius, 
+          field: field, 
+          geopointFrom: (data) => (data[field] as Map<String, dynamic>)['geopoint'] as GeoPoint
+        );
   }
 
   @override
@@ -88,13 +87,14 @@ class _MapScreenState extends State<MapScreen> {
     _mapController.animateCamera(CameraUpdate.newLatLng(userLocation));
 
     setState(() {
-      center = geoFlutterFire.point(latitude: position.latitude, longitude: position.longitude);
-      _signalsStream = geoFlutterFire.collection(collectionRef: signalsRef).within(
-        center: center,
-        radius: radius,
-        field: field,
-        strictMode: true,
-      );
+      center = GeoFirePoint(GeoPoint(position.latitude, position.longitude));
+      _signalsStream = GeoCollectionReference(signalsRef)
+          .subscribeWithin(
+            center: center, 
+            radiusInKm: radius, 
+            field: field, 
+            geopointFrom: (data) => (data[field] as Map<String, dynamic>)['geopoint'] as GeoPoint
+          );
     });
   }
 
@@ -139,7 +139,7 @@ class _MapScreenState extends State<MapScreen> {
                   GoogleMap(
                     initialCameraPosition: CameraPosition(
                         bearing: 0.0,
-                        target: LatLng(center.latitude, center.longitude),
+                        target: LatLng(center.geopoint.latitude, center.geopoint.longitude),
                         tilt: 0.0,
                         zoom: 11.0
                     ),
@@ -231,7 +231,10 @@ class _MapScreenState extends State<MapScreen> {
                                   final centerLatitude = (visibleRegion.northeast.latitude + visibleRegion.southwest.latitude) / 2;
                                   final centerLongitude = (visibleRegion.northeast.longitude + visibleRegion.southwest.longitude) / 2;
 
-                                  GeoFirePoint signalLocation = geoFlutterFire.point(latitude: centerLatitude, longitude: centerLongitude);
+                                  final signalLocation = {
+                                    'geopoint': GeoPoint(centerLatitude, centerLongitude),
+                                    'geohash': GeoFirePoint(GeoPoint(centerLatitude, centerLongitude)).geohash
+                                  };
                                   final newSignal = Signal(
                                     title: _newSignalTitleController.text,
                                     description: _newSignalDescriptionController.text,
@@ -239,8 +242,8 @@ class _MapScreenState extends State<MapScreen> {
                                     signalType: _newSignalType,
                                     reporter: FirebaseFirestore.instance.collection('users').doc('milen-marinov'),
                                     contactPhone: '0123456789',
-                                    location: signalLocation.data,
-                                    createdAt: FieldValue.serverTimestamp(),
+                                    location: signalLocation,
+                                    createdAt: Timestamp.now(),
                                   );
 
                                   await FirebaseFirestore.instance.collection('signals').add(newSignal.toJson());
@@ -332,8 +335,11 @@ class _MapScreenState extends State<MapScreen> {
       BitmapDescriptor? pin;
       switch(status) {
         case 0: pin = redPin;
+        break;
         case 1: pin = orangePin;
+        break;
         case 2: pin = greenPin;
+        break;
       }
 
       return pin ?? BitmapDescriptor.defaultMarker;
