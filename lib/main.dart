@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart'
     hide PhoneAuthProvider, EmailAuthProvider;
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_ui_auth/firebase_ui_auth.dart';
+import 'package:firebase_ui_oauth_google/firebase_ui_oauth_google.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
@@ -15,13 +17,23 @@ import 'package:help_a_paw/src/widgets/signal_details_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  
+  // Initialize Firebase only if not already initialized
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    // Firebase already initialized, which is fine
+  }
+  
+  // Configure Firebase UI Auth providers
+  FirebaseUIAuth.configureProviders([
+    EmailAuthProvider(),
+    GoogleProvider(clientId: '757136327951-0lv74a2r35rta4lai55fc78vi6543ho7.apps.googleusercontent.com'),
+  ]);
+  
   // await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
-  //final auth = FirebaseAuth.instanceFor(
-  //    app: Firebase.app(), persistence: Persistence.LOCAL);
-  // await auth.setPersistence(Persistence.LOCAL);
   runApp(const HelpAPaw());
   usePathUrlStrategy();
 }
@@ -29,6 +41,31 @@ Future<void> main() async {
 final GoRouter _router = GoRouter(
   debugLogDiagnostics: true,
   initialLocation: '/home',
+  redirect: (context, state) {
+    final user = FirebaseAuth.instance.currentUser;
+    final isSigningIn = state.matchedLocation == '/sign_in';
+    final isVerifyingEmail = state.matchedLocation == '/verify_email';
+    
+    // If user is authenticated
+    if (user != null) {
+      // Check if user used email/password and email is not verified
+      final hasPasswordProvider = user.providerData.any((info) => info.providerId == 'password');
+      
+      // Redirect unverified email users to verification screen
+      if (hasPasswordProvider && !user.emailVerified && !isVerifyingEmail) {
+        return '/verify_email';
+      }
+      
+      // Redirect verified users away from auth screens to home
+      if ((isSigningIn || isVerifyingEmail) && (user.emailVerified || !hasPasswordProvider)) {
+        return '/home';
+      }
+    }
+    
+    // Allow guests to access all pages - no forced sign-in redirect
+    return null;
+  },
+  refreshListenable: GoRouterRefreshStream(FirebaseAuth.instance.authStateChanges()),
   routes: <GoRoute>[
     GoRoute(
       name: 'initial_route',
@@ -38,7 +75,10 @@ final GoRouter _router = GoRouter(
     GoRoute(
       name: 'sign_in',
       path: '/sign_in',
-      builder: (BuildContext context, GoRouterState state) => const SignInPage(),
+      builder: (BuildContext context, GoRouterState state) => SignInPage(
+        prefilledEmail: state.uri.queryParameters['email'],
+        prefilledPassword: state.uri.queryParameters['password'],
+      ),
     ),
     GoRoute(
       name: 'signal_details',
@@ -50,8 +90,40 @@ final GoRouter _router = GoRouter(
       path: '/in_dev',
       builder: (BuildContext context, GoRouterState state) => const InDev(),
     ),
+    GoRoute(
+      name: 'verify_email',
+      path: '/verify_email',
+      builder: (BuildContext context, GoRouterState state) => EmailVerificationScreen(
+        actions: [
+          EmailVerifiedAction(() {
+            context.go('/home');
+          }),
+          AuthCancelledAction((context) {
+            FirebaseAuth.instance.signOut();
+            context.go('/sign_in');
+          }),
+        ],
+      ),
+    ),
   ],
 );
+
+class GoRouterRefreshStream extends ChangeNotifier {
+  GoRouterRefreshStream(Stream<dynamic> stream) {
+    notifyListeners();
+    _subscription = stream.asBroadcastStream().listen(
+      (dynamic _) => notifyListeners(),
+    );
+  }
+
+  late final StreamSubscription<dynamic> _subscription;
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+}
 
 class HelpAPaw extends StatefulWidget {
   const HelpAPaw({super.key});
