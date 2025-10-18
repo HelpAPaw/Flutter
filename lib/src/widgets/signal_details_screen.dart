@@ -101,11 +101,13 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                     launchUrl(url);
                                   } else {
                                     // Show alert to the user
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Cannot navigate to signal location, please try to do so manually.'),
-                                      ),
-                                    );
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Cannot navigate to signal location, please try to do so manually.'),
+                                        ),
+                                      );
+                                    }
                                   }
                                 },
                                 icon: const Icon(Icons.directions),
@@ -122,12 +124,14 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                   if (await canLaunchUrl(phoneUri)) {
                                     launchUrl(phoneUri);
                                   } else {
-                                    // Show an alert to the user without using context
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('Cannot call ${signal.contactPhone}, please try to connect manually.'),
-                                      ),
-                                    );
+                                    // Show an alert to the user
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Cannot call ${signal.contactPhone}, please try to connect manually.'),
+                                        ),
+                                      );
+                                    }
                                   }
                                 },
                                 icon: const Icon(Icons.phone),

@@ -46,7 +46,7 @@ class DefaultFirebaseOptions {
     }
   }
 
-  static FirebaseOptions web = FirebaseOptions(
+  static const FirebaseOptions web = FirebaseOptions(
     apiKey: 'AIzaSyBoB7K9lV8yt432J7XymbNWryQ2SXbZPzk',
     appId: '1:757136327951:web:c1bd49f5a3beb6310f2a7a',
     messagingSenderId: '757136327951',
@@ -55,7 +55,7 @@ class DefaultFirebaseOptions {
     storageBucket: 'help-a-paw-dev.appspot.com',
   );
 
-  static FirebaseOptions android = FirebaseOptions(
+  static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyDFn3Cexv_aWaSIQ6w4i53YQJf-j5_EsNk',
     appId: '1:757136327951:android:be094e7052a38f6e0f2a7a',
     messagingSenderId: '757136327951',
@@ -63,7 +63,7 @@ class DefaultFirebaseOptions {
     storageBucket: 'help-a-paw-dev.appspot.com',
   );
 
-  static FirebaseOptions ios = FirebaseOptions(
+  static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyDX000zOUB-F2qL4Wcf-pas3q3ThyHAOVc',
     appId: '1:757136327951:ios:1a56d4871b9a39fa0f2a7a',
     messagingSenderId: '757136327951',

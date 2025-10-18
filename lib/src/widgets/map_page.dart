@@ -78,7 +78,9 @@ class _MapScreenState extends State<MapScreen> {
     }
 
     // Get the user's current location
-    Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+    Position position = await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high)
+    );
     _updateMapLocation(position);
   }
 
@@ -275,26 +277,22 @@ class _MapScreenState extends State<MapScreen> {
               foregroundColor: Colors.white,
               // elevation: 6,
               actions: <Widget>[
-                ButtonBar(
-                  children: <Widget>[
-                    IconButton(
-                        icon: const Icon(Icons.filter_list_outlined),
-                        onPressed: () => {
-                          //TODO: implement
-                        }),
-                    IconButton(
-                      //TODO: import custom icon
-                        icon: const Icon(Icons.local_hospital),
-                        onPressed: () => {
-                          //TODO: implement
-                        }),
-                    IconButton(
-                        icon: const Icon(Icons.refresh),
-                        onPressed: () => {
-                          //TODO: implement
-                        }),
-                  ],
-                ),
+                IconButton(
+                    icon: const Icon(Icons.filter_list_outlined),
+                    onPressed: () => {
+                      //TODO: implement
+                    }),
+                IconButton(
+                  //TODO: import custom icon
+                    icon: const Icon(Icons.local_hospital),
+                    onPressed: () => {
+                      //TODO: implement
+                    }),
+                IconButton(
+                    icon: const Icon(Icons.refresh),
+                    onPressed: () => {
+                      //TODO: implement
+                    }),
               ],
             ),
             drawer: const HomeRouteDrawer(),
@@ -325,7 +323,7 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<BitmapDescriptor> _loadPin(String color) async {
-    return BitmapDescriptor.fromAssetImage(
+    return BitmapDescriptor.asset(
         const ImageConfiguration(size: Size(24, 24)),
         'assets/icons/pin_$color.png'
     );
