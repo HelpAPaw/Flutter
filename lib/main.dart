@@ -12,6 +12,7 @@ import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/src/config/firebase_options.dart';
 import 'package:help_a_paw/src/widgets/home_route.dart';
 import 'package:help_a_paw/src/widgets/in_dev.dart';
+import 'package:help_a_paw/src/widgets/profile_completion_page.dart';
 import 'package:help_a_paw/src/widgets/sign_in_page.dart';
 import 'package:help_a_paw/src/widgets/signal_details_screen.dart';
 
@@ -45,6 +46,7 @@ final GoRouter _router = GoRouter(
     final user = FirebaseAuth.instance.currentUser;
     final isSigningIn = state.matchedLocation == '/sign_in';
     final isVerifyingEmail = state.matchedLocation == '/verify_email';
+    final isCompletingProfile = state.matchedLocation == '/complete_profile';
     
     // If user is authenticated
     if (user != null) {
@@ -56,9 +58,9 @@ final GoRouter _router = GoRouter(
         return '/verify_email';
       }
       
-      // Redirect verified users away from auth screens to home
-      if ((isSigningIn || isVerifyingEmail) && (user.emailVerified || !hasPasswordProvider)) {
-        return '/home';
+      // Don't redirect if user is on auth-related screens
+      if (isSigningIn || isVerifyingEmail || isCompletingProfile) {
+        return null;
       }
     }
     
@@ -96,7 +98,7 @@ final GoRouter _router = GoRouter(
       builder: (BuildContext context, GoRouterState state) => EmailVerificationScreen(
         actions: [
           EmailVerifiedAction(() {
-            context.go('/home');
+            context.go('/complete_profile');
           }),
           AuthCancelledAction((context) {
             FirebaseAuth.instance.signOut();
@@ -104,6 +106,11 @@ final GoRouter _router = GoRouter(
           }),
         ],
       ),
+    ),
+    GoRoute(
+      name: 'complete_profile',
+      path: '/complete_profile',
+      builder: (BuildContext context, GoRouterState state) => const ProfileCompletionPage(),
     ),
   ],
 );

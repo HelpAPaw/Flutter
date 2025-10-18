@@ -1,8 +1,38 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide EmailAuthProvider;
 import 'package:firebase_ui_auth/firebase_ui_auth.dart';
 import 'package:firebase_ui_oauth_google/firebase_ui_oauth_google.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+
+Future<void> _checkProfileCompletion(BuildContext context, User? user) async {
+  if (user == null) return;
+  
+  try {
+    // Check if user profile exists and is complete
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+    
+    if (!doc.exists || doc.data()?['profileCompleted'] != true) {
+      // Profile not complete, go to completion screen
+      if (context.mounted) {
+        context.go('/complete_profile');
+      }
+    } else {
+      // Profile is complete, go to home
+      if (context.mounted) {
+        context.go('/home');
+      }
+    }
+  } catch (e) {
+    // On error, go to profile completion to be safe
+    if (context.mounted) {
+      context.go('/complete_profile');
+    }
+  }
+}
 
 class SignInPage extends StatelessWidget {
   final String? prefilledEmail;
@@ -45,8 +75,8 @@ class SignInPage extends StatelessWidget {
                       context.go('/verify_email');
                       return;
                     }
-                    // User is fully authenticated, go to home
-                    context.go('/home');
+                    // User is authenticated, check if profile is complete
+                    _checkProfileCompletion(context, user);
                   }),
                   AuthStateChangeAction<UserCreated>((context, state) {
                     final user = FirebaseAuth.instance.currentUser;
@@ -55,8 +85,8 @@ class SignInPage extends StatelessWidget {
                       // For email/password users, navigate to verification
                       context.go('/verify_email');
                     } else {
-                      // For OAuth providers (Google), go directly to home
-                      context.go('/home');
+                      // For OAuth providers (Google), go to profile completion
+                      context.go('/complete_profile');
                     }
                   }),
                 ],

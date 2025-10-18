@@ -34,6 +34,10 @@ migrate_working_dir/
 .pub/
 /build/
 
+# FVM (Flutter Version Management)
+.fvm/
+.fvmrc
+
 # Symbolication related
 app.*.symbols
 
@@ -61,10 +65,13 @@ app.*.map.json
 /macos/Runner/GoogleService-Info.plist
 /web/index.html
 /android/.gradle/
+/android/app/src/main/java/io/flutter/plugins/
 /ios/Runner.xcworkspace/xcuserdata/
 /ios/Pods/
 /ios/.symlinks/plugins/
 /ios/Flutter/Flutter.podspec
+/ios/Flutter/ephemeral/
+/ios/Runner/GeneratedPluginRegistrant.m
 /ios/firebase_app_id_file_prod.json
 /lib/generated_plugin_registrant.dart
 /lib/firebase_options_prod.dart
