@@ -299,7 +299,14 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                               ),
                               IconButton(
                                 icon: const Icon(Icons.send),
-                                onPressed: _addComment
+                                onPressed: () {
+                                  // Check if user is authenticated
+                                  if (FirebaseAuth.instance.currentUser == null) {
+                                    _showSignInDialog();
+                                  } else {
+                                    _addComment();
+                                  }
+                                }
                               ),
                             ],
                           ),
@@ -328,6 +335,33 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       _scrollController.position.maxScrollExtent,
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOut,
+    );
+  }
+
+  void _showSignInDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Sign in required'),
+          content: const Text('You need to sign in to comment'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                context.push('/sign_in');
+              },
+              child: const Text('Sign In'),
+            ),
+          ],
+        );
+      },
     );
   }
 }
