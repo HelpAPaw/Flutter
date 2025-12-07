@@ -49,10 +49,17 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         }
       }
 
-      return Scaffold(
-        body: AdaptiveContainer(
-          child: Scaffold(
-            appBar: AppBar(
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (!didPop) {
+            context.go('/home');
+          }
+        },
+        child: Scaffold(
+          body: AdaptiveContainer(
+            child: Scaffold(
+              appBar: AppBar(
               title: const Text('Signal Details'),
               backgroundColor: Colors.orange,
               foregroundColor: Colors.white,
@@ -310,6 +317,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
               ),
             ),
           )
+        ),
         ),
       );
     });

@@ -7,14 +7,28 @@ import 'package:go_router/go_router.dart';
 
 Future<void> _checkProfileCompletion(BuildContext context, User? user) async {
   if (user == null) return;
-  
+
   try {
+    // Reload user to get fresh email verification status
+    await user.reload();
+    final refreshedUser = FirebaseAuth.instance.currentUser;
+
+    // Double-check email verification after reload
+    if (refreshedUser != null &&
+        refreshedUser.providerData.any((info) => info.providerId == 'password') &&
+        !refreshedUser.emailVerified) {
+      if (context.mounted) {
+        context.go('/verify_email');
+      }
+      return;
+    }
+
     // Check if user profile exists and is complete
     final doc = await FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
         .get();
-    
+
     if (!doc.exists || doc.data()?['profileCompleted'] != true) {
       // Profile not complete, go to completion screen
       if (context.mounted) {
@@ -46,18 +60,25 @@ class SignInPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => FocusScope.of(context).unfocus(),
-      child: Scaffold(
-        resizeToAvoidBottomInset: true,
-        body: SafeArea(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom,
-            ),
-            child: SizedBox(
-              height: MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top,
-              child: SignInScreen(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) {
+          context.go('/home');
+        }
+      },
+      child: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Scaffold(
+          resizeToAvoidBottomInset: true,
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: SizedBox(
+                height: MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top,
+                child: SignInScreen(
                 email: prefilledEmail,
                 showAuthActionSwitch: true,
                 providers: [
@@ -78,12 +99,27 @@ class SignInPage extends StatelessWidget {
                     // User is authenticated, check if profile is complete
                     _checkProfileCompletion(context, user);
                   }),
-                  AuthStateChangeAction<UserCreated>((context, state) {
+                  AuthStateChangeAction<UserCreated>((context, state) async {
                     final user = FirebaseAuth.instance.currentUser;
-                    if (user != null && 
+                    if (user != null &&
                         user.providerData.any((info) => info.providerId == 'password')) {
+                      // Send verification email with proper action code settings
+                      try {
+                        await user.sendEmailVerification(
+                          ActionCodeSettings(
+                            url: 'https://help-a-paw-dev.firebaseapp.com/__/auth/action',
+                            handleCodeInApp: false,
+                            androidPackageName: 'org.helpapaw.helpapaw',
+                            androidInstallApp: false,
+                          ),
+                        );
+                      } catch (e) {
+                        debugPrint('Error sending verification email: $e');
+                      }
                       // For email/password users, navigate to verification
-                      context.go('/verify_email');
+                      if (context.mounted) {
+                        context.go('/verify_email');
+                      }
                     } else {
                       // For OAuth providers (Google), go to profile completion
                       context.go('/complete_profile');
@@ -129,6 +165,7 @@ class SignInPage extends StatelessWidget {
                     ),
                   );
                 },
+                ),
               ),
             ),
           ),

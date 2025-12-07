@@ -15,8 +15,15 @@ class _InDevState extends State<InDev> {
   // In Development Widgets
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AdaptiveAppBar(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) {
+          context.go('/home');
+        }
+      },
+      child: Scaffold(
+        appBar: AdaptiveAppBar(
         elevation: 6,
         leading: BackButton(
             onPressed: () => {
@@ -27,10 +34,11 @@ class _InDevState extends State<InDev> {
           softWrap: true,
         ),
       ),
-      body: AdaptiveContainer(
-        child: ListView(children: const <Widget>[
-          Text('In development')
-        ]),
+        body: AdaptiveContainer(
+          child: ListView(children: const <Widget>[
+            Text('In development')
+          ]),
+        ),
       ),
     );
   }

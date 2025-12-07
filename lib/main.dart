@@ -10,6 +10,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/src/config/firebase_options.dart';
+import 'package:help_a_paw/src/widgets/email_verification_page.dart';
 import 'package:help_a_paw/src/widgets/home_route.dart';
 import 'package:help_a_paw/src/widgets/in_dev.dart';
 import 'package:help_a_paw/src/widgets/profile_completion_page.dart';
@@ -33,6 +34,11 @@ Future<void> main() async {
     EmailAuthProvider(),
     GoogleProvider(clientId: '757136327951-0lv74a2r35rta4lai55fc78vi6543ho7.apps.googleusercontent.com'),
   ]);
+
+  // Configure email action code settings for verification links
+  await FirebaseAuth.instance.setSettings(
+    appVerificationDisabledForTesting: false,
+  );
   
   // await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
   runApp(const HelpAPaw());
@@ -95,17 +101,7 @@ final GoRouter _router = GoRouter(
     GoRoute(
       name: 'verify_email',
       path: '/verify_email',
-      builder: (BuildContext context, GoRouterState state) => EmailVerificationScreen(
-        actions: [
-          EmailVerifiedAction(() {
-            context.go('/complete_profile');
-          }),
-          AuthCancelledAction((context) {
-            FirebaseAuth.instance.signOut();
-            context.go('/sign_in');
-          }),
-        ],
-      ),
+      builder: (BuildContext context, GoRouterState state) => const EmailVerificationPage(),
     ),
     GoRoute(
       name: 'complete_profile',

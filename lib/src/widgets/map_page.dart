@@ -35,12 +35,11 @@ class _MapScreenState extends State<MapScreen> {
   int _newSignalType = 0;
 
   _MapScreenState() {
-    _loadPins();
     _signalsStream = GeoCollectionReference(signalsRef)
         .subscribeWithin(
-          center: center, 
-          radiusInKm: radius, 
-          field: field, 
+          center: center,
+          radiusInKm: radius,
+          field: field,
           geopointFrom: (data) => (data[field] as Map<String, dynamic>)['geopoint'] as GeoPoint
         );
   }
@@ -48,6 +47,7 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
+    _loadPins();
     _getUserLocation();
   }
 
