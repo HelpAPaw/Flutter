@@ -98,11 +98,17 @@ final GoRouter _router = GoRouter(
       builder: (BuildContext context, GoRouterState state) => EmailVerificationScreen(
         actions: [
           EmailVerifiedAction(() {
-            context.go('/complete_profile');
+            // Push profile completion to preserve navigation stack
+            context.push('/complete_profile');
           }),
           AuthCancelledAction((context) {
             FirebaseAuth.instance.signOut();
-            context.go('/sign_in');
+            // Pop back to previous screen (user can continue as anonymous)
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/home');
+            }
           }),
         ],
       ),

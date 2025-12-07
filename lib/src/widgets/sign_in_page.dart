@@ -7,29 +7,33 @@ import 'package:go_router/go_router.dart';
 
 Future<void> _checkProfileCompletion(BuildContext context, User? user) async {
   if (user == null) return;
-  
+
   try {
     // Check if user profile exists and is complete
     final doc = await FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
         .get();
-    
+
     if (!doc.exists || doc.data()?['profileCompleted'] != true) {
-      // Profile not complete, go to completion screen
+      // Profile not complete, push completion screen to preserve stack
       if (context.mounted) {
-        context.go('/complete_profile');
+        context.push('/complete_profile');
       }
     } else {
-      // Profile is complete, go to home
+      // Profile is complete, return to previous screen if possible
       if (context.mounted) {
-        context.go('/home');
+        if (context.canPop()) {
+          context.pop();
+        } else {
+          context.go('/home');
+        }
       }
     }
   } catch (e) {
-    // On error, go to profile completion to be safe
+    // On error, push profile completion to be safe
     if (context.mounted) {
-      context.go('/complete_profile');
+      context.push('/complete_profile');
     }
   }
 }
@@ -83,11 +87,11 @@ class SignInPage extends StatelessWidget {
                   AuthStateChangeAction<SignedIn>((context, state) {
                     final user = state.user;
                     // Check if email verification is required for email/password users
-                    if (user != null && 
-                        user.providerData.any((info) => info.providerId == 'password') && 
+                    if (user != null &&
+                        user.providerData.any((info) => info.providerId == 'password') &&
                         !user.emailVerified) {
-                      // Navigate to email verification screen
-                      context.go('/verify_email');
+                      // Push verification screen on top to preserve navigation stack
+                      context.push('/verify_email');
                       return;
                     }
                     // User is authenticated, check if profile is complete
@@ -95,13 +99,13 @@ class SignInPage extends StatelessWidget {
                   }),
                   AuthStateChangeAction<UserCreated>((context, state) {
                     final user = FirebaseAuth.instance.currentUser;
-                    if (user != null && 
+                    if (user != null &&
                         user.providerData.any((info) => info.providerId == 'password')) {
-                      // For email/password users, navigate to verification
-                      context.go('/verify_email');
+                      // Push verification screen on top to preserve navigation stack
+                      context.push('/verify_email');
                     } else {
-                      // For OAuth providers (Google), go to profile completion
-                      context.go('/complete_profile');
+                      // For OAuth providers (Google), push profile completion
+                      context.push('/complete_profile');
                     }
                   }),
                 ],
