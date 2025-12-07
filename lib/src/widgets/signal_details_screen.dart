@@ -1,5 +1,6 @@
 import 'package:adaptive_components/adaptive_components.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -319,8 +320,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     await FirebaseFirestore.instance.collection('signals').doc(widget.signalId).collection('comments').add({
       'text': _newCommentController.text,
       'createdAt': DateTime.now(),
-      //TODO: update author field
-      'author': FirebaseFirestore.instance.collection('users').doc('milen-marinov'),
+      'author': FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser!.uid),
     });
     _newCommentController.clear();
     FocusManager.instance.primaryFocus?.unfocus();

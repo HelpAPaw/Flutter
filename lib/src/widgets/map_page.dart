@@ -1,5 +1,6 @@
 import 'package:adaptive_components/adaptive_components.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -242,7 +243,7 @@ class _MapScreenState extends State<MapScreen> {
                                     description: _newSignalDescriptionController.text,
                                     phoneNumber: _newSignalPhoneNumberController.text,
                                     signalType: _newSignalType,
-                                    reporter: FirebaseFirestore.instance.collection('users').doc('milen-marinov'),
+                                    reporter: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser!.uid),
                                     contactPhone: '0123456789',
                                     location: signalLocation,
                                     createdAt: Timestamp.now(),
