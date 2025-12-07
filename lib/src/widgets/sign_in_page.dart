@@ -50,13 +50,28 @@ class SignInPage extends StatelessWidget {
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
         resizeToAvoidBottomInset: true,
+        appBar: AppBar(
+          backgroundColor: Colors.orange,
+          foregroundColor: Colors.white,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/home');
+              }
+            },
+          ),
+          title: const Text('Sign In'),
+        ),
         body: SafeArea(
           child: SingleChildScrollView(
             padding: EdgeInsets.only(
               bottom: MediaQuery.of(context).viewInsets.bottom,
             ),
             child: SizedBox(
-              height: MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top,
+              height: MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top - kToolbarHeight,
               child: SignInScreen(
                 email: prefilledEmail,
                 showAuthActionSwitch: true,

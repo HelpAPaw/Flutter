@@ -19,9 +19,13 @@ class _InDevState extends State<InDev> {
       appBar: AdaptiveAppBar(
         elevation: 6,
         leading: BackButton(
-            onPressed: () => {
-                  context.go('/home'),
-                }),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/home');
+              }
+            }),
         title: const Text(
           'Development',
           softWrap: true,
