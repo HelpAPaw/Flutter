@@ -21,7 +21,8 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
     try {
       await FirebaseAuth.instance.signOut();
       if (mounted) {
-        context.go('/sign_in');
+        // Close the drawer and stay on home screen for anonymous usage
+        Navigator.of(context).pop();
       }
     } catch (e) {
       // Handle sign out error
@@ -71,7 +72,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
                   enableFeedback: true,
                   leading: const Icon(Icons.login),
                   onTap: () => {
-                    context.go('/sign_in'),
+                    context.push('/sign_in'),
                     homeRouteTile(0),
                   },
                   selected: _homeRouteTile == 0,
@@ -93,7 +94,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
                             : null,
                       ),
                       onTap: () => {
-                        context.go('/in_dev'),
+                        context.push('/in_dev'),
                         homeRouteTile(1),
                       },
                       selected: _homeRouteTile == 1,
@@ -127,7 +128,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             enableFeedback: true,
             leading: const Icon(Icons.pin_drop),
             onTap: () => {
-              context.go('/in_dev'),
+              context.push('/in_dev'),
               homeRouteTile(2),
             },
             selected: _homeRouteTile == 2,
@@ -140,7 +141,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             enableFeedback: true,
             leading: const Icon(Icons.notifications),
             onTap: () => {
-              context.go('/in_dev'),
+              context.push('/in_dev'),
               homeRouteTile(3),
             },
             selected: _homeRouteTile == 3,
@@ -153,7 +154,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             enableFeedback: true,
             leading: const Icon(Icons.question_mark),
             onTap: () => {
-              context.go('/in_dev'),
+              context.push('/in_dev'),
               homeRouteTile(4),
             },
             selected: _homeRouteTile == 4,
@@ -166,7 +167,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             enableFeedback: true,
             leading: const Icon(Icons.settings),
             onTap: () => {
-              context.go('/in_dev'),
+              context.push('/in_dev'),
               homeRouteTile(5),
             },
             selected: _homeRouteTile == 5,
@@ -179,7 +180,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             enableFeedback: true,
             leading: const Icon(Icons.feedback),
             onTap: () => {
-              context.go('/in_dev'),
+              context.push('/in_dev'),
               homeRouteTile(6),
             },
             selected: _homeRouteTile == 6,
@@ -192,7 +193,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             enableFeedback: true,
             leading: const Icon(Icons.privacy_tip),
             onTap: () => {
-              context.go('/in_dev'),
+              context.push('/in_dev'),
               homeRouteTile(7),
             },
             selected: _homeRouteTile == 7,
@@ -220,7 +221,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             enableFeedback: true,
             leading: const Icon(Icons.info),
             onTap: () => {
-              context.go('/in_dev'),
+              context.push('/in_dev'),
               homeRouteTile(9),
             },
             selected: _homeRouteTile == 9,
@@ -233,7 +234,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             enableFeedback: true,
             leading: const Icon(Icons.share),
             onTap: () => {
-              context.go('/in_dev'),
+              context.push('/in_dev'),
               homeRouteTile(10),
             },
             selected: _homeRouteTile == 10,

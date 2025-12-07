@@ -39,6 +39,34 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
     super.dispose();
   }
 
+  /// Pops back through the auth stack to return to the original screen.
+  /// The stack may be: original → sign_in → [verify_email] → complete_profile
+  void _popAuthStack(BuildContext context) {
+    // Auth routes that should be popped
+    const authRoutes = {'/complete_profile', '/verify_email', '/sign_in'};
+
+    void popNext() {
+      if (!context.mounted) return;
+
+      final currentPath = GoRouterState.of(context).matchedLocation;
+
+      // If we're still on an auth route and can pop, continue popping
+      if (authRoutes.contains(currentPath) && context.canPop()) {
+        context.pop();
+        // Schedule next check after this pop completes
+        WidgetsBinding.instance.addPostFrameCallback((_) => popNext());
+      }
+      // Otherwise we've reached the original screen - stop popping
+    }
+
+    if (context.canPop()) {
+      popNext();
+    } else {
+      // Fallback if somehow we can't pop
+      context.go('/home');
+    }
+  }
+
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -69,8 +97,8 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
       }, SetOptions(merge: true));
 
       if (mounted) {
-        // Navigate to home after successful profile completion
-        context.go('/home');
+        // Pop back through auth screens to return to original screen
+        _popAuthStack(context);
       }
     } catch (e) {
       if (mounted) {
@@ -90,18 +118,11 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) {
-          context.go('/home');
-        }
-      },
-      child: GestureDetector(
-        onTap: () => FocusScope.of(context).unfocus(),
-        child: Scaffold(
-          resizeToAvoidBottomInset: true,
-          body: SafeArea(
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
+        resizeToAvoidBottomInset: true,
+        body: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(20),
             child: Form(
@@ -222,7 +243,8 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
                         'profileCompleted': true,
                         'createdAt': FieldValue.serverTimestamp(),
                       }, SetOptions(merge: true));
-                      context.go('/home');
+                      // Pop back through auth screens to return to original screen
+                      _popAuthStack(context);
                     },
                     child: const Text(
                       'Skip for now',
@@ -234,7 +256,6 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
             ),
           ),
         ),
-      ),
       ),
     );
   }

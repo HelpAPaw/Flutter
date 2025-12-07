@@ -18,7 +18,8 @@ Future<void> _checkProfileCompletion(BuildContext context, User? user) async {
         refreshedUser.providerData.any((info) => info.providerId == 'password') &&
         !refreshedUser.emailVerified) {
       if (context.mounted) {
-        context.go('/verify_email');
+        // Push verification screen to preserve navigation stack
+        context.push('/verify_email');
       }
       return;
     }
@@ -30,20 +31,24 @@ Future<void> _checkProfileCompletion(BuildContext context, User? user) async {
         .get();
 
     if (!doc.exists || doc.data()?['profileCompleted'] != true) {
-      // Profile not complete, go to completion screen
+      // Profile not complete, push completion screen to preserve stack
       if (context.mounted) {
-        context.go('/complete_profile');
+        context.push('/complete_profile');
       }
     } else {
-      // Profile is complete, go to home
+      // Profile is complete, return to previous screen if possible
       if (context.mounted) {
-        context.go('/home');
+        if (context.canPop()) {
+          context.pop();
+        } else {
+          context.go('/home');
+        }
       }
     }
   } catch (e) {
-    // On error, go to profile completion to be safe
+    // On error, push profile completion to be safe
     if (context.mounted) {
-      context.go('/complete_profile');
+      context.push('/complete_profile');
     }
   }
 }
@@ -51,34 +56,42 @@ Future<void> _checkProfileCompletion(BuildContext context, User? user) async {
 class SignInPage extends StatelessWidget {
   final String? prefilledEmail;
   final String? prefilledPassword;
-  
+
   const SignInPage({
-    super.key, 
-    this.prefilledEmail, 
+    super.key,
+    this.prefilledEmail,
     this.prefilledPassword,
   });
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) {
-          context.go('/home');
-        }
-      },
-      child: GestureDetector(
-        onTap: () => FocusScope.of(context).unfocus(),
-        child: Scaffold(
-          resizeToAvoidBottomInset: true,
-          body: SafeArea(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: SizedBox(
-                height: MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top,
-                child: SignInScreen(
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
+        resizeToAvoidBottomInset: true,
+        appBar: AppBar(
+          backgroundColor: Colors.orange,
+          foregroundColor: Colors.white,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/home');
+              }
+            },
+          ),
+          title: const Text('Sign In'),
+        ),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
+            ),
+            child: SizedBox(
+              height: MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top - kToolbarHeight,
+              child: SignInScreen(
                 email: prefilledEmail,
                 showAuthActionSwitch: true,
                 providers: [
@@ -89,11 +102,11 @@ class SignInPage extends StatelessWidget {
                   AuthStateChangeAction<SignedIn>((context, state) {
                     final user = state.user;
                     // Check if email verification is required for email/password users
-                    if (user != null && 
-                        user.providerData.any((info) => info.providerId == 'password') && 
+                    if (user != null &&
+                        user.providerData.any((info) => info.providerId == 'password') &&
                         !user.emailVerified) {
-                      // Navigate to email verification screen
-                      context.go('/verify_email');
+                      // Push verification screen on top to preserve navigation stack
+                      context.push('/verify_email');
                       return;
                     }
                     // User is authenticated, check if profile is complete
@@ -116,13 +129,13 @@ class SignInPage extends StatelessWidget {
                       } catch (e) {
                         debugPrint('Error sending verification email: $e');
                       }
-                      // For email/password users, navigate to verification
+                      // Push verification screen to preserve navigation stack
                       if (context.mounted) {
-                        context.go('/verify_email');
+                        context.push('/verify_email');
                       }
                     } else {
-                      // For OAuth providers (Google), go to profile completion
-                      context.go('/complete_profile');
+                      // For OAuth providers (Google), push profile completion
+                      context.push('/complete_profile');
                     }
                   }),
                 ],
@@ -165,7 +178,6 @@ class SignInPage extends StatelessWidget {
                     ),
                   );
                 },
-                ),
               ),
             ),
           ),

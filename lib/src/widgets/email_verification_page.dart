@@ -50,7 +50,8 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
         if (refreshedUser?.emailVerified ?? false) {
           _timer?.cancel();
           if (mounted) {
-            context.go('/complete_profile');
+            // Push profile completion to preserve navigation stack
+            context.push('/complete_profile');
           }
         }
       }
@@ -135,16 +136,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
 
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) {
-          // Sign out and go back to sign in
-          FirebaseAuth.instance.signOut();
-          context.go('/sign_in');
-        }
-      },
-      child: Scaffold(
+    return Scaffold(
         appBar: AppBar(
           title: const Text('Verify Email'),
           backgroundColor: Colors.orange,
@@ -153,7 +145,12 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
             icon: const Icon(Icons.arrow_back),
             onPressed: () {
               FirebaseAuth.instance.signOut();
-              context.go('/sign_in');
+              // Pop back to previous screen (user can continue as anonymous)
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/home');
+              }
             },
           ),
         ),
@@ -282,7 +279,12 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
                 TextButton(
                   onPressed: () {
                     FirebaseAuth.instance.signOut();
-                    context.go('/sign_in');
+                    // Pop back to previous screen (user can continue as anonymous)
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go('/home');
+                    }
                   },
                   child: const Text(
                     'Cancel and sign out',
@@ -295,7 +297,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
                   TextButton(
                     onPressed: () {
                       // Skip verification for development/testing
-                      context.go('/complete_profile');
+                      context.push('/complete_profile');
                     },
                     child: const Text(
                       'Skip (Dev Only)',
@@ -306,7 +308,6 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
             ),
           ),
         ),
-      ),
     );
   }
 }

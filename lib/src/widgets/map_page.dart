@@ -1,5 +1,6 @@
 import 'package:adaptive_components/adaptive_components.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -242,7 +243,7 @@ class _MapScreenState extends State<MapScreen> {
                                     description: _newSignalDescriptionController.text,
                                     phoneNumber: _newSignalPhoneNumberController.text,
                                     signalType: _newSignalType,
-                                    reporter: FirebaseFirestore.instance.collection('users').doc('milen-marinov'),
+                                    reporter: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser!.uid),
                                     contactPhone: '0123456789',
                                     location: signalLocation,
                                     createdAt: Timestamp.now(),
@@ -303,9 +304,14 @@ class _MapScreenState extends State<MapScreen> {
               enableFeedback: true,
               shape: const CircleBorder(),
               onPressed: () {
-                setState(() {
-                  _isAddingNewSignal = !_isAddingNewSignal;
-                });
+                // Check if user is authenticated
+                if (FirebaseAuth.instance.currentUser == null) {
+                  _showSignInDialog();
+                } else {
+                  setState(() {
+                    _isAddingNewSignal = !_isAddingNewSignal;
+                  });
+                }
               },
               tooltip: 'TODO: implement',
               child: const Icon(Icons.add),
@@ -342,4 +348,31 @@ class _MapScreenState extends State<MapScreen> {
 
       return pin ?? BitmapDescriptor.defaultMarker;
     }
+
+  void _showSignInDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Sign in required'),
+          content: const Text('You need to sign in to create signals'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                context.push('/sign_in');
+              },
+              child: const Text('Sign In'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }
