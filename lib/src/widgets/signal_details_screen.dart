@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:help_a_paw/src/services/share_service.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:photo_view/photo_view.dart';
@@ -78,8 +79,15 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
               actions: [
                 IconButton(
                   icon: const Icon(Icons.share),
-                  onPressed: () => {
-                    context.push('/in_dev'),
+                  onPressed: () {
+                    final GeoPoint? geopoint = signal.location['geopoint'] as GeoPoint?;
+                    ShareService.shareSignal(
+                      signalId: widget.signalId,
+                      signalType: Signal.getSignalTypeName(signal.signalType),
+                      description: signal.description,
+                      latitude: geopoint?.latitude,
+                      longitude: geopoint?.longitude,
+                    );
                   },
                 ),
               ],
