@@ -337,7 +337,7 @@ class _MapScreenState extends State<MapScreen> {
                                     if (_selectedImage != null) {
                                       try {
                                         final photoUrl = await _uploadImageToStorage(docRef.id);
-                                        await docRef.update({'photoUrl': photoUrl});
+                                        await docRef.update({'photoUrls': [photoUrl]});
                                       } catch (e) {
                                         // Photo upload failed, but signal was created - just log it
                                         // We don't want to fail the entire operation
@@ -629,12 +629,14 @@ class _MapScreenState extends State<MapScreen> {
     if (_selectedImage == null) return null;
 
     try {
-      final String fileName = '${signalId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final String fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
 
       final storage = FirebaseStorage.instanceFor(bucket: 'gs://help-a-paw-dev.appspot.com');
       final Reference storageRef = storage
           .ref()
-          .child('signal_photos')
+          .child('signals')
+          .child(signalId)
+          .child('photos')
           .child(fileName);
 
       final File file = File(_selectedImage!.path);

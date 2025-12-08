@@ -9,7 +9,7 @@ class Signal {
   final DocumentReference reporter;
   final String contactPhone;
   final dynamic createdAt;
-  final String? photoUrl;
+  final List<String> photoUrls;
   int status = 0;
 
   Signal({
@@ -21,7 +21,7 @@ class Signal {
     required this.reporter,
     required this.contactPhone,
     required this.createdAt,
-    this.photoUrl,
+    this.photoUrls = const [],
     this.status = 0,
   });
 
@@ -36,7 +36,7 @@ class Signal {
       'contactPhone': contactPhone,
       'createdAt': createdAt,
       'status': status,
-      'photoUrl': photoUrl,
+      'photoUrls': photoUrls,
     };
   }
 
@@ -51,7 +51,9 @@ class Signal {
       contactPhone: json['contactPhone'] ?? '',
       createdAt: json['createdAt'] ?? Timestamp.now(),
       status: json['status'] ?? 0,
-      photoUrl: json['photoUrl'],
+      photoUrls: (json['photoUrls'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList() ?? [],
     );
   }
 

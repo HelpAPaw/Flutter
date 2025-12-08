@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:adaptive_components/adaptive_components.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -9,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:photo_view/photo_view.dart';
+import 'package:photo_view/photo_view_gallery.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/signal.dart';
@@ -29,6 +31,8 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _imagePicker = ImagePicker();
   bool _isUploadingPhoto = false;
+  final PageController _photoPageController = PageController();
+  int _currentPhotoPage = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -91,147 +95,199 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.start,
                         children: <Widget>[
-                          if (signal.photoUrl != null && signal.photoUrl!.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 16.0),
-                              child: GestureDetector(
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => _FullScreenPhotoViewer(
-                                        photoUrl: signal.photoUrl!,
-                                      ),
-                                    ),
-                                  );
-                                },
-                                child: Stack(
-                                  children: [
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(12.0),
-                                      child: Image.network(
-                                        signal.photoUrl!,
-                                        width: double.infinity,
-                                        fit: BoxFit.cover,
-                                        loadingBuilder: (context, child, loadingProgress) {
-                                          if (loadingProgress == null) return child;
-                                          return SizedBox(
-                                            height: 200,
-                                            child: Center(
-                                              child: CircularProgressIndicator(
-                                                value: loadingProgress.expectedTotalBytes != null
-                                                    ? loadingProgress.cumulativeBytesLoaded /
-                                                        loadingProgress.expectedTotalBytes!
-                                                    : null,
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                        errorBuilder: (context, error, stackTrace) {
-                                          return Container(
-                                            height: 200,
-                                            color: Colors.grey[200],
-                                            child: const Center(
-                                              child: Column(
-                                                mainAxisAlignment: MainAxisAlignment.center,
-                                                children: [
-                                                  Icon(Icons.broken_image, size: 48, color: Colors.grey),
-                                                  SizedBox(height: 8),
-                                                  Text('Failed to load image', style: TextStyle(color: Colors.grey)),
-                                                ],
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                    Positioned(
-                                      top: 8,
-                                      right: 8,
-                                      child: Container(
-                                        padding: const EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black54,
-                                          borderRadius: BorderRadius.circular(20),
-                                        ),
-                                        child: const Icon(
-                                          Icons.zoom_in,
-                                          color: Colors.white,
-                                          size: 20,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            )
-                          else if (_isUserAuthor(signal))
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 16.0),
-                              child: GestureDetector(
-                                onTap: _isUploadingPhoto ? null : _showImageSourceDialog,
-                                child: Container(
-                                  height: 200,
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey[200],
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: Colors.orange,
-                                      width: 2,
-                                      style: BorderStyle.solid,
-                                    ),
-                                  ),
-                                  child: Center(
-                                    child: _isUploadingPhoto
-                                        ? Column(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              const CircularProgressIndicator(
-                                                valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
-                                              ),
-                                              const SizedBox(height: 16),
-                                              Text(
-                                                'Uploading photo...',
-                                                style: TextStyle(
-                                                  color: Colors.grey[600],
-                                                  fontSize: 14,
+                          if (signal.photoUrls.isNotEmpty || _isUserAuthor(signal))
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                SizedBox(
+                                  height: 250,
+                                  child: PageView.builder(
+                                    controller: _photoPageController,
+                                    onPageChanged: (index) {
+                                      setState(() {
+                                        _currentPhotoPage = index;
+                                      });
+                                    },
+                                    itemCount: signal.photoUrls.length +
+                                        (_isUserAuthor(signal) && signal.photoUrls.length < 5 ? 1 : 0),
+                                    itemBuilder: (context, index) {
+                                      // Show "Add Photo" page if this is the last index and user is author
+                                      if (index >= signal.photoUrls.length) {
+                                        return Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                          child: GestureDetector(
+                                            onTap: _isUploadingPhoto ? null : _showImageSourceDialog,
+                                            child: Container(
+                                              decoration: BoxDecoration(
+                                                color: Colors.grey[200],
+                                                borderRadius: BorderRadius.circular(12),
+                                                border: Border.all(
+                                                  color: Colors.orange,
+                                                  width: 2,
+                                                  style: BorderStyle.solid,
                                                 ),
                                               ),
-                                            ],
-                                          )
-                                        : Column(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              const Icon(
-                                                Icons.add_photo_alternate,
-                                                size: 48,
-                                                color: Colors.orange,
+                                              child: Center(
+                                                child: _isUploadingPhoto
+                                                    ? Column(
+                                                        mainAxisAlignment: MainAxisAlignment.center,
+                                                        children: [
+                                                          const CircularProgressIndicator(
+                                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+                                                          ),
+                                                          const SizedBox(height: 16),
+                                                          Text(
+                                                            'Uploading photo...',
+                                                            style: TextStyle(
+                                                              color: Colors.grey[600],
+                                                              fontSize: 14,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      )
+                                                    : Column(
+                                                        mainAxisAlignment: MainAxisAlignment.center,
+                                                        children: [
+                                                          const Icon(
+                                                            Icons.add_photo_alternate,
+                                                            size: 48,
+                                                            color: Colors.orange,
+                                                          ),
+                                                          const SizedBox(height: 8),
+                                                          Text(
+                                                            signal.photoUrls.isEmpty ? 'Add Photo' : 'Add Another Photo',
+                                                            style: TextStyle(
+                                                              color: Colors.grey[600],
+                                                              fontSize: 16,
+                                                              fontWeight: FontWeight.bold,
+                                                            ),
+                                                          ),
+                                                          const SizedBox(height: 4),
+                                                          Text(
+                                                            '${signal.photoUrls.length}/5 photos',
+                                                            style: TextStyle(
+                                                              color: Colors.grey[500],
+                                                              fontSize: 12,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
                                               ),
-                                              const SizedBox(height: 8),
-                                              Text(
-                                                'Add Photo',
-                                                style: TextStyle(
-                                                  color: Colors.grey[600],
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        );
+                                      }
+
+                                      // Show photo
+                                      return Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                        child: GestureDetector(
+                                          onTap: () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (context) => _FullScreenPhotoGallery(
+                                                  photoUrls: signal.photoUrls,
+                                                  initialIndex: index,
                                                 ),
                                               ),
-                                              const SizedBox(height: 4),
-                                              Text(
-                                                'Tap to attach a photo',
-                                                style: TextStyle(
-                                                  color: Colors.grey[500],
-                                                  fontSize: 12,
+                                            );
+                                          },
+                                          child: Stack(
+                                            children: [
+                                              ClipRRect(
+                                                borderRadius: BorderRadius.circular(12.0),
+                                                child: CachedNetworkImage(
+                                                  imageUrl: signal.photoUrls[index],
+                                                  width: double.infinity,
+                                                  fit: BoxFit.cover,
+                                                  placeholder: (context, url) => Container(
+                                                    color: Colors.grey[200],
+                                                    child: const Center(
+                                                      child: CircularProgressIndicator(),
+                                                    ),
+                                                  ),
+                                                  errorWidget: (context, url, error) => Container(
+                                                    color: Colors.grey[200],
+                                                    child: const Center(
+                                                      child: Column(
+                                                        mainAxisAlignment: MainAxisAlignment.center,
+                                                        children: [
+                                                          Icon(Icons.broken_image, size: 48, color: Colors.grey),
+                                                          SizedBox(height: 8),
+                                                          Text('Failed to load image', style: TextStyle(color: Colors.grey)),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                              if (_isUserAuthor(signal))
+                                                Positioned(
+                                                  top: 8,
+                                                  right: 8,
+                                                  child: IconButton(
+                                                    icon: const Icon(Icons.delete, color: Colors.white),
+                                                    style: IconButton.styleFrom(
+                                                      backgroundColor: Colors.red,
+                                                    ),
+                                                    onPressed: () => _deletePhoto(signal.photoUrls[index]),
+                                                  ),
+                                                ),
+                                              Positioned(
+                                                bottom: 8,
+                                                right: 8,
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.black54,
+                                                    borderRadius: BorderRadius.circular(20),
+                                                  ),
+                                                  child: Text(
+                                                    '${index + 1}/${signal.photoUrls.length}',
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 12,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
                                                 ),
                                               ),
                                             ],
                                           ),
+                                        ),
+                                      );
+                                    },
                                   ),
                                 ),
-                              ),
-                            )
-                          else
-                            const Icon(Icons.adb),
+                                // Page indicator dots
+                                if ((signal.photoUrls.length +
+                                        (_isUserAuthor(signal) && signal.photoUrls.length < 5 ? 1 : 0)) >
+                                    1)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 8.0),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: List.generate(
+                                        signal.photoUrls.length +
+                                            (_isUserAuthor(signal) && signal.photoUrls.length < 5 ? 1 : 0),
+                                        (index) => Container(
+                                          margin: const EdgeInsets.symmetric(horizontal: 4.0),
+                                          width: 8.0,
+                                          height: 8.0,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: _currentPhotoPage == index
+                                                ? Colors.orange
+                                                : Colors.grey[400],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                const SizedBox(height: 8),
+                              ],
+                            ),
                           Text(signal.title, style: const TextStyle(fontSize: 30), textAlign: TextAlign.center,),
                           Text(signal.description, style: const TextStyle(fontSize: 20), textAlign: TextAlign.center,),
                           Text("Signal type: ${Signal.getSignalTypeName(signal.signalType)}"),
@@ -477,6 +533,14 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     });
   }
 
+  @override
+  void dispose() {
+    _photoPageController.dispose();
+    _scrollController.dispose();
+    _newCommentController.dispose();
+    super.dispose();
+  }
+
   Future<void> _addComment() async {
     await FirebaseFirestore.instance.collection('signals').doc(widget.signalId).collection('comments').add({
       'text': _newCommentController.text,
@@ -547,11 +611,13 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       try {
         final photoUrl = await _uploadImageToStorage(image);
 
-        // Update signal with photo URL
+        // Add photo URL to photoUrls array
         await FirebaseFirestore.instance
             .collection('signals')
             .doc(widget.signalId)
-            .update({'photoUrl': photoUrl});
+            .update({
+          'photoUrls': FieldValue.arrayUnion([photoUrl])
+        });
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -587,13 +653,77 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     }
   }
 
+  Future<void> _deletePhoto(String photoUrl) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Photo'),
+        content: const Text('Are you sure you want to delete this photo?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      // Remove from Firestore array
+      await FirebaseFirestore.instance
+          .collection('signals')
+          .doc(widget.signalId)
+          .update({
+        'photoUrls': FieldValue.arrayRemove([photoUrl])
+      });
+
+      // Delete from Storage
+      try {
+        final ref = FirebaseStorage.instanceFor(
+                bucket: 'gs://help-a-paw-dev.appspot.com')
+            .refFromURL(photoUrl);
+        await ref.delete();
+      } catch (e) {
+        // Storage deletion failed, but Firestore update succeeded
+        // This is acceptable - orphaned files can be cleaned up later
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Photo deleted successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete photo: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Future<String> _uploadImageToStorage(XFile image) async {
-    final String fileName = '${widget.signalId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final String fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
 
     final storage = FirebaseStorage.instanceFor(bucket: 'gs://help-a-paw-dev.appspot.com');
     final Reference storageRef = storage
         .ref()
-        .child('signal_photos')
+        .child('signals')
+        .child(widget.signalId)
+        .child('photos')
         .child(fileName);
 
     final File file = File(image.path);
@@ -632,10 +762,35 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   }
 }
 
-class _FullScreenPhotoViewer extends StatelessWidget {
-  final String photoUrl;
+class _FullScreenPhotoGallery extends StatefulWidget {
+  final List<String> photoUrls;
+  final int initialIndex;
 
-  const _FullScreenPhotoViewer({required this.photoUrl});
+  const _FullScreenPhotoGallery({
+    required this.photoUrls,
+    required this.initialIndex,
+  });
+
+  @override
+  State<_FullScreenPhotoGallery> createState() => _FullScreenPhotoGalleryState();
+}
+
+class _FullScreenPhotoGalleryState extends State<_FullScreenPhotoGallery> {
+  late int _currentIndex;
+  late PageController _pageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -643,10 +798,36 @@ class _FullScreenPhotoViewer extends StatelessWidget {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          PhotoView(
-            imageProvider: NetworkImage(photoUrl),
-            minScale: PhotoViewComputedScale.contained,
-            maxScale: PhotoViewComputedScale.covered * 3,
+          PhotoViewGallery.builder(
+            pageController: _pageController,
+            itemCount: widget.photoUrls.length,
+            builder: (context, index) {
+              return PhotoViewGalleryPageOptions(
+                imageProvider: CachedNetworkImageProvider(widget.photoUrls[index]),
+                minScale: PhotoViewComputedScale.contained,
+                maxScale: PhotoViewComputedScale.covered * 3,
+                errorBuilder: (context, error, stackTrace) {
+                  return const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.broken_image, size: 64, color: Colors.white),
+                        SizedBox(height: 16),
+                        Text(
+                          'Failed to load image',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+            onPageChanged: (index) {
+              setState(() {
+                _currentIndex = index;
+              });
+            },
             backgroundDecoration: const BoxDecoration(
               color: Colors.black,
             ),
@@ -657,21 +838,6 @@ class _FullScreenPhotoViewer extends StatelessWidget {
                       ? 0
                       : event.cumulativeBytesLoaded / (event.expectedTotalBytes ?? 1),
                   color: Colors.white,
-                ),
-              );
-            },
-            errorBuilder: (context, error, stackTrace) {
-              return const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.broken_image, size: 64, color: Colors.white),
-                    SizedBox(height: 16),
-                    Text(
-                      'Failed to load image',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ],
                 ),
               );
             },
@@ -690,6 +856,30 @@ class _FullScreenPhotoViewer extends StatelessWidget {
               ),
             ),
           ),
+          // Photo counter
+          if (widget.photoUrls.length > 1)
+            Positioned(
+              bottom: 40,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${_currentIndex + 1} of ${widget.photoUrls.length}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

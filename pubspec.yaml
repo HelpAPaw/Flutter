@@ -36,6 +36,7 @@ dependencies:
   url_launcher: ^6.2.1
   geoflutterfire_plus: ^0.0.31
   geolocator: ^14.0.0
+  cached_network_image: ^3.3.1
 
 dev_dependencies:
   flutter_test:

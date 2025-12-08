@@ -1,0 +1,30 @@
+rules_version = '2';
+
+// Firebase Storage Security Rules
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Signal photos - hierarchical structure
+    match /signals/{signalId}/photos/{fileName} {
+      // Anyone can read signal photos
+      allow read: if true;
+
+      // Only the signal reporter can upload or delete photos
+      allow write, delete: if request.auth != null &&
+        isSignalReporter(signalId, request.auth.uid);
+    }
+
+    // Future: Comment photos (when implemented)
+    match /signals/{signalId}/comments/{commentId}/photos/{fileName} {
+      allow read: if true;
+      // TODO: Add write rules for comment authors when feature is implemented
+    }
+
+    // Helper function to check if the user is the signal reporter
+    function isSignalReporter(signalId, userId) {
+      let signal = firestore.get(/databases/(default)/documents/signals/$(signalId)).data;
+      // Compare the reporter DocumentReference path with the current user's path
+      return signal.reporter == /databases/(default)/documents/users/$(userId);
+    }
+  }
+}
