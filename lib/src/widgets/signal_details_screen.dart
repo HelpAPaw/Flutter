@@ -401,8 +401,10 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                   ),
                                 ),
                               ],
-                              onChanged: (value) => {
-                                //TODO: update signal status
+                              onChanged: (value) {
+                                if (value != null) {
+                                  _updateSignalStatus(signal.status, value);
+                                }
                               },
                           ),
                           //Get nested Firebase collection called 'comments'
@@ -427,6 +429,57 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                       itemCount: comments.length,
                                       itemBuilder: (BuildContext context, int index) {
                                         Map<String, dynamic> commentData = comments[index].data()! as Map<String, dynamic>;
+                                        final bool isStatusChange = commentData['type'] == 'status_change';
+
+                                        if (isStatusChange) {
+                                          // Status change entry
+                                          return ListTile(
+                                            title: Container(
+                                              decoration: BoxDecoration(
+                                                color: Colors.orange.shade50,
+                                                borderRadius: BorderRadius.circular(10),
+                                                border: Border.all(
+                                                  color: Colors.orange.shade200,
+                                                  width: 1,
+                                                ),
+                                              ),
+                                              child: Padding(
+                                                padding: const EdgeInsets.all(8.0),
+                                                child: Row(
+                                                  children: [
+                                                    Image.asset(
+                                                      _getStatusIcon(commentData['newStatus']),
+                                                      width: 24,
+                                                      height: 24,
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Expanded(
+                                                      child: FutureBuilder<DocumentSnapshot>(
+                                                        future: commentData['author'].get(),
+                                                        builder: (BuildContext context, AsyncSnapshot<DocumentSnapshot> snapshot) {
+                                                          String authorName = 'Someone';
+                                                          if (snapshot.hasData && snapshot.data?.data() != null) {
+                                                            Map<String, dynamic> authorData = snapshot.data!.data() as Map<String, dynamic>;
+                                                            authorName = authorData['name'] ?? 'Someone';
+                                                          }
+                                                          return Text(
+                                                            '$authorName changed the status to ${_getStatusName(commentData['newStatus'])}',
+                                                            style: const TextStyle(fontStyle: FontStyle.italic),
+                                                          );
+                                                        },
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                            subtitle: Text(
+                                              DateFormat.yMd().add_jm().format(commentData['createdAt'].toDate()),
+                                            ),
+                                          );
+                                        }
+
+                                        // Regular comment
                                         return ListTile(
                                           title: Container(
                                             decoration: BoxDecoration(
@@ -562,6 +615,55 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
 
     // Compare the user UID with the reporter's document ID
     return signal.reporter.id == currentUser.uid;
+  }
+
+  String _getStatusName(int status) {
+    switch (status) {
+      case 0:
+        return 'Help needed';
+      case 1:
+        return 'Somebody on the way';
+      case 2:
+        return 'Solved';
+      default:
+        return 'Unknown';
+    }
+  }
+
+  String _getStatusIcon(int status) {
+    switch (status) {
+      case 0:
+        return 'assets/icons/pin_red.png';
+      case 1:
+        return 'assets/icons/pin_orange.png';
+      case 2:
+        return 'assets/icons/pin_green.png';
+      default:
+        return 'assets/icons/pin_red.png';
+    }
+  }
+
+  Future<void> _updateSignalStatus(int oldStatus, int newStatus) async {
+    if (oldStatus == newStatus) return;
+
+    if (FirebaseAuth.instance.currentUser == null) {
+      _showSignInDialog();
+      return;
+    }
+
+    final signalRef = FirebaseFirestore.instance.collection('signals').doc(widget.signalId);
+
+    // Update signal status
+    await signalRef.update({'status': newStatus});
+
+    // Add status change comment
+    await signalRef.collection('comments').add({
+      'type': 'status_change',
+      'oldStatus': oldStatus,
+      'newStatus': newStatus,
+      'createdAt': DateTime.now(),
+      'author': FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser!.uid),
+    });
   }
 
   void _showImageSourceDialog() {
