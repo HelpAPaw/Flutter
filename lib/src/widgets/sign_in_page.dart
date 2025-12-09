@@ -5,6 +5,34 @@ import 'package:firebase_ui_oauth_google/firebase_ui_oauth_google.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../services/auth_service.dart';
+
+/// Handle merging anonymous user data after sign-in
+Future<void> _handleAnonymousDataMerge(String? previousAnonymousUid, User newUser) async {
+  if (previousAnonymousUid == null || previousAnonymousUid == newUser.uid) {
+    // No anonymous user to merge, or same UID (shouldn't happen with FirebaseUI)
+    return;
+  }
+
+  debugPrint('Handling anonymous data merge: $previousAnonymousUid -> ${newUser.uid}');
+
+  final db = FirebaseFirestore.instance;
+
+  // Check if the new user already has settings (existing account)
+  final newUserDoc = await db.collection('users').doc(newUser.uid).get();
+  final hasExistingSettings = newUserDoc.exists &&
+      (newUserDoc.data()?['notificationPreferences'] != null ||
+       newUserDoc.data()?['profileCompleted'] == true);
+
+  if (hasExistingSettings) {
+    // Existing account - just merge tokens
+    await AuthService().mergeAnonymousIntoExisting(previousAnonymousUid, newUser.uid);
+  } else {
+    // New account - transfer all settings
+    await AuthService().transferAnonymousData(previousAnonymousUid, newUser.uid);
+  }
+}
+
 Future<void> _checkProfileCompletion(BuildContext context, User? user) async {
   if (user == null) return;
 
@@ -89,6 +117,12 @@ class _SignInPageState extends State<SignInPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Capture anonymous UID before sign-in (will be null if not anonymous)
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final previousAnonymousUid = currentUser?.isAnonymous == true
+        ? currentUser?.uid
+        : null;
+
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
@@ -123,21 +157,37 @@ class _SignInPageState extends State<SignInPage> {
                   GoogleProvider(clientId: '757136327951-0lv74a2r35rta4lai55fc78vi6543ho7.apps.googleusercontent.com'),
                 ],
                 actions: [
-                  AuthStateChangeAction<SignedIn>((context, state) {
+                  AuthStateChangeAction<SignedIn>((context, state) async {
                     final user = state.user;
+
+                    // Handle anonymous data merge if user was previously anonymous
+                    if (previousAnonymousUid != null && user != null) {
+                      await _handleAnonymousDataMerge(previousAnonymousUid, user);
+                    }
+
                     // Check if email verification is required for email/password users
                     if (user != null &&
                         user.providerData.any((info) => info.providerId == 'password') &&
                         !user.emailVerified) {
                       // Push verification screen on top to preserve navigation stack
-                      context.push('/verify_email');
+                      if (context.mounted) {
+                        context.push('/verify_email');
+                      }
                       return;
                     }
                     // User is authenticated, check if profile is complete
-                    _checkProfileCompletion(context, user);
+                    if (context.mounted) {
+                      _checkProfileCompletion(context, user);
+                    }
                   }),
                   AuthStateChangeAction<UserCreated>((context, state) async {
                     final user = FirebaseAuth.instance.currentUser;
+
+                    // Handle anonymous data merge for new account creation
+                    if (previousAnonymousUid != null && user != null) {
+                      await _handleAnonymousDataMerge(previousAnonymousUid, user);
+                    }
+
                     if (user != null &&
                         user.providerData.any((info) => info.providerId == 'password')) {
                       // Send verification email with proper action code settings
@@ -159,7 +209,9 @@ class _SignInPageState extends State<SignInPage> {
                       }
                     } else {
                       // For OAuth providers (Google), push profile completion
-                      context.push('/complete_profile');
+                      if (context.mounted) {
+                        context.push('/complete_profile');
+                      }
                     }
                   }),
                 ],
