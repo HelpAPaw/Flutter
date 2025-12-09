@@ -1,5 +1,8 @@
 import * as admin from "firebase-admin";
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import {
+  onDocumentCreated,
+  onDocumentUpdated,
+} from "firebase-functions/v2/firestore";
 
 admin.initializeApp();
 
@@ -16,6 +19,9 @@ const SIGNAL_TYPES = [
   "Wild animals",
   "Other",
 ];
+
+// Signal status names
+const SIGNAL_STATUSES = ["Help needed", "Somebody on the way", "Solved"];
 
 interface GeoPoint {
   latitude: number;
@@ -35,7 +41,9 @@ interface UserNotificationPrefs {
 }
 
 interface UserData {
-  fcmToken?: string;
+  fcmTokens?: string[];
+  isAnonymous?: boolean;
+  signalSubscriptions?: string[];
   currentLocation?: {
     geopoint: GeoPoint;
     geohash: string;
@@ -70,6 +78,97 @@ function toRad(deg: number): number {
 }
 
 /**
+ * Clean up invalid FCM tokens from user documents
+ */
+async function cleanupInvalidTokens(
+  response: admin.messaging.BatchResponse,
+  tokens: string[],
+  userTokens: Map<string, string[]>
+): Promise<void> {
+  const batch = db.batch();
+  const tokenToUserMap = new Map<string, string>();
+
+  // Build reverse mapping from token to userId
+  for (const [userId, userTokensList] of userTokens.entries()) {
+    for (const token of userTokensList) {
+      tokenToUserMap.set(token, userId);
+    }
+  }
+
+  let hasUpdates = false;
+  response.responses.forEach((resp, idx) => {
+    if (!resp.success) {
+      const failedToken = tokens[idx];
+      const userId = tokenToUserMap.get(failedToken);
+
+      if (
+        userId &&
+        (resp.error?.code === "messaging/registration-token-not-registered" ||
+          resp.error?.code === "messaging/invalid-registration-token")
+      ) {
+        const userRef = db.collection("users").doc(userId);
+        batch.update(userRef, {
+          fcmTokens: admin.firestore.FieldValue.arrayRemove(failedToken),
+        });
+        hasUpdates = true;
+      }
+    }
+  });
+
+  if (hasUpdates) {
+    await batch.commit();
+  }
+}
+
+/**
+ * Send notifications to multiple users
+ */
+async function sendNotificationsToUsers(
+  userTokens: Map<string, string[]>,
+  notification: { title: string; body: string },
+  data: Record<string, string>
+): Promise<void> {
+  const allTokens = Array.from(userTokens.values()).flat();
+
+  if (allTokens.length === 0) {
+    return;
+  }
+
+  const message: admin.messaging.MulticastMessage = {
+    tokens: allTokens,
+    notification,
+    data: {
+      ...data,
+      click_action: "FLUTTER_NOTIFICATION_CLICK",
+    },
+    android: {
+      notification: {
+        channelId: "help_a_paw_signals",
+        priority: "high",
+      },
+    },
+    apns: {
+      payload: {
+        aps: {
+          sound: "default",
+          badge: 1,
+        },
+      },
+    },
+  };
+
+  try {
+    const response = await messaging.sendEachForMulticast(message);
+
+    if (response.failureCount > 0) {
+      await cleanupInvalidTokens(response, allTokens, userTokens);
+    }
+  } catch (error) {
+    console.error("Error sending notifications:", error);
+  }
+}
+
+/**
  * Cloud Function triggered when a new signal is created
  */
 export const onSignalCreated = onDocumentCreated(
@@ -79,7 +178,6 @@ export const onSignalCreated = onDocumentCreated(
     const signalData = event.data?.data();
 
     if (!signalData) {
-      console.log("No signal data found");
       return;
     }
 
@@ -95,17 +193,11 @@ export const onSignalCreated = onDocumentCreated(
       | undefined;
 
     if (!signalGeopoint || !signalGeohash) {
-      console.log("Signal missing location data");
       return;
     }
 
-    console.log(
-      `New signal created: ${signalId} at ${signalGeopoint.latitude}, ${signalGeopoint.longitude}`
-    );
-
     // Find users to notify
-    const usersToNotify = new Set<string>();
-    const userTokens: Map<string, string> = new Map();
+    const userTokens: Map<string, string[]> = new Map();
 
     // Query all users with notification preferences enabled
     const usersSnapshot = await db
@@ -122,8 +214,8 @@ export const onSignalCreated = onDocumentCreated(
         continue;
       }
 
-      // Skip if no FCM token
-      if (!userData.fcmToken) {
+      // Skip if no FCM tokens
+      if (!userData.fcmTokens || userData.fcmTokens.length === 0) {
         continue;
       }
 
@@ -156,9 +248,6 @@ export const onSignalCreated = onDocumentCreated(
 
         const radius = prefs.locationRadiusKm || 10;
         if (distance <= radius) {
-          console.log(
-            `User ${userId} is ${distance.toFixed(1)}km from signal (within ${radius}km radius)`
-          );
           shouldNotify = true;
         }
       }
@@ -175,81 +264,177 @@ export const onSignalCreated = onDocumentCreated(
         );
 
         if (distance <= regionRadius) {
-          console.log(
-            `Signal is in user ${userId}'s region of interest (${distance.toFixed(1)}km from center, within ${regionRadius}km radius)`
-          );
           shouldNotify = true;
         }
       }
 
       if (shouldNotify) {
-        usersToNotify.add(userId);
-        userTokens.set(userId, userData.fcmToken);
+        userTokens.set(userId, userData.fcmTokens);
       }
     }
 
-    if (usersToNotify.size === 0) {
-      console.log("No users to notify");
+    if (userTokens.size === 0) {
       return;
     }
 
-    console.log(`Sending notifications to ${usersToNotify.size} users`);
-
-    // Build notification message
     const signalTypeName =
       SIGNAL_TYPES[signalType] || SIGNAL_TYPES[SIGNAL_TYPES.length - 1];
 
-    const tokens = Array.from(userTokens.values());
-
-    // Send notifications
-    const message: admin.messaging.MulticastMessage = {
-      tokens,
-      notification: {
+    await sendNotificationsToUsers(
+      userTokens,
+      {
         title: "New signal nearby!",
         body: `${signalTypeName}: ${signalTitle}`,
       },
-      data: {
+      {
         signalId,
         type: "new_signal",
-        click_action: "FLUTTER_NOTIFICATION_CLICK",
-      },
-      android: {
-        notification: {
-          channelId: "help_a_paw_signals",
-          priority: "high",
-        },
-      },
-      apns: {
-        payload: {
-          aps: {
-            sound: "default",
-            badge: 1,
-          },
-        },
-      },
-    };
-
-    try {
-      const response = await messaging.sendEachForMulticast(message);
-      console.log(
-        `Successfully sent ${response.successCount} notifications, ${response.failureCount} failures`
-      );
-
-      // Handle failed tokens (e.g., remove invalid tokens)
-      if (response.failureCount > 0) {
-        const failedTokens: string[] = [];
-        response.responses.forEach((resp, idx) => {
-          if (!resp.success) {
-            failedTokens.push(tokens[idx]);
-            console.log(`Failed to send to token: ${resp.error?.message}`);
-          }
-        });
-
-        // Optionally: Remove invalid tokens from user documents
-        // This would require mapping tokens back to user IDs
       }
-    } catch (error) {
-      console.error("Error sending notifications:", error);
+    );
+  }
+);
+
+/**
+ * Cloud Function triggered when a signal is updated (status change)
+ */
+export const onSignalUpdated = onDocumentUpdated(
+  "signals/{signalId}",
+  async (event) => {
+    const signalId = event.params.signalId;
+    const beforeData = event.data?.before.data();
+    const afterData = event.data?.after.data();
+
+    if (!beforeData || !afterData) {
+      return;
     }
+
+    // Check if status changed
+    const statusChanged = beforeData.status !== afterData.status;
+    if (!statusChanged) {
+      return;
+    }
+
+    const signalTitle = afterData.title as string;
+    const newStatus = afterData.status as number;
+    const updatedByRef = afterData.lastUpdatedBy as
+      | admin.firestore.DocumentReference
+      | undefined;
+
+    // Find users subscribed to this signal
+    const userTokens: Map<string, string[]> = new Map();
+
+    const subscribedUsersSnapshot = await db
+      .collection("users")
+      .where("signalSubscriptions", "array-contains", signalId)
+      .get();
+
+    for (const userDoc of subscribedUsersSnapshot.docs) {
+      const userId = userDoc.id;
+      const userData = userDoc.data() as UserData;
+
+      // Skip the user who made the update
+      if (updatedByRef && updatedByRef.id === userId) {
+        continue;
+      }
+
+      // Skip if no FCM tokens
+      if (!userData.fcmTokens || userData.fcmTokens.length === 0) {
+        continue;
+      }
+
+      userTokens.set(userId, userData.fcmTokens);
+    }
+
+    if (userTokens.size === 0) {
+      return;
+    }
+
+    const statusName = SIGNAL_STATUSES[newStatus] || "Updated";
+
+    await sendNotificationsToUsers(
+      userTokens,
+      {
+        title: "Signal status updated",
+        body: `${signalTitle}: ${statusName}`,
+      },
+      {
+        signalId,
+        type: "status_change",
+      }
+    );
+  }
+);
+
+/**
+ * Cloud Function triggered when a new comment is added to a signal
+ */
+export const onCommentCreated = onDocumentCreated(
+  "signals/{signalId}/comments/{commentId}",
+  async (event) => {
+    const signalId = event.params.signalId;
+    const commentData = event.data?.data();
+
+    if (!commentData) {
+      return;
+    }
+
+    const authorRef = commentData.author as
+      | admin.firestore.DocumentReference
+      | undefined;
+    const commentText = commentData.text as string;
+
+    // Get the signal to get its title
+    const signalDoc = await db.collection("signals").doc(signalId).get();
+    if (!signalDoc.exists) {
+      return;
+    }
+
+    const signalData = signalDoc.data();
+    const signalTitle = signalData?.title as string;
+
+    // Find users subscribed to this signal
+    const userTokens: Map<string, string[]> = new Map();
+
+    const subscribedUsersSnapshot = await db
+      .collection("users")
+      .where("signalSubscriptions", "array-contains", signalId)
+      .get();
+
+    for (const userDoc of subscribedUsersSnapshot.docs) {
+      const userId = userDoc.id;
+      const userData = userDoc.data() as UserData;
+
+      // Skip the comment author
+      if (authorRef && authorRef.id === userId) {
+        continue;
+      }
+
+      // Skip if no FCM tokens
+      if (!userData.fcmTokens || userData.fcmTokens.length === 0) {
+        continue;
+      }
+
+      userTokens.set(userId, userData.fcmTokens);
+    }
+
+    if (userTokens.size === 0) {
+      return;
+    }
+
+    // Truncate comment text for notification
+    const truncatedComment =
+      commentText.length > 50 ? commentText.substring(0, 47) + "..." : commentText;
+
+    await sendNotificationsToUsers(
+      userTokens,
+      {
+        title: `New comment on: ${signalTitle}`,
+        body: truncatedComment,
+      },
+      {
+        signalId,
+        type: "new_comment",
+      }
+    );
   }
 );
