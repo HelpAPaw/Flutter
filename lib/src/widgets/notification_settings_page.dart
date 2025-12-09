@@ -19,7 +19,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   bool _notificationsEnabled = false;
   bool _locationTrackingEnabled = false;
   double _locationRadiusKm = 10.0;
-  List<int> _selectedSignalTypes = [];
+  late List<int> _selectedSignalTypes;
   Map<String, dynamic>? _regionOfInterest;
   bool _isLoading = true;
 
@@ -30,7 +30,22 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   }
 
   Future<void> _loadPreferences() async {
-    final user = FirebaseAuth.instance.currentUser;
+    // Default to all signal types selected
+    _selectedSignalTypes = List.generate(Signal.signalTypes.length, (i) => i);
+
+    var user = FirebaseAuth.instance.currentUser;
+
+    // Ensure user is authenticated (create anonymous account if needed)
+    if (user == null) {
+      try {
+        final credential = await FirebaseAuth.instance.signInAnonymously();
+        user = credential.user;
+      } catch (e) {
+        setState(() => _isLoading = false);
+        return;
+      }
+    }
+
     if (user == null) {
       setState(() => _isLoading = false);
       return;
@@ -49,20 +64,29 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
             _notificationsEnabled = prefs['enabled'] ?? false;
             _locationTrackingEnabled = prefs['locationTrackingEnabled'] ?? false;
             _locationRadiusKm = (prefs['locationRadiusKm'] as num?)?.toDouble() ?? 10.0;
-            _selectedSignalTypes = (prefs['signalTypes'] as List<dynamic>?)?.cast<int>() ?? [];
+            _selectedSignalTypes = (prefs['signalTypes'] as List<dynamic>?)?.cast<int>() ?? List.generate(Signal.signalTypes.length, (i) => i);
             _regionOfInterest = prefs['regionOfInterest'] as Map<String, dynamic>?;
           });
         }
       }
-    } catch (e) {
-      debugPrint('Error loading preferences: $e');
+    } catch (_) {
+      // Ignore errors loading preferences
     }
 
     setState(() => _isLoading = false);
   }
 
   Future<void> _savePreferences() async {
-    final user = FirebaseAuth.instance.currentUser;
+    var user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      try {
+        final credential = await FirebaseAuth.instance.signInAnonymously();
+        user = credential.user;
+      } catch (_) {
+        return;
+      }
+    }
+
     if (user == null) return;
 
     try {
@@ -84,8 +108,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
           const SnackBar(content: Text('Settings saved')),
         );
       }
-    } catch (e) {
-      debugPrint('Error saving preferences: $e');
+    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Failed to save settings')),
@@ -158,53 +181,70 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Notification Settings'),
       ),
-      body: user == null
-          ? _buildSignInPrompt()
-          : _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _buildSettingsContent(),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _buildSettingsContent(),
     );
   }
 
-  Widget _buildSignInPrompt() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              Icons.notifications_off,
-              size: 64,
-              color: Colors.grey,
+  Widget _buildAnonymousUpgradeBanner() {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline, color: Colors.orange.shade700),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Create an account',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.orange.shade900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Sign up to keep your settings across devices',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.orange.shade800,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'Sign in to configure notifications',
-              style: TextStyle(fontSize: 18),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () => context.push('/sign_in'),
-              child: const Text('Sign In'),
-            ),
-          ],
-        ),
+          ),
+          TextButton(
+            onPressed: () => context.push('/sign_in'),
+            child: const Text('Sign Up'),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildSettingsContent() {
+    final user = FirebaseAuth.instance.currentUser;
+    final isAnonymous = user?.isAnonymous ?? false;
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // Show upgrade banner for anonymous users
+        if (isAnonymous) _buildAnonymousUpgradeBanner(),
+
         // Master toggle
         _buildSectionHeader('Notifications'),
         SwitchListTile(
