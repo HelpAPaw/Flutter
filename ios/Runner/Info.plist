@@ -49,5 +49,14 @@
 	<string>We need camera access to let you take photos of animals in need</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>We need photo library access to let you attach photos to signals</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>We need your location to show signals near you and notify you about animals in need nearby.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>We need background location access to notify you when animals need help near your location, even when the app is closed.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>

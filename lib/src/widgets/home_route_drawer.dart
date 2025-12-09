@@ -143,12 +143,12 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             enableFeedback: true,
             leading: const Icon(Icons.notifications),
             onTap: () => {
-              context.push('/in_dev'),
+              context.push('/notification-settings'),
               homeRouteTile(3),
             },
             selected: _homeRouteTile == 3,
             title: const Text(
-              'My Notifications',
+              'Notification Settings',
               softWrap: true,
             ),
           ),

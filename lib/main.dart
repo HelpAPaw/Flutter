@@ -16,6 +16,9 @@ import 'package:help_a_paw/src/widgets/in_dev.dart';
 import 'package:help_a_paw/src/widgets/profile_completion_page.dart';
 import 'package:help_a_paw/src/widgets/sign_in_page.dart';
 import 'package:help_a_paw/src/widgets/signal_details_screen.dart';
+import 'package:help_a_paw/src/widgets/notification_settings_page.dart';
+import 'package:help_a_paw/src/widgets/region_selection_page.dart';
+import 'package:help_a_paw/src/services/notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -41,6 +44,10 @@ Future<void> main() async {
   );
   
   // await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
+
+  // Initialize notification service (router will be passed after it's created)
+  await NotificationService().initialize(router: _router);
+
   runApp(const HelpAPaw());
   usePathUrlStrategy();
 }
@@ -107,6 +114,16 @@ final GoRouter _router = GoRouter(
       name: 'complete_profile',
       path: '/complete_profile',
       builder: (BuildContext context, GoRouterState state) => const ProfileCompletionPage(),
+    ),
+    GoRoute(
+      name: 'notification_settings',
+      path: '/notification-settings',
+      builder: (BuildContext context, GoRouterState state) => const NotificationSettingsPage(),
+    ),
+    GoRoute(
+      name: 'select_region',
+      path: '/select-region',
+      builder: (BuildContext context, GoRouterState state) => const RegionSelectionPage(),
     ),
   ],
 );
