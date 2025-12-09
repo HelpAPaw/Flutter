@@ -182,9 +182,14 @@ class NotificationService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final token = await _messaging.getToken();
-    if (token != null) {
-      await _saveFcmTokenToFirestore(token);
+    try {
+      final token = await _messaging.getToken();
+      if (token != null) {
+        await _saveFcmTokenToFirestore(token);
+      }
+    } catch (_) {
+      // FCM token retrieval can fail due to network issues
+      // The app continues to work, token refresh listener will retry later
     }
   }
 
@@ -192,12 +197,17 @@ class NotificationService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
+    // Use arrayUnion to add token without duplicates (supports multi-device)
     await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
-      {'fcmToken': token},
+      {
+        'fcmTokens': FieldValue.arrayUnion([token]),
+        'isAnonymous': user.isAnonymous,
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
       SetOptions(merge: true),
     );
 
-    debugPrint('FCM token saved to Firestore');
+    debugPrint('FCM token saved to Firestore (isAnonymous: ${user.isAnonymous})');
   }
 
   /// Call this when user logs in to update FCM token
@@ -205,13 +215,17 @@ class NotificationService {
     await _updateFcmToken();
   }
 
-  /// Call this when user logs out to clear FCM token
+  /// Call this when user explicitly logs out - removes only this device's token
   Future<void> onUserLogout() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-      'fcmToken': FieldValue.delete(),
-    });
+    // Remove only this device's token, don't delete the user doc
+    final token = await _messaging.getToken();
+    if (token != null) {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+        'fcmTokens': FieldValue.arrayRemove([token]),
+      });
+    }
   }
 }
