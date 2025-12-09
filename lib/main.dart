@@ -45,6 +45,17 @@ Future<void> main() async {
   
   // await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
 
+  // Auto sign-in anonymously if no user is authenticated
+  // This allows anonymous users to save notification preferences
+  if (FirebaseAuth.instance.currentUser == null) {
+    try {
+      await FirebaseAuth.instance.signInAnonymously();
+      debugPrint('Signed in anonymously');
+    } catch (e) {
+      debugPrint('Anonymous sign-in failed: $e');
+    }
+  }
+
   // Initialize notification service (router will be passed after it's created)
   await NotificationService().initialize(router: _router);
 
