@@ -33,18 +33,24 @@ class NotificationService {
     importance: Importance.high,
   );
 
-  /// Initialize the notification service
+  bool _isFullyInitialized = false;
+
+  /// Phase 1: Basic initialization (no permission triggers)
   Future<void> initialize({GoRouter? router}) async {
     _router = router;
 
-    // Set up background message handler
-    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-
-    // Initialize local notifications
+    // Initialize local notifications (minimal setup)
     await _initializeLocalNotifications();
 
-    // Request permissions
-    await _requestPermissions();
+    // Don't set up Firebase Messaging yet - wait for onboarding
+  }
+
+  /// Phase 2: Complete initialization after permissions granted
+  Future<void> completeInitialization() async {
+    if (_isFullyInitialized) return;
+
+    // Set up background message handler
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
     // Set up foreground message handler
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
@@ -58,13 +64,12 @@ class NotificationService {
       _handleNotificationTap(initialMessage);
     }
 
-    // Update FCM token when user is logged in
-    _updateFcmToken();
-
     // Listen for token refresh
     _messaging.onTokenRefresh.listen((token) {
       _saveFcmTokenToFirestore(token);
     });
+
+    _isFullyInitialized = true;
   }
 
   Future<void> _initializeLocalNotifications() async {
@@ -86,13 +91,7 @@ class NotificationService {
       onDidReceiveNotificationResponse: _onNotificationResponse,
     );
 
-    // Create the notification channel on Android
-    if (Platform.isAndroid) {
-      await _localNotifications
-          .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
-          ?.createNotificationChannel(_channel);
-    }
+    // Don't create notification channel yet - wait for user permission
   }
 
   Future<void> _requestPermissions() async {
@@ -213,6 +212,47 @@ class NotificationService {
   /// Call this when user logs in to update FCM token
   Future<void> onUserLogin() async {
     await _updateFcmToken();
+  }
+
+  /// Request notification permission and return whether it was granted
+  /// Use this for controlled permission requests (e.g., onboarding flow)
+  Future<bool> requestNotificationPermission() async {
+    final settings = await _messaging.requestPermission(
+      alert: true,
+      announcement: false,
+      badge: true,
+      carPlay: false,
+      criticalAlert: false,
+      provisional: false,
+      sound: true,
+    );
+
+    final granted = settings.authorizationStatus == AuthorizationStatus.authorized ||
+        settings.authorizationStatus == AuthorizationStatus.provisional;
+
+    if (granted) {
+      // Request local notification permissions on Android 13+
+      if (Platform.isAndroid) {
+        await _localNotifications
+            .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin>()
+            ?.requestNotificationsPermission();
+
+        // Create notification channel after permission granted
+        await _localNotifications
+            .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin>()
+            ?.createNotificationChannel(_channel);
+      }
+
+      // Complete notification service initialization
+      await completeInitialization();
+
+      // Update FCM token
+      await _updateFcmToken();
+    }
+
+    return granted;
   }
 
   /// Call this when user explicitly logs out - removes only this device's token

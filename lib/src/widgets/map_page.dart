@@ -14,8 +14,11 @@ import 'package:image_picker/image_picker.dart';
 
 import '../models/signal.dart';
 import '../models/vet_clinic.dart';
+import '../services/app_preferences_service.dart';
 import '../services/vet_clinic_service.dart';
 import 'home_route_drawer.dart';
+import 'notification_onboarding_button.dart';
+import 'notification_onboarding_sheet.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -47,6 +50,8 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   String? _newlyCreatedSignalId;
   XFile? _selectedImage;
   final ImagePicker _imagePicker = ImagePicker();
+  bool _showOnboardingButton = false;
+  bool _onboardingSheetShown = false;
 
   // Filter state - all selected by default
   Set<int> _selectedSignalTypes = {0, 1, 2, 3, 4, 5, 6}; // All 7 types
@@ -83,6 +88,45 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
     _loadPins();
     _loadHospitalIcon();
     _getUserLocation();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkOnboardingState());
+  }
+
+  Future<void> _checkOnboardingState() async {
+    final prefs = AppPreferencesService();
+
+    if (prefs.shouldShowOnboardingSheet()) {
+      _showOnboardingSheet();
+    } else if (prefs.shouldShowOnboardingButton()) {
+      setState(() => _showOnboardingButton = true);
+    }
+  }
+
+  void _showOnboardingSheet() {
+    if (_onboardingSheetShown) return;
+    _onboardingSheetShown = true;
+
+    showModalBottomSheet(
+      context: context,
+      isDismissible: true,
+      enableDrag: true,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => NotificationOnboardingSheet(
+        onComplete: () {
+          Navigator.pop(context);
+          setState(() => _showOnboardingButton = false);
+        },
+        onDismiss: () async {
+          Navigator.pop(context);
+          await AppPreferencesService().setOnboardingDismissed(true);
+          setState(() => _showOnboardingButton = true);
+        },
+      ),
+    ).whenComplete(() {
+      _onboardingSheetShown = false;
+    });
   }
 
   @override
@@ -96,44 +140,31 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   }
 
   Future<void> _getUserLocation() async {
+    // Check if location services are enabled
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      // Location services are not enabled - just return without error
+      return;
+    }
+
+    // Check for location permissions (but don't request them)
+    // User will grant permission through onboarding flow
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      // Permissions not granted - just return without requesting
+      return;
+    }
+
+    // Permission already granted, get the user's current location
     try {
-      bool serviceEnabled;
-      LocationPermission permission;
-
-      // Check if location services are enabled
-      serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        // Location services are not enabled - silently continue without location
-        debugPrint('Location services are disabled.');
-        return;
-      }
-
-      // Check for location permissions
-      permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          // Permissions are denied - silently continue without location
-          debugPrint('Location permissions are denied.');
-          return;
-        }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        // Permissions are denied forever - silently continue without location
-        debugPrint('Location permissions are permanently denied.');
-        return;
-      }
-
-      // Get the user's current location
       Position position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high)
       );
       _updateMapLocation(position);
     } catch (e) {
-      // Handle any other location errors gracefully
+      // Failed to get location, just continue with default location
       debugPrint('Error getting user location: $e');
-      // App continues to function without user location
     }
   }
 
@@ -616,6 +647,10 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                           ),
                         ),
                       ),
+                    ),
+                  if (_showOnboardingButton)
+                    NotificationOnboardingButton(
+                      onTap: _showOnboardingSheet,
                     ),
                 ],
               ),

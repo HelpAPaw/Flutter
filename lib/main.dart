@@ -26,10 +26,14 @@ import 'package:help_a_paw/src/widgets/clinic_details_screen.dart';
 import 'package:help_a_paw/src/widgets/notification_settings_page.dart';
 import 'package:help_a_paw/src/widgets/region_selection_page.dart';
 import 'package:help_a_paw/src/services/notification_service.dart';
+import 'package:help_a_paw/src/services/app_preferences_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
+  // Initialize local preferences
+  await AppPreferencesService().initialize();
+
   // Initialize Firebase only if not already initialized
   try {
     await Firebase.initializeApp(
