@@ -55,7 +55,9 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        final isLoggedIn = snapshot.hasData && snapshot.data != null;
+        final isLoggedIn = snapshot.hasData &&
+                           snapshot.data != null &&
+                           !(snapshot.data!.isAnonymous);
         final user = snapshot.data;
         
         return Drawer(
