@@ -45,6 +45,10 @@ class _MapScreenState extends State<MapScreen> {
   XFile? _selectedImage;
   final ImagePicker _imagePicker = ImagePicker();
 
+  // Filter state - all selected by default
+  Set<int> _selectedSignalTypes = {0, 1, 2, 3, 4, 5, 6}; // All 7 types
+  Set<int> _selectedStatuses = {0, 1, 2}; // All 3 statuses
+
   _MapScreenState() {
     _signalsStream = GeoCollectionReference(signalsRef)
         .subscribeWithin(
@@ -127,7 +131,10 @@ class _MapScreenState extends State<MapScreen> {
             // return const Text("Loading");
           } else {
             var signals = snapshot.data!;
-            signalMarkers = signals.map<Marker>((signalDocument) {
+            signalMarkers = signals.where((signalDocument) {
+              Map<String, dynamic> data = signalDocument.data()! as Map<String, dynamic>;
+              return _signalPassesFilter(data);
+            }).map<Marker>((signalDocument) {
               Map<String, dynamic> data = signalDocument.data()! as Map<String, dynamic>;
               GeoPoint location = data['location']['geopoint'];
 
@@ -462,10 +469,26 @@ class _MapScreenState extends State<MapScreen> {
               // elevation: 6,
               actions: <Widget>[
                 IconButton(
-                    icon: const Icon(Icons.filter_list_outlined),
-                    onPressed: () => {
-                      //TODO: implement
-                    }),
+                    icon: Stack(
+                      children: [
+                        const Icon(Icons.filter_list_outlined),
+                        if (_hasActiveFilters)
+                          Positioned(
+                            right: 0,
+                            top: 0,
+                            child: Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    onPressed: _showFilterBottomSheet,
+                ),
                 IconButton(
                   //TODO: import custom icon
                     icon: const Icon(Icons.local_hospital),
@@ -532,6 +555,178 @@ class _MapScreenState extends State<MapScreen> {
 
       return pin ?? BitmapDescriptor.defaultMarker;
     }
+
+  bool _signalPassesFilter(Map<String, dynamic> data) {
+    final int signalType = data['signalType'] ?? 0;
+    final int status = data['status'] ?? 0;
+    return _selectedSignalTypes.contains(signalType) &&
+           _selectedStatuses.contains(status);
+  }
+
+  bool get _hasActiveFilters =>
+      _selectedSignalTypes.length < Signal.signalTypes.length ||
+      _selectedStatuses.length < 3;
+
+  Widget _buildStatusCheckbox(int status, String label, String iconPath, StateSetter setModalState) {
+    return CheckboxListTile(
+      value: _selectedStatuses.contains(status),
+      onChanged: (bool? value) {
+        setModalState(() {
+          if (value == true) {
+            _selectedStatuses.add(status);
+          } else {
+            _selectedStatuses.remove(status);
+          }
+        });
+      },
+      title: Row(
+        children: [
+          Image.asset(iconPath, width: 24, height: 24),
+          const SizedBox(width: 12),
+          Text(label),
+        ],
+      ),
+      activeColor: Colors.orange,
+      controlAffinity: ListTileControlAffinity.leading,
+      contentPadding: EdgeInsets.zero,
+    );
+  }
+
+  Widget _buildTypeCheckbox(int type, String label, StateSetter setModalState) {
+    return CheckboxListTile(
+      value: _selectedSignalTypes.contains(type),
+      onChanged: (bool? value) {
+        setModalState(() {
+          if (value == true) {
+            _selectedSignalTypes.add(type);
+          } else {
+            _selectedSignalTypes.remove(type);
+          }
+        });
+      },
+      title: Text(label),
+      activeColor: Colors.orange,
+      controlAffinity: ListTileControlAffinity.leading,
+      contentPadding: EdgeInsets.zero,
+    );
+  }
+
+  void _showFilterBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(10.0)),
+      ),
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header with title and action buttons
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Filter Signals',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            TextButton(
+                              onPressed: () {
+                                setModalState(() {
+                                  _selectedSignalTypes = {0, 1, 2, 3, 4, 5, 6};
+                                  _selectedStatuses = {0, 1, 2};
+                                });
+                              },
+                              child: const Text('Select All'),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                setModalState(() {
+                                  _selectedSignalTypes = {};
+                                  _selectedStatuses = {};
+                                });
+                              },
+                              child: const Text('Clear All'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const Divider(),
+
+                    // Signal Status Section
+                    const Text(
+                      'Status',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildStatusCheckbox(0, 'Help needed', 'assets/icons/pin_red.png', setModalState),
+                    _buildStatusCheckbox(1, 'Somebody on the way', 'assets/icons/pin_orange.png', setModalState),
+                    _buildStatusCheckbox(2, 'Solved', 'assets/icons/pin_green.png', setModalState),
+
+                    const SizedBox(height: 16),
+                    const Divider(),
+
+                    // Signal Type Section
+                    const Text(
+                      'Signal Type',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ...List.generate(Signal.signalTypes.length, (index) {
+                      return _buildTypeCheckbox(index, Signal.signalTypes[index], setModalState);
+                    }),
+
+                    const SizedBox(height: 16),
+
+                    // Apply Button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10.0),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          setState(() {}); // Trigger rebuild with new filters
+                        },
+                        child: const Text(
+                          'Apply Filters',
+                          style: TextStyle(fontSize: 16),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
 
   void _showImageSourceBottomSheet() {
     showModalBottomSheet(
