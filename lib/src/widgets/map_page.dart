@@ -510,8 +510,9 @@ class _MapScreenState extends State<MapScreen> {
               enableFeedback: true,
               shape: const CircleBorder(),
               onPressed: () {
-                // Check if user is authenticated
-                if (FirebaseAuth.instance.currentUser == null) {
+                // Check if user is authenticated (not anonymous)
+                if (FirebaseAuth.instance.currentUser == null ||
+                    FirebaseAuth.instance.currentUser!.isAnonymous) {
                   _showSignInDialog();
                 } else {
                   setState(() {
