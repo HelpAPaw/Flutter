@@ -595,11 +595,17 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   }
 
   Future<void> _addComment() async {
+    final userId = FirebaseAuth.instance.currentUser!.uid;
+
     await FirebaseFirestore.instance.collection('signals').doc(widget.signalId).collection('comments').add({
       'text': _newCommentController.text,
       'createdAt': DateTime.now(),
-      'author': FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser!.uid),
+      'author': FirebaseFirestore.instance.collection('users').doc(userId),
     });
+
+    // Subscribe user to this signal for update notifications
+    await _subscribeToSignal(userId);
+
     _newCommentController.clear();
     FocusManager.instance.primaryFocus?.unfocus();
     _scrollController.animateTo(
@@ -607,6 +613,20 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOut,
     );
+  }
+
+  /// Subscribe the user to receive notifications about this signal's updates
+  Future<void> _subscribeToSignal(String userId) async {
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(userId).set(
+        {
+          'signalSubscriptions': FieldValue.arrayUnion([widget.signalId]),
+        },
+        SetOptions(merge: true),
+      );
+    } catch (e) {
+      debugPrint('Error subscribing to signal: $e');
+    }
   }
 
   bool _isUserAuthor(Signal signal) {
@@ -646,15 +666,19 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   Future<void> _updateSignalStatus(int oldStatus, int newStatus) async {
     if (oldStatus == newStatus) return;
 
-    if (FirebaseAuth.instance.currentUser == null) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
       _showSignInDialog();
       return;
     }
 
     final signalRef = FirebaseFirestore.instance.collection('signals').doc(widget.signalId);
 
-    // Update signal status
-    await signalRef.update({'status': newStatus});
+    // Update signal status and track who made the update (for notification filtering)
+    await signalRef.update({
+      'status': newStatus,
+      'lastUpdatedBy': FirebaseFirestore.instance.collection('users').doc(user.uid),
+    });
 
     // Add status change comment
     await signalRef.collection('comments').add({
@@ -662,8 +686,11 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       'oldStatus': oldStatus,
       'newStatus': newStatus,
       'createdAt': DateTime.now(),
-      'author': FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser!.uid),
+      'author': FirebaseFirestore.instance.collection('users').doc(user.uid),
     });
+
+    // Subscribe user to this signal for update notifications
+    await _subscribeToSignal(user.uid);
   }
 
   void _showImageSourceDialog() {

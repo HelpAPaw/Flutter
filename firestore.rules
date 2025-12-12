@@ -2,8 +2,22 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if false;
+    // Users collection - users can read/write their own document
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Signals collection - public read, authenticated write
+    match /signals/{signalId} {
+      allow read: if true;  // Public read - signals are public data
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+
+      // Comments subcollection
+      match /comments/{commentId} {
+        allow read: if true;  // Public read
+        allow create: if request.auth != null;
+      }
     }
   }
 }
