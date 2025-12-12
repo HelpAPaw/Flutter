@@ -336,6 +336,32 @@ class _MapScreenState extends State<MapScreen> {
                                         )
                                       : const Icon(Icons.send),
                                   onPressed: _isSubmittingSignal ? null : () async {
+                                  // Validate title and description
+                                  final title = _newSignalTitleController.text.trim();
+                                  final description = _newSignalDescriptionController.text.trim();
+
+                                  if (title.isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Please enter a title for the signal'),
+                                        backgroundColor: Colors.red,
+                                        duration: Duration(seconds: 3),
+                                      ),
+                                    );
+                                    return;
+                                  }
+
+                                  if (description.isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Please enter a description for the signal'),
+                                        backgroundColor: Colors.red,
+                                        duration: Duration(seconds: 3),
+                                      ),
+                                    );
+                                    return;
+                                  }
+
                                   setState(() {
                                     _isSubmittingSignal = true;
                                   });
@@ -353,9 +379,9 @@ class _MapScreenState extends State<MapScreen> {
                                       'geohash': GeoFirePoint(GeoPoint(centerLatitude, centerLongitude)).geohash
                                     };
                                     final newSignal = Signal(
-                                      title: _newSignalTitleController.text,
-                                      description: _newSignalDescriptionController.text,
-                                      phoneNumber: _newSignalPhoneNumberController.text,
+                                      title: title,
+                                      description: description,
+                                      phoneNumber: _newSignalPhoneNumberController.text.trim(),
                                       signalType: _newSignalType,
                                       reporter: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser!.uid),
                                       contactPhone: '0123456789',
