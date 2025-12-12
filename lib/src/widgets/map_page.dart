@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:adaptive_components/adaptive_components.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -14,6 +13,8 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../models/signal.dart';
+import '../models/vet_clinic.dart';
+import '../services/vet_clinic_service.dart';
 import 'home_route_drawer.dart';
 
 class MapScreen extends StatefulWidget {
@@ -48,6 +49,17 @@ class _MapScreenState extends State<MapScreen> {
   // Filter state - all selected by default
   Set<int> _selectedSignalTypes = {0, 1, 2, 3, 4, 5, 6}; // All 7 types
   Set<int> _selectedStatuses = {0, 1, 2}; // All 3 statuses
+
+  // Vet clinic state
+  bool _showVetClinics = false;
+  List<VetClinic> _vetClinics = [];
+  Set<Marker> _clinicMarkers = {};
+  LatLng? _lastClinicSearchCenter;
+  bool _showSearchThisAreaButton = false;
+  bool _isLoadingClinics = false;
+  Timer? _searchButtonDebounce;
+  double? _lastSearchZoom;
+  final _vetClinicService = VetClinicService.instance;
 
   _MapScreenState() {
     _signalsStream = GeoCollectionReference(signalsRef)
@@ -174,6 +186,16 @@ class _MapScreenState extends State<MapScreen> {
             }).toSet();
           }
 
+          // Build clinic markers if enabled
+          if (_showVetClinics) {
+            _clinicMarkers = _buildClinicMarkers();
+          } else {
+            _clinicMarkers = {};
+          }
+
+          // Merge both marker sets
+          final allMarkers = {...signalMarkers, ..._clinicMarkers};
+
           return PopScope(
             canPop: !_isAddingNewSignal,
             onPopInvokedWithResult: (didPop, result) {
@@ -198,26 +220,10 @@ class _MapScreenState extends State<MapScreen> {
                     onMapCreated: (GoogleMapController controller) {
                       _mapController = controller;
                     },
-                    onCameraIdle: () async {
-                      final position = await _mapController.getVisibleRegion();
-                      final newCenter = LatLng(
-                        (position.northeast.latitude + position.southwest.latitude) / 2,
-                        (position.northeast.longitude + position.southwest.longitude) / 2,
-                      );
-                      setState(() {
-                        center = GeoFirePoint(GeoPoint(newCenter.latitude, newCenter.longitude));
-                        _signalsStream = GeoCollectionReference(signalsRef)
-                            .subscribeWithin(
-                              center: center,
-                              radiusInKm: radius,
-                              field: field,
-                              geopointFrom: (data) => (data[field] as Map<String, dynamic>)['geopoint'] as GeoPoint
-                            );
-                      });
-                    },
+                    onCameraIdle: _onCameraIdle,
                     zoomControlsEnabled: true,
                     myLocationEnabled: true,
-                    markers: signalMarkers,
+                    markers: allMarkers,
                   ),
                   if (_isAddingNewSignal) const IgnorePointer(
                     child: Center(
@@ -516,6 +522,63 @@ class _MapScreenState extends State<MapScreen> {
                       ),
                     ),
                   ),
+                  if (_showSearchThisAreaButton)
+                    Positioned(
+                      top: 16,
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.search, color: Colors.white),
+                          label: const Text('Search this area', style: TextStyle(color: Colors.white)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.orange,
+                            elevation: 6,
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _showSearchThisAreaButton = false;
+                            });
+                            _loadVetClinics();
+                          },
+                        ),
+                      ),
+                    ),
+                  if (_isLoadingClinics)
+                    Positioned(
+                      bottom: 80,
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                              SizedBox(width: 12),
+                              Text('Loading clinics...'),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -547,11 +610,24 @@ class _MapScreenState extends State<MapScreen> {
                     onPressed: _showFilterBottomSheet,
                 ),
                 IconButton(
-                  //TODO: import custom icon
-                    icon: const Icon(Icons.local_hospital),
-                    onPressed: () => {
-                      //TODO: implement
-                    }),
+                  icon: Icon(
+                    Icons.local_hospital,
+                    color: _showVetClinics ? Colors.white : Colors.white70,
+                  ),
+                  style: _showVetClinics
+                      ? IconButton.styleFrom(backgroundColor: Colors.orange[800])
+                      : null,
+                  onPressed: () {
+                    setState(() {
+                      _showVetClinics = !_showVetClinics;
+                      if (_showVetClinics) {
+                        _loadVetClinics();
+                      } else {
+                        _clearVetClinics();
+                      }
+                    });
+                  },
+                ),
                 IconButton(
                     icon: const Icon(Icons.refresh),
                     onPressed: () => {
@@ -619,6 +695,7 @@ class _MapScreenState extends State<MapScreen> {
       return pin ?? BitmapDescriptor.defaultMarker;
     }
 
+  // Filter methods
   bool _signalPassesFilter(Map<String, dynamic> data) {
     final int signalType = data['signalType'] ?? 0;
     final int status = data['status'] ?? 0;
@@ -789,6 +866,155 @@ class _MapScreenState extends State<MapScreen> {
         );
       },
     );
+  }
+
+  // Vet clinic methods
+  double _calculateSearchRadius(double zoomLevel) {
+    final radiusKm = 20000 / (1 << zoomLevel.round());
+    return radiusKm.clamp(1.0, 100.0);
+  }
+
+  Future<void> _loadVetClinics() async {
+    setState(() {
+      _isLoadingClinics = true;
+    });
+
+    try {
+      final region = await _mapController.getVisibleRegion();
+      final centerLat = (region.northeast.latitude + region.southwest.latitude) / 2;
+      final centerLng = (region.northeast.longitude + region.southwest.longitude) / 2;
+      final center = LatLng(centerLat, centerLng);
+
+      final zoom = await _mapController.getZoomLevel();
+      final radiusKm = _calculateSearchRadius(zoom);
+      final radiusMeters = radiusKm * 1000;
+
+      final clinics = await _vetClinicService.searchNearby(center, radiusMeters);
+
+      if (mounted) {
+        setState(() {
+          _vetClinics = clinics;
+          _lastClinicSearchCenter = center;
+          _lastSearchZoom = zoom;
+          _showSearchThisAreaButton = false;
+          _isLoadingClinics = false;
+        });
+
+        if (clinics.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No veterinary clinics found in this area'),
+              backgroundColor: Colors.grey,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingClinics = false;
+        });
+
+        String errorMessage = 'Failed to load vet clinics';
+        if (e.toString().contains('Network error')) {
+          errorMessage = 'Network error. Please check your internet connection.';
+        } else if (e.toString().contains('timed out')) {
+          errorMessage = 'Request timed out. Please try again.';
+        } else if (e.toString().contains('Rate limit')) {
+          errorMessage = 'Too many searches. Please wait a moment and try again.';
+        } else if (e.toString().contains('API access denied')) {
+          errorMessage = 'Service temporarily unavailable.';
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    }
+  }
+
+  void _clearVetClinics() {
+    setState(() {
+      _clinicMarkers = {};
+      _vetClinics = [];
+      _lastClinicSearchCenter = null;
+      _showSearchThisAreaButton = false;
+    });
+    _vetClinicService.clearCache();
+  }
+
+  Set<Marker> _buildClinicMarkers() {
+    return _vetClinics.map((clinic) {
+      return Marker(
+        markerId: MarkerId('clinic_${clinic.id}'),
+        position: LatLng(clinic.latitude, clinic.longitude),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+        infoWindow: InfoWindow(
+          title: clinic.name,
+          snippet: clinic.phoneNumber ?? 'Tap for details',
+          onTap: () {
+            context.push('/clinic_details/${clinic.id}');
+          },
+        ),
+      );
+    }).toSet();
+  }
+
+  void _onCameraIdle() async {
+    // Update signal stream for new map center
+    final position = await _mapController.getVisibleRegion();
+    final newCenter = LatLng(
+      (position.northeast.latitude + position.southwest.latitude) / 2,
+      (position.northeast.longitude + position.southwest.longitude) / 2,
+    );
+    setState(() {
+      center = GeoFirePoint(GeoPoint(newCenter.latitude, newCenter.longitude));
+      _signalsStream = GeoCollectionReference(signalsRef)
+          .subscribeWithin(
+            center: center,
+            radiusInKm: radius,
+            field: field,
+            geopointFrom: (data) => (data[field] as Map<String, dynamic>)['geopoint'] as GeoPoint
+          );
+    });
+
+    // Check if we need to show "search this area" button for vet clinics
+    _checkVetClinicSearchButton();
+  }
+
+  Future<void> _checkVetClinicSearchButton() async {
+    if (!_showVetClinics || _lastClinicSearchCenter == null) return;
+
+    _searchButtonDebounce?.cancel();
+    _searchButtonDebounce = Timer(const Duration(milliseconds: 1000), () async {
+      final region = await _mapController.getVisibleRegion();
+      final centerLat = (region.northeast.latitude + region.southwest.latitude) / 2;
+      final centerLng = (region.northeast.longitude + region.southwest.longitude) / 2;
+      final currentCenter = LatLng(centerLat, centerLng);
+
+      final zoom = await _mapController.getZoomLevel();
+      final distance = Geolocator.distanceBetween(
+        _lastClinicSearchCenter!.latitude,
+        _lastClinicSearchCenter!.longitude,
+        currentCenter.latitude,
+        currentCenter.longitude,
+      ) / 1000;
+
+      final zoomDiff = (_lastSearchZoom != null) ? (zoom - _lastSearchZoom!).abs() : 0.0;
+
+      if (distance > 2.0 || zoomDiff > 2.0) {
+        if (mounted) {
+          setState(() {
+            _showSearchThisAreaButton = true;
+          });
+        }
+      }
+    });
   }
 
   void _showImageSourceBottomSheet() {
