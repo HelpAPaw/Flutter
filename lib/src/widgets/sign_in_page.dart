@@ -53,7 +53,7 @@ Future<void> _checkProfileCompletion(BuildContext context, User? user) async {
   }
 }
 
-class SignInPage extends StatelessWidget {
+class SignInPage extends StatefulWidget {
   final String? prefilledEmail;
   final String? prefilledPassword;
 
@@ -62,6 +62,30 @@ class SignInPage extends StatelessWidget {
     this.prefilledEmail,
     this.prefilledPassword,
   });
+
+  @override
+  State<SignInPage> createState() => _SignInPageState();
+}
+
+class _SignInPageState extends State<SignInPage> {
+  @override
+  void initState() {
+    super.initState();
+    // Sign out anonymous users before showing sign-in screen
+    _signOutAnonymousUser();
+  }
+
+  Future<void> _signOutAnonymousUser() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null && user.isAnonymous) {
+      try {
+        await FirebaseAuth.instance.signOut();
+        debugPrint('Signed out anonymous user before sign-in');
+      } catch (e) {
+        debugPrint('Error signing out anonymous user: $e');
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -92,7 +116,7 @@ class SignInPage extends StatelessWidget {
             child: SizedBox(
               height: MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top - kToolbarHeight,
               child: SignInScreen(
-                email: prefilledEmail,
+                email: widget.prefilledEmail,
                 showAuthActionSwitch: true,
                 providers: [
                   EmailAuthProvider(),
