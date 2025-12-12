@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:help_a_paw/src/services/share_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class HomeRouteDrawer extends StatefulWidget {
@@ -96,7 +97,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
                             : null,
                       ),
                       onTap: () => {
-                        context.push('/in_dev'),
+                        context.push('/profile'),
                         homeRouteTile(1),
                       },
                       selected: _homeRouteTile == 1,
@@ -130,7 +131,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             enableFeedback: true,
             leading: const Icon(Icons.pin_drop),
             onTap: () => {
-              context.push('/in_dev'),
+              context.push('/my_signals'),
               homeRouteTile(2),
             },
             selected: _homeRouteTile == 2,
@@ -156,7 +157,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             enableFeedback: true,
             leading: const Icon(Icons.question_mark),
             onTap: () => {
-              context.push('/in_dev'),
+              context.push('/faqs'),
               homeRouteTile(4),
             },
             selected: _homeRouteTile == 4,
@@ -169,7 +170,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             enableFeedback: true,
             leading: const Icon(Icons.settings),
             onTap: () => {
-              context.push('/in_dev'),
+              context.push('/settings'),
               homeRouteTile(5),
             },
             selected: _homeRouteTile == 5,
@@ -182,7 +183,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             enableFeedback: true,
             leading: const Icon(Icons.feedback),
             onTap: () => {
-              context.push('/in_dev'),
+              context.push('/feedback'),
               homeRouteTile(6),
             },
             selected: _homeRouteTile == 6,
@@ -195,7 +196,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             enableFeedback: true,
             leading: const Icon(Icons.privacy_tip),
             onTap: () => {
-              context.push('/in_dev'),
+              context.push('/privacy_policy'),
               homeRouteTile(7),
             },
             selected: _homeRouteTile == 7,
@@ -223,7 +224,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             enableFeedback: true,
             leading: const Icon(Icons.info),
             onTap: () => {
-              context.push('/in_dev'),
+              context.push('/about'),
               homeRouteTile(9),
             },
             selected: _homeRouteTile == 9,
@@ -236,7 +237,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             enableFeedback: true,
             leading: const Icon(Icons.share),
             onTap: () => {
-              context.push('/in_dev'),
+              ShareService.shareApp(),
               homeRouteTile(10),
             },
             selected: _homeRouteTile == 10,

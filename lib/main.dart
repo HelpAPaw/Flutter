@@ -10,10 +10,17 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/src/config/firebase_options.dart';
+import 'package:help_a_paw/src/widgets/about_page.dart';
 import 'package:help_a_paw/src/widgets/email_verification_page.dart';
+import 'package:help_a_paw/src/widgets/faqs_page.dart';
+import 'package:help_a_paw/src/widgets/feedback_page.dart';
 import 'package:help_a_paw/src/widgets/home_route.dart';
-import 'package:help_a_paw/src/widgets/in_dev.dart';
+import 'package:help_a_paw/src/widgets/my_notifications_page.dart';
+import 'package:help_a_paw/src/widgets/my_signals_page.dart';
+import 'package:help_a_paw/src/widgets/privacy_policy_page.dart';
 import 'package:help_a_paw/src/widgets/profile_completion_page.dart';
+import 'package:help_a_paw/src/widgets/profile_page.dart';
+import 'package:help_a_paw/src/widgets/settings_page.dart';
 import 'package:help_a_paw/src/widgets/sign_in_page.dart';
 import 'package:help_a_paw/src/widgets/signal_details_screen.dart';
 import 'package:help_a_paw/src/widgets/clinic_details_screen.dart';
@@ -118,11 +125,6 @@ final GoRouter _router = GoRouter(
       builder: (BuildContext context, GoRouterState state) => ClinicDetailsScreen(clinicId: state.pathParameters['clinicId']!),
     ),
     GoRoute(
-      name: 'in_development',
-      path: '/in_dev',
-      builder: (BuildContext context, GoRouterState state) => const InDev(),
-    ),
-    GoRoute(
       name: 'verify_email',
       path: '/verify_email',
       builder: (BuildContext context, GoRouterState state) => const EmailVerificationPage(),
@@ -141,6 +143,46 @@ final GoRouter _router = GoRouter(
       name: 'select_region',
       path: '/select-region',
       builder: (BuildContext context, GoRouterState state) => const RegionSelectionPage(),
+    ),
+    GoRoute(
+      name: 'profile',
+      path: '/profile',
+      builder: (BuildContext context, GoRouterState state) => const ProfilePage(),
+    ),
+    GoRoute(
+      name: 'my_signals',
+      path: '/my_signals',
+      builder: (BuildContext context, GoRouterState state) => const MySignalsPage(),
+    ),
+    GoRoute(
+      name: 'my_notifications',
+      path: '/my_notifications',
+      builder: (BuildContext context, GoRouterState state) => const MyNotificationsPage(),
+    ),
+    GoRoute(
+      name: 'faqs',
+      path: '/faqs',
+      builder: (BuildContext context, GoRouterState state) => const FaqsPage(),
+    ),
+    GoRoute(
+      name: 'settings',
+      path: '/settings',
+      builder: (BuildContext context, GoRouterState state) => const SettingsPage(),
+    ),
+    GoRoute(
+      name: 'feedback',
+      path: '/feedback',
+      builder: (BuildContext context, GoRouterState state) => const FeedbackPage(),
+    ),
+    GoRoute(
+      name: 'privacy_policy',
+      path: '/privacy_policy',
+      builder: (BuildContext context, GoRouterState state) => const PrivacyPolicyPage(),
+    ),
+    GoRoute(
+      name: 'about',
+      path: '/about',
+      builder: (BuildContext context, GoRouterState state) => const AboutPage(),
     ),
   ],
 );
