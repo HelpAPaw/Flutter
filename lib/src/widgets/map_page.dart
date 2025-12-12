@@ -26,7 +26,7 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   final signalsRef = FirebaseFirestore.instance.collection('signals');
-  var center = const GeoFirePoint(GeoPoint(0, 0));
+  var center = const GeoFirePoint(GeoPoint(42.6977, 23.3219)); // Sofia, Bulgaria coordinates
   final radius = 100.0; // radius in kilometers
   final field = 'location'; // field that contains the GeoPoint
   late Stream<List<DocumentSnapshot<Object?>>> _signalsStream;
@@ -67,36 +67,45 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _getUserLocation() async {
-    bool serviceEnabled;
-    LocationPermission permission;
+    try {
+      bool serviceEnabled;
+      LocationPermission permission;
 
-    // Check if location services are enabled
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      // Location services are not enabled, request the user to enable them
-      return Future.error('Location services are disabled.');
-    }
-
-    // Check for location permissions
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        // Permissions are denied, request the user to grant permissions
-        return Future.error('Location permissions are denied.');
+      // Check if location services are enabled
+      serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        // Location services are not enabled - silently continue without location
+        debugPrint('Location services are disabled.');
+        return;
       }
-    }
 
-    if (permission == LocationPermission.deniedForever) {
-      // Permissions are denied forever, handle appropriately
-      return Future.error('Location permissions are permanently denied.');
-    }
+      // Check for location permissions
+      permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          // Permissions are denied - silently continue without location
+          debugPrint('Location permissions are denied.');
+          return;
+        }
+      }
 
-    // Get the user's current location
-    Position position = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high)
-    );
-    _updateMapLocation(position);
+      if (permission == LocationPermission.deniedForever) {
+        // Permissions are denied forever - silently continue without location
+        debugPrint('Location permissions are permanently denied.');
+        return;
+      }
+
+      // Get the user's current location
+      Position position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high)
+      );
+      _updateMapLocation(position);
+    } catch (e) {
+      // Handle any other location errors gracefully
+      debugPrint('Error getting user location: $e');
+      // App continues to function without user location
+    }
   }
 
   void _updateMapLocation(Position position) {
@@ -188,6 +197,23 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                     onMapCreated: (GoogleMapController controller) {
                       _mapController = controller;
+                    },
+                    onCameraIdle: () async {
+                      final position = await _mapController.getVisibleRegion();
+                      final newCenter = LatLng(
+                        (position.northeast.latitude + position.southwest.latitude) / 2,
+                        (position.northeast.longitude + position.southwest.longitude) / 2,
+                      );
+                      setState(() {
+                        center = GeoFirePoint(GeoPoint(newCenter.latitude, newCenter.longitude));
+                        _signalsStream = GeoCollectionReference(signalsRef)
+                            .subscribeWithin(
+                              center: center,
+                              radiusInKm: radius,
+                              field: field,
+                              geopointFrom: (data) => (data[field] as Map<String, dynamic>)['geopoint'] as GeoPoint
+                            );
+                      });
                     },
                     zoomControlsEnabled: true,
                     myLocationEnabled: true,
@@ -294,18 +320,22 @@ class _MapScreenState extends State<MapScreen> {
                                   ],
                                 ),
                               ),
-                              IconButton(
-                                icon: _isSubmittingSignal
-                                    ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
-                                        ),
-                                      )
-                                    : const Icon(Icons.send),
-                                onPressed: _isSubmittingSignal ? null : () async {
+                              Semantics(
+                                label: 'Submit signal',
+                                button: true,
+                                enabled: !_isSubmittingSignal,
+                                child: IconButton(
+                                  icon: _isSubmittingSignal
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+                                          ),
+                                        )
+                                      : const Icon(Icons.send),
+                                  onPressed: _isSubmittingSignal ? null : () async {
                                   setState(() {
                                     _isSubmittingSignal = true;
                                   });
@@ -453,6 +483,7 @@ class _MapScreenState extends State<MapScreen> {
                                   }
                                 },
                               ),
+                              ),
                             ],
                           ),
                         ),
@@ -503,25 +534,30 @@ class _MapScreenState extends State<MapScreen> {
               ],
             ),
             drawer: const HomeRouteDrawer(),
-            floatingActionButton: FloatingActionButton(
-              backgroundColor: Colors.orange,
-              foregroundColor: Colors.white,
-              elevation: 6,
-              enableFeedback: true,
-              shape: const CircleBorder(),
-              onPressed: () {
-                // Check if user is authenticated (not anonymous)
-                if (FirebaseAuth.instance.currentUser == null ||
-                    FirebaseAuth.instance.currentUser!.isAnonymous) {
-                  _showSignInDialog();
-                } else {
-                  setState(() {
-                    _isAddingNewSignal = !_isAddingNewSignal;
-                  });
-                }
-              },
-              tooltip: 'TODO: implement',
-              child: const Icon(Icons.add),
+            floatingActionButton: Semantics(
+              label: 'Add new signal',
+              button: true,
+              enabled: true,
+              child: FloatingActionButton(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+                elevation: 6,
+                enableFeedback: true,
+                shape: const CircleBorder(),
+                onPressed: () {
+                  // Check if user is authenticated (not anonymous)
+                  if (FirebaseAuth.instance.currentUser == null ||
+                      FirebaseAuth.instance.currentUser!.isAnonymous) {
+                    _showSignInDialog();
+                  } else {
+                    setState(() {
+                      _isAddingNewSignal = !_isAddingNewSignal;
+                    });
+                  }
+                },
+                tooltip: 'Add new signal',
+                child: const Icon(Icons.add),
+              ),
             ),
             floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat
             ),
