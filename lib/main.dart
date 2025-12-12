@@ -16,6 +16,7 @@ import 'package:help_a_paw/src/widgets/in_dev.dart';
 import 'package:help_a_paw/src/widgets/profile_completion_page.dart';
 import 'package:help_a_paw/src/widgets/sign_in_page.dart';
 import 'package:help_a_paw/src/widgets/signal_details_screen.dart';
+import 'package:help_a_paw/src/widgets/clinic_details_screen.dart';
 import 'package:help_a_paw/src/widgets/notification_settings_page.dart';
 import 'package:help_a_paw/src/widgets/region_selection_page.dart';
 import 'package:help_a_paw/src/services/notification_service.dart';
@@ -110,6 +111,11 @@ final GoRouter _router = GoRouter(
       name: 'signal_details',
       path: '/signal_details/:signalId',
       builder: (BuildContext context, GoRouterState state) => SignalDetailsScreen(signalId: state.pathParameters['signalId']!),
+    ),
+    GoRoute(
+      name: 'clinic_details',
+      path: '/clinic_details/:clinicId',
+      builder: (BuildContext context, GoRouterState state) => ClinicDetailsScreen(clinicId: state.pathParameters['clinicId']!),
     ),
     GoRoute(
       name: 'in_development',
