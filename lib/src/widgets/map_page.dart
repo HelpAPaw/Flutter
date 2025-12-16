@@ -25,12 +25,13 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
+class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMixin {
   final signalsRef = FirebaseFirestore.instance.collection('signals');
   var center = const GeoFirePoint(GeoPoint(42.6977, 23.3219)); // Sofia, Bulgaria coordinates
   final radius = 100.0; // radius in kilometers
   final field = 'location'; // field that contains the GeoPoint
   late Stream<List<DocumentSnapshot<Object?>>> _signalsStream;
+  late AnimationController _fabAnimationController;
 
   late GoogleMapController _mapController;
   BitmapDescriptor? redPin;
@@ -75,9 +76,23 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
+    _fabAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
     _loadPins();
     _loadHospitalIcon();
     _getUserLocation();
+  }
+
+  @override
+  void dispose() {
+    _fabAnimationController.dispose();
+    _newSignalTitleController.dispose();
+    _newSignalDescriptionController.dispose();
+    _newSignalPhoneNumberController.dispose();
+    _searchButtonDebounce?.cancel();
+    super.dispose();
   }
 
   Future<void> _getUserLocation() async {
@@ -198,6 +213,7 @@ class _MapScreenState extends State<MapScreen> {
                 setState(() {
                   _isAddingNewSignal = false;
                   _selectedImage = null;
+                  _fabAnimationController.reverse();
                 });
               }
             },
@@ -234,26 +250,43 @@ class _MapScreenState extends State<MapScreen> {
                     top: 0,
                     left: 0,
                     right: 0,
-                    child: SafeArea(
-                      child: Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Container(
-                          constraints: const BoxConstraints(maxHeight: 400),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(10.0),
-                            border: Border.all(color: Colors.grey, width: 1.0),
-                          ),
-                          child: Row(
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.camera_alt),
-                                onPressed: _showImageSourceBottomSheet,
+                    child: Builder(
+                      builder: (BuildContext context) {
+                        final mediaQuery = MediaQuery.maybeOf(context);
+                        if (mediaQuery == null) {
+                          // Fallback if MediaQuery is not available
+                          return const SafeArea(child: SizedBox.shrink());
+                        }
+
+                        final keyboardHeight = mediaQuery.viewInsets.bottom;
+                        final screenHeight = mediaQuery.size.height;
+                        final safeAreaTop = mediaQuery.padding.top;
+
+                        // Calculate available height for the form
+                        // Leave space for: safe area, padding, target icon visibility, and keyboard
+                        final availableHeight = screenHeight - safeAreaTop - keyboardHeight - 16 - 150; // 16 for padding, 150 for target icon space
+                        final formMaxHeight = availableHeight.clamp(200.0, 400.0);
+
+                        return SafeArea(
+                          child: Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Container(
+                              constraints: BoxConstraints(maxHeight: formMaxHeight),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(10.0),
+                                border: Border.all(color: Colors.grey, width: 1.0),
                               ),
-                              Expanded(
-                                child: SingleChildScrollView(
-                                  child: Column(
-                                    children: [
+                              child: Row(
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.camera_alt),
+                                    onPressed: _showImageSourceBottomSheet,
+                                  ),
+                                  Expanded(
+                                    child: SingleChildScrollView(
+                                      child: Column(
+                                        children: [
                                       TextField(
                                         controller: _newSignalTitleController,
                                         decoration: const InputDecoration(
@@ -516,15 +549,17 @@ class _MapScreenState extends State<MapScreen> {
                                       );
                                     }
                                   }
-                                },
-                              ),
+                                  },
+                                ),
                               ),
                             ],
                           ),
                         ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
+                ),
+              ),
                   if (_showSearchThisAreaButton)
                     Positioned(
                       top: 16,
@@ -652,11 +687,24 @@ class _MapScreenState extends State<MapScreen> {
                   } else {
                     setState(() {
                       _isAddingNewSignal = !_isAddingNewSignal;
+                      if (_isAddingNewSignal) {
+                        _fabAnimationController.forward();
+                      } else {
+                        _fabAnimationController.reverse();
+                      }
                     });
                   }
                 },
                 tooltip: 'Add new signal',
-                child: const Icon(Icons.add),
+                child: AnimatedBuilder(
+                  animation: _fabAnimationController,
+                  builder: (context, child) {
+                    return Transform.rotate(
+                      angle: _fabAnimationController.value * 0.785398, // π/4 radians (45 degrees)
+                      child: const Icon(Icons.add),
+                    );
+                  },
+                ),
               ),
             ),
             floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat
