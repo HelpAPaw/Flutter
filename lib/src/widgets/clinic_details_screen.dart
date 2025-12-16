@@ -133,6 +133,21 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(_clinic!.address, style: const TextStyle(fontSize: 16)),
+                  const SizedBox(height: 12),
+
+                  // Navigate Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _navigateToClinic,
+                      icon: const Icon(Icons.directions, color: Colors.white),
+                      label: const Text('Navigate', style: TextStyle(color: Colors.white)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 16),
 
                   // Phone Number
@@ -152,6 +167,21 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(_clinic!.phoneNumber!, style: const TextStyle(fontSize: 16)),
+                    const SizedBox(height: 12),
+
+                    // Call Button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _callClinic,
+                        icon: const Icon(Icons.phone, color: Colors.white),
+                        label: const Text('Call', style: TextStyle(color: Colors.white)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 16),
                   ],
 
@@ -183,41 +213,6 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
                   const Divider(),
                   const SizedBox(height: 16),
 
-                  // Action Buttons
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      // Navigate Button
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: _navigateToClinic,
-                          icon: const Icon(Icons.directions, color: Colors.white),
-                          label: const Text('Navigate', style: TextStyle(color: Colors.white)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.orange,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-
-                      // Call Button
-                      if (_clinic!.phoneNumber != null)
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: _callClinic,
-                            icon: const Icon(Icons.phone, color: Colors.white),
-                            label: const Text('Call', style: TextStyle(color: Colors.white)),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.orange,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-
                   // View in Google Maps Button
                   SizedBox(
                     width: double.infinity,
@@ -242,17 +237,28 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
   }
 
   Future<void> _navigateToClinic() async {
-    final uri = Uri.parse('geo:${_clinic!.latitude},${_clinic!.longitude}');
+    // Use geo URI with query parameter - allows user to choose navigation app
+    // This works on both Android and iOS, letting the system handle app selection
+    final uri = Uri.parse(
+        'geo:${_clinic!.latitude},${_clinic!.longitude}?q=${_clinic!.latitude},${_clinic!.longitude}(${Uri.encodeComponent(_clinic!.name)})');
+
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cannot open navigation app'),
-            backgroundColor: Colors.red,
-          ),
-        );
+      // Fallback to Google Maps web URL if geo: scheme not supported
+      final fallbackUri = Uri.parse(
+          'https://www.google.com/maps/dir/?api=1&destination=${_clinic!.latitude},${_clinic!.longitude}');
+      if (await canLaunchUrl(fallbackUri)) {
+        await launchUrl(fallbackUri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Cannot open navigation app'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }

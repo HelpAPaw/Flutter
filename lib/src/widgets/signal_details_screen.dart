@@ -313,18 +313,29 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                               TextButton.icon(
                                 onPressed: () async {
                                   // Open navigation app with signal location
+                                  // Use geo URI with query parameter - allows user to choose navigation app
                                   GeoPoint location = signal.location['geopoint'];
-                                  Uri url = Uri.parse('geo:${location.latitude},${location.longitude}');
+                                  Uri url = Uri.parse(
+                                    'geo:${location.latitude},${location.longitude}?q=${location.latitude},${location.longitude}(${Uri.encodeComponent(signal.title)})'
+                                  );
                                   if (await canLaunchUrl(url)) {
                                     launchUrl(url);
                                   } else {
-                                    // Show alert to the user
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('Cannot navigate to signal location, please try to do so manually.'),
-                                        ),
-                                      );
+                                    // Fallback to Google Maps web URL if geo: scheme not supported
+                                    final fallbackUri = Uri.parse(
+                                      'https://www.google.com/maps/dir/?api=1&destination=${location.latitude},${location.longitude}'
+                                    );
+                                    if (await canLaunchUrl(fallbackUri)) {
+                                      await launchUrl(fallbackUri, mode: LaunchMode.externalApplication);
+                                    } else {
+                                      // Show alert to the user
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('Cannot navigate to signal location, please try to do so manually.'),
+                                          ),
+                                        );
+                                      }
                                     }
                                   }
                                 },
