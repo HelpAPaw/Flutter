@@ -16,7 +16,7 @@ class VetClinicService {
   DateTime? _lastSearchTime;
   LatLng? _lastSearchLocation;
 
-  static const String _apiKey = 'AIzaSyC9rEqolZ2VygmUBHaIqp_m7sQqipyt_Lc';
+  static const String _apiKey = 'AIzaSyAyFtEitLbPStFFtIb940Ms141RWxx2_rU';
   static const String _placesApiUrl = 'https://places.googleapis.com/v1/places:searchNearby';
   static const int _cacheExpiryMinutes = 15;
   static const double _cacheLocationThresholdMeters = 1000;
@@ -100,8 +100,10 @@ class VetClinicService {
       } else if (response.statusCode == 429) {
         throw Exception('Rate limit exceeded. Please wait and try again.');
       } else if (response.statusCode == 403) {
+        print('Places API 403 Error - Response body: ${response.body}');
         throw Exception('API access denied. Service temporarily unavailable.');
       } else {
+        print('Places API Error ${response.statusCode} - Response: ${response.body}');
         throw Exception('Failed to search clinics: ${response.statusCode}');
       }
     } on SocketException {
