@@ -36,6 +36,7 @@ class _MapScreenState extends State<MapScreen> {
   BitmapDescriptor? redPin;
   BitmapDescriptor? orangePin;
   BitmapDescriptor? greenPin;
+  BitmapDescriptor? hospitalPin;
   bool _isAddingNewSignal = false;
   bool _isSubmittingSignal = false;
   final _newSignalTitleController = TextEditingController();
@@ -75,6 +76,7 @@ class _MapScreenState extends State<MapScreen> {
   void initState() {
     super.initState();
     _loadPins();
+    _loadHospitalIcon();
     _getUserLocation();
   }
 
@@ -128,9 +130,9 @@ class _MapScreenState extends State<MapScreen> {
       center = GeoFirePoint(GeoPoint(position.latitude, position.longitude));
       _signalsStream = GeoCollectionReference(signalsRef)
           .subscribeWithin(
-            center: center, 
-            radiusInKm: radius, 
-            field: field, 
+            center: center,
+            radiusInKm: radius,
+            field: field,
             geopointFrom: (data) => (data[field] as Map<String, dynamic>)['geopoint'] as GeoPoint
           );
     });
@@ -186,14 +188,7 @@ class _MapScreenState extends State<MapScreen> {
             }).toSet();
           }
 
-          // Build clinic markers if enabled
-          if (_showVetClinics) {
-            _clinicMarkers = _buildClinicMarkers();
-          } else {
-            _clinicMarkers = {};
-          }
-
-          // Merge both marker sets
+          // Merge both marker sets - clinic markers are already built in _loadVetClinics
           final allMarkers = {...signalMarkers, ..._clinicMarkers};
 
           return PopScope(
@@ -207,6 +202,7 @@ class _MapScreenState extends State<MapScreen> {
               }
             },
             child: Scaffold(
+              resizeToAvoidBottomInset: false,
               body: AdaptiveContainer(
               child: Stack(
                 children: [
@@ -225,9 +221,13 @@ class _MapScreenState extends State<MapScreen> {
                     myLocationEnabled: true,
                     markers: allMarkers,
                   ),
-                  if (_isAddingNewSignal) const IgnorePointer(
-                    child: Center(
-                      child: Icon(Icons.gps_fixed, size: 50.0), // replace with your target icon
+                  if (_isAddingNewSignal) IgnorePointer(
+                    child: Align(
+                      alignment: Alignment.center,
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 100),
+                        child: const Icon(Icons.gps_fixed, size: 50.0),
+                      ),
                     ),
                   ),
                   if (_isAddingNewSignal) Positioned(
@@ -238,6 +238,7 @@ class _MapScreenState extends State<MapScreen> {
                       child: Padding(
                         padding: const EdgeInsets.all(8.0),
                         child: Container(
+                          constraints: const BoxConstraints(maxHeight: 400),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(10.0),
@@ -250,80 +251,82 @@ class _MapScreenState extends State<MapScreen> {
                                 onPressed: _showImageSourceBottomSheet,
                               ),
                               Expanded(
-                                child: Column(
-                                  children: [
-                                    TextField(
-                                      controller: _newSignalTitleController,
-                                      decoration: const InputDecoration(
-                                        labelText: 'Title',
-                                      ),
-                                      textCapitalization: TextCapitalization.sentences,
-                                    ),
-                                    TextField(
-                                      controller: _newSignalDescriptionController,
-                                      decoration: const InputDecoration(
-                                        labelText: 'Description',
-                                      ),
-                                      textCapitalization: TextCapitalization.sentences,
-                                    ),
-                                    TextField(
-                                      controller: _newSignalPhoneNumberController,
-                                      decoration: const InputDecoration(
-                                        labelText: 'Phone Number',
-                                      ),
-                                      keyboardType: TextInputType.phone,
-                                    ),
-                                    DropdownButton<String>(
-                                      isExpanded: true,
-                                      value: Signal.signalTypes[_newSignalType],
-                                      items: Signal.signalTypes
-                                          .map<DropdownMenuItem<String>>((String value) {
-                                        return DropdownMenuItem<String>(
-                                          value: value,
-                                          child: Text(value),
-                                        );
-                                      }).toList(),
-                                      onChanged: (String? newValue) {
-                                        if (newValue != null) {
-                                          setState(() {
-                                            _newSignalType = Signal.signalTypes.indexOf(newValue);
-                                          });
-                                        }
-                                      },
-                                    ),
-                                    if (_selectedImage != null)
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(vertical: 8.0),
-                                        child: Stack(
-                                          children: [
-                                            ClipRRect(
-                                              borderRadius: BorderRadius.circular(8.0),
-                                              child: Image.file(
-                                                File(_selectedImage!.path),
-                                                height: 150,
-                                                width: double.infinity,
-                                                fit: BoxFit.cover,
-                                              ),
-                                            ),
-                                            Positioned(
-                                              top: 4,
-                                              right: 4,
-                                              child: IconButton(
-                                                icon: const Icon(Icons.close, color: Colors.white),
-                                                style: IconButton.styleFrom(
-                                                  backgroundColor: Colors.black54,
-                                                ),
-                                                onPressed: () {
-                                                  setState(() {
-                                                    _selectedImage = null;
-                                                  });
-                                                },
-                                              ),
-                                            ),
-                                          ],
+                                child: SingleChildScrollView(
+                                  child: Column(
+                                    children: [
+                                      TextField(
+                                        controller: _newSignalTitleController,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Title',
                                         ),
+                                        textCapitalization: TextCapitalization.sentences,
                                       ),
-                                  ],
+                                      TextField(
+                                        controller: _newSignalDescriptionController,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Description',
+                                        ),
+                                        textCapitalization: TextCapitalization.sentences,
+                                      ),
+                                      TextField(
+                                        controller: _newSignalPhoneNumberController,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Phone Number',
+                                        ),
+                                        keyboardType: TextInputType.phone,
+                                      ),
+                                      DropdownButton<String>(
+                                        isExpanded: true,
+                                        value: Signal.signalTypes[_newSignalType],
+                                        items: Signal.signalTypes
+                                            .map<DropdownMenuItem<String>>((String value) {
+                                          return DropdownMenuItem<String>(
+                                            value: value,
+                                            child: Text(value),
+                                          );
+                                        }).toList(),
+                                        onChanged: (String? newValue) {
+                                          if (newValue != null) {
+                                            setState(() {
+                                              _newSignalType = Signal.signalTypes.indexOf(newValue);
+                                            });
+                                          }
+                                        },
+                                      ),
+                                      if (_selectedImage != null)
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                          child: Stack(
+                                            children: [
+                                              ClipRRect(
+                                                borderRadius: BorderRadius.circular(8.0),
+                                                child: Image.file(
+                                                  File(_selectedImage!.path),
+                                                  height: 150,
+                                                  width: double.infinity,
+                                                  fit: BoxFit.cover,
+                                                ),
+                                              ),
+                                              Positioned(
+                                                top: 4,
+                                                right: 4,
+                                                child: IconButton(
+                                                  icon: const Icon(Icons.close, color: Colors.white),
+                                                  style: IconButton.styleFrom(
+                                                    backgroundColor: Colors.black54,
+                                                  ),
+                                                  onPressed: () {
+                                                    setState(() {
+                                                      _selectedImage = null;
+                                                    });
+                                                  },
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                    ],
+                                  ),
                                 ),
                               ),
                               Semantics(
@@ -628,11 +631,6 @@ class _MapScreenState extends State<MapScreen> {
                     });
                   },
                 ),
-                IconButton(
-                    icon: const Icon(Icons.refresh),
-                    onPressed: () => {
-                      //TODO: implement
-                    }),
               ],
             ),
             drawer: const HomeRouteDrawer(),
@@ -678,6 +676,13 @@ class _MapScreenState extends State<MapScreen> {
     return BitmapDescriptor.asset(
         const ImageConfiguration(size: Size(24, 24)),
         'assets/icons/pin_$color.png'
+    );
+  }
+
+  Future<void> _loadHospitalIcon() async {
+    hospitalPin = await BitmapDescriptor.asset(
+      const ImageConfiguration(size: Size(24, 24)),
+      'assets/icons/local_hospital_blue.png'
     );
   }
 
@@ -762,48 +767,63 @@ class _MapScreenState extends State<MapScreen> {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setModalState) {
             return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header with title and action buttons
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Filter Signals',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Drag handle
+                  Container(
+                    margin: const EdgeInsets.only(top: 8, bottom: 4),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            TextButton(
-                              onPressed: () {
-                                setModalState(() {
-                                  _selectedSignalTypes = {0, 1, 2, 3, 4, 5, 6};
-                                  _selectedStatuses = {0, 1, 2};
-                                });
-                              },
-                              child: const Text('Select All'),
+                        // Header with title and action buttons
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Filter Signals',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                            TextButton(
-                              onPressed: () {
-                                setModalState(() {
-                                  _selectedSignalTypes = {};
-                                  _selectedStatuses = {};
-                                });
-                              },
-                              child: const Text('Clear All'),
+                            Row(
+                              children: [
+                                TextButton(
+                                  onPressed: () {
+                                    setModalState(() {
+                                      _selectedSignalTypes = {0, 1, 2, 3, 4, 5, 6};
+                                      _selectedStatuses = {0, 1, 2};
+                                    });
+                                  },
+                                  child: const Text('Select All'),
+                                ),
+                                TextButton(
+                                  onPressed: () {
+                                    setModalState(() {
+                                      _selectedSignalTypes = {};
+                                      _selectedStatuses = {};
+                                    });
+                                  },
+                                  child: const Text('Clear All'),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                      ],
-                    ),
-                    const Divider(),
+                        const Divider(),
 
                     // Signal Status Section
                     const Text(
@@ -836,30 +856,34 @@ class _MapScreenState extends State<MapScreen> {
 
                     const SizedBox(height: 16),
 
-                    // Apply Button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10.0),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        onPressed: () {
-                          Navigator.pop(context);
-                          setState(() {}); // Trigger rebuild with new filters
-                        },
-                        child: const Text(
-                          'Apply Filters',
-                          style: TextStyle(fontSize: 16),
+                            // Apply Button
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.orange,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10.0),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                ),
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                  setState(() {}); // Trigger rebuild with new filters
+                                },
+                                child: const Text(
+                                  'Apply Filters',
+                                  style: TextStyle(fontSize: 16),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             );
           },
@@ -894,6 +918,7 @@ class _MapScreenState extends State<MapScreen> {
       if (mounted) {
         setState(() {
           _vetClinics = clinics;
+          _clinicMarkers = _buildClinicMarkers();
           _lastClinicSearchCenter = center;
           _lastSearchZoom = zoom;
           _showSearchThisAreaButton = false;
@@ -953,10 +978,10 @@ class _MapScreenState extends State<MapScreen> {
       return Marker(
         markerId: MarkerId('clinic_${clinic.id}'),
         position: LatLng(clinic.latitude, clinic.longitude),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+        icon: hospitalPin ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
         infoWindow: InfoWindow(
           title: clinic.name,
-          snippet: clinic.phoneNumber ?? 'Tap for details',
+          snippet: clinic.address,
           onTap: () {
             context.push('/clinic_details/${clinic.id}');
           },
@@ -966,24 +991,8 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _onCameraIdle() async {
-    // Update signal stream for new map center
-    final position = await _mapController.getVisibleRegion();
-    final newCenter = LatLng(
-      (position.northeast.latitude + position.southwest.latitude) / 2,
-      (position.northeast.longitude + position.southwest.longitude) / 2,
-    );
-    setState(() {
-      center = GeoFirePoint(GeoPoint(newCenter.latitude, newCenter.longitude));
-      _signalsStream = GeoCollectionReference(signalsRef)
-          .subscribeWithin(
-            center: center,
-            radiusInKm: radius,
-            field: field,
-            geopointFrom: (data) => (data[field] as Map<String, dynamic>)['geopoint'] as GeoPoint
-          );
-    });
-
-    // Check if we need to show "search this area" button for vet clinics
+    // Only check if we need to show "search this area" button for vet clinics
+    // Signal stream doesn't need to be updated - 100km radius is large enough
     _checkVetClinicSearchButton();
   }
 
