@@ -19,5 +19,10 @@ service cloud.firestore {
         allow create: if request.auth != null;
       }
     }
+
+    // Allow collection group queries for comments
+    match /{path=**}/comments/{commentId} {
+      allow read: if request.auth != null;
+    }
   }
 }

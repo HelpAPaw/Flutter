@@ -59,22 +59,30 @@ class _ProfilePageState extends State<ProfilePage> {
 
     final userRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
 
-    final signalsSnapshot = await FirebaseFirestore.instance
-        .collection('signals')
-        .where('reporter', isEqualTo: userRef)
-        .count()
-        .get();
+    try {
+      final signalsSnapshot = await FirebaseFirestore.instance
+          .collection('signals')
+          .where('reporter', isEqualTo: userRef)
+          .count()
+          .get();
 
-    final commentsSnapshot = await FirebaseFirestore.instance
-        .collection('comments')
-        .where('authorId', isEqualTo: user.uid)
-        .count()
-        .get();
+      final commentsSnapshot = await FirebaseFirestore.instance
+          .collectionGroup('comments')
+          .where('author', isEqualTo: userRef)
+          .count()
+          .get();
 
-    setState(() {
-      _signalsCount = signalsSnapshot.count ?? 0;
-      _commentsCount = commentsSnapshot.count ?? 0;
-    });
+      setState(() {
+        _signalsCount = signalsSnapshot.count ?? 0;
+        _commentsCount = commentsSnapshot.count ?? 0;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading statistics: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _updateProfile() async {
