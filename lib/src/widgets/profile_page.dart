@@ -331,6 +331,11 @@ class _ProfilePageState extends State<ProfilePage> {
                       subtitle: Text(user.email ?? 'Not set'),
                     ),
                     ListTile(
+                      leading: const Icon(Icons.phone),
+                      title: const Text('Phone Number'),
+                      subtitle: Text(_phoneController.text.isEmpty ? 'Not set' : _phoneController.text),
+                    ),
+                    ListTile(
                       leading: const Icon(Icons.verified),
                       title: const Text('Email Verified'),
                       subtitle: Text(user.emailVerified ? 'Yes' : 'No'),
