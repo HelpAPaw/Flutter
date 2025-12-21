@@ -20,7 +20,6 @@ import 'package:help_a_paw/src/widgets/my_signals_page.dart';
 import 'package:help_a_paw/src/widgets/privacy_policy_page.dart';
 import 'package:help_a_paw/src/widgets/profile_completion_page.dart';
 import 'package:help_a_paw/src/widgets/profile_page.dart';
-import 'package:help_a_paw/src/widgets/settings_page.dart';
 import 'package:help_a_paw/src/widgets/sign_in_page.dart';
 import 'package:help_a_paw/src/widgets/signal_details_screen.dart';
 import 'package:help_a_paw/src/widgets/clinic_details_screen.dart';
@@ -163,11 +162,6 @@ final GoRouter _router = GoRouter(
       name: 'faqs',
       path: '/faqs',
       builder: (BuildContext context, GoRouterState state) => const FaqsPage(),
-    ),
-    GoRoute(
-      name: 'settings',
-      path: '/settings',
-      builder: (BuildContext context, GoRouterState state) => const SettingsPage(),
     ),
     GoRoute(
       name: 'feedback',

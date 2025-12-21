@@ -168,25 +168,12 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
           ),
           ListTile(
             enableFeedback: true,
-            leading: const Icon(Icons.settings),
-            onTap: () => {
-              context.push('/settings'),
-              homeRouteTile(5),
-            },
-            selected: _homeRouteTile == 5,
-            title: const Text(
-              'Settings',
-              softWrap: true,
-            ),
-          ),
-          ListTile(
-            enableFeedback: true,
             leading: const Icon(Icons.feedback),
             onTap: () => {
               context.push('/feedback'),
-              homeRouteTile(6),
+              homeRouteTile(5),
             },
-            selected: _homeRouteTile == 6,
+            selected: _homeRouteTile == 5,
             title: const Text(
               'Feedback',
               softWrap: true,
@@ -197,9 +184,9 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             leading: const Icon(Icons.privacy_tip),
             onTap: () => {
               context.push('/privacy_policy'),
-              homeRouteTile(7),
+              homeRouteTile(6),
             },
-            selected: _homeRouteTile == 7,
+            selected: _homeRouteTile == 6,
             title: const Text(
               'Privacy Policy',
               softWrap: true,
@@ -209,12 +196,12 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             enableFeedback: true,
             leading: const Icon(Icons.link),
             onTap: () => {
-              homeRouteTile(8),
+              homeRouteTile(7),
               setState(() {
                 _browserLaunched = _launchBrowser(launchUrl);
               }),
             },
-            selected: _homeRouteTile == 8,
+            selected: _homeRouteTile == 7,
             title: const Text(
               'Our Site',
               softWrap: true,
@@ -225,9 +212,9 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             leading: const Icon(Icons.info),
             onTap: () => {
               context.push('/about'),
-              homeRouteTile(9),
+              homeRouteTile(8),
             },
-            selected: _homeRouteTile == 9,
+            selected: _homeRouteTile == 8,
             title: const Text(
               'About',
               softWrap: true,
@@ -238,9 +225,9 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             leading: const Icon(Icons.share),
             onTap: () => {
               ShareService.shareApp(),
-              homeRouteTile(10),
+              homeRouteTile(9),
             },
-            selected: _homeRouteTile == 10,
+            selected: _homeRouteTile == 9,
             title: const Text(
               'Share',
               softWrap: true,
