@@ -2,7 +2,7 @@
 // ignore_for_file: lines_longer_than_80_chars, avoid_classes_with_only_static_members
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, kIsWeb, TargetPlatform;
+    show defaultTargetPlatform, kIsWeb, TargetPlatform, kDebugMode;
 
 /// Default [FirebaseOptions] for use with your Firebase apps.
 ///
@@ -23,7 +23,8 @@ class DefaultFirebaseOptions {
       case TargetPlatform.android:
         return android;
       case TargetPlatform.iOS:
-        return ios;
+        // Return debug config for debug builds, production config for release/profile
+        return kDebugMode ? iosDebug : ios;
       case TargetPlatform.macOS:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for macos - '
@@ -72,5 +73,16 @@ class DefaultFirebaseOptions {
     iosClientId:
         '757136327951-9hkvaklhc08pdcc8lfi5vd53c8c61391.apps.googleusercontent.com',
     iosBundleId: 'com.helpapaw.helpapaw',
+  );
+
+  static const FirebaseOptions iosDebug = FirebaseOptions(
+    apiKey: 'AIzaSyDX000zOUB-F2qL4Wcf-pas3q3ThyHAOVc',
+    appId: '1:757136327951:ios:ede1e0f25ad37a060f2a7a',
+    messagingSenderId: '757136327951',
+    projectId: 'help-a-paw-dev',
+    storageBucket: 'help-a-paw-dev.appspot.com',
+    iosClientId:
+        '757136327951-ov7ddq4eu2psocbs5dk7r1l80ol0917l.apps.googleusercontent.com',
+    iosBundleId: 'com.helpapaw.helpapaw.debug',
   );
 }

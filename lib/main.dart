@@ -57,7 +57,6 @@ Future<void> main() async {
   if (FirebaseAuth.instance.currentUser == null) {
     try {
       await FirebaseAuth.instance.signInAnonymously();
-      debugPrint('Signed in anonymously');
     } catch (e) {
       debugPrint('Anonymous sign-in failed: $e');
     }
