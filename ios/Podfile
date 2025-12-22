@@ -1,5 +1,5 @@
 # Define a constant
-IOS_DEPLOYMENT_TARGET = '14.0'
+IOS_DEPLOYMENT_TARGET = '15.0'
 
 platform :ios, IOS_DEPLOYMENT_TARGET
 
