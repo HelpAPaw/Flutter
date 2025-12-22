@@ -58,5 +58,7 @@
 		<string>location</string>
 		<string>remote-notification</string>
 	</array>
+	<key>GMSApiKey</key>
+	<string>AIzaSyC9rEqolZ2VygmUBHaIqp_m7sQqipyt_Lc</string>
 </dict>
 </plist>
