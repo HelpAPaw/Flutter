@@ -52,6 +52,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   final ImagePicker _imagePicker = ImagePicker();
   bool _showOnboardingButton = false;
   bool _onboardingSheetShown = false;
+  bool _hasLocationPermission = false;
 
   // Filter state - all selected by default
   Set<int> _selectedSignalTypes = {0, 1, 2, 3, 4, 5, 6}; // All 7 types
@@ -117,6 +118,8 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
         onComplete: () {
           Navigator.pop(context);
           setState(() => _showOnboardingButton = false);
+          // Recheck location permission to enable myLocationEnabled on map
+          _getUserLocation();
         },
         onDismiss: () async {
           Navigator.pop(context);
@@ -153,10 +156,14 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
       // Permissions not granted - just return without requesting
+      setState(() => _hasLocationPermission = false);
       return;
     }
 
-    // Permission already granted, get the user's current location
+    // Permission already granted, enable my location on map
+    setState(() => _hasLocationPermission = true);
+
+    // Get the user's current location
     try {
       Position position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high)
@@ -265,7 +272,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                     },
                     onCameraIdle: _onCameraIdle,
                     zoomControlsEnabled: true,
-                    myLocationEnabled: true,
+                    myLocationEnabled: _hasLocationPermission,
                     markers: allMarkers,
                   ),
                   if (_isAddingNewSignal) IgnorePointer(
