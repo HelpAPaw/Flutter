@@ -3,10 +3,19 @@ import {
   onDocumentCreated,
   onDocumentUpdated,
 } from "firebase-functions/v2/firestore";
+import { defineSecret } from "firebase-functions/params";
+import * as nodemailer from "nodemailer";
 
 admin.initializeApp();
 
 const db = admin.firestore();
+
+// Email configuration secrets
+const smtpHost = defineSecret("SMTP_HOST");
+const smtpPort = defineSecret("SMTP_PORT");
+const smtpUser = defineSecret("SMTP_USER");
+const smtpPass = defineSecret("SMTP_PASS");
+const feedbackRecipient = defineSecret("FEEDBACK_RECIPIENT");
 const messaging = admin.messaging();
 
 // Signal type names for notification messages
@@ -436,5 +445,127 @@ export const onCommentCreated = onDocumentCreated(
         type: "new_comment",
       }
     );
+  }
+);
+
+// Feedback type labels
+const FEEDBACK_TYPES: Record<string, string> = {
+  general: "General Feedback",
+  bug: "Bug Report",
+  feature: "Feature Request",
+  other: "Other",
+};
+
+/**
+ * Cloud Function triggered when new feedback is submitted
+ * Sends an email notification with the feedback details
+ */
+export const onFeedbackCreated = onDocumentCreated(
+  {
+    document: "feedback/{feedbackId}",
+    secrets: [smtpHost, smtpPort, smtpUser, smtpPass, feedbackRecipient],
+  },
+  async (event) => {
+    const feedbackId = event.params.feedbackId;
+    const feedbackData = event.data?.data();
+
+    if (!feedbackData) {
+      console.error("No feedback data found");
+      return;
+    }
+
+    const feedbackType = feedbackData.type as string;
+    const message = feedbackData.message as string;
+    const userEmail = feedbackData.email as string | undefined;
+    const userId = feedbackData.userId as string | undefined;
+    const deviceInfo = feedbackData.deviceInfo as Record<string, string> | undefined;
+    const createdAt = feedbackData.createdAt?.toDate?.() || new Date();
+
+    // Build email content
+    const typeLabel = FEEDBACK_TYPES[feedbackType] || feedbackType;
+
+    let deviceInfoText = "";
+    if (deviceInfo) {
+      deviceInfoText = `
+Device Information:
+- Platform: ${deviceInfo.platform || "N/A"}
+- OS Version: ${deviceInfo.osVersion || "N/A"}
+- App Version: ${deviceInfo.appVersion || "N/A"}
+- Build: ${deviceInfo.buildNumber || "N/A"}`;
+    }
+
+    const emailBody = `
+New feedback submitted to Help A Paw
+
+Type: ${typeLabel}
+Date: ${createdAt.toISOString()}
+User ID: ${userId || "Anonymous"}
+User Email: ${userEmail || "Not provided"}
+
+Message:
+${message}
+${deviceInfoText}
+
+---
+Feedback ID: ${feedbackId}
+View in Firebase Console: https://console.firebase.google.com/project/help-a-paw-dev/firestore/data/~2Ffeedback~2F${feedbackId}
+`;
+
+    const htmlBody = `
+<h2>New feedback submitted to Help A Paw</h2>
+
+<table style="border-collapse: collapse; margin-bottom: 20px;">
+  <tr><td style="padding: 5px 10px; font-weight: bold;">Type:</td><td style="padding: 5px 10px;">${typeLabel}</td></tr>
+  <tr><td style="padding: 5px 10px; font-weight: bold;">Date:</td><td style="padding: 5px 10px;">${createdAt.toISOString()}</td></tr>
+  <tr><td style="padding: 5px 10px; font-weight: bold;">User ID:</td><td style="padding: 5px 10px;">${userId || "Anonymous"}</td></tr>
+  <tr><td style="padding: 5px 10px; font-weight: bold;">User Email:</td><td style="padding: 5px 10px;">${userEmail ? `<a href="mailto:${userEmail}">${userEmail}</a>` : "Not provided"}</td></tr>
+</table>
+
+<h3>Message:</h3>
+<p style="background: #f5f5f5; padding: 15px; border-radius: 5px; white-space: pre-wrap;">${message}</p>
+
+${deviceInfo ? `
+<h3>Device Information:</h3>
+<table style="border-collapse: collapse;">
+  <tr><td style="padding: 5px 10px;">Platform:</td><td style="padding: 5px 10px;">${deviceInfo.platform || "N/A"}</td></tr>
+  <tr><td style="padding: 5px 10px;">OS Version:</td><td style="padding: 5px 10px;">${deviceInfo.osVersion || "N/A"}</td></tr>
+  <tr><td style="padding: 5px 10px;">App Version:</td><td style="padding: 5px 10px;">${deviceInfo.appVersion || "N/A"}</td></tr>
+  <tr><td style="padding: 5px 10px;">Build:</td><td style="padding: 5px 10px;">${deviceInfo.buildNumber || "N/A"}</td></tr>
+</table>
+` : ""}
+
+<hr>
+<p style="color: #666; font-size: 12px;">
+  Feedback ID: ${feedbackId}<br>
+  <a href="https://console.firebase.google.com/project/help-a-paw-dev/firestore/data/~2Ffeedback~2F${feedbackId}">View in Firebase Console</a>
+</p>
+`;
+
+    try {
+      const transporter = nodemailer.createTransport({
+        host: smtpHost.value(),
+        port: parseInt(smtpPort.value(), 10),
+        secure: parseInt(smtpPort.value(), 10) === 465,
+        auth: {
+          user: smtpUser.value(),
+          pass: smtpPass.value(),
+        },
+      });
+
+      const replyTo = userEmail || undefined;
+
+      await transporter.sendMail({
+        from: `"Help A Paw Feedback" <${smtpUser.value()}>`,
+        to: feedbackRecipient.value(),
+        replyTo,
+        subject: `[Help A Paw] ${typeLabel}${userEmail ? ` from ${userEmail}` : ""}`,
+        text: emailBody,
+        html: htmlBody,
+      });
+
+      console.log(`Feedback email sent for ${feedbackId}`);
+    } catch (error) {
+      console.error("Error sending feedback email:", error);
+    }
   }
 );

@@ -24,5 +24,15 @@ service cloud.firestore {
     match /{path=**}/comments/{commentId} {
       allow read: if request.auth != null;
     }
+
+    // Feedback collection - anyone can submit, only admins can read
+    match /feedback/{feedbackId} {
+      allow create: if request.resource.data.message is string
+                    && request.resource.data.message.size() > 0
+                    && request.resource.data.message.size() <= 1000
+                    && request.resource.data.type in ['general', 'bug', 'feature', 'other']
+                    && (!('email' in request.resource.data) || request.resource.data.email == null || request.resource.data.email is string);
+      allow read, update, delete: if false;  // Only accessible via Admin SDK/Console
+    }
   }
 }

@@ -14,13 +14,25 @@ class FeedbackPage extends StatefulWidget {
 
 class _FeedbackPageState extends State<FeedbackPage> {
   final _feedbackController = TextEditingController();
+  final _emailController = TextEditingController();
   String _feedbackType = 'general';
   bool _includeDeviceInfo = true;
   bool _isSubmitting = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Prefill email for logged-in users
+    final user = FirebaseAuth.instance.currentUser;
+    if (user?.email != null) {
+      _emailController.text = user!.email!;
+    }
+  }
+
+  @override
   void dispose() {
     _feedbackController.dispose();
+    _emailController.dispose();
     super.dispose();
   }
 
@@ -38,11 +50,12 @@ class _FeedbackPageState extends State<FeedbackPage> {
       final user = FirebaseAuth.instance.currentUser;
       final packageInfo = await PackageInfo.fromPlatform();
 
+      final email = _emailController.text.trim();
       final feedbackData = {
         'type': _feedbackType,
         'message': _feedbackController.text.trim(),
         'userId': user?.uid,
-        'userEmail': user?.email,
+        'email': email.isNotEmpty ? email : null,
         'createdAt': FieldValue.serverTimestamp(),
         'status': 'new',
       };
@@ -154,6 +167,34 @@ class _FeedbackPageState extends State<FeedbackPage> {
                     onSelected: (_) => setState(() => _feedbackType = 'other'),
                   ),
                 ],
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Your Email (optional)',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(
+                  hintText: 'email@example.com',
+                  border: const OutlineInputBorder(),
+                  filled: true,
+                  fillColor: Colors.grey[50],
+                  prefixIcon: const Icon(Icons.email_outlined),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Provide your email if you\'d like us to follow up',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
               ),
               const SizedBox(height: 24),
               const Text(
