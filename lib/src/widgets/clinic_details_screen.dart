@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:adaptive_components/adaptive_components.dart';
@@ -35,6 +36,8 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     if (_isLoading) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
@@ -44,7 +47,7 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
     if (_clinic == null) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('Clinic Details'),
+          title: Text(l10n.clinicDetails),
           backgroundColor: Colors.orange,
           foregroundColor: Colors.white,
         ),
@@ -54,11 +57,11 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
             children: [
               const Icon(Icons.error_outline, size: 64, color: Colors.grey),
               const SizedBox(height: 16),
-              const Text('Clinic not found'),
+              Text(l10n.clinicNotFound),
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () => context.go('/home'),
-                child: const Text('Return to Map'),
+                child: Text(l10n.returnToMap),
               ),
             ],
           ),
@@ -77,7 +80,7 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
         body: AdaptiveContainer(
           child: Scaffold(
             appBar: AppBar(
-              title: const Text('Clinic Details'),
+              title: Text(l10n.clinicDetails),
               backgroundColor: Colors.orange,
               foregroundColor: Colors.white,
             ),
@@ -109,7 +112,7 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
                         const SizedBox(width: 8),
                         TextButton(
                           onPressed: _viewInGoogleMaps,
-                          child: const Text('View reviews'),
+                          child: Text(l10n.viewReviews),
                         ),
                       ],
                     ),
@@ -118,13 +121,13 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
 
                   // Address
                   const SizedBox(height: 16),
-                  const Row(
+                  Row(
                     children: [
-                      Icon(Icons.location_on, color: Colors.orange),
-                      SizedBox(width: 8),
+                      const Icon(Icons.location_on, color: Colors.orange),
+                      const SizedBox(width: 8),
                       Text(
-                        'Address',
-                        style: TextStyle(
+                        l10n.address,
+                        style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w600,
                         ),
@@ -141,7 +144,7 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
                     child: ElevatedButton.icon(
                       onPressed: _navigateToClinic,
                       icon: const Icon(Icons.directions, color: Colors.white),
-                      label: const Text('Navigate', style: TextStyle(color: Colors.white)),
+                      label: Text(l10n.navigate, style: const TextStyle(color: Colors.white)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.orange,
                         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -152,13 +155,13 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
 
                   // Phone Number
                   if (_clinic!.phoneNumber != null) ...[
-                    const Row(
+                    Row(
                       children: [
-                        Icon(Icons.phone, color: Colors.orange),
-                        SizedBox(width: 8),
+                        const Icon(Icons.phone, color: Colors.orange),
+                        const SizedBox(width: 8),
                         Text(
-                          'Phone',
-                          style: TextStyle(
+                          l10n.phone,
+                          style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
                           ),
@@ -175,7 +178,7 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
                       child: ElevatedButton.icon(
                         onPressed: _callClinic,
                         icon: const Icon(Icons.phone, color: Colors.white),
-                        label: const Text('Call', style: TextStyle(color: Colors.white)),
+                        label: Text(l10n.call, style: const TextStyle(color: Colors.white)),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.orange,
                           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -187,13 +190,13 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
 
                   // Opening Hours
                   if (_clinic!.openingHours != null) ...[
-                    const Row(
+                    Row(
                       children: [
-                        Icon(Icons.schedule, color: Colors.orange),
-                        SizedBox(width: 8),
+                        const Icon(Icons.schedule, color: Colors.orange),
+                        const SizedBox(width: 8),
                         Text(
-                          'Opening Hours',
-                          style: TextStyle(
+                          l10n.openingHours,
+                          style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
                           ),
@@ -219,7 +222,7 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
                     child: OutlinedButton.icon(
                       onPressed: _viewInGoogleMaps,
                       icon: const Icon(Icons.open_in_new, color: Colors.orange),
-                      label: const Text('View in Google Maps'),
+                      label: Text(l10n.viewInGoogleMaps),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.orange,
                         side: const BorderSide(color: Colors.orange),
@@ -237,6 +240,7 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
   }
 
   Future<void> _navigateToClinic() async {
+    final l10n = AppLocalizations.of(context);
     // Use geo URI with query parameter - allows user to choose navigation app
     // This works on both Android and iOS, letting the system handle app selection
     final uri = Uri.parse(
@@ -253,8 +257,8 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Cannot open navigation app'),
+            SnackBar(
+              content: Text(l10n.cannotOpenNavigationApp),
               backgroundColor: Colors.red,
             ),
           );
@@ -266,14 +270,15 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
   Future<void> _callClinic() async {
     if (_clinic!.phoneNumber == null) return;
 
+    final l10n = AppLocalizations.of(context);
     final uri = Uri(scheme: 'tel', path: _clinic!.phoneNumber);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cannot make phone calls on this device'),
+          SnackBar(
+            content: Text(l10n.cannotMakePhoneCalls),
             backgroundColor: Colors.red,
           ),
         );
@@ -282,6 +287,7 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
   }
 
   Future<void> _viewInGoogleMaps() async {
+    final l10n = AppLocalizations.of(context);
     if (_clinic!.googleMapsUri == null) {
       // Fallback to geo URI
       final uri = Uri.parse(
@@ -298,8 +304,8 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cannot open Google Maps'),
+          SnackBar(
+            content: Text(l10n.cannotOpenGoogleMaps),
             backgroundColor: Colors.red,
           ),
         );

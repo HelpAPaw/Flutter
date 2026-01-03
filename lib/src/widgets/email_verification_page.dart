@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 
 class EmailVerificationPage extends StatefulWidget {
@@ -134,11 +135,12 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
         appBar: AppBar(
-          title: const Text('Verify Email'),
+          title: Text(l10n.verifyEmail),
           backgroundColor: Colors.orange,
           foregroundColor: Colors.white,
           leading: IconButton(
@@ -171,15 +173,15 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
                 ),
                 const SizedBox(height: 24),
 
-                const Text(
-                  'Verify Your Email',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                Text(
+                  l10n.verifyYourEmail,
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
 
                 Text(
-                  'We sent a verification email to:',
+                  l10n.verificationEmailSentTo,
                   style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                   textAlign: TextAlign.center,
                 ),
@@ -201,31 +203,28 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
                   ),
                   child: Column(
                     children: [
-                      const Text(
-                        'Instructions:',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      Text(
+                        l10n.instructions,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                       ),
                       const SizedBox(height: 8),
-                      const Text(
-                        '1. Open the email in your inbox\n'
-                        '2. Click the verification link\n'
-                        '3. Return to this app\n'
-                        '4. You\'ll be automatically redirected',
-                        style: TextStyle(fontSize: 14),
+                      Text(
+                        l10n.instructionsSteps,
+                        style: const TextStyle(fontSize: 14),
                       ),
                       if (_isChecking)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 12),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              SizedBox(
+                              const SizedBox(
                                 width: 16,
                                 height: 16,
                                 child: CircularProgressIndicator(strokeWidth: 2),
                               ),
-                              SizedBox(width: 8),
-                              Text('Checking verification status...'),
+                              const SizedBox(width: 8),
+                              Text(l10n.checkingVerificationStatus),
                             ],
                           ),
                         ),

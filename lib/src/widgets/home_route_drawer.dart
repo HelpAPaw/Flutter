@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/src/services/share_service.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -49,10 +50,11 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
   // Home Route Navigation Drawer Widgets
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final Uri launchUrl = Uri(
         scheme: 'https', host: 'www.helpapaw.org', path: 'subjects/view-all');
     FutureBuilder<void>(
-        future: _browserLaunched, builder: _browserLaunchStatus);
+        future: _browserLaunched, builder: (context, snapshot) => _browserLaunchStatus(context, snapshot, l10n));
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
@@ -60,10 +62,10 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
                            snapshot.data != null &&
                            !(snapshot.data!.isAnonymous);
         final user = snapshot.data;
-        
+
         return Drawer(
       elevation: 6,
-      semanticLabel: 'Navigation Drawer',
+      semanticLabel: l10n.navigationDrawer,
       child: ListView(
         children: <Widget>[
           DrawerHeader(
@@ -79,8 +81,8 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
                     homeRouteTile(0),
                   },
                   selected: _homeRouteTile == 0,
-                  title: const Text(
-                    'Sign In',
+                  title: Text(
+                    l10n.signIn,
                     softWrap: true,
                   ),
                 )
@@ -102,7 +104,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
                       },
                       selected: _homeRouteTile == 1,
                       title: Text(
-                        user?.displayName ?? user?.email ?? 'Profile',
+                        user?.displayName ?? user?.email ?? l10n.profile,
                         softWrap: true,
                       ),
                       subtitle: user?.email != null && user?.displayName != null
@@ -120,8 +122,8 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
                         homeRouteTile(11),
                       },
                       selected: _homeRouteTile == 11,
-                      title: const Text(
-                        'Sign Out',
+                      title: Text(
+                        l10n.signOut,
                         softWrap: true,
                       ),
                     ),
@@ -135,8 +137,8 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
               homeRouteTile(2),
             },
             selected: _homeRouteTile == 2,
-            title: const Text(
-              'My Signals',
+            title: Text(
+              l10n.mySignals,
               softWrap: true,
             ),
           ),
@@ -148,8 +150,8 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
               homeRouteTile(3),
             },
             selected: _homeRouteTile == 3,
-            title: const Text(
-              'Notification Settings',
+            title: Text(
+              l10n.notificationSettings,
               softWrap: true,
             ),
           ),
@@ -161,8 +163,8 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
               homeRouteTile(4),
             },
             selected: _homeRouteTile == 4,
-            title: const Text(
-              'FAQs',
+            title: Text(
+              l10n.faqs,
               softWrap: true,
             ),
           ),
@@ -174,8 +176,8 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
               homeRouteTile(5),
             },
             selected: _homeRouteTile == 5,
-            title: const Text(
-              'Feedback',
+            title: Text(
+              l10n.feedback,
               softWrap: true,
             ),
           ),
@@ -187,8 +189,8 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
               homeRouteTile(6),
             },
             selected: _homeRouteTile == 6,
-            title: const Text(
-              'Privacy Policy',
+            title: Text(
+              l10n.privacyPolicy,
               softWrap: true,
             ),
           ),
@@ -202,8 +204,8 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
               }),
             },
             selected: _homeRouteTile == 7,
-            title: const Text(
-              'Our Site',
+            title: Text(
+              l10n.ourSite,
               softWrap: true,
             ),
           ),
@@ -215,8 +217,8 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
               homeRouteTile(8),
             },
             selected: _homeRouteTile == 8,
-            title: const Text(
-              'About',
+            title: Text(
+              l10n.about,
               softWrap: true,
             ),
           ),
@@ -228,8 +230,8 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
               homeRouteTile(9),
             },
             selected: _homeRouteTile == 9,
-            title: const Text(
-              'Share',
+            title: Text(
+              l10n.share,
               softWrap: true,
             ),
           ),
@@ -241,11 +243,11 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
   }
 
   Widget _browserLaunchStatus(
-      BuildContext context, AsyncSnapshot<void> snapshot) {
+      BuildContext context, AsyncSnapshot<void> snapshot, AppLocalizations l10n) {
     if (snapshot.hasError) {
-      return Text('Snapshot Error: ${snapshot.error}');
+      return Text(l10n.snapshotError(snapshot.error.toString()));
     } else {
-      return const Text('Launching Browser');
+      return Text(l10n.launchingBrowser);
     }
   }
 }

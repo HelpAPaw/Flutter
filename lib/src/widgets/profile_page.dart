@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -78,8 +79,9 @@ class _ProfilePageState extends State<ProfilePage> {
       });
     } catch (e) {
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading statistics: $e')),
+          SnackBar(content: Text(l10n.errorLoadingStatistics(e.toString()))),
         );
       }
     }
@@ -106,15 +108,17 @@ class _ProfilePageState extends State<ProfilePage> {
       await user.reload();
 
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         setState(() => _isEditing = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile updated successfully')),
+          SnackBar(content: Text(l10n.profileUpdatedSuccessfully)),
         );
       }
     } catch (e) {
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error updating profile: $e')),
+          SnackBar(content: Text(l10n.errorUpdatingProfile(e.toString()))),
         );
       }
     } finally {
@@ -153,15 +157,17 @@ class _ProfilePageState extends State<ProfilePage> {
       await user.reload();
 
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         setState(() {});
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Photo updated successfully')),
+          SnackBar(content: Text(l10n.photoUpdatedSuccessfully)),
         );
       }
     } catch (e) {
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error uploading photo: $e')),
+          SnackBar(content: Text(l10n.errorUploadingPhoto(e.toString()))),
         );
       }
     } finally {
@@ -174,6 +180,7 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
+    final l10n = AppLocalizations.of(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -189,7 +196,7 @@ class _ProfilePageState extends State<ProfilePage> {
             }
           },
         ),
-        title: const Text('Profile'),
+        title: Text(l10n.profile),
         actions: [
           if (!_isEditing)
             IconButton(
@@ -210,11 +217,11 @@ class _ProfilePageState extends State<ProfilePage> {
                 children: [
                   const Icon(Icons.account_circle, size: 80, color: Colors.grey),
                   const SizedBox(height: 16),
-                  const Text('Please sign in to view your profile'),
+                  Text(l10n.pleaseSignInToViewProfile),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () => context.push('/sign_in'),
-                    child: const Text('Sign In'),
+                    child: Text(l10n.signIn),
                   ),
                 ],
               ),
@@ -253,19 +260,19 @@ class _ProfilePageState extends State<ProfilePage> {
                   if (_isEditing) ...[
                     TextField(
                       controller: _displayNameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Display Name',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.person),
+                      decoration: InputDecoration(
+                        labelText: l10n.displayName,
+                        border: const OutlineInputBorder(),
+                        prefixIcon: const Icon(Icons.person),
                       ),
                     ),
                     const SizedBox(height: 16),
                     TextField(
                       controller: _phoneController,
-                      decoration: const InputDecoration(
-                        labelText: 'Phone Number',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.phone),
+                      decoration: InputDecoration(
+                        labelText: l10n.phoneNumber,
+                        border: const OutlineInputBorder(),
+                        prefixIcon: const Icon(Icons.phone),
                       ),
                       keyboardType: TextInputType.phone,
                     ),
@@ -288,12 +295,12 @@ class _ProfilePageState extends State<ProfilePage> {
                                   color: Colors.white,
                                 ),
                               )
-                            : const Text('Save Changes'),
+                            : Text(l10n.saveChanges),
                       ),
                     ),
                   ] else ...[
                     Text(
-                      user.displayName ?? 'No name set',
+                      user.displayName ?? l10n.noNameSet,
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -314,12 +321,12 @@ class _ProfilePageState extends State<ProfilePage> {
                         _StatCard(
                           icon: Icons.pin_drop,
                           value: _signalsCount.toString(),
-                          label: 'Signals',
+                          label: l10n.signals,
                         ),
                         _StatCard(
                           icon: Icons.comment,
                           value: _commentsCount.toString(),
-                          label: 'Comments',
+                          label: l10n.comments,
                         ),
                       ],
                     ),
@@ -327,41 +334,41 @@ class _ProfilePageState extends State<ProfilePage> {
                     const Divider(),
                     ListTile(
                       leading: const Icon(Icons.email),
-                      title: const Text('Email'),
-                      subtitle: Text(user.email ?? 'Not set'),
+                      title: Text(l10n.email),
+                      subtitle: Text(user.email ?? l10n.notSet),
                     ),
                     ListTile(
                       leading: const Icon(Icons.phone),
-                      title: const Text('Phone Number'),
-                      subtitle: Text(_phoneController.text.isEmpty ? 'Not set' : _phoneController.text),
+                      title: Text(l10n.phoneNumber),
+                      subtitle: Text(_phoneController.text.isEmpty ? l10n.notSet : _phoneController.text),
                     ),
                     ListTile(
                       leading: const Icon(Icons.verified),
-                      title: const Text('Email Verified'),
-                      subtitle: Text(user.emailVerified ? 'Yes' : 'No'),
+                      title: Text(l10n.emailVerified),
+                      subtitle: Text(user.emailVerified ? l10n.yes : l10n.no),
                       trailing: !user.emailVerified
                           ? TextButton(
                               onPressed: () async {
                                 await user.sendEmailVerification();
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Verification email sent'),
+                                    SnackBar(
+                                      content: Text(l10n.verificationEmailSent),
                                     ),
                                   );
                                 }
                               },
-                              child: const Text('Verify'),
+                              child: Text(l10n.verify),
                             )
                           : null,
                     ),
                     ListTile(
                       leading: const Icon(Icons.calendar_today),
-                      title: const Text('Member Since'),
+                      title: Text(l10n.memberSince),
                       subtitle: Text(
                         user.metadata.creationTime != null
                             ? '${user.metadata.creationTime!.day}/${user.metadata.creationTime!.month}/${user.metadata.creationTime!.year}'
-                            : 'Unknown',
+                            : l10n.unknown,
                       ),
                     ),
                   ],

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'dart:io' show Platform;
@@ -37,9 +38,10 @@ class _FeedbackPageState extends State<FeedbackPage> {
   }
 
   Future<void> _submitFeedback() async {
+    final l10n = AppLocalizations.of(context);
     if (_feedbackController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your feedback')),
+        SnackBar(content: Text(l10n.pleaseEnterFeedback)),
       );
       return;
     }
@@ -74,8 +76,8 @@ class _FeedbackPageState extends State<FeedbackPage> {
       if (mounted) {
         _feedbackController.clear();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Thank you for your feedback!'),
+          SnackBar(
+            content: Text(l10n.thankYouFeedback),
             backgroundColor: Colors.green,
           ),
         );
@@ -83,8 +85,9 @@ class _FeedbackPageState extends State<FeedbackPage> {
       }
     } catch (e) {
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error submitting feedback: $e')),
+          SnackBar(content: Text(l10n.errorSubmittingFeedback(e.toString()))),
         );
       }
     } finally {
@@ -96,6 +99,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
@@ -112,32 +116,32 @@ class _FeedbackPageState extends State<FeedbackPage> {
               }
             },
           ),
-          title: const Text('Send Feedback'),
+          title: Text(l10n.sendFeedback),
         ),
         body: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'We\'d love to hear from you!',
-                style: TextStyle(
+              Text(
+                l10n.weLoveToHear,
+                style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
-                'Your feedback helps us improve Help A Paw for everyone.',
+                l10n.feedbackHelpsImprove,
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey[600],
                 ),
               ),
               const SizedBox(height: 24),
-              const Text(
-                'Feedback Type',
-                style: TextStyle(
+              Text(
+                l10n.feedbackType,
+                style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                 ),
@@ -147,31 +151,31 @@ class _FeedbackPageState extends State<FeedbackPage> {
                 spacing: 8,
                 children: [
                   ChoiceChip(
-                    label: const Text('General'),
+                    label: Text(l10n.general),
                     selected: _feedbackType == 'general',
                     onSelected: (_) => setState(() => _feedbackType = 'general'),
                   ),
                   ChoiceChip(
-                    label: const Text('Bug Report'),
+                    label: Text(l10n.bugReport),
                     selected: _feedbackType == 'bug',
                     onSelected: (_) => setState(() => _feedbackType = 'bug'),
                   ),
                   ChoiceChip(
-                    label: const Text('Feature Request'),
+                    label: Text(l10n.featureRequest),
                     selected: _feedbackType == 'feature',
                     onSelected: (_) => setState(() => _feedbackType = 'feature'),
                   ),
                   ChoiceChip(
-                    label: const Text('Other'),
+                    label: Text(l10n.other),
                     selected: _feedbackType == 'other',
                     onSelected: (_) => setState(() => _feedbackType = 'other'),
                   ),
                 ],
               ),
               const SizedBox(height: 24),
-              const Text(
-                'Your Email (optional)',
-                style: TextStyle(
+              Text(
+                l10n.yourEmailOptional,
+                style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                 ),
@@ -181,7 +185,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
-                  hintText: 'email@example.com',
+                  hintText: l10n.emailPlaceholder,
                   border: const OutlineInputBorder(),
                   filled: true,
                   fillColor: Colors.grey[50],
@@ -190,16 +194,16 @@ class _FeedbackPageState extends State<FeedbackPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Provide your email if you\'d like us to follow up',
+                l10n.provideEmailForFollowUp,
                 style: TextStyle(
                   fontSize: 12,
                   color: Colors.grey[600],
                 ),
               ),
               const SizedBox(height: 24),
-              const Text(
-                'Your Feedback',
-                style: TextStyle(
+              Text(
+                l10n.yourFeedback,
+                style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                 ),
@@ -211,10 +215,10 @@ class _FeedbackPageState extends State<FeedbackPage> {
                 maxLength: 1000,
                 decoration: InputDecoration(
                   hintText: _feedbackType == 'bug'
-                      ? 'Please describe the issue you encountered...'
+                      ? l10n.bugReportHint
                       : _feedbackType == 'feature'
-                          ? 'Tell us about the feature you\'d like to see...'
-                          : 'Share your thoughts with us...',
+                          ? l10n.featureRequestHint
+                          : l10n.generalFeedbackHint,
                   border: const OutlineInputBorder(),
                   filled: true,
                   fillColor: Colors.grey[50],
@@ -223,9 +227,9 @@ class _FeedbackPageState extends State<FeedbackPage> {
               const SizedBox(height: 16),
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Include device information'),
+                title: Text(l10n.includeDeviceInfo),
                 subtitle: Text(
-                  'Helps us diagnose issues faster',
+                  l10n.helpsUsDiagnose,
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey[600],
@@ -254,7 +258,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                             color: Colors.white,
                           ),
                         )
-                      : const Text('Submit Feedback'),
+                      : Text(l10n.submitFeedback),
                 ),
               ),
               const SizedBox(height: 32),
@@ -264,7 +268,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                 child: Column(
                   children: [
                     Text(
-                      'Other ways to reach us',
+                      l10n.otherWaysToReach,
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.grey[600],

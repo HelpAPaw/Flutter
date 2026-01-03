@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
@@ -93,9 +94,10 @@ class _RegionSelectionPageState extends State<RegionSelectionPage> {
   }
 
   void _saveRegion() {
+    final l10n = AppLocalizations.of(context);
     if (_centerPoint == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please tap on the map to set a center point')),
+        SnackBar(content: Text(l10n.tapToSetCenterPoint)),
       );
       return;
     }
@@ -114,13 +116,15 @@ class _RegionSelectionPageState extends State<RegionSelectionPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Select Region'),
+        title: Text(l10n.selectRegionTitle),
         actions: [
           TextButton(
             onPressed: _centerPoint != null ? _saveRegion : null,
-            child: const Text('Save'),
+            child: Text(l10n.save),
           ),
         ],
       ),
@@ -154,7 +158,7 @@ class _RegionSelectionPageState extends State<RegionSelectionPage> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'Tap on the map to set the center of your region of interest',
+                          l10n.tapMapInstruction,
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                       ),
@@ -186,11 +190,11 @@ class _RegionSelectionPageState extends State<RegionSelectionPage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Region radius',
+                                  l10n.regionRadius,
                                   style: Theme.of(context).textTheme.titleSmall,
                                 ),
                                 Text(
-                                  '${_radiusKm.toStringAsFixed(1)} km',
+                                  '${_radiusKm.toStringAsFixed(1)} ${l10n.km}',
                                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                                         fontWeight: FontWeight.bold,
                                         color: Colors.orange,
@@ -206,7 +210,7 @@ class _RegionSelectionPageState extends State<RegionSelectionPage> {
                         min: 1,
                         max: 100,
                         divisions: 99,
-                        label: '${_radiusKm.toStringAsFixed(1)} km',
+                        label: '${_radiusKm.toStringAsFixed(1)} ${l10n.km}',
                         onChanged: (value) {
                           setState(() {
                             _radiusKm = value;
@@ -215,7 +219,7 @@ class _RegionSelectionPageState extends State<RegionSelectionPage> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Drag the marker to reposition the center',
+                        l10n.dragMarkerToReposition,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: Colors.grey,
                             ),

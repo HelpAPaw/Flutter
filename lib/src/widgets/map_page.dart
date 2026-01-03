@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
@@ -146,31 +147,25 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
     // Check if location services are enabled
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      // Location services are not enabled - just return without error
       return;
     }
 
     // Check for location permissions (but don't request them)
-    // User will grant permission through onboarding flow
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
-      // Permissions not granted - just return without requesting
       setState(() => _hasLocationPermission = false);
       return;
     }
 
-    // Permission already granted, enable my location on map
     setState(() => _hasLocationPermission = true);
 
-    // Get the user's current location
     try {
       Position position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high)
       );
       _updateMapLocation(position);
     } catch (e) {
-      // Failed to get location, just continue with default location
       debugPrint('Error getting user location: $e');
     }
   }
@@ -194,17 +189,16 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   // Map Page Widgets
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return StreamBuilder<List<DocumentSnapshot>>(
         stream: _signalsStream,
         builder: (BuildContext context, AsyncSnapshot<List<DocumentSnapshot>> snapshot) {
           Set<Marker> signalMarkers = {};
 
           if (snapshot.hasError) {
-            //TODO
-            return const Text('Something went wrong');
+            return Text(l10n.somethingWentWrong);
           } else if (snapshot.connectionState == ConnectionState.waiting) {
-            //TODO
-            // return const Text("Loading");
+            // Loading
           } else {
             var signals = snapshot.data!;
             signalMarkers = signals.where((signalDocument) {
@@ -216,10 +210,8 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
 
               // Check if this is the newly created signal
               if (_newlyCreatedSignalId != null && signalDocument.id == _newlyCreatedSignalId) {
-                // Schedule showing the info window after the frame is built
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   _mapController.showMarkerInfoWindow(MarkerId(signalDocument.id));
-                  // Clear the flag so we don't keep showing it
                   setState(() {
                     _newlyCreatedSignalId = null;
                   });
@@ -241,7 +233,6 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
             }).toSet();
           }
 
-          // Merge both marker sets - clinic markers are already built in _loadVetClinics
           final allMarkers = {...signalMarkers, ..._clinicMarkers};
 
           return PopScope(
@@ -292,7 +283,6 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                       builder: (BuildContext context) {
                         final mediaQuery = MediaQuery.maybeOf(context);
                         if (mediaQuery == null) {
-                          // Fallback if MediaQuery is not available
                           return const SafeArea(child: SizedBox.shrink());
                         }
 
@@ -300,9 +290,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                         final screenHeight = mediaQuery.size.height;
                         final safeAreaTop = mediaQuery.padding.top;
 
-                        // Calculate available height for the form
-                        // Leave space for: safe area, padding, target icon visibility, and keyboard
-                        final availableHeight = screenHeight - safeAreaTop - keyboardHeight - 16 - 150; // 16 for padding, 150 for target icon space
+                        final availableHeight = screenHeight - safeAreaTop - keyboardHeight - 16 - 150;
                         final formMaxHeight = availableHeight.clamp(200.0, 400.0);
 
                         return SafeArea(
@@ -327,22 +315,22 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                                         children: [
                                       TextField(
                                         controller: _newSignalTitleController,
-                                        decoration: const InputDecoration(
-                                          labelText: 'Title',
+                                        decoration: InputDecoration(
+                                          labelText: l10n.title,
                                         ),
                                         textCapitalization: TextCapitalization.sentences,
                                       ),
                                       TextField(
                                         controller: _newSignalDescriptionController,
-                                        decoration: const InputDecoration(
-                                          labelText: 'Description',
+                                        decoration: InputDecoration(
+                                          labelText: l10n.description,
                                         ),
                                         textCapitalization: TextCapitalization.sentences,
                                       ),
                                       TextField(
                                         controller: _newSignalPhoneNumberController,
-                                        decoration: const InputDecoration(
-                                          labelText: 'Phone Number',
+                                        decoration: InputDecoration(
+                                          labelText: l10n.phoneNumber,
                                         ),
                                         keyboardType: TextInputType.phone,
                                       ),
@@ -401,7 +389,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                                 ),
                               ),
                               Semantics(
-                                label: 'Submit signal',
+                                label: l10n.submitSignal,
                                 button: true,
                                 enabled: !_isSubmittingSignal,
                                 child: IconButton(
@@ -415,179 +403,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                                           ),
                                         )
                                       : const Icon(Icons.send),
-                                  onPressed: _isSubmittingSignal ? null : () async {
-                                  // Validate title and description
-                                  final title = _newSignalTitleController.text.trim();
-                                  final description = _newSignalDescriptionController.text.trim();
-
-                                  if (title.isEmpty) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Please enter a title for the signal'),
-                                        backgroundColor: Colors.red,
-                                        duration: Duration(seconds: 3),
-                                      ),
-                                    );
-                                    return;
-                                  }
-
-                                  if (description.isEmpty) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Please enter a description for the signal'),
-                                        backgroundColor: Colors.red,
-                                        duration: Duration(seconds: 3),
-                                      ),
-                                    );
-                                    return;
-                                  }
-
-                                  setState(() {
-                                    _isSubmittingSignal = true;
-                                  });
-
-                                  try {
-                                    // Get the visible region of the map
-                                    final visibleRegion = await _mapController.getVisibleRegion();
-
-                                    // Calculate the center of the visible region
-                                    final centerLatitude = (visibleRegion.northeast.latitude + visibleRegion.southwest.latitude) / 2;
-                                    final centerLongitude = (visibleRegion.northeast.longitude + visibleRegion.southwest.longitude) / 2;
-
-                                    final signalLocation = {
-                                      'geopoint': GeoPoint(centerLatitude, centerLongitude),
-                                      'geohash': GeoFirePoint(GeoPoint(centerLatitude, centerLongitude)).geohash
-                                    };
-                                    final newSignal = Signal(
-                                      title: title,
-                                      description: description,
-                                      phoneNumber: _newSignalPhoneNumberController.text.trim(),
-                                      signalType: _newSignalType,
-                                      reporter: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser!.uid),
-                                      contactPhone: '0123456789',
-                                      location: signalLocation,
-                                      createdAt: Timestamp.now(),
-                                    );
-
-                                    final docRef = await FirebaseFirestore.instance.collection('signals').add(newSignal.toJson()).timeout(
-                                      const Duration(seconds: 10),
-                                      onTimeout: () {
-                                        throw Exception('Request timed out. Please check your internet connection and try again.');
-                                      },
-                                    );
-
-                                    // Upload photo if one was selected
-                                    if (_selectedImage != null) {
-                                      try {
-                                        final photoUrl = await _uploadImageToStorage(docRef.id);
-                                        await docRef.update({'photoUrls': [photoUrl]});
-                                      } catch (e) {
-                                        // Photo upload failed, but signal was created - just log it
-                                        // We don't want to fail the entire operation
-                                        if (mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(
-                                              content: Text('Signal created, but photo upload failed. You can try again later.'),
-                                              backgroundColor: Colors.orange,
-                                            ),
-                                          );
-                                        }
-                                      }
-                                    }
-
-                                    // Clear the text fields and dropdown
-                                    _newSignalTitleController.clear();
-                                    _newSignalDescriptionController.clear();
-                                    _newSignalPhoneNumberController.clear();
-                                    _newSignalType = 0;
-
-                                    setState(() {
-                                      _isAddingNewSignal = false;
-                                      _isSubmittingSignal = false;
-                                      _newlyCreatedSignalId = docRef.id;
-                                      _selectedImage = null;
-                                    });
-                                  } on FirebaseException catch (e) {
-
-                                    setState(() {
-                                      _isSubmittingSignal = false;
-                                    });
-
-                                    if (mounted) {
-                                      String errorMessage;
-                                      switch (e.code) {
-                                        case 'permission-denied':
-                                          errorMessage = 'Permission denied. Please check your account permissions.';
-                                          break;
-                                        case 'unauthenticated':
-                                          errorMessage = 'Authentication error. Please sign in again.';
-                                          break;
-                                        case 'unavailable':
-                                          errorMessage = 'Service unavailable. Please try again later.';
-                                          break;
-                                        case 'network-request-failed':
-                                          errorMessage = 'Network error. Please check your connection.';
-                                          break;
-                                        default:
-                                          errorMessage = e.message ?? 'Failed to create signal. Please try again.';
-                                      }
-
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text(errorMessage),
-                                          backgroundColor: Colors.red,
-                                          duration: const Duration(seconds: 5),
-                                          action: SnackBarAction(
-                                            label: 'Retry',
-                                            textColor: Colors.white,
-                                            onPressed: () {
-                                              // User can tap retry or just tap send again
-                                            },
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                    // Keep dialog open on error so user can retry
-                                  } on TimeoutException {
-                                    setState(() {
-                                      _isSubmittingSignal = false;
-                                    });
-
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: const Text('Request timed out. Please check your connection and try again.'),
-                                          backgroundColor: Colors.red,
-                                          duration: const Duration(seconds: 5),
-                                          action: SnackBarAction(
-                                            label: 'Retry',
-                                            textColor: Colors.white,
-                                            onPressed: () {},
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                  } catch (e) {
-                                    setState(() {
-                                      _isSubmittingSignal = false;
-                                    });
-
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: const Text('An unexpected error occurred. Please try again.'),
-                                          backgroundColor: Colors.red,
-                                          duration: const Duration(seconds: 5),
-                                          action: SnackBarAction(
-                                            label: 'Retry',
-                                            textColor: Colors.white,
-                                            onPressed: () {},
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                  }
-                                  },
+                                  onPressed: _isSubmittingSignal ? null : () => _submitNewSignal(context),
                                 ),
                               ),
                             ],
@@ -606,7 +422,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                       child: Center(
                         child: ElevatedButton.icon(
                           icon: const Icon(Icons.search, color: Colors.white),
-                          label: const Text('Search this area', style: TextStyle(color: Colors.white)),
+                          label: Text(l10n.searchThisArea, style: const TextStyle(color: Colors.white)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.orange,
                             elevation: 6,
@@ -640,16 +456,16 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                               ),
                             ],
                           ),
-                          child: const Row(
+                          child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              SizedBox(
+                              const SizedBox(
                                 width: 20,
                                 height: 20,
                                 child: CircularProgressIndicator(strokeWidth: 2),
                               ),
-                              SizedBox(width: 12),
-                              Text('Loading clinics...'),
+                              const SizedBox(width: 12),
+                              Text(l10n.loadingClinics),
                             ],
                           ),
                         ),
@@ -666,7 +482,6 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
               title: const Text('Help a Paw'),
               backgroundColor: Colors.orange,
               foregroundColor: Colors.white,
-              // elevation: 6,
               actions: <Widget>[
                 IconButton(
                     icon: Stack(
@@ -712,7 +527,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
             ),
             drawer: const HomeRouteDrawer(),
             floatingActionButton: Semantics(
-              label: 'Add new signal',
+              label: l10n.addNewSignal,
               button: true,
               enabled: true,
               child: FloatingActionButton(
@@ -722,7 +537,6 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                 enableFeedback: true,
                 shape: const CircleBorder(),
                 onPressed: () {
-                  // Check if user is authenticated (not anonymous)
                   if (FirebaseAuth.instance.currentUser == null ||
                       FirebaseAuth.instance.currentUser!.isAnonymous) {
                     _showSignInDialog();
@@ -737,12 +551,12 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                     });
                   }
                 },
-                tooltip: 'Add new signal',
+                tooltip: l10n.addNewSignal,
                 child: AnimatedBuilder(
                   animation: _fabAnimationController,
                   builder: (context, child) {
                     return Transform.rotate(
-                      angle: _fabAnimationController.value * 0.785398, // π/4 radians (45 degrees)
+                      angle: _fabAnimationController.value * 0.785398,
                       child: const Icon(Icons.add),
                     );
                   },
@@ -754,6 +568,170 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
           );
         }
     );
+  }
+
+  Future<void> _submitNewSignal(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
+    final title = _newSignalTitleController.text.trim();
+    final description = _newSignalDescriptionController.text.trim();
+
+    if (title.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.pleaseEnterTitle),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    if (description.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.pleaseEnterDescription),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSubmittingSignal = true;
+    });
+
+    try {
+      final visibleRegion = await _mapController.getVisibleRegion();
+
+      final centerLatitude = (visibleRegion.northeast.latitude + visibleRegion.southwest.latitude) / 2;
+      final centerLongitude = (visibleRegion.northeast.longitude + visibleRegion.southwest.longitude) / 2;
+
+      final signalLocation = {
+        'geopoint': GeoPoint(centerLatitude, centerLongitude),
+        'geohash': GeoFirePoint(GeoPoint(centerLatitude, centerLongitude)).geohash
+      };
+      final newSignal = Signal(
+        title: title,
+        description: description,
+        phoneNumber: _newSignalPhoneNumberController.text.trim(),
+        signalType: _newSignalType,
+        reporter: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser!.uid),
+        contactPhone: '0123456789',
+        location: signalLocation,
+        createdAt: Timestamp.now(),
+      );
+
+      final docRef = await FirebaseFirestore.instance.collection('signals').add(newSignal.toJson()).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception(l10n.requestTimedOut);
+        },
+      );
+
+      if (_selectedImage != null) {
+        try {
+          final photoUrl = await _uploadImageToStorage(docRef.id);
+          await docRef.update({'photoUrls': [photoUrl]});
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(l10n.signalCreatedPhotoFailed),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+        }
+      }
+
+      _newSignalTitleController.clear();
+      _newSignalDescriptionController.clear();
+      _newSignalPhoneNumberController.clear();
+      _newSignalType = 0;
+
+      setState(() {
+        _isAddingNewSignal = false;
+        _isSubmittingSignal = false;
+        _newlyCreatedSignalId = docRef.id;
+        _selectedImage = null;
+      });
+    } on FirebaseException catch (e) {
+      setState(() {
+        _isSubmittingSignal = false;
+      });
+
+      if (mounted) {
+        String errorMessage;
+        switch (e.code) {
+          case 'permission-denied':
+            errorMessage = l10n.permissionDenied;
+            break;
+          case 'unauthenticated':
+            errorMessage = l10n.authenticationError;
+            break;
+          case 'unavailable':
+            errorMessage = l10n.serviceUnavailable;
+            break;
+          case 'network-request-failed':
+            errorMessage = l10n.networkError;
+            break;
+          default:
+            errorMessage = e.message ?? l10n.failedToCreateSignal;
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: l10n.retry,
+              textColor: Colors.white,
+              onPressed: () {},
+            ),
+          ),
+        );
+      }
+    } on TimeoutException {
+      setState(() {
+        _isSubmittingSignal = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.requestTimedOut),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: l10n.retry,
+              textColor: Colors.white,
+              onPressed: () {},
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _isSubmittingSignal = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.unexpectedError),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: l10n.retry,
+              textColor: Colors.white,
+              onPressed: () {},
+            ),
+          ),
+        );
+      }
+    }
   }
 
   _loadPins() async {
@@ -847,6 +825,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   }
 
   void _showFilterBottomSheet() {
+    final l10n = AppLocalizations.of(context);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -860,7 +839,6 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Drag handle
                   Container(
                     margin: const EdgeInsets.only(top: 8, bottom: 4),
                     width: 40,
@@ -878,13 +856,12 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                        // Header with title and action buttons
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
-                              'Filter Signals',
-                              style: TextStyle(
+                            Text(
+                              l10n.filterSignals,
+                              style: const TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -898,7 +875,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                                       _selectedStatuses = {0, 1, 2};
                                     });
                                   },
-                                  child: const Text('Select All'),
+                                  child: Text(l10n.selectAll),
                                 ),
                                 TextButton(
                                   onPressed: () {
@@ -907,7 +884,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                                       _selectedStatuses = {};
                                     });
                                   },
-                                  child: const Text('Clear All'),
+                                  child: Text(l10n.clearAll),
                                 ),
                               ],
                             ),
@@ -915,38 +892,35 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                         ),
                         const Divider(),
 
-                    // Signal Status Section
-                    const Text(
-                      'Status',
-                      style: TextStyle(
+                    Text(
+                      l10n.status,
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 8),
-                    _buildStatusCheckbox(0, 'Help needed', 'assets/icons/pin_red.png', setModalState),
-                    _buildStatusCheckbox(1, 'Somebody on the way', 'assets/icons/pin_orange.png', setModalState),
-                    _buildStatusCheckbox(2, 'Solved', 'assets/icons/pin_green.png', setModalState),
+                    _buildStatusCheckbox(0, l10n.statusHelpNeeded, 'assets/icons/pin_red.png', setModalState),
+                    _buildStatusCheckbox(1, l10n.statusSomebodyOnTheWay, 'assets/icons/pin_orange.png', setModalState),
+                    _buildStatusCheckbox(2, l10n.statusSolved, 'assets/icons/pin_green.png', setModalState),
 
                     const SizedBox(height: 16),
                     const Divider(),
 
-                    // Signal Type Section
-                    const Text(
-                      'Signal Type',
-                      style: TextStyle(
+                    Text(
+                      l10n.signalType,
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 8),
                     ...List.generate(Signal.signalTypes.length, (index) {
-                      return _buildTypeCheckbox(index, Signal.signalTypes[index], setModalState);
+                      return _buildTypeCheckbox(index, Signal.getLocalizedSignalTypeName(context, index), setModalState);
                     }),
 
                     const SizedBox(height: 16),
 
-                            // Apply Button
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton(
@@ -960,11 +934,11 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                                 ),
                                 onPressed: () {
                                   Navigator.pop(context);
-                                  setState(() {}); // Trigger rebuild with new filters
+                                  setState(() {});
                                 },
-                                child: const Text(
-                                  'Apply Filters',
-                                  style: TextStyle(fontSize: 16),
+                                child: Text(
+                                  l10n.applyFilters,
+                                  style: const TextStyle(fontSize: 16),
                                 ),
                               ),
                             ),
@@ -989,6 +963,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   }
 
   Future<void> _loadVetClinics() async {
+    final l10n = AppLocalizations.of(context);
     setState(() {
       _isLoadingClinics = true;
     });
@@ -1017,10 +992,10 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
 
         if (clinics.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No veterinary clinics found in this area'),
+            SnackBar(
+              content: Text(l10n.noVetClinicsFound),
               backgroundColor: Colors.grey,
-              duration: Duration(seconds: 3),
+              duration: const Duration(seconds: 3),
             ),
           );
         }
@@ -1031,15 +1006,15 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
           _isLoadingClinics = false;
         });
 
-        String errorMessage = 'Failed to load vet clinics';
+        String errorMessage = l10n.failedToLoadVetClinics;
         if (e.toString().contains('Network error')) {
-          errorMessage = 'Network error. Please check your internet connection.';
+          errorMessage = l10n.networkError;
         } else if (e.toString().contains('timed out')) {
-          errorMessage = 'Request timed out. Please try again.';
+          errorMessage = l10n.requestTimedOut;
         } else if (e.toString().contains('Rate limit')) {
-          errorMessage = 'Too many searches. Please wait a moment and try again.';
+          errorMessage = l10n.tooManySearches;
         } else if (e.toString().contains('API access denied')) {
-          errorMessage = 'Service temporarily unavailable.';
+          errorMessage = l10n.serviceUnavailable;
         }
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1081,8 +1056,6 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   }
 
   void _onCameraIdle() async {
-    // Only check if we need to show "search this area" button for vet clinics
-    // Signal stream doesn't need to be updated - 100km radius is large enough
     _checkVetClinicSearchButton();
   }
 
@@ -1117,6 +1090,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   }
 
   void _showImageSourceBottomSheet() {
+    final l10n = AppLocalizations.of(context);
     showModalBottomSheet(
       context: context,
       builder: (BuildContext context) {
@@ -1126,7 +1100,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
             children: [
               ListTile(
                 leading: const Icon(Icons.camera_alt, color: Colors.orange),
-                title: const Text('Take Photo'),
+                title: Text(l10n.takePhoto),
                 onTap: () {
                   Navigator.pop(context);
                   _pickImageFromCamera();
@@ -1134,7 +1108,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
               ),
               ListTile(
                 leading: const Icon(Icons.photo_library, color: Colors.orange),
-                title: const Text('Choose from Gallery'),
+                title: Text(l10n.chooseFromGallery),
                 onTap: () {
                   Navigator.pop(context);
                   _pickImageFromGallery();
@@ -1143,7 +1117,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
               if (_selectedImage != null)
                 ListTile(
                   leading: const Icon(Icons.delete, color: Colors.red),
-                  title: const Text('Remove Photo'),
+                  title: Text(l10n.removePhoto),
                   onTap: () {
                     Navigator.pop(context);
                     setState(() {
@@ -1159,6 +1133,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   }
 
   Future<void> _pickImageFromCamera() async {
+    final l10n = AppLocalizations.of(context);
     try {
       final XFile? image = await _imagePicker.pickImage(
         source: ImageSource.camera,
@@ -1175,7 +1150,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error accessing camera: ${e.toString()}'),
+            content: Text(l10n.errorAccessingCamera(e.toString())),
             backgroundColor: Colors.red,
           ),
         );
@@ -1184,6 +1159,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   }
 
   Future<void> _pickImageFromGallery() async {
+    final l10n = AppLocalizations.of(context);
     try {
       final XFile? image = await _imagePicker.pickImage(
         source: ImageSource.gallery,
@@ -1200,7 +1176,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error accessing gallery: ${e.toString()}'),
+            content: Text(l10n.errorAccessingGallery(e.toString())),
             backgroundColor: Colors.red,
           ),
         );
@@ -1234,25 +1210,26 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   }
 
   void _showSignInDialog() {
+    final l10n = AppLocalizations.of(context);
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Sign in required'),
-          content: const Text('You need to sign in to create signals'),
+          title: Text(l10n.signInRequired),
+          content: Text(l10n.signInToCreateSignals),
           actions: [
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
               },
-              child: const Text('Cancel'),
+              child: Text(l10n.cancel),
             ),
             ElevatedButton(
               onPressed: () {
                 Navigator.of(context).pop();
                 context.push('/sign_in');
               },
-              child: const Text('Sign In'),
+              child: Text(l10n.signIn),
             ),
           ],
         );

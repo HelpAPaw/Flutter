@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/src/services/share_service.dart';
 import 'package:image_picker/image_picker.dart';
@@ -37,15 +38,15 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final locale = Localizations.localeOf(context).languageCode;
     _signalStream ??= FirebaseFirestore.instance.collection('signals').doc(widget.signalId).snapshots();
     Signal signal;
 
     return StreamBuilder(stream: _signalStream, builder: (BuildContext context, AsyncSnapshot<DocumentSnapshot> snapshot) {
       if (snapshot.hasError) {
-        //TODO
-        return const Text('Something went wrong');
+        return Text(l10n.somethingWentWrong);
       } else if (snapshot.connectionState == ConnectionState.waiting) {
-        //TODO
         return const CircularProgressIndicator();
       } else {
         final signalData = snapshot.data!.data() as Map<String, dynamic>;
@@ -73,7 +74,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
           body: AdaptiveContainer(
             child: Scaffold(
               appBar: AppBar(
-              title: const Text('Signal Details'),
+              title: Text(l10n.signalDetails),
               backgroundColor: Colors.orange,
               foregroundColor: Colors.white,
               actions: [
@@ -145,7 +146,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                                           ),
                                                           const SizedBox(height: 16),
                                                           Text(
-                                                            'Uploading photo...',
+                                                            l10n.uploadingPhoto,
                                                             style: TextStyle(
                                                               color: Colors.grey[600],
                                                               fontSize: 14,
@@ -163,7 +164,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                                           ),
                                                           const SizedBox(height: 8),
                                                           Text(
-                                                            signal.photoUrls.isEmpty ? 'Add Photo' : 'Add Another Photo',
+                                                            signal.photoUrls.isEmpty ? l10n.addPhoto : l10n.addAnotherPhoto,
                                                             style: TextStyle(
                                                               color: Colors.grey[600],
                                                               fontSize: 16,
@@ -172,7 +173,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                                           ),
                                                           const SizedBox(height: 4),
                                                           Text(
-                                                            '${signal.photoUrls.length}/5 photos',
+                                                            l10n.photosCount(signal.photoUrls.length, 5),
                                                             style: TextStyle(
                                                               color: Colors.grey[500],
                                                               fontSize: 12,
@@ -217,13 +218,13 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                                   ),
                                                   errorWidget: (context, url, error) => Container(
                                                     color: Colors.grey[200],
-                                                    child: const Center(
+                                                    child: Center(
                                                       child: Column(
                                                         mainAxisAlignment: MainAxisAlignment.center,
                                                         children: [
-                                                          Icon(Icons.broken_image, size: 48, color: Colors.grey),
-                                                          SizedBox(height: 8),
-                                                          Text('Failed to load image', style: TextStyle(color: Colors.grey)),
+                                                          const Icon(Icons.broken_image, size: 48, color: Colors.grey),
+                                                          const SizedBox(height: 8),
+                                                          Text(l10n.failedToLoadImage, style: const TextStyle(color: Colors.grey)),
                                                         ],
                                                       ),
                                                     ),
@@ -298,12 +299,11 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                             ),
                           Text(signal.title, style: const TextStyle(fontSize: 30), textAlign: TextAlign.center,),
                           Text(signal.description, style: const TextStyle(fontSize: 20), textAlign: TextAlign.center,),
-                          Text("Signal type: ${Signal.getSignalTypeName(signal.signalType)}"),
+                          Text(l10n.signalTypeLabel(Signal.getLocalizedSignalTypeName(context, signal.signalType))),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(DateFormat.yMd().add_jm().format((signal.createdAt as Timestamp).toDate())),
-                              //show user name from reporter field which is a reference to the users collection
+                              Text(DateFormat.yMd(locale).add_jm().format((signal.createdAt as Timestamp).toDate())),
                               Text(reporterName)
                             ],
                           ),
@@ -313,7 +313,6 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                               TextButton.icon(
                                 onPressed: () async {
                                   // Open navigation app with signal location
-                                  // Use geo URI with query parameter - allows user to choose navigation app
                                   GeoPoint location = signal.location['geopoint'];
                                   Uri url = Uri.parse(
                                     'geo:${location.latitude},${location.longitude}?q=${location.latitude},${location.longitude}(${Uri.encodeComponent(signal.title)})'
@@ -328,11 +327,10 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                     if (await canLaunchUrl(fallbackUri)) {
                                       await launchUrl(fallbackUri, mode: LaunchMode.externalApplication);
                                     } else {
-                                      // Show alert to the user
                                       if (context.mounted) {
                                         ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('Cannot navigate to signal location, please try to do so manually.'),
+                                          SnackBar(
+                                            content: Text(l10n.cannotNavigate),
                                           ),
                                         );
                                       }
@@ -340,8 +338,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                   }
                                 },
                                 icon: const Icon(Icons.directions),
-                                label: const Text('Navigate Me'),
-                                //TODO: extract button style
+                                label: Text(l10n.navigateMe),
                                 style: ButtonStyle(
                                   foregroundColor: WidgetStateProperty.all<Color>(Colors.white),
                                   backgroundColor: WidgetStateProperty.all<Color>(Colors.orange),
@@ -353,11 +350,10 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                   if (await canLaunchUrl(phoneUri)) {
                                     launchUrl(phoneUri);
                                   } else {
-                                    // Show an alert to the user
                                     if (context.mounted) {
                                       ScaffoldMessenger.of(context).showSnackBar(
                                         SnackBar(
-                                          content: Text('Cannot call ${signal.contactPhone}, please try to connect manually.'),
+                                          content: Text(l10n.cannotCall(signal.contactPhone)),
                                         ),
                                       );
                                     }
@@ -372,10 +368,8 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                               ),
                             ],
                           ),
-                          //add section delimiter + label
-                          const Text(' Status'),
+                          Text(' ${l10n.status}'),
                           DropdownButton(
-                            // expand to fill width
                             itemHeight: 64,
                             isExpanded: true,
                             value: signal.status,
@@ -389,7 +383,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                         child: Image.asset('assets/icons/pin_red.png'),
                                       ),
                                       SizedBox.fromSize(size: const Size(8, 8)),
-                                      const Text('Help needed'),
+                                      Text(l10n.statusHelpNeeded),
                                     ],
                                   ),
                                 ),
@@ -402,7 +396,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                         child: Image.asset('assets/icons/pin_orange.png'),
                                       ),
                                       SizedBox.fromSize(size: const Size(8, 8)),
-                                      const Text('Somebody on the way'),
+                                      Text(l10n.statusSomebodyOnTheWay),
                                     ],
                                   ),
                                 ),
@@ -415,7 +409,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                         child: Image.asset('assets/icons/pin_green.png'),
                                       ),
                                       SizedBox.fromSize(size: const Size(8, 8)),
-                                      const Text('Solved'),
+                                      Text(l10n.statusSolved),
                                     ],
                                   ),
                                 ),
@@ -426,10 +420,9 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                 }
                               },
                           ),
-                          //Get nested Firebase collection called 'comments'
                           Column(
                             children: [
-                              const Text('Comments'),
+                              Text(l10n.comments),
                               StreamBuilder(
                                 stream: FirebaseFirestore.instance.collection('signals').doc(widget.signalId).collection('comments')
                                   .orderBy('createdAt').snapshots(),
@@ -476,13 +469,13 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                                       child: FutureBuilder<DocumentSnapshot>(
                                                         future: commentData['author'].get(),
                                                         builder: (BuildContext context, AsyncSnapshot<DocumentSnapshot> snapshot) {
-                                                          String authorName = 'Someone';
+                                                          String authorName = l10n.someone;
                                                           if (snapshot.hasData && snapshot.data?.data() != null) {
                                                             Map<String, dynamic> authorData = snapshot.data!.data() as Map<String, dynamic>;
-                                                            authorName = authorData['name'] ?? 'Someone';
+                                                            authorName = authorData['name'] ?? l10n.someone;
                                                           }
                                                           return Text(
-                                                            '$authorName changed the status to ${_getStatusName(commentData['newStatus'])}',
+                                                            l10n.changedStatusTo(authorName, _getStatusName(context, commentData['newStatus'])),
                                                             style: const TextStyle(fontStyle: FontStyle.italic),
                                                           );
                                                         },
@@ -493,7 +486,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                               ),
                                             ),
                                             subtitle: Text(
-                                              DateFormat.yMd().add_jm().format(commentData['createdAt'].toDate()),
+                                              DateFormat.yMd(locale).add_jm().format(commentData['createdAt'].toDate()),
                                             ),
                                           );
                                         }
@@ -517,18 +510,17 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                           subtitle: Row(
                                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                             children: [
-                                              Text(DateFormat.yMd().add_jm().format(commentData['createdAt'].toDate())),
-                                              //Retrieve user name from author field
+                                              Text(DateFormat.yMd(locale).add_jm().format(commentData['createdAt'].toDate())),
                                               FutureBuilder<DocumentSnapshot>(
                                                 future: commentData['author'].get(),
                                                 builder: (BuildContext context, AsyncSnapshot<DocumentSnapshot> snapshot) {
                                                   if (snapshot.hasError) {
-                                                    return const Text('Unknown');
+                                                    return Text(l10n.unknown);
                                                   } else if (snapshot.connectionState == ConnectionState.waiting) {
                                                     return const Text('');
                                                   } else {
                                                     Map<String, dynamic>? authorData = snapshot.data?.data() as Map<String, dynamic>?;
-                                                    return Text(authorData?['name'] ?? 'Unknown');
+                                                    return Text(authorData?['name'] ?? l10n.unknown);
                                                   }
                                                 }
                                               ),
@@ -545,7 +537,6 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                         ],
                       ),
                     ),
-                    //add an element fixed at the bottom of the screen for entering new comments
                     Positioned(
                       bottom: 0,
                       left: 0,
@@ -573,15 +564,14 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                 child: TextField(
                                   controller: _newCommentController,
                                   textCapitalization: TextCapitalization.sentences,
-                                  decoration: const InputDecoration(
-                                    hintText: 'Enter your comment',
+                                  decoration: InputDecoration(
+                                    hintText: l10n.enterYourComment,
                                   ),
                                 ),
                               ),
                               IconButton(
                                 icon: const Icon(Icons.send),
                                 onPressed: () {
-                                  // Check if user is authenticated
                                   if (FirebaseAuth.instance.currentUser == null) {
                                     _showSignInDialog();
                                   } else {
@@ -622,7 +612,6 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       'author': FirebaseFirestore.instance.collection('users').doc(userId),
     });
 
-    // Subscribe user to this signal for update notifications
     await _subscribeToSignal(userId);
 
     _newCommentController.clear();
@@ -634,7 +623,6 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     );
   }
 
-  /// Subscribe the user to receive notifications about this signal's updates
   Future<void> _subscribeToSignal(String userId) async {
     try {
       await FirebaseFirestore.instance.collection('users').doc(userId).set(
@@ -651,21 +639,20 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   bool _isUserAuthor(Signal signal) {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return false;
-
-    // Compare the user UID with the reporter's document ID
     return signal.reporter.id == currentUser.uid;
   }
 
-  String _getStatusName(int status) {
+  String _getStatusName(BuildContext context, int status) {
+    final l10n = AppLocalizations.of(context);
     switch (status) {
       case 0:
-        return 'Help needed';
+        return l10n.statusHelpNeeded;
       case 1:
-        return 'Somebody on the way';
+        return l10n.statusSomebodyOnTheWay;
       case 2:
-        return 'Solved';
+        return l10n.statusSolved;
       default:
-        return 'Unknown';
+        return l10n.unknown;
     }
   }
 
@@ -693,13 +680,11 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
 
     final signalRef = FirebaseFirestore.instance.collection('signals').doc(widget.signalId);
 
-    // Update signal status and track who made the update (for notification filtering)
     await signalRef.update({
       'status': newStatus,
       'lastUpdatedBy': FirebaseFirestore.instance.collection('users').doc(user.uid),
     });
 
-    // Add status change comment
     await signalRef.collection('comments').add({
       'type': 'status_change',
       'oldStatus': oldStatus,
@@ -708,11 +693,11 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       'author': FirebaseFirestore.instance.collection('users').doc(user.uid),
     });
 
-    // Subscribe user to this signal for update notifications
     await _subscribeToSignal(user.uid);
   }
 
   void _showImageSourceDialog() {
+    final l10n = AppLocalizations.of(context);
     showModalBottomSheet(
       context: context,
       builder: (BuildContext context) {
@@ -722,7 +707,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
             children: [
               ListTile(
                 leading: const Icon(Icons.camera_alt, color: Colors.orange),
-                title: const Text('Take Photo'),
+                title: Text(l10n.takePhoto),
                 onTap: () {
                   Navigator.pop(context);
                   _pickAndUploadImage(ImageSource.camera);
@@ -730,7 +715,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
               ),
               ListTile(
                 leading: const Icon(Icons.photo_library, color: Colors.orange),
-                title: const Text('Choose from Gallery'),
+                title: Text(l10n.chooseFromGallery),
                 onTap: () {
                   Navigator.pop(context);
                   _pickAndUploadImage(ImageSource.gallery);
@@ -744,6 +729,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   }
 
   Future<void> _pickAndUploadImage(ImageSource source) async {
+    final l10n = AppLocalizations.of(context);
     try {
       final XFile? image = await _imagePicker.pickImage(
         source: source,
@@ -759,7 +745,6 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       try {
         final photoUrl = await _uploadImageToStorage(image);
 
-        // Add photo URL to photoUrls array
         await FirebaseFirestore.instance
             .collection('signals')
             .doc(widget.signalId)
@@ -769,8 +754,8 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Photo added successfully!'),
+            SnackBar(
+              content: Text(l10n.photoAddedSuccessfully),
               backgroundColor: Colors.green,
             ),
           );
@@ -779,7 +764,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Failed to upload photo: ${e.toString()}'),
+              content: Text(l10n.failedToUploadPhoto(e.toString())),
               backgroundColor: Colors.red,
             ),
           );
@@ -791,9 +776,12 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       }
     } catch (e) {
       if (mounted) {
+        final errorMessage = source == ImageSource.camera
+            ? l10n.errorAccessingCamera(e.toString())
+            : l10n.errorAccessingGallery(e.toString());
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error accessing ${source == ImageSource.camera ? "camera" : "gallery"}: ${e.toString()}'),
+            content: Text(errorMessage),
             backgroundColor: Colors.red,
           ),
         );
@@ -802,20 +790,21 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   }
 
   Future<void> _deletePhoto(String photoUrl) async {
+    final l10n = AppLocalizations.of(context);
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Photo'),
-        content: const Text('Are you sure you want to delete this photo?'),
+        title: Text(l10n.deletePhoto),
+        content: Text(l10n.confirmDeletePhoto),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
+            child: Text(l10n.delete),
           ),
         ],
       ),
@@ -824,7 +813,6 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     if (confirm != true) return;
 
     try {
-      // Remove from Firestore array
       await FirebaseFirestore.instance
           .collection('signals')
           .doc(widget.signalId)
@@ -832,7 +820,6 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         'photoUrls': FieldValue.arrayRemove([photoUrl])
       });
 
-      // Delete from Storage
       try {
         final ref = FirebaseStorage.instanceFor(
                 bucket: 'gs://help-a-paw-dev.appspot.com')
@@ -840,13 +827,12 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         await ref.delete();
       } catch (e) {
         // Storage deletion failed, but Firestore update succeeded
-        // This is acceptable - orphaned files can be cleaned up later
       }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Photo deleted successfully'),
+          SnackBar(
+            content: Text(l10n.photoDeletedSuccessfully),
             backgroundColor: Colors.green,
           ),
         );
@@ -855,7 +841,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to delete photo: ${e.toString()}'),
+            content: Text(l10n.failedToDeletePhoto(e.toString())),
             backgroundColor: Colors.red,
           ),
         );
@@ -883,25 +869,26 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   }
 
   void _showSignInDialog() {
+    final l10n = AppLocalizations.of(context);
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Sign in required'),
-          content: const Text('You need to sign in to comment'),
+          title: Text(l10n.signInRequired),
+          content: Text(l10n.signInToComment),
           actions: [
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
               },
-              child: const Text('Cancel'),
+              child: Text(l10n.cancel),
             ),
             ElevatedButton(
               onPressed: () {
                 Navigator.of(context).pop();
                 context.push('/sign_in');
               },
-              child: const Text('Sign In'),
+              child: Text(l10n.signIn),
             ),
           ],
         );
@@ -942,6 +929,7 @@ class _FullScreenPhotoGalleryState extends State<_FullScreenPhotoGallery> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
@@ -955,15 +943,15 @@ class _FullScreenPhotoGalleryState extends State<_FullScreenPhotoGallery> {
                 minScale: PhotoViewComputedScale.contained,
                 maxScale: PhotoViewComputedScale.covered * 3,
                 errorBuilder: (context, error, stackTrace) {
-                  return const Center(
+                  return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.broken_image, size: 64, color: Colors.white),
-                        SizedBox(height: 16),
+                        const Icon(Icons.broken_image, size: 64, color: Colors.white),
+                        const SizedBox(height: 16),
                         Text(
-                          'Failed to load image',
-                          style: TextStyle(color: Colors.white),
+                          l10n.failedToLoadImage,
+                          style: const TextStyle(color: Colors.white),
                         ),
                       ],
                     ),
@@ -1004,7 +992,6 @@ class _FullScreenPhotoGalleryState extends State<_FullScreenPhotoGallery> {
               ),
             ),
           ),
-          // Photo counter
           if (widget.photoUrls.length > 1)
             Positioned(
               bottom: 40,
@@ -1018,7 +1005,7 @@ class _FullScreenPhotoGalleryState extends State<_FullScreenPhotoGallery> {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    '${_currentIndex + 1} of ${widget.photoUrls.length}',
+                    l10n.photoOf(_currentIndex + 1, widget.photoUrls.length),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 16,

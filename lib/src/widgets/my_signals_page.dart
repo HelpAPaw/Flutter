@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/src/models/signal.dart';
 import 'package:intl/intl.dart';
@@ -21,16 +22,16 @@ class MySignalsPage extends StatelessWidget {
     }
   }
 
-  String _getStatusText(int status) {
+  String _getStatusText(int status, AppLocalizations l10n) {
     switch (status) {
       case 0:
-        return 'Needs Help';
+        return l10n.statusNeedsHelp;
       case 1:
-        return 'In Progress';
+        return l10n.statusInProgress;
       case 2:
-        return 'Resolved';
+        return l10n.statusResolved;
       default:
-        return 'Unknown';
+        return l10n.statusUnknown;
     }
   }
 
@@ -55,6 +56,7 @@ class MySignalsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
@@ -71,7 +73,7 @@ class MySignalsPage extends StatelessWidget {
             }
           },
         ),
-        title: const Text('My Signals'),
+        title: Text(l10n.mySignals),
       ),
       body: user == null
           ? Center(
@@ -80,11 +82,11 @@ class MySignalsPage extends StatelessWidget {
                 children: [
                   const Icon(Icons.pin_drop, size: 80, color: Colors.grey),
                   const SizedBox(height: 16),
-                  const Text('Please sign in to view your signals'),
+                  Text(l10n.pleaseSignInToViewSignals),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () => context.push('/sign_in'),
-                    child: const Text('Sign In'),
+                    child: Text(l10n.signIn),
                   ),
                 ],
               ),
@@ -101,7 +103,7 @@ class MySignalsPage extends StatelessWidget {
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return Center(
-                    child: Text('Error: ${snapshot.error}'),
+                    child: Text(l10n.errorWithMessage(snapshot.error.toString())),
                   );
                 }
 
@@ -125,7 +127,7 @@ class MySignalsPage extends StatelessWidget {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'No signals yet',
+                          l10n.noSignalsYet,
                           style: TextStyle(
                             fontSize: 18,
                             color: Colors.grey[600],
@@ -133,7 +135,7 @@ class MySignalsPage extends StatelessWidget {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Your submitted signals will appear here',
+                          l10n.submittedSignalsAppearHere,
                           style: TextStyle(
                             fontSize: 14,
                             color: Colors.grey[500],
@@ -153,8 +155,8 @@ class MySignalsPage extends StatelessWidget {
                     final signal = Signal.fromJson(data);
                     final createdAt = signal.createdAt as Timestamp?;
                     final dateStr = createdAt != null
-                        ? DateFormat('MMM d, yyyy').format(createdAt.toDate())
-                        : 'Unknown date';
+                        ? DateFormat('MMM d, yyyy', Localizations.localeOf(context).languageCode).format(createdAt.toDate())
+                        : l10n.unknownDate;
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -192,7 +194,7 @@ class MySignalsPage extends StatelessWidget {
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Text(
-                                    _getStatusText(signal.status),
+                                    _getStatusText(signal.status, l10n),
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: _getStatusColor(signal.status),

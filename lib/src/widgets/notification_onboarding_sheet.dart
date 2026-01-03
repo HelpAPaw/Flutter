@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 
 import '../services/app_preferences_service.dart';
@@ -196,6 +197,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
   }
 
   Widget _buildNotificationStep(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -206,7 +208,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
         ),
         const SizedBox(height: 24),
         Text(
-          'Stay Informed About Animals in Need',
+          l10n.stayInformedTitle,
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.bold,
           ),
@@ -214,7 +216,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
         ),
         const SizedBox(height: 12),
         Text(
-          'Get notified when signals appear near you or in your area of interest.',
+          l10n.stayInformedSubtitle,
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
             color: Colors.grey[600],
           ),
@@ -242,9 +244,9 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
                       valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                     ),
                   )
-                : const Text(
-                    'Enable Notifications',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                : Text(
+                    l10n.enableNotifications,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
           ),
         ),
@@ -252,7 +254,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
         TextButton(
           onPressed: _isProcessing ? null : widget.onDismiss,
           child: Text(
-            'Maybe Later',
+            l10n.maybeLater,
             style: TextStyle(
               color: Colors.grey[600],
               fontSize: 16,
@@ -264,6 +266,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
   }
 
   Widget _buildLocationStep(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -274,7 +277,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
         ),
         const SizedBox(height: 24),
         Text(
-          'Enable Location Tracking',
+          l10n.enableLocationTitle,
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.bold,
           ),
@@ -282,7 +285,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
         ),
         const SizedBox(height: 12),
         Text(
-          'Get alerts for animals in need within 10km of your location.',
+          l10n.enableLocationSubtitle,
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
             color: Colors.grey[600],
           ),
@@ -310,9 +313,9 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
                       valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                     ),
                   )
-                : const Text(
-                    'Enable Location',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                : Text(
+                    l10n.enableLocation,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
           ),
         ),
@@ -320,7 +323,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
         TextButton(
           onPressed: _isProcessing ? null : _handleSkipLocation,
           child: Text(
-            'Skip for Now',
+            l10n.skipForNow,
             style: TextStyle(
               color: Colors.grey[600],
               fontSize: 16,
@@ -332,6 +335,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
   }
 
   Widget _buildRegionStep(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -342,7 +346,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
         ),
         const SizedBox(height: 24),
         Text(
-          'Choose Your Region of Interest',
+          l10n.chooseRegionTitle,
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.bold,
           ),
@@ -350,7 +354,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
         ),
         const SizedBox(height: 12),
         Text(
-          'Select a specific area you care about and get notified of signals there.',
+          l10n.chooseRegionSubtitle,
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
             color: Colors.grey[600],
           ),
@@ -369,9 +373,9 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-            child: const Text(
-              'Select Region',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            child: Text(
+              l10n.selectRegion,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
           ),
         ),
@@ -379,7 +383,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
         TextButton(
           onPressed: _handleSkipRegion,
           child: Text(
-            'Skip for Now',
+            l10n.skipForNow,
             style: TextStyle(
               color: Colors.grey[600],
               fontSize: 16,

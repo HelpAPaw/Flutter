@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -35,6 +36,11 @@ class _AboutPageState extends State<AboutPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final version = _packageInfo?.version ?? '...';
+    final build = _packageInfo?.buildNumber ?? '...';
+    final year = DateTime.now().year;
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.orange,
@@ -49,7 +55,7 @@ class _AboutPageState extends State<AboutPage> {
             }
           },
         ),
-        title: const Text('About'),
+        title: Text(l10n.aboutTitle),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -61,39 +67,39 @@ class _AboutPageState extends State<AboutPage> {
               height: 120,
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Help A Paw',
-              style: TextStyle(
+            Text(
+              l10n.helpAPaw,
+              style: const TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              'Version ${_packageInfo?.version ?? '...'} (${_packageInfo?.buildNumber ?? '...'})',
+              l10n.version(version, build),
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.grey[600],
               ),
             ),
             const SizedBox(height: 24),
-            const Text(
-              'Send emergency signals about animals in need',
-              style: TextStyle(fontSize: 16),
+            Text(
+              l10n.appDescription,
+              style: const TextStyle(fontSize: 16),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
             const Divider(),
             const SizedBox(height: 16),
-            const Text(
-              'Help A Paw is a platform that connects people who spot animals in distress with volunteers who can help. Together, we can make a difference in the lives of animals.',
-              style: TextStyle(fontSize: 14),
+            Text(
+              l10n.aboutDescription,
+              style: const TextStyle(fontSize: 14),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
-            const Text(
-              'Connect with us',
-              style: TextStyle(
+            Text(
+              l10n.connectWithUs,
+              style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
               ),
@@ -107,17 +113,17 @@ class _AboutPageState extends State<AboutPage> {
                 OutlinedButton.icon(
                   onPressed: () => _launchUrl('https://www.helpapaw.org'),
                   icon: const Icon(Icons.language),
-                  label: const Text('Website'),
+                  label: Text(l10n.website),
                 ),
                 OutlinedButton.icon(
                   onPressed: () => _launchUrl('https://www.facebook.com/HelpAPaw'),
                   icon: const Icon(Icons.facebook),
-                  label: const Text('Facebook'),
+                  label: Text(l10n.facebook),
                 ),
                 OutlinedButton.icon(
                   onPressed: () => _launchUrl('https://github.com/HelpAPaw'),
                   icon: const Icon(Icons.code),
-                  label: const Text('GitHub'),
+                  label: Text(l10n.gitHub),
                 ),
               ],
             ),
@@ -128,7 +134,7 @@ class _AboutPageState extends State<AboutPage> {
               onPressed: () {
                 showLicensePage(
                   context: context,
-                  applicationName: 'Help A Paw',
+                  applicationName: l10n.helpAPaw,
                   applicationVersion: _packageInfo?.version,
                   applicationIcon: Padding(
                     padding: const EdgeInsets.all(8),
@@ -136,11 +142,11 @@ class _AboutPageState extends State<AboutPage> {
                   ),
                 );
               },
-              child: const Text('Open Source Licenses'),
+              child: Text(l10n.openSourceLicenses),
             ),
             const SizedBox(height: 8),
             Text(
-              '© ${DateTime.now().year} Help A Paw',
+              l10n.copyright(year),
               style: TextStyle(
                 fontSize: 12,
                 color: Colors.grey[500],

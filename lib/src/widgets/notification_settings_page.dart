@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 
@@ -104,14 +105,16 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
       );
 
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Settings saved')),
+          SnackBar(content: Text(l10n.settingsSaved)),
         );
       }
     } catch (_) {
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to save settings')),
+          SnackBar(content: Text(l10n.failedToSaveSettings)),
         );
       }
     }
@@ -136,9 +139,10 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
         if (mounted) {
+          final l10n = AppLocalizations.of(context);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Location permission is required for this feature'),
+            SnackBar(
+              content: Text(l10n.locationPermissionRequired),
             ),
           );
         }
@@ -181,9 +185,10 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Notification Settings'),
+        title: Text(l10n.notificationSettings),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -192,6 +197,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   }
 
   Widget _buildAnonymousUpgradeBanner() {
+    final l10n = AppLocalizations.of(context);
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(16),
@@ -209,7 +215,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Create an account',
+                  l10n.createAnAccount,
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: Colors.orange.shade900,
@@ -217,7 +223,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Sign up to keep your settings across devices',
+                  l10n.signUpToKeepSettings,
                   style: TextStyle(
                     fontSize: 13,
                     color: Colors.orange.shade800,
@@ -228,7 +234,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
           ),
           TextButton(
             onPressed: () => context.push('/sign_in'),
-            child: const Text('Sign Up'),
+            child: Text(l10n.signUp),
           ),
         ],
       ),
@@ -236,6 +242,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   }
 
   Widget _buildSettingsContent() {
+    final l10n = AppLocalizations.of(context);
     final user = FirebaseAuth.instance.currentUser;
     final isAnonymous = user?.isAnonymous ?? false;
 
@@ -246,22 +253,20 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
         if (isAnonymous) _buildAnonymousUpgradeBanner(),
 
         // Master toggle
-        _buildSectionHeader('Notifications'),
+        _buildSectionHeader(l10n.notifications),
         SwitchListTile(
-          title: const Text('Enable Notifications'),
-          subtitle: const Text('Receive notifications about signals near you'),
+          title: Text(l10n.enableNotifications),
+          subtitle: Text(l10n.receiveNotificationsAboutSignals),
           value: _notificationsEnabled,
           onChanged: _toggleNotifications,
         ),
         const Divider(),
 
         // Location tracking
-        _buildSectionHeader('Location Tracking'),
+        _buildSectionHeader(l10n.locationTracking),
         SwitchListTile(
-          title: const Text('Track My Location'),
-          subtitle: const Text(
-            'Get notified when signals appear near your current location',
-          ),
+          title: Text(l10n.trackMyLocation),
+          subtitle: Text(l10n.getNotifiedNearLocation),
           value: _locationTrackingEnabled,
           onChanged: _notificationsEnabled ? _toggleLocationTracking : null,
         ),
@@ -272,7 +277,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Notification radius: ${_locationRadiusKm.toStringAsFixed(0)} km',
+                  l10n.notificationRadiusKm(_locationRadiusKm.toStringAsFixed(0)),
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 Slider(
@@ -280,7 +285,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                   min: 1,
                   max: 50,
                   divisions: 49,
-                  label: '${_locationRadiusKm.toStringAsFixed(0)} km',
+                  label: '${_locationRadiusKm.toStringAsFixed(0)} ${l10n.km}',
                   onChanged: (value) {
                     setState(() => _locationRadiusKm = value);
                   },
@@ -293,14 +298,12 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
         const Divider(),
 
         // Region of interest
-        _buildSectionHeader('Region of Interest'),
+        _buildSectionHeader(l10n.regionOfInterest),
         ListTile(
-          title: const Text('Set Region on Map'),
+          title: Text(l10n.setRegionOnMap),
           subtitle: _regionOfInterest != null
-              ? Text(
-                  'Radius: ${(_regionOfInterest!['radiusKm'] as num).toStringAsFixed(1)} km',
-                )
-              : const Text('Tap to select an area on the map'),
+              ? Text(l10n.radiusKm((_regionOfInterest!['radiusKm'] as num).toStringAsFixed(1)))
+              : Text(l10n.tapToSelectArea),
           trailing: const Icon(Icons.map),
           onTap: _notificationsEnabled
               ? () async {
@@ -321,31 +324,31 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                 setState(() => _regionOfInterest = null);
                 await _savePreferences();
               },
-              child: const Text('Clear Region'),
+              child: Text(l10n.clearRegion),
             ),
           ),
         const Divider(),
 
         // Signal types
-        _buildSectionHeader('Signal Types'),
+        _buildSectionHeader(l10n.signalTypes),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             children: [
               TextButton(
                 onPressed: _notificationsEnabled ? _selectAllSignalTypes : null,
-                child: const Text('Select All'),
+                child: Text(l10n.selectAll),
               ),
               TextButton(
                 onPressed: _notificationsEnabled ? _deselectAllSignalTypes : null,
-                child: const Text('Deselect All'),
+                child: Text(l10n.deselectAll),
               ),
             ],
           ),
         ),
         ...List.generate(Signal.signalTypes.length, (index) {
           return CheckboxListTile(
-            title: Text(Signal.signalTypes[index]),
+            title: Text(Signal.getLocalizedSignalTypeName(context, index)),
             value: _selectedSignalTypes.contains(index),
             onChanged: _notificationsEnabled
                 ? (value) => _toggleSignalType(index, value ?? false)

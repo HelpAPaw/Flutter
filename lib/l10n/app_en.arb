@@ -1,0 +1,445 @@
+{
+  "@@locale": "en",
+
+  "signIn": "Sign In",
+  "signOut": "Sign Out",
+  "signUp": "Sign Up",
+  "cancel": "Cancel",
+  "save": "Save",
+  "delete": "Delete",
+  "retry": "Retry",
+  "confirm": "Confirm",
+  "yes": "Yes",
+  "no": "No",
+  "unknown": "Unknown",
+  "error": "Error",
+  "loading": "Loading...",
+  "somethingWentWrong": "Something went wrong",
+
+  "statusHelpNeeded": "Help needed",
+  "statusSomebodyOnTheWay": "Somebody on the way",
+  "statusSolved": "Solved",
+  "statusNeedsHelp": "Needs Help",
+  "statusInProgress": "In Progress",
+  "statusResolved": "Resolved",
+  "statusUnknown": "Unknown",
+
+  "signalTypeEmergency": "Emergency",
+  "signalTypeLostOrFound": "Lost or Found",
+  "signalTypeBloodDonation": "Blood donation",
+  "signalTypeHomeless": "Homeless",
+  "signalTypeUnneuteredAnimals": "Unneutered animals",
+  "signalTypeWildAnimals": "Wild animals",
+  "signalTypeOther": "Other",
+
+  "filterSignals": "Filter Signals",
+  "selectAll": "Select All",
+  "clearAll": "Clear All",
+  "deselectAll": "Deselect All",
+  "status": "Status",
+  "signalType": "Signal Type",
+  "applyFilters": "Apply Filters",
+  "searchThisArea": "Search this area",
+  "loadingClinics": "Loading clinics...",
+  "title": "Title",
+  "description": "Description",
+  "phoneNumber": "Phone Number",
+  "submitSignal": "Submit signal",
+  "addNewSignal": "Add new signal",
+
+  "pleaseEnterTitle": "Please enter a title for the signal",
+  "pleaseEnterDescription": "Please enter a description for the signal",
+  "signalCreatedPhotoFailed": "Signal created, but photo upload failed. You can try again later.",
+  "permissionDenied": "Permission denied. Please check your account permissions.",
+  "authenticationError": "Authentication error. Please sign in again.",
+  "serviceUnavailable": "Service unavailable. Please try again later.",
+  "networkError": "Network error. Please check your connection.",
+  "failedToCreateSignal": "Failed to create signal. Please try again.",
+  "requestTimedOut": "Request timed out. Please check your connection and try again.",
+  "unexpectedError": "An unexpected error occurred. Please try again.",
+  "noVetClinicsFound": "No veterinary clinics found in this area",
+  "failedToLoadVetClinics": "Failed to load vet clinics",
+  "tooManySearches": "Too many searches. Please wait a moment and try again.",
+
+  "takePhoto": "Take Photo",
+  "chooseFromGallery": "Choose from Gallery",
+  "removePhoto": "Remove Photo",
+  "errorAccessingCamera": "Error accessing camera: {error}",
+  "@errorAccessingCamera": {
+    "placeholders": {
+      "error": {"type": "String"}
+    }
+  },
+  "errorAccessingGallery": "Error accessing gallery: {error}",
+  "@errorAccessingGallery": {
+    "placeholders": {
+      "error": {"type": "String"}
+    }
+  },
+
+  "signInRequired": "Sign in required",
+  "signInToCreateSignals": "You need to sign in to create signals",
+  "signInToComment": "You need to sign in to comment",
+
+  "signalDetails": "Signal Details",
+  "uploadingPhoto": "Uploading photo...",
+  "addPhoto": "Add Photo",
+  "addAnotherPhoto": "Add Another Photo",
+  "photosCount": "{current}/{max} photos",
+  "@photosCount": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "max": {"type": "int"}
+    }
+  },
+  "failedToLoadImage": "Failed to load image",
+  "signalTypeLabel": "Signal type: {type}",
+  "@signalTypeLabel": {
+    "placeholders": {
+      "type": {"type": "String"}
+    }
+  },
+  "navigateMe": "Navigate Me",
+  "cannotNavigate": "Cannot navigate to signal location, please try to do so manually.",
+  "cannotCall": "Cannot call {phone}, please try to connect manually.",
+  "@cannotCall": {
+    "placeholders": {
+      "phone": {"type": "String"}
+    }
+  },
+  "comments": "Comments",
+  "enterYourComment": "Enter your comment",
+  "changedStatusTo": "{name} changed the status to {status}",
+  "@changedStatusTo": {
+    "placeholders": {
+      "name": {"type": "String"},
+      "status": {"type": "String"}
+    }
+  },
+  "someone": "Someone",
+  "deletePhoto": "Delete Photo",
+  "confirmDeletePhoto": "Are you sure you want to delete this photo?",
+  "photoAddedSuccessfully": "Photo added successfully!",
+  "photoDeletedSuccessfully": "Photo deleted successfully",
+  "failedToUploadPhoto": "Failed to upload photo: {error}",
+  "@failedToUploadPhoto": {
+    "placeholders": {
+      "error": {"type": "String"}
+    }
+  },
+  "failedToDeletePhoto": "Failed to delete photo: {error}",
+  "@failedToDeletePhoto": {
+    "placeholders": {
+      "error": {"type": "String"}
+    }
+  },
+  "photoOf": "{current} of {total}",
+  "@photoOf": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+
+  "profile": "Profile",
+  "pleaseSignInToViewProfile": "Please sign in to view your profile",
+  "displayName": "Display Name",
+  "noNameSet": "No name set",
+  "signals": "Signals",
+  "comments": "Comments",
+  "email": "Email",
+  "notSet": "Not set",
+  "emailVerified": "Email Verified",
+  "verify": "Verify",
+  "verificationEmailSent": "Verification email sent",
+  "memberSince": "Member Since",
+  "profileUpdatedSuccessfully": "Profile updated successfully",
+  "errorUpdatingProfile": "Error updating profile: {error}",
+  "@errorUpdatingProfile": {
+    "placeholders": {
+      "error": {"type": "String"}
+    }
+  },
+  "photoUpdatedSuccessfully": "Photo updated successfully",
+  "errorUploadingPhoto": "Error uploading photo: {error}",
+  "@errorUploadingPhoto": {
+    "placeholders": {
+      "error": {"type": "String"}
+    }
+  },
+  "errorLoadingStatistics": "Error loading statistics: {error}",
+  "@errorLoadingStatistics": {
+    "placeholders": {
+      "error": {"type": "String"}
+    }
+  },
+  "saveChanges": "Save Changes",
+
+  "sendFeedback": "Send Feedback",
+  "weLoveToHear": "We'd love to hear from you!",
+  "feedbackHelpsImprove": "Your feedback helps us improve Help A Paw for everyone.",
+  "feedbackType": "Feedback Type",
+  "general": "General",
+  "bugReport": "Bug Report",
+  "featureRequest": "Feature Request",
+  "other": "Other",
+  "yourEmailOptional": "Your Email (optional)",
+  "emailPlaceholder": "email@example.com",
+  "provideEmailForFollowUp": "Provide your email if you'd like us to follow up",
+  "yourFeedback": "Your Feedback",
+  "bugReportHint": "Please describe the issue you encountered...",
+  "featureRequestHint": "Tell us about the feature you'd like to see...",
+  "generalFeedbackHint": "Share your thoughts with us...",
+  "includeDeviceInfo": "Include device information",
+  "helpsUsDiagnose": "Helps us diagnose issues faster",
+  "submitFeedback": "Submit Feedback",
+  "pleaseEnterFeedback": "Please enter your feedback",
+  "thankYouFeedback": "Thank you for your feedback!",
+  "errorSubmittingFeedback": "Error submitting feedback: {error}",
+  "@errorSubmittingFeedback": {
+    "placeholders": {
+      "error": {"type": "String"}
+    }
+  },
+  "otherWaysToReach": "Other ways to reach us",
+
+  "notificationSettings": "Notification Settings",
+  "createAnAccount": "Create an account",
+  "signUpToKeepSettings": "Sign up to keep your settings across devices",
+  "notifications": "Notifications",
+  "enableNotifications": "Enable Notifications",
+  "receiveNotificationsAboutSignals": "Receive notifications about signals near you",
+  "locationTracking": "Location Tracking",
+  "trackMyLocation": "Track My Location",
+  "getNotifiedNearLocation": "Get notified when signals appear near your current location",
+  "notificationRadiusKm": "Notification radius: {radius} km",
+  "@notificationRadiusKm": {
+    "placeholders": {
+      "radius": {"type": "String"}
+    }
+  },
+  "regionOfInterest": "Region of Interest",
+  "setRegionOnMap": "Set Region on Map",
+  "radiusKm": "Radius: {radius} km",
+  "@radiusKm": {
+    "placeholders": {
+      "radius": {"type": "String"}
+    }
+  },
+  "tapToSelectArea": "Tap to select an area on the map",
+  "clearRegion": "Clear Region",
+  "signalTypes": "Signal Types",
+  "settingsSaved": "Settings saved",
+  "failedToSaveSettings": "Failed to save settings",
+  "locationPermissionRequired": "Location permission is required for this feature",
+
+  "mySignals": "My Signals",
+  "pleaseSignInToViewSignals": "Please sign in to view your signals",
+  "noSignalsYet": "No signals yet",
+  "submittedSignalsAppearHere": "Your submitted signals will appear here",
+  "unknownDate": "Unknown date",
+  "errorWithMessage": "Error: {error}",
+  "@errorWithMessage": {
+    "placeholders": {
+      "error": {"type": "String"}
+    }
+  },
+
+  "navigationDrawer": "Navigation Drawer",
+  "ourSite": "Our Site",
+  "about": "About",
+  "share": "Share",
+  "faqs": "FAQs",
+  "feedback": "Feedback",
+  "privacyPolicy": "Privacy Policy",
+  "launchingBrowser": "Launching Browser",
+  "snapshotError": "Snapshot Error: {error}",
+  "@snapshotError": {
+    "placeholders": {
+      "error": {"type": "String"}
+    }
+  },
+
+  "faqsTitle": "FAQs",
+  "faqSectionGeneral": "General",
+  "faqSectionCreatingSignals": "Creating Signals",
+  "faqSectionHelpingAnimals": "Helping Animals",
+  "faqSectionNotifications": "Notifications",
+  "faqSectionPrivacySafety": "Privacy & Safety",
+
+  "faqWhatIsHelpAPaw": "What is Help A Paw?",
+  "faqWhatIsHelpAPawAnswer": "Help A Paw is a mobile application that helps connect people who spot animals in distress with volunteers who can provide assistance. By creating signals on the map, you can alert the community about animals that need help.",
+
+  "faqNeedAccount": "Do I need to create an account?",
+  "faqNeedAccountAnswer": "You can browse signals without an account, but to create new signals or leave comments, you'll need to sign in. This helps us maintain the quality of reports and allows you to track your contributions.",
+
+  "faqIsFree": "Is the app free to use?",
+  "faqIsFreeAnswer": "Yes, Help A Paw is completely free to use. We are a non-profit initiative dedicated to helping animals in need.",
+
+  "faqHowCreateSignal": "How do I create a signal?",
+  "faqHowCreateSignalAnswer": "Tap the \"+\" button on the map, select the location where you spotted the animal, choose the signal type (Emergency, Lost/Found, etc.), add a description, and optionally include photos. Your signal will be visible to other users in the area.",
+
+  "faqWhatTypesSignals": "What types of signals can I create?",
+  "faqWhatTypesSignalsAnswer": "You can create signals for: Emergency situations, Lost or Found animals, Blood donation needs, Homeless animals, Unneutered animals, Wild animals, and Other situations.",
+
+  "faqCanEditDelete": "Can I edit or delete my signal?",
+  "faqCanEditDeleteAnswer": "Yes, you can edit or delete signals that you've created. Go to \"My Signals\" from the menu, select the signal you want to modify, and use the edit or delete options.",
+
+  "faqWhatIncludeDescription": "What should I include in a signal description?",
+  "faqWhatIncludeDescriptionAnswer": "Include details like: the type and condition of the animal, exact location landmarks, any urgent needs (food, medical attention), your availability to help, and a contact number if you're comfortable sharing it.",
+
+  "faqHowHelp": "How can I help with a signal?",
+  "faqHowHelpAnswer": "When you see a signal on the map, tap it to view details. You can leave a comment to coordinate with others, update the signal status if you're helping, or contact the person who created the signal.",
+
+  "faqWhatStatusesMean": "What do the signal statuses mean?",
+  "faqWhatStatusesMeanAnswer": "Red (Needs Help): The animal still needs assistance.\nOrange (In Progress): Someone is working on helping.\nGreen (Resolved): The animal has received help or the situation is resolved.",
+
+  "faqCantHelpDirectly": "I'm not able to help directly. What can I do?",
+  "faqCantHelpDirectlyAnswer": "You can share the signal with friends who might be able to help, leave helpful comments with advice or contacts of local animal rescue organizations, or simply spread awareness about the app to grow our community of helpers.",
+
+  "faqHowNotificationsWork": "How do notifications work?",
+  "faqHowNotificationsWorkAnswer": "You'll receive notifications when: a new signal appears in your area, someone comments on your signal, or the status of a signal you're following changes. You can customize notification settings in the app.",
+
+  "faqChangeNotificationRadius": "How do I change my notification radius?",
+  "faqChangeNotificationRadiusAnswer": "Go to Settings > Notification Radius and adjust the slider. You can set it from 1km to 50km depending on how far you're willing to help.",
+
+  "faqPersonalInfoSafe": "Is my personal information safe?",
+  "faqPersonalInfoSafeAnswer": "We take privacy seriously. Your email is only used for account management. Phone numbers shared in signals are optional and at your discretion. Location data is only used to show relevant signals.",
+
+  "faqReportInappropriate": "How do I report inappropriate content?",
+  "faqReportInappropriateAnswer": "If you see a signal that contains inappropriate content, spam, or false information, please use the report function on the signal or contact us through the Feedback option in the menu.",
+
+  "stayInformedTitle": "Stay Informed About Animals in Need",
+  "stayInformedSubtitle": "Get notified when signals appear near you or in your area of interest.",
+  "maybeLater": "Maybe Later",
+
+  "enableLocationTitle": "Enable Location Tracking",
+  "enableLocationSubtitle": "Get alerts for animals in need within 10km of your location.",
+  "enableLocation": "Enable Location",
+  "skipForNow": "Skip for Now",
+
+  "chooseRegionTitle": "Choose Your Region of Interest",
+  "chooseRegionSubtitle": "Select a specific area you care about and get notified of signals there.",
+  "selectRegion": "Select Region",
+
+  "aboutTitle": "About",
+  "helpAPaw": "Help A Paw",
+  "version": "Version {version} ({build})",
+  "@version": {
+    "placeholders": {
+      "version": {"type": "String"},
+      "build": {"type": "String"}
+    }
+  },
+  "appDescription": "Send emergency signals about animals in need",
+  "aboutDescription": "Help A Paw is a platform that connects people who spot animals in distress with volunteers who can help. Together, we can make a difference in the lives of animals.",
+  "connectWithUs": "Connect with us",
+  "website": "Website",
+  "facebook": "Facebook",
+  "gitHub": "GitHub",
+  "openSourceLicenses": "Open Source Licenses",
+  "copyright": "\u00a9 {year} Help A Paw",
+  "@copyright": {
+    "placeholders": {
+      "year": {"type": "int"}
+    }
+  },
+
+  "verifyEmail": "Verify Email",
+  "verifyYourEmail": "Verify Your Email",
+  "verificationEmailSentTo": "We sent a verification email to:",
+  "instructions": "Instructions:",
+  "instructionsSteps": "1. Open the email in your inbox\n2. Click the verification link\n3. Return to this app\n4. You'll be automatically redirected",
+  "checkingVerificationStatus": "Checking verification status...",
+  "verificationEmailSentCheck": "Verification email sent! Check your inbox.",
+  "tooManyRequests": "Too many requests. Please try again later or contact support.",
+  "accountDisabled": "This account has been disabled. Please contact support.",
+  "unexpectedErrorWithMessage": "Unexpected error: {error}",
+  "@unexpectedErrorWithMessage": {
+    "placeholders": {
+      "error": {"type": "String"}
+    }
+  },
+  "errorWithCode": "Error: {message}",
+  "@errorWithCode": {
+    "placeholders": {
+      "message": {"type": "String"}
+    }
+  },
+  "resendInSeconds": "Resend in {seconds}s",
+  "@resendInSeconds": {
+    "placeholders": {
+      "seconds": {"type": "int"}
+    }
+  },
+  "resendVerificationEmail": "Resend Verification Email",
+  "iveVerifiedMyEmail": "I've verified my email",
+  "cancelAndSignOut": "Cancel and sign out",
+  "skipDevOnly": "Skip (Dev Only)",
+
+  "myNotifications": "Notifications",
+  "pleaseSignInToViewNotifications": "Please sign in to view notifications",
+  "markAllAsRead": "Mark all as read",
+  "clearAllNotifications": "Clear all",
+  "noNotifications": "No notifications",
+  "notifiedAboutSignalUpdates": "You'll be notified about signal updates",
+  "notification": "Notification",
+  "justNow": "Just now",
+  "minutesAgo": "{minutes}m ago",
+  "@minutesAgo": {
+    "placeholders": {
+      "minutes": {"type": "int"}
+    }
+  },
+  "hoursAgo": "{hours}h ago",
+  "@hoursAgo": {
+    "placeholders": {
+      "hours": {"type": "int"}
+    }
+  },
+  "daysAgo": "{days}d ago",
+  "@daysAgo": {
+    "placeholders": {
+      "days": {"type": "int"}
+    }
+  },
+
+  "completeYourProfile": "Complete Your Profile",
+  "helpUsPersonalize": "Help us personalize your experience",
+  "fullNameRequired": "Full Name *",
+  "enterFullName": "Enter your full name",
+  "nameIsRequired": "Name is required",
+  "nameTooShort": "Name must be at least 2 characters",
+  "phoneNumberOptional": "Phone Number (Optional)",
+  "enterPhoneNumber": "Enter your phone number",
+  "validPhoneNumber": "Please enter a valid phone number",
+  "completeProfile": "Complete Profile",
+  "skipForNowProfile": "Skip for now",
+  "errorSavingProfile": "Error saving profile: {error}",
+  "@errorSavingProfile": {
+    "placeholders": {
+      "error": {"type": "String"}
+    }
+  },
+
+  "clinicDetails": "Clinic Details",
+  "clinicNotFound": "Clinic not found",
+  "returnToMap": "Return to Map",
+  "viewReviews": "View reviews",
+  "address": "Address",
+  "navigate": "Navigate",
+  "phone": "Phone",
+  "call": "Call",
+  "openingHours": "Opening Hours",
+  "viewInGoogleMaps": "View in Google Maps",
+  "cannotOpenNavigationApp": "Cannot open navigation app",
+  "cannotMakePhoneCalls": "Cannot make phone calls on this device",
+  "cannotOpenGoogleMaps": "Cannot open Google Maps",
+
+  "selectRegionTitle": "Select Region",
+  "tapToSetCenterPoint": "Please tap on the map to set a center point",
+  "tapMapInstruction": "Tap on the map to set the center of your region of interest",
+  "regionRadius": "Region radius",
+  "km": "km",
+  "dragMarkerToReposition": "Drag the marker to reposition the center"
+}

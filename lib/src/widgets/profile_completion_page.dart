@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 
 class ProfileCompletionPage extends StatefulWidget {
@@ -102,9 +103,10 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
       }
     } catch (e) {
       if (mounted) {
+        final l10n = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error saving profile: ${e.toString()}'),
+            content: Text(l10n.errorSavingProfile(e.toString())),
             backgroundColor: Colors.red,
           ),
         );
@@ -118,6 +120,7 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
@@ -131,21 +134,21 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const SizedBox(height: 40),
-                  
+
                   // Header
                   Center(
                     child: Column(
                       children: [
                         Image.asset('assets/logo.png', height: 60),
                         const SizedBox(height: 16),
-                        const Text(
-                          'Complete Your Profile',
-                          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                        Text(
+                          l10n.completeYourProfile,
+                          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 8),
-                        const Text(
-                          'Help us personalize your experience',
-                          style: TextStyle(fontSize: 16, color: Colors.grey),
+                        Text(
+                          l10n.helpUsPersonalize,
+                          style: const TextStyle(fontSize: 16, color: Colors.grey),
                           textAlign: TextAlign.center,
                         ),
                       ],
@@ -156,22 +159,22 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
                   // Name field (mandatory)
                   TextFormField(
                     controller: _nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Full Name *',
-                      hintText: 'Enter your full name',
-                      prefixIcon: Icon(Icons.person, color: Colors.orange),
-                      border: OutlineInputBorder(),
-                      focusedBorder: OutlineInputBorder(
+                    decoration: InputDecoration(
+                      labelText: l10n.fullNameRequired,
+                      hintText: l10n.enterFullName,
+                      prefixIcon: const Icon(Icons.person, color: Colors.orange),
+                      border: const OutlineInputBorder(),
+                      focusedBorder: const OutlineInputBorder(
                         borderSide: BorderSide(color: Colors.orange, width: 2),
                       ),
-                      labelStyle: TextStyle(color: Colors.orange),
+                      labelStyle: const TextStyle(color: Colors.orange),
                     ),
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
-                        return 'Name is required';
+                        return l10n.nameIsRequired;
                       }
                       if (value.trim().length < 2) {
-                        return 'Name must be at least 2 characters';
+                        return l10n.nameTooShort;
                       }
                       return null;
                     },
@@ -182,22 +185,22 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
                   // Phone field (optional)
                   TextFormField(
                     controller: _phoneController,
-                    decoration: const InputDecoration(
-                      labelText: 'Phone Number (Optional)',
-                      hintText: 'Enter your phone number',
-                      prefixIcon: Icon(Icons.phone, color: Colors.orange),
-                      border: OutlineInputBorder(),
-                      focusedBorder: OutlineInputBorder(
+                    decoration: InputDecoration(
+                      labelText: l10n.phoneNumberOptional,
+                      hintText: l10n.enterPhoneNumber,
+                      prefixIcon: const Icon(Icons.phone, color: Colors.orange),
+                      border: const OutlineInputBorder(),
+                      focusedBorder: const OutlineInputBorder(
                         borderSide: BorderSide(color: Colors.orange, width: 2),
                       ),
-                      labelStyle: TextStyle(color: Colors.orange),
+                      labelStyle: const TextStyle(color: Colors.orange),
                     ),
                     keyboardType: TextInputType.phone,
                     validator: (value) {
                       if (value != null && value.isNotEmpty) {
                         // Basic phone validation if provided
                         if (value.length < 8) {
-                          return 'Please enter a valid phone number';
+                          return l10n.validPhoneNumber;
                         }
                       }
                       return null;
@@ -225,9 +228,9 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
                               valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                             ),
                           )
-                        : const Text(
-                            'Complete Profile',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        : Text(
+                            l10n.completeProfile,
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                           ),
                   ),
                   const SizedBox(height: 16),
@@ -246,9 +249,9 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
                       // Pop back through auth screens to return to original screen
                       _popAuthStack(context);
                     },
-                    child: const Text(
-                      'Skip for now',
-                      style: TextStyle(color: Colors.grey),
+                    child: Text(
+                      l10n.skipForNowProfile,
+                      style: const TextStyle(color: Colors.grey),
                     ),
                   ),
                 ],

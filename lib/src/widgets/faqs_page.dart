@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 
 class FaqsPage extends StatelessWidget {
@@ -6,6 +7,7 @@ class FaqsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.orange,
@@ -20,107 +22,93 @@ class FaqsPage extends StatelessWidget {
             }
           },
         ),
-        title: const Text('FAQs'),
+        title: Text(l10n.faqsTitle),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
-        children: const [
+        children: [
           _FaqSection(
-            title: 'General',
+            title: l10n.faqSectionGeneral,
             items: [
               _FaqItem(
-                question: 'What is Help A Paw?',
-                answer:
-                    'Help A Paw is a mobile application that helps connect people who spot animals in distress with volunteers who can provide assistance. By creating signals on the map, you can alert the community about animals that need help.',
+                question: l10n.faqWhatIsHelpAPaw,
+                answer: l10n.faqWhatIsHelpAPawAnswer,
               ),
               _FaqItem(
-                question: 'Do I need to create an account?',
-                answer:
-                    'You can browse signals without an account, but to create new signals or leave comments, you\'ll need to sign in. This helps us maintain the quality of reports and allows you to track your contributions.',
+                question: l10n.faqNeedAccount,
+                answer: l10n.faqNeedAccountAnswer,
               ),
               _FaqItem(
-                question: 'Is the app free to use?',
-                answer:
-                    'Yes, Help A Paw is completely free to use. We are a non-profit initiative dedicated to helping animals in need.',
+                question: l10n.faqIsFree,
+                answer: l10n.faqIsFreeAnswer,
               ),
             ],
           ),
           _FaqSection(
-            title: 'Creating Signals',
+            title: l10n.faqSectionCreatingSignals,
             items: [
               _FaqItem(
-                question: 'How do I create a signal?',
-                answer:
-                    'Tap the "+" button on the map, select the location where you spotted the animal, choose the signal type (Emergency, Lost/Found, etc.), add a description, and optionally include photos. Your signal will be visible to other users in the area.',
+                question: l10n.faqHowCreateSignal,
+                answer: l10n.faqHowCreateSignalAnswer,
               ),
               _FaqItem(
-                question: 'What types of signals can I create?',
-                answer:
-                    'You can create signals for: Emergency situations, Lost or Found animals, Blood donation needs, Homeless animals, Unneutered animals, Wild animals, and Other situations.',
+                question: l10n.faqWhatTypesSignals,
+                answer: l10n.faqWhatTypesSignalsAnswer,
               ),
               _FaqItem(
-                question: 'Can I edit or delete my signal?',
-                answer:
-                    'Yes, you can edit or delete signals that you\'ve created. Go to "My Signals" from the menu, select the signal you want to modify, and use the edit or delete options.',
+                question: l10n.faqCanEditDelete,
+                answer: l10n.faqCanEditDeleteAnswer,
               ),
               _FaqItem(
-                question: 'What should I include in a signal description?',
-                answer:
-                    'Include details like: the type and condition of the animal, exact location landmarks, any urgent needs (food, medical attention), your availability to help, and a contact number if you\'re comfortable sharing it.',
+                question: l10n.faqWhatIncludeDescription,
+                answer: l10n.faqWhatIncludeDescriptionAnswer,
               ),
             ],
           ),
           _FaqSection(
-            title: 'Helping Animals',
+            title: l10n.faqSectionHelpingAnimals,
             items: [
               _FaqItem(
-                question: 'How can I help with a signal?',
-                answer:
-                    'When you see a signal on the map, tap it to view details. You can leave a comment to coordinate with others, update the signal status if you\'re helping, or contact the person who created the signal.',
+                question: l10n.faqHowHelp,
+                answer: l10n.faqHowHelpAnswer,
               ),
               _FaqItem(
-                question: 'What do the signal statuses mean?',
-                answer:
-                    'Red (Needs Help): The animal still needs assistance.\nOrange (In Progress): Someone is working on helping.\nGreen (Resolved): The animal has received help or the situation is resolved.',
+                question: l10n.faqWhatStatusesMean,
+                answer: l10n.faqWhatStatusesMeanAnswer,
               ),
               _FaqItem(
-                question: 'I\'m not able to help directly. What can I do?',
-                answer:
-                    'You can share the signal with friends who might be able to help, leave helpful comments with advice or contacts of local animal rescue organizations, or simply spread awareness about the app to grow our community of helpers.',
+                question: l10n.faqCantHelpDirectly,
+                answer: l10n.faqCantHelpDirectlyAnswer,
               ),
             ],
           ),
           _FaqSection(
-            title: 'Notifications',
+            title: l10n.faqSectionNotifications,
             items: [
               _FaqItem(
-                question: 'How do notifications work?',
-                answer:
-                    'You\'ll receive notifications when: a new signal appears in your area, someone comments on your signal, or the status of a signal you\'re following changes. You can customize notification settings in the app.',
+                question: l10n.faqHowNotificationsWork,
+                answer: l10n.faqHowNotificationsWorkAnswer,
               ),
               _FaqItem(
-                question: 'How do I change my notification radius?',
-                answer:
-                    'Go to Settings > Notification Radius and adjust the slider. You can set it from 1km to 50km depending on how far you\'re willing to help.',
+                question: l10n.faqChangeNotificationRadius,
+                answer: l10n.faqChangeNotificationRadiusAnswer,
               ),
             ],
           ),
           _FaqSection(
-            title: 'Privacy & Safety',
+            title: l10n.faqSectionPrivacySafety,
             items: [
               _FaqItem(
-                question: 'Is my personal information safe?',
-                answer:
-                    'We take privacy seriously. Your email is only used for account management. Phone numbers shared in signals are optional and at your discretion. Location data is only used to show relevant signals.',
+                question: l10n.faqPersonalInfoSafe,
+                answer: l10n.faqPersonalInfoSafeAnswer,
               ),
               _FaqItem(
-                question: 'How do I report inappropriate content?',
-                answer:
-                    'If you see a signal that contains inappropriate content, spam, or false information, please use the report function on the signal or contact us through the Feedback option in the menu.',
+                question: l10n.faqReportInappropriate,
+                answer: l10n.faqReportInappropriateAnswer,
               ),
             ],
           ),
-          SizedBox(height: 32),
+          const SizedBox(height: 32),
         ],
       ),
     );
