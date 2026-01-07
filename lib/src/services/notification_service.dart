@@ -42,7 +42,13 @@ class NotificationService {
     // Initialize local notifications (minimal setup)
     await _initializeLocalNotifications();
 
-    // Don't set up Firebase Messaging yet - wait for onboarding
+    // Check if notification permission is already granted from a previous session
+    // If so, complete initialization to set up notification tap handlers
+    final settings = await _messaging.getNotificationSettings();
+    if (settings.authorizationStatus == AuthorizationStatus.authorized ||
+        settings.authorizationStatus == AuthorizationStatus.provisional) {
+      await completeInitialization();
+    }
   }
 
   /// Phase 2: Complete initialization after permissions granted
