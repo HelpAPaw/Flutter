@@ -88,7 +88,7 @@ final GoRouter _router = GoRouter(
       final hasPasswordProvider = user.providerData.any((info) => info.providerId == 'password');
       
       // Redirect unverified email users to verification screen
-      if (hasPasswordProvider && !user.emailVerified && !isVerifyingEmail) {
+      if (hasPasswordProvider && !user.emailVerified && !isVerifyingEmail && !isCompletingProfile) {
         return '/verify_email';
       }
       
