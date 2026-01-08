@@ -49,11 +49,20 @@ class NotificationService {
   Future<void> completeInitialization() async {
     if (_isFullyInitialized) return;
 
+    // Create notification channel on Android (required for local notifications)
+    if (Platform.isAndroid) {
+      await _localNotifications
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(_channel);
+    }
+
     // Set up background message handler
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
     // Set up foreground message handler
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+    debugPrint('Foreground message handler registered');
 
     // Handle notification tap when app is in background/terminated
     FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
@@ -209,8 +218,11 @@ class NotificationService {
     debugPrint('FCM token saved to Firestore (isAnonymous: ${user.isAnonymous})');
   }
 
-  /// Call this when user logs in to update FCM token
+  /// Call this when user logs in or enables notifications
   Future<void> onUserLogin() async {
+    // Complete initialization to set up message handlers
+    await completeInitialization();
+    // Update FCM token
     await _updateFcmToken();
   }
 
