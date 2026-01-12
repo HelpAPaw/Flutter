@@ -154,11 +154,15 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
-      setState(() => _hasLocationPermission = false);
+      if (mounted) {
+        setState(() => _hasLocationPermission = false);
+      }
       return;
     }
 
-    setState(() => _hasLocationPermission = true);
+    if (mounted) {
+      setState(() => _hasLocationPermission = true);
+    }
 
     try {
       Position position = await Geolocator.getCurrentPosition(
