@@ -1,11 +1,27 @@
+import 'dart:io' show Platform;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide EmailAuthProvider;
 import 'package:firebase_ui_auth/firebase_ui_auth.dart';
 import 'package:firebase_ui_oauth_google/firebase_ui_oauth_google.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../services/auth_service.dart';
+
+// Google Sign-In client IDs for different platforms
+const _iOSClientId = '757136327951-ov7ddq4eu2psocbs5dk7r1l80ol0917l.apps.googleusercontent.com';
+// TODO: Get web client ID from Firebase Console for web/desktop support
+const _webClientId = 'TODO-get-web-client-id.apps.googleusercontent.com';
+
+String get _googleClientId {
+  if (kIsWeb) return _webClientId;
+  if (Platform.isIOS || Platform.isMacOS) return _iOSClientId;
+  // Android ignores clientId and uses google-services.json automatically
+  // Linux/Windows/Web require web client ID per Firebase UI documentation
+  return _webClientId;
+}
 
 /// Handle merging anonymous user data after sign-in
 Future<void> _handleAnonymousDataMerge(String? previousAnonymousUid, User newUser) async {
@@ -154,7 +170,7 @@ class _SignInPageState extends State<SignInPage> {
                 showAuthActionSwitch: true,
                 providers: [
                   EmailAuthProvider(),
-                  GoogleProvider(clientId: '757136327951-0lv74a2r35rta4lai55fc78vi6543ho7.apps.googleusercontent.com'),
+                  GoogleProvider(clientId: _googleClientId),
                 ],
                 actions: [
                   AuthStateChangeAction<SignedIn>((context, state) async {

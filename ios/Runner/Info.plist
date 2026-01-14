@@ -60,5 +60,16 @@
 	</array>
 	<key>GMSApiKey</key>
 	<string>AIzaSyC9rEqolZ2VygmUBHaIqp_m7sQqipyt_Lc</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.757136327951-ov7ddq4eu2psocbs5dk7r1l80ol0917l</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:firebase_auth/firebase_auth.dart'
     hide PhoneAuthProvider, EmailAuthProvider;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_ui_auth/firebase_ui_auth.dart';
 import 'package:firebase_ui_oauth_google/firebase_ui_oauth_google.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
@@ -28,6 +30,19 @@ import 'package:help_a_paw/src/widgets/region_selection_page.dart';
 import 'package:help_a_paw/src/services/notification_service.dart';
 import 'package:help_a_paw/src/services/app_preferences_service.dart';
 
+// Google Sign-In client IDs for different platforms
+const iOSClientId = '757136327951-ov7ddq4eu2psocbs5dk7r1l80ol0917l.apps.googleusercontent.com';
+// TODO: Get web client ID from Firebase Console for web/desktop support
+const webClientId = 'TODO-get-web-client-id.apps.googleusercontent.com';
+
+String get googleClientId {
+  if (kIsWeb) return webClientId;
+  if (Platform.isIOS || Platform.isMacOS) return iOSClientId;
+  // Android ignores clientId and uses google-services.json automatically
+  // Linux/Windows/Web require web client ID per Firebase UI documentation
+  return webClientId;
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -42,11 +57,11 @@ Future<void> main() async {
   } catch (e) {
     // Firebase already initialized, which is fine
   }
-  
+
   // Configure Firebase UI Auth providers
   FirebaseUIAuth.configureProviders([
     EmailAuthProvider(),
-    GoogleProvider(clientId: '757136327951-0lv74a2r35rta4lai55fc78vi6543ho7.apps.googleusercontent.com'),
+    GoogleProvider(clientId: googleClientId),
   ]);
 
   // Configure email action code settings for verification links
