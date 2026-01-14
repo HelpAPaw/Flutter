@@ -31,7 +31,7 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMixin {
   final signalsRef = FirebaseFirestore.instance.collection('signals');
-  var center = const GeoFirePoint(GeoPoint(42.6977, 23.3219)); // Sofia, Bulgaria coordinates
+  var center = const GeoFirePoint(GeoPoint(42.6977, 23.3219)); // Default fallback: Sofia, Bulgaria (updated to user location if permissions granted)
   final radius = 100.0; // radius in kilometers
   final field = 'location'; // field that contains the GeoPoint
   late Stream<List<DocumentSnapshot<Object?>>> _signalsStream;
