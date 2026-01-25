@@ -633,6 +633,16 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
         },
       );
 
+      // TODO: Consider moving subscription logic to backend Cloud Functions for better consistency
+      // and to ensure creators are always subscribed regardless of client implementation
+      // Subscribe creator to their own signal for notifications
+      await FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser!.uid).set(
+        {
+          'signalSubscriptions': FieldValue.arrayUnion([docRef.id]),
+        },
+        SetOptions(merge: true),
+      );
+
       if (_selectedImage != null) {
         try {
           final photoUrl = await _uploadImageToStorage(docRef.id);
