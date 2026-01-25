@@ -383,7 +383,11 @@ export const onCommentCreated = onDocumentCreated(
     const signalId = event.params.signalId;
     const commentData = event.data?.data();
 
+    console.log("onCommentCreated triggered for signal:", signalId);
+    console.log("Comment data:", JSON.stringify(commentData));
+
     if (!commentData) {
+      console.log("No comment data found, exiting");
       return;
     }
 
@@ -392,14 +396,19 @@ export const onCommentCreated = onDocumentCreated(
       | undefined;
     const commentText = commentData.text as string;
 
+    console.log("Author ref:", authorRef?.path);
+    console.log("Comment text:", commentText);
+
     // Get the signal to get its title
     const signalDoc = await db.collection("signals").doc(signalId).get();
     if (!signalDoc.exists) {
+      console.log("Signal document not found, exiting");
       return;
     }
 
     const signalData = signalDoc.data();
     const signalTitle = signalData?.title as string;
+    console.log("Signal title:", signalTitle);
 
     // Find users subscribed to this signal
     const userTokens: Map<string, string[]> = new Map();
@@ -409,24 +418,35 @@ export const onCommentCreated = onDocumentCreated(
       .where("signalSubscriptions", "array-contains", signalId)
       .get();
 
+    console.log("Found subscribed users:", subscribedUsersSnapshot.size);
+
     for (const userDoc of subscribedUsersSnapshot.docs) {
       const userId = userDoc.id;
       const userData = userDoc.data() as UserData;
 
+      console.log("Processing user:", userId);
+      console.log("User has FCM tokens:", userData.fcmTokens?.length || 0);
+
       // Skip the comment author
       if (authorRef && authorRef.id === userId) {
+        console.log("Skipping comment author:", userId);
         continue;
       }
 
       // Skip if no FCM tokens
       if (!userData.fcmTokens || userData.fcmTokens.length === 0) {
+        console.log("User has no FCM tokens, skipping:", userId);
         continue;
       }
 
+      console.log("Adding user to notification list:", userId);
       userTokens.set(userId, userData.fcmTokens);
     }
 
+    console.log("Total users to notify:", userTokens.size);
+
     if (userTokens.size === 0) {
+      console.log("No users to notify, exiting");
       return;
     }
 
@@ -434,6 +454,7 @@ export const onCommentCreated = onDocumentCreated(
     const truncatedComment =
       commentText.length > 50 ? commentText.substring(0, 47) + "..." : commentText;
 
+    console.log("Sending notifications...");
     await sendNotificationsToUsers(
       userTokens,
       {
@@ -445,6 +466,7 @@ export const onCommentCreated = onDocumentCreated(
         type: "new_comment",
       }
     );
+    console.log("Notifications sent successfully");
   }
 );
 
