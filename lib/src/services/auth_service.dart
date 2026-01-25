@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
+import 'notification_service.dart';
+
 /// Result of attempting to link an anonymous account
 enum LinkResult {
   /// Successfully linked anonymous account to the credential
@@ -167,6 +169,16 @@ class AuthService {
     if (currentUser == null || !currentUser.isAnonymous) {
       // Not anonymous, just sign in normally
       final result = await _auth.signInWithCredential(credential);
+
+      // Save FCM token for the signed-in user
+      if (result.user != null) {
+        try {
+          await NotificationService().onUserLogin();
+        } catch (e) {
+          debugPrint('Failed to save FCM token after sign-in: $e');
+        }
+      }
+
       return result.user;
     }
 
@@ -178,6 +190,12 @@ class AuthService {
     switch (linkResult) {
       case LinkResult.linked:
         // Successfully linked - same UID, already marked as permanent
+        // Save FCM token for the linked user
+        try {
+          await NotificationService().onUserLogin();
+        } catch (e) {
+          debugPrint('Failed to save FCM token after linking: $e');
+        }
         return _auth.currentUser;
 
       case LinkResult.needsMerge:
@@ -189,6 +207,13 @@ class AuthService {
         if (existingUser != null) {
           // Merge anonymous tokens into existing account
           await mergeAnonymousIntoExisting(anonymousUid, existingUser.uid);
+
+          // Save FCM token for the merged user
+          try {
+            await NotificationService().onUserLogin();
+          } catch (e) {
+            debugPrint('Failed to save FCM token after merge: $e');
+          }
         }
 
         return existingUser;
