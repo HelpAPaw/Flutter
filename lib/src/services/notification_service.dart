@@ -85,6 +85,10 @@ class NotificationService {
     });
 
     _isFullyInitialized = true;
+
+    // Get and save the current FCM token
+    // This ensures token is saved for users who already have permissions
+    await _updateFcmToken();
   }
 
   Future<void> _initializeLocalNotifications() async {
