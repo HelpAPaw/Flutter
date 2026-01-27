@@ -669,6 +669,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
         _isSubmittingSignal = false;
         _newlyCreatedSignalId = docRef.id;
         _selectedImage = null;
+        _fabAnimationController.reverse();
       });
     } on FirebaseException catch (e) {
       setState(() {
