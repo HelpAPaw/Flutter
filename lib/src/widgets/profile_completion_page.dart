@@ -103,7 +103,7 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
       }
     } catch (e) {
       if (mounted) {
-        final l10n = AppLocalizations.of(context)!;
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(l10n.errorSavingProfile(e.toString())),
@@ -120,7 +120,7 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context);
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(

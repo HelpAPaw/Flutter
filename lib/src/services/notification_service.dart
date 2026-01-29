@@ -113,41 +113,6 @@ class NotificationService {
     // Don't create notification channel yet - wait for user permission
   }
 
-  Future<void> _requestPermissions() async {
-    // Request FCM permissions
-    final settings = await _messaging.requestPermission(
-      alert: true,
-      announcement: false,
-      badge: true,
-      carPlay: false,
-      criticalAlert: false,
-      provisional: false,
-      sound: true,
-    );
-
-    debugPrint('FCM Authorization status: ${settings.authorizationStatus}');
-
-    // Request local notification permissions on iOS
-    if (Platform.isIOS) {
-      await _localNotifications
-          .resolvePlatformSpecificImplementation<
-              IOSFlutterLocalNotificationsPlugin>()
-          ?.requestPermissions(
-            alert: true,
-            badge: true,
-            sound: true,
-          );
-    }
-
-    // Request notification permission on Android 13+
-    if (Platform.isAndroid) {
-      await _localNotifications
-          .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
-          ?.requestNotificationsPermission();
-    }
-  }
-
   void _handleForegroundMessage(RemoteMessage message) {
     debugPrint('Received foreground message: ${message.messageId}');
 

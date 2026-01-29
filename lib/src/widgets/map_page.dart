@@ -770,17 +770,10 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   }
 
   BitmapDescriptor _getSignalPin(int status) {
-      BitmapDescriptor? pin;
-      switch(status) {
-        case 0: pin = redPin;
-        break;
-        case 1: pin = orangePin;
-        break;
-        case 2: pin = greenPin;
-        break;
-      }
-
-      return pin ?? BitmapDescriptor.defaultMarker;
+      final pins = [redPin, orangePin, greenPin];
+      return (status >= 0 && status < pins.length)
+          ? (pins[status] ?? BitmapDescriptor.defaultMarker)
+          : BitmapDescriptor.defaultMarker;
     }
 
   // Filter methods

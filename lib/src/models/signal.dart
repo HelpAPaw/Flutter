@@ -59,11 +59,6 @@ class Signal {
     );
   }
 
-  //TODO: use signal property once model is used in code
-  static String getSignalTypeName(int type) {
-    return signalTypes[type];
-  }
-
   /// Returns localized signal type name for the given type index
   static String getLocalizedSignalTypeName(BuildContext context, int type) {
     final l10n = AppLocalizations.of(context);
@@ -111,6 +106,7 @@ class Signal {
     }
   }
 
+  /// Signal type identifiers (for indexing/length only - use getLocalizedSignalTypeName for display)
   static const List<String> signalTypes = [
     'Emergency',
     'Lost or Found',

@@ -1,5 +1,4 @@
 import 'package:adaptive_components/adaptive_components.dart';
-import 'package:adaptive_navigation/adaptive_navigation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -16,7 +15,7 @@ class _InDevState extends State<InDev> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AdaptiveAppBar(
+      appBar: AppBar(
         elevation: 6,
         leading: BackButton(
             onPressed: () {

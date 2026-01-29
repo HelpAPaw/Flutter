@@ -169,7 +169,7 @@ class MySignalsPage extends StatelessWidget {
                           ),
                         ),
                         title: Text(
-                          signal.title.isNotEmpty ? signal.title : Signal.getSignalTypeName(signal.signalType),
+                          signal.title.isNotEmpty ? signal.title : Signal.getLocalizedSignalTypeName(context, signal.signalType),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),

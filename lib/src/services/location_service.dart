@@ -208,35 +208,10 @@ class LocationService {
       final reporter = data['reporter'] as DocumentReference?;
       if (reporter != null && reporter.id == user.uid) continue;
 
-      // Show local notification
+      // Mark as notified (local notification not yet implemented)
       _notifiedSignalIds.add(signalId);
-      _showLocalNotification(signalId, data);
+      debugPrint('New signal nearby: $signalId');
     }
-  }
-
-  void _showLocalNotification(String signalId, Map<String, dynamic> data) {
-    final title = data['title'] as String? ?? 'New signal nearby';
-    final signalType = _getSignalTypeName(data['signalType'] as int? ?? 6);
-
-    debugPrint('Showing notification for signal: $signalId');
-
-    // Use NotificationService to show local notification
-    // This would need to be implemented in NotificationService
-    // For now, just log
-    debugPrint('New signal: $signalType - $title');
-  }
-
-  String _getSignalTypeName(int type) {
-    const types = [
-      'Emergency',
-      'Lost or Found',
-      'Blood donation',
-      'Homeless',
-      'Unneutered animals',
-      'Wild animals',
-      'Other',
-    ];
-    return type >= 0 && type < types.length ? types[type] : 'Signal';
   }
 
   /// Update location when user opens the map (foreground update)

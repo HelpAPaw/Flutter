@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
@@ -100,10 +101,10 @@ class VetClinicService {
       } else if (response.statusCode == 429) {
         throw Exception('Rate limit exceeded. Please wait and try again.');
       } else if (response.statusCode == 403) {
-        print('Places API 403 Error - Response body: ${response.body}');
+        debugPrint('Places API 403 Error - Response body: ${response.body}');
         throw Exception('API access denied. Service temporarily unavailable.');
       } else {
-        print('Places API Error ${response.statusCode} - Response: ${response.body}');
+        debugPrint('Places API Error ${response.statusCode} - Response: ${response.body}');
         throw Exception('Failed to search clinics: ${response.statusCode}');
       }
     } on SocketException {

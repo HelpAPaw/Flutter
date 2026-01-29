@@ -84,7 +84,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                     final GeoPoint? geopoint = signal.location['geopoint'] as GeoPoint?;
                     ShareService.shareSignal(
                       signalId: widget.signalId,
-                      signalType: Signal.getSignalTypeName(signal.signalType),
+                      signalType: Signal.getLocalizedSignalTypeName(context, signal.signalType),
                       description: signal.description,
                       latitude: geopoint?.latitude,
                       longitude: geopoint?.longitude,

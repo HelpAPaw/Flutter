@@ -68,8 +68,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
 
       if (!mounted) return;
 
-      final granted = locationGranted != null &&
-          locationGranted.toString() != 'LocationPermission.denied' &&
+      final granted = locationGranted.toString() != 'LocationPermission.denied' &&
           locationGranted.toString() != 'LocationPermission.deniedForever';
 
       if (granted) {

@@ -50,7 +50,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
   // Home Route Navigation Drawer Widgets
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context);
     final Uri launchUrl = Uri(
         scheme: 'https', host: 'www.helpapaw.org', path: 'subjects/view-all');
     FutureBuilder<void>(
