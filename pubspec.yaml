@@ -37,6 +37,7 @@ dependencies:
   url_launcher: ^6.2.1
   geoflutterfire_plus: ^0.0.31
   geolocator: ^14.0.0
+  flutter_riverpod: ^2.5.1
   cached_network_image: ^3.3.1
   share_plus: ^10.1.4
   package_info_plus: ^8.3.0

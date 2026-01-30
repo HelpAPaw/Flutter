@@ -8,6 +8,7 @@ import 'package:firebase_ui_auth/firebase_ui_auth.dart';
 import 'package:firebase_ui_oauth_google/firebase_ui_oauth_google.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:go_router/go_router.dart';
@@ -84,7 +85,7 @@ Future<void> main() async {
   // Initialize notification service (router will be passed after it's created)
   await NotificationService().initialize(router: _router);
 
-  runApp(const HelpAPaw());
+  runApp(const ProviderScope(child: HelpAPaw()));
   usePathUrlStrategy();
 }
 
