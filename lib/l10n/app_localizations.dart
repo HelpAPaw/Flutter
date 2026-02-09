@@ -272,6 +272,12 @@ abstract class AppLocalizations {
   /// **'Filter Signals'**
   String get filterSignals;
 
+  /// No description provided for @toggleVetClinics.
+  ///
+  /// In en, this message translates to:
+  /// **'Toggle veterinary clinics'**
+  String get toggleVetClinics;
+
   /// No description provided for @selectAll.
   ///
   /// In en, this message translates to:
@@ -443,7 +449,7 @@ abstract class AppLocalizations {
   /// No description provided for @removePhoto.
   ///
   /// In en, this message translates to:
-  /// **'Remove Photo'**
+  /// **'Remove photo'**
   String get removePhoto;
 
   /// No description provided for @errorAccessingCamera.
@@ -563,7 +569,7 @@ abstract class AppLocalizations {
   /// No description provided for @deletePhoto.
   ///
   /// In en, this message translates to:
-  /// **'Delete Photo'**
+  /// **'Delete photo'**
   String get deletePhoto;
 
   /// No description provided for @confirmDeletePhoto.
@@ -1717,6 +1723,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Drag the marker to reposition the center'**
   String get dragMarkerToReposition;
+
+  /// No description provided for @shareSignal.
+  ///
+  /// In en, this message translates to:
+  /// **'Share signal'**
+  String get shareSignal;
+
+  /// No description provided for @sendComment.
+  ///
+  /// In en, this message translates to:
+  /// **'Send comment'**
+  String get sendComment;
+
+  /// No description provided for @closePhotoViewer.
+  ///
+  /// In en, this message translates to:
+  /// **'Close photo viewer'**
+  String get closePhotoViewer;
+
+  /// No description provided for @uploadPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload photo'**
+  String get uploadPhoto;
 }
 
 class _AppLocalizationsDelegate

@@ -73,9 +73,14 @@ class _NewSignalFormState extends ConsumerState<NewSignalForm> {
               ),
               child: Row(
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.camera_alt),
-                    onPressed: _showImageSourceBottomSheet,
+                  Semantics(
+                    label: l10n.uploadPhoto,
+                    button: true,
+                    enabled: true,
+                    child: IconButton(
+                      icon: const Icon(Icons.camera_alt),
+                      onPressed: _showImageSourceBottomSheet,
+                    ),
                   ),
                   Expanded(
                     child: SingleChildScrollView(
@@ -138,7 +143,7 @@ class _NewSignalFormState extends ConsumerState<NewSignalForm> {
                             },
                           ),
                           if (formState.selectedImage != null)
-                            _buildImagePreview(formState.selectedImage!),
+                            _buildImagePreview(context, formState.selectedImage!),
                         ],
                       ),
                     ),
@@ -172,7 +177,7 @@ class _NewSignalFormState extends ConsumerState<NewSignalForm> {
     );
   }
 
-  Widget _buildImagePreview(XFile image) {
+  Widget _buildImagePreview(BuildContext context, XFile image) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Stack(
@@ -189,14 +194,19 @@ class _NewSignalFormState extends ConsumerState<NewSignalForm> {
           Positioned(
             top: 4,
             right: 4,
-            child: IconButton(
-              icon: const Icon(Icons.close, color: Colors.white),
-              style: IconButton.styleFrom(
-                backgroundColor: Colors.black54,
+            child: Semantics(
+              label: AppLocalizations.of(context).removePhoto,
+              button: true,
+              enabled: true,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.black54,
+                ),
+                onPressed: () {
+                  ref.read(mapViewModelProvider.notifier).clearFormImage();
+                },
               ),
-              onPressed: () {
-                ref.read(mapViewModelProvider.notifier).clearFormImage();
-              },
             ),
           ),
         ],

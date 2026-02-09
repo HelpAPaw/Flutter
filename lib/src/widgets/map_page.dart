@@ -367,46 +367,56 @@ class _MapScreenState extends ConsumerState<MapScreen>
           backgroundColor: Colors.orange,
           foregroundColor: Colors.white,
           actions: <Widget>[
-            IconButton(
-              icon: Stack(
-                children: [
-                  const Icon(Icons.filter_list_outlined),
-                  if (mapState.filterState.hasActiveFilters)
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
+            Semantics(
+              label: l10n.filterSignals,
+              button: true,
+              enabled: true,
+              child: IconButton(
+                icon: Stack(
+                  children: [
+                    const Icon(Icons.filter_list_outlined),
+                    if (mapState.filterState.hasActiveFilters)
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
+                onPressed: () => showFilterBottomSheet(context, ref),
               ),
-              onPressed: () => showFilterBottomSheet(context, ref),
             ),
-            IconButton(
-              icon: Icon(
-                Icons.local_hospital,
-                color: mapState.vetClinicState.showVetClinics
-                    ? Colors.white
-                    : Colors.white70,
+            Semantics(
+              label: l10n.toggleVetClinics,
+              button: true,
+              enabled: true,
+              child: IconButton(
+                icon: Icon(
+                  Icons.local_hospital,
+                  color: mapState.vetClinicState.showVetClinics
+                      ? Colors.white
+                      : Colors.white70,
+                ),
+                style: mapState.vetClinicState.showVetClinics
+                    ? IconButton.styleFrom(
+                        backgroundColor: Colors.orange[800])
+                    : null,
+                onPressed: () {
+                  final viewModel = ref.read(mapViewModelProvider.notifier);
+                  viewModel.toggleVetClinics();
+                  if (!mapState.vetClinicState.showVetClinics) {
+                    // Was off, now toggled on
+                    _loadVetClinics();
+                  }
+                },
               ),
-              style: mapState.vetClinicState.showVetClinics
-                  ? IconButton.styleFrom(
-                      backgroundColor: Colors.orange[800])
-                  : null,
-              onPressed: () {
-                final viewModel = ref.read(mapViewModelProvider.notifier);
-                viewModel.toggleVetClinics();
-                if (!mapState.vetClinicState.showVetClinics) {
-                  // Was off, now toggled on
-                  _loadVetClinics();
-                }
-              },
             ),
           ],
         ),

@@ -96,6 +96,9 @@ class AppLocalizationsBg extends AppLocalizations {
   String get filterSignals => 'Филтриране на сигнали';
 
   @override
+  String get toggleVetClinics => 'Покажи/скрий ветеринарни клиники';
+
+  @override
   String get selectAll => 'Избери всички';
 
   @override
@@ -928,4 +931,16 @@ class AppLocalizationsBg extends AppLocalizations {
   @override
   String get dragMarkerToReposition =>
       'Плъзнете маркера, за да преместите центъра';
+
+  @override
+  String get shareSignal => 'Сподели сигнал';
+
+  @override
+  String get sendComment => 'Изпрати коментар';
+
+  @override
+  String get closePhotoViewer => 'Затвори снимката';
+
+  @override
+  String get uploadPhoto => 'Качи снимка';
 }

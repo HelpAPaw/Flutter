@@ -33,6 +33,7 @@
   "signalTypeOther": "Other",
 
   "filterSignals": "Filter Signals",
+  "toggleVetClinics": "Toggle veterinary clinics",
   "selectAll": "Select All",
   "clearAll": "Clear All",
   "deselectAll": "Deselect All",
@@ -441,5 +442,12 @@
   "tapMapInstruction": "Tap on the map to set the center of your region of interest",
   "regionRadius": "Region radius",
   "km": "km",
-  "dragMarkerToReposition": "Drag the marker to reposition the center"
+  "dragMarkerToReposition": "Drag the marker to reposition the center",
+
+  "shareSignal": "Share signal",
+  "deletePhoto": "Delete photo",
+  "sendComment": "Send comment",
+  "closePhotoViewer": "Close photo viewer",
+  "uploadPhoto": "Upload photo",
+  "removePhoto": "Remove photo"
 }

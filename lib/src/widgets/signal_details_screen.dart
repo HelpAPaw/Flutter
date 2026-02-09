@@ -82,18 +82,23 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
               backgroundColor: Colors.orange,
               foregroundColor: Colors.white,
               actions: [
-                IconButton(
-                  icon: const Icon(Icons.share),
-                  onPressed: () {
-                    final GeoPoint? geopoint = signal.location['geopoint'] as GeoPoint?;
-                    ShareService.shareSignal(
-                      signalId: widget.signalId,
-                      signalType: Signal.getLocalizedSignalTypeName(context, signal.signalType),
-                      description: signal.description,
-                      latitude: geopoint?.latitude,
-                      longitude: geopoint?.longitude,
-                    );
-                  },
+                Semantics(
+                  label: l10n.shareSignal,
+                  button: true,
+                  enabled: true,
+                  child: IconButton(
+                    icon: const Icon(Icons.share),
+                    onPressed: () {
+                      final GeoPoint? geopoint = signal.location['geopoint'] as GeoPoint?;
+                      ShareService.shareSignal(
+                        signalId: widget.signalId,
+                        signalType: Signal.getLocalizedSignalTypeName(context, signal.signalType),
+                        description: signal.description,
+                        latitude: geopoint?.latitude,
+                        longitude: geopoint?.longitude,
+                      );
+                    },
+                  ),
                 ),
               ],
             ),
@@ -239,12 +244,17 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                                 Positioned(
                                                   top: 8,
                                                   right: 8,
-                                                  child: IconButton(
-                                                    icon: const Icon(Icons.delete, color: Colors.white),
-                                                    style: IconButton.styleFrom(
-                                                      backgroundColor: Colors.red,
+                                                  child: Semantics(
+                                                    label: l10n.deletePhoto,
+                                                    button: true,
+                                                    enabled: true,
+                                                    child: IconButton(
+                                                      icon: const Icon(Icons.delete, color: Colors.white),
+                                                      style: IconButton.styleFrom(
+                                                        backgroundColor: Colors.red,
+                                                      ),
+                                                      onPressed: () => _deletePhoto(signal.photoUrls[index]),
                                                     ),
-                                                    onPressed: () => _deletePhoto(signal.photoUrls[index]),
                                                   ),
                                                 ),
                                               Positioned(
@@ -573,15 +583,20 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                   ),
                                 ),
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.send),
-                                onPressed: () {
-                                  if (FirebaseAuth.instance.currentUser == null) {
-                                    _showSignInDialog();
-                                  } else {
-                                    _addComment();
+                              Semantics(
+                                label: l10n.sendComment,
+                                button: true,
+                                enabled: true,
+                                child: IconButton(
+                                  icon: const Icon(Icons.send),
+                                  onPressed: () {
+                                    if (FirebaseAuth.instance.currentUser == null) {
+                                      _showSignInDialog();
+                                    } else {
+                                      _addComment();
+                                    }
                                   }
-                                }
+                                ),
                               ),
                             ],
                           ),
@@ -988,9 +1003,14 @@ class _FullScreenPhotoGalleryState extends State<_FullScreenPhotoGallery> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white, size: 30),
-                    onPressed: () => Navigator.pop(context),
+                  Semantics(
+                    label: l10n.closePhotoViewer,
+                    button: true,
+                    enabled: true,
+                    child: IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                      onPressed: () => Navigator.pop(context),
+                    ),
                   ),
                 ],
               ),

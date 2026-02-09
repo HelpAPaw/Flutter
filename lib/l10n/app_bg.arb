@@ -33,6 +33,7 @@
   "signalTypeOther": "Друго",
 
   "filterSignals": "Филтриране на сигнали",
+  "toggleVetClinics": "Покажи/скрий ветеринарни клиники",
   "selectAll": "Избери всички",
   "clearAll": "Изчисти всички",
   "deselectAll": "Премахни всички",
@@ -307,5 +308,12 @@
   "tapMapInstruction": "Докоснете картата, за да зададете центъра на вашия регион на интерес",
   "regionRadius": "Радиус на региона",
   "km": "км",
-  "dragMarkerToReposition": "Плъзнете маркера, за да преместите центъра"
+  "dragMarkerToReposition": "Плъзнете маркера, за да преместите центъра",
+
+  "shareSignal": "Сподели сигнал",
+  "deletePhoto": "Изтрий снимка",
+  "sendComment": "Изпрати коментар",
+  "closePhotoViewer": "Затвори снимката",
+  "uploadPhoto": "Качи снимка",
+  "removePhoto": "Премахни снимка"
 }

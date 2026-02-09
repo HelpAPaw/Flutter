@@ -96,6 +96,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filterSignals => 'Filter Signals';
 
   @override
+  String get toggleVetClinics => 'Toggle veterinary clinics';
+
+  @override
   String get selectAll => 'Select All';
 
   @override
@@ -189,7 +192,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chooseFromGallery => 'Choose from Gallery';
 
   @override
-  String get removePhoto => 'Remove Photo';
+  String get removePhoto => 'Remove photo';
 
   @override
   String errorAccessingCamera(String error) {
@@ -262,7 +265,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get someone => 'Someone';
 
   @override
-  String get deletePhoto => 'Delete Photo';
+  String get deletePhoto => 'Delete photo';
 
   @override
   String get confirmDeletePhoto =>
@@ -918,4 +921,16 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get dragMarkerToReposition =>
       'Drag the marker to reposition the center';
+
+  @override
+  String get shareSignal => 'Share signal';
+
+  @override
+  String get sendComment => 'Send comment';
+
+  @override
+  String get closePhotoViewer => 'Close photo viewer';
+
+  @override
+  String get uploadPhoto => 'Upload photo';
 }
