@@ -67,7 +67,11 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         canPop: false,
         onPopInvokedWithResult: (didPop, result) {
           if (!didPop) {
-            context.pop();
+            if (Navigator.of(context).canPop()) {
+              context.pop();
+            } else {
+              context.go('/home');
+            }
           }
         },
         child: Scaffold(
