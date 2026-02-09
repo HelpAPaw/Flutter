@@ -153,17 +153,35 @@ The map's initial location logic: `_getUserLocation()` is called during `initSta
 
 ### MCP Mobile Tools Integration
 
-This project uses **MCP Mobile Tools** for cross-device automated testing on both iOS (physical devices) and Android devices. The testing infrastructure is documented in detail in `TEST_RESULTS_CROSS_DEVICE_COMPREHENSIVE.md`.
+This project uses **two complementary MCP servers** for cross-device automated testing on both iOS (physical devices) and Android devices:
+
+1. **mobile-mcp** - Lightweight, accessibility-tree based automation with screenshot fallback
+2. **appium-mcp** - Advanced automation with AI-powered locator generation and W3C Actions API
+
+**IMPORTANT: Prefer using appium-mcp over mobile-mcp whenever possible.** Appium-mcp provides more reliable element-based interactions, better cross-platform support, and advanced features like AI-powered locator generation.
+
+The testing infrastructure is documented in detail in:
+- `TEST_RESULTS_CROSS_DEVICE_COMPREHENSIVE.md` - Cross-device test results and methodologies
+- `APPIUM_MCP_GUIDE.md` - Complete guide for appium-mcp installation, configuration, and usage
 
 #### Device Setup
 
 **iOS (Physical Devices):**
+
+**WebDriverAgent Location:** `/Users/milen/.appium/node_modules/appium-xcuitest-driver/node_modules/appium-webdriveragent/`
+
+**iPad UDID:** `6c602c36e83e447ac48c4477f18fac43d1e00175`
+
 1. Install go-ios: `npm install -g go-ios`
-2. Clone WebDriverAgent: `git clone https://github.com/appium/WebDriverAgent.git`
-3. Configure code signing in Xcode
-4. Build and deploy to device: `xcodebuild -project WebDriverAgent.xcodeproj -scheme WebDriverAgentRunner -destination 'platform=iOS,id=<DEVICE_UDID>' test`
+2. WebDriverAgent is already installed via Appium (see location above)
+3. Configure code signing in Xcode (one-time setup)
+4. Build and deploy to device:
+   ```bash
+   cd /Users/milen/.appium/node_modules/appium-xcuitest-driver/node_modules/appium-webdriveragent
+   xcodebuild -project WebDriverAgent.xcodeproj -scheme WebDriverAgentRunner -destination 'platform=iOS,id=6c602c36e83e447ac48c4477f18fac43d1e00175' test
+   ```
 5. Start tunneling: `ios tunnel start --userspace`
-6. Port forward: `ios forward 8100 8100 --udid <DEVICE_UDID>`
+6. Port forward: `ios forward 8100 8100 --udid 6c602c36e83e447ac48c4477f18fac43d1e00175`
 7. Verify: MCP tools should detect device via `mobile_list_available_devices`
 
 **Android:**
