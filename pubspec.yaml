@@ -22,6 +22,7 @@ dependencies:
   firebase_ui_auth: ^3.0.0
   firebase_ui_oauth_google: ^2.0.0
   firebase_core: ^4.0.0
+  cloud_functions: ^6.0.0
   firebase_crashlytics: ^5.0.0
   firebase_in_app_messaging: ^0.9.0
   firebase_messaging: ^16.0.0

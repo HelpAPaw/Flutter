@@ -1,11 +1,9 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:http/http.dart' as http;
 
 import '../models/vet_clinic.dart';
 
@@ -17,8 +15,6 @@ class VetClinicService {
   DateTime? _lastSearchTime;
   LatLng? _lastSearchLocation;
 
-  static const String _apiKey = 'AIzaSyAyFtEitLbPStFFtIb940Ms141RWxx2_rU';
-  static const String _placesApiUrl = 'https://places.googleapis.com/v1/places:searchNearby';
   static const int _cacheExpiryMinutes = 15;
   static const double _cacheLocationThresholdMeters = 1000;
 
@@ -50,72 +46,49 @@ class VetClinicService {
     }
 
     try {
-      final requestBody = {
-        'includedTypes': ['veterinary_care'],
-        'maxResultCount': 20,
-        'locationRestriction': {
-          'circle': {
-            'center': {
-              'latitude': center.latitude,
-              'longitude': center.longitude,
-            },
-            'radius': radiusMeters,
-          },
-        },
-      };
+      final callable = FirebaseFunctions.instance.httpsCallable(
+        'searchVetClinics',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 15)),
+      );
 
-      final response = await http
-          .post(
-            Uri.parse(_placesApiUrl),
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Goog-Api-Key': _apiKey,
-              'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.internationalPhoneNumber,places.rating,places.googleMapsUri,places.regularOpeningHours',
-            },
-            body: jsonEncode(requestBody),
-          )
-          .timeout(
-            const Duration(seconds: 10),
-            onTimeout: () => throw TimeoutException('Request timed out'),
-          );
+      final result = await callable.call<Map<String, dynamic>>({
+        'latitude': center.latitude,
+        'longitude': center.longitude,
+        'radius': radiusMeters,
+      });
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final places = data['places'] as List<dynamic>?;
+      final places = (_castList(result.data['places']));
 
-        if (places == null || places.isEmpty) {
-          return [];
-        }
-
-        _clinicCache.clear();
-        final clinics = places.map((place) {
-          final clinic = VetClinic.fromJson(place as Map<String, dynamic>);
-          _clinicCache[clinic.id] = clinic;
-          return clinic;
-        }).toList();
-
+      if (places == null || places.isEmpty) {
         _lastSearchTime = DateTime.now();
         _lastSearchLocation = center;
-
-        return clinics;
-      } else if (response.statusCode == 429) {
-        throw Exception('Rate limit exceeded. Please wait and try again.');
-      } else if (response.statusCode == 403) {
-        debugPrint('Places API 403 Error - Response body: ${response.body}');
-        throw Exception('API access denied. Service temporarily unavailable.');
-      } else {
-        debugPrint('Places API Error ${response.statusCode} - Response: ${response.body}');
-        throw Exception('Failed to search clinics: ${response.statusCode}');
+        return [];
       }
-    } on SocketException {
-      throw Exception('Network error. Please check your internet connection.');
+
+      _clinicCache.clear();
+      final clinics = places.map((place) {
+        final clinic = VetClinic.fromJson(place as Map<String, dynamic>);
+        _clinicCache[clinic.id] = clinic;
+        return clinic;
+      }).toList();
+
+      _lastSearchTime = DateTime.now();
+      _lastSearchLocation = center;
+
+      return clinics;
+    } on FirebaseFunctionsException catch (e) {
+      debugPrint('Cloud Function error: ${e.code} - ${e.message}');
+      if (e.code == 'resource-exhausted') {
+        throw Exception('Rate limit exceeded. Please wait and try again.');
+      } else if (e.code == 'invalid-argument') {
+        throw Exception('Invalid search parameters.');
+      }
+      throw Exception('Failed to search clinics. Please try again.');
     } on TimeoutException {
       throw Exception('Request timed out. Please try again.');
     } catch (e) {
-      if (e is Exception) {
-        rethrow;
-      }
-      throw Exception('Unexpected error: $e');
+      debugPrint('Vet clinic search error: $e');
+      throw Exception('Failed to search clinics. Please try again.');
     }
   }
 
@@ -127,5 +100,15 @@ class VetClinicService {
     _clinicCache.clear();
     _lastSearchTime = null;
     _lastSearchLocation = null;
+  }
+
+  static Map<String, dynamic> _castMap(Object? value) {
+    final map = value as Map;
+    return map.map((k, v) => MapEntry(k as String, v is Map ? _castMap(v) : v is List ? _castList(v) : v));
+  }
+
+  static List<dynamic> _castList(Object? value) {
+    final list = value as List;
+    return list.map((e) => e is Map ? _castMap(e) : e is List ? _castList(e) : e).toList();
   }
 }

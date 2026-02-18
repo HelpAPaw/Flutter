@@ -166,13 +166,33 @@ class NotificationService {
     if (user == null) return;
 
     try {
+      // On iOS, APNs token may not be available immediately at startup.
+      // Wait for it before requesting FCM token.
+      if (Platform.isIOS) {
+        var apnsToken = await _messaging.getAPNSToken();
+        if (apnsToken == null) {
+          debugPrint('APNs token not ready, waiting...');
+          for (int i = 0; i < 5; i++) {
+            await Future.delayed(const Duration(seconds: 2));
+            apnsToken = await _messaging.getAPNSToken();
+            if (apnsToken != null) break;
+          }
+          if (apnsToken == null) {
+            debugPrint('APNs token still null after retries');
+            return;
+          }
+        }
+        debugPrint('APNs token available');
+      }
       final token = await _messaging.getToken();
       if (token != null) {
         await _saveFcmTokenToFirestore(token);
+        debugPrint('FCM token saved to Firestore');
       }
-    } catch (_) {
-      // FCM token retrieval can fail due to network issues
-      // The app continues to work, token refresh listener will retry later
+    } catch (e) {
+      debugPrint('FCM token error: $e');
+      // Retry after delay on transient errors (network issues)
+      Future.delayed(const Duration(seconds: 5), _updateFcmToken);
     }
   }
 

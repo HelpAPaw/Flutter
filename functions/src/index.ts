@@ -3,12 +3,16 @@ import {
   onDocumentCreated,
   onDocumentUpdated,
 } from "firebase-functions/v2/firestore";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import * as nodemailer from "nodemailer";
 
 admin.initializeApp();
 
 const db = admin.firestore();
+
+// API keys
+const placesApiKey = defineSecret("PLACES_API_KEY");
 
 // Email configuration secrets
 const smtpHost = defineSecret("SMTP_HOST");
@@ -168,6 +172,12 @@ async function sendNotificationsToUsers(
 
   try {
     const response = await messaging.sendEachForMulticast(message);
+    console.log(`Send results: ${response.successCount} success, ${response.failureCount} failures`);
+    response.responses.forEach((resp, idx) => {
+      if (!resp.success) {
+        console.error(`Token ${idx} failed:`, resp.error?.code, resp.error?.message);
+      }
+    });
 
     if (response.failureCount > 0) {
       await cleanupInvalidTokens(response, allTokens, userTokens);
@@ -588,6 +598,102 @@ ${deviceInfo ? `
       console.log(`Feedback email sent for ${feedbackId}`);
     } catch (error) {
       console.error("Error sending feedback email:", error);
+    }
+  }
+);
+
+/**
+ * Cloud Function to search for nearby vet clinics via Places API.
+ * Keeps the API key server-side so it cannot be extracted from client apps.
+ */
+export const searchVetClinics = onCall(
+  {
+    secrets: [placesApiKey],
+    enforceAppCheck: true,
+  },
+  async (request) => {
+    const { latitude, longitude, radius } = request.data;
+
+    if (
+      typeof latitude !== "number" ||
+      typeof longitude !== "number" ||
+      typeof radius !== "number"
+    ) {
+      throw new HttpsError(
+        "invalid-argument",
+        "latitude, longitude, and radius are required numbers"
+      );
+    }
+
+    if (radius < 0 || radius > 50000) {
+      throw new HttpsError(
+        "invalid-argument",
+        "radius must be between 0 and 50000 meters"
+      );
+    }
+
+    const placesUrl =
+      "https://places.googleapis.com/v1/places:searchNearby";
+
+    const requestBody = {
+      includedTypes: ["veterinary_care"],
+      maxResultCount: 20,
+      locationRestriction: {
+        circle: {
+          center: { latitude, longitude },
+          radius,
+        },
+      },
+    };
+
+    const fieldMask = [
+      "places.id",
+      "places.displayName",
+      "places.formattedAddress",
+      "places.location",
+      "places.internationalPhoneNumber",
+      "places.rating",
+      "places.googleMapsUri",
+      "places.regularOpeningHours",
+    ].join(",");
+
+    try {
+      const response = await fetch(placesUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": placesApiKey.value(),
+          "X-Goog-FieldMask": fieldMask,
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (response.status === 429) {
+        throw new HttpsError(
+          "resource-exhausted",
+          "Rate limit exceeded. Please try again later."
+        );
+      }
+
+      if (!response.ok) {
+        console.error(
+          `Places API error ${response.status}:`,
+          await response.text()
+        );
+        throw new HttpsError(
+          "internal",
+          "Failed to search for vet clinics"
+        );
+      }
+
+      const data = await response.json();
+      return { places: data.places || [] };
+    } catch (error) {
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+      console.error("Error searching vet clinics:", error);
+      throw new HttpsError("internal", "Failed to search for vet clinics");
     }
   }
 );
