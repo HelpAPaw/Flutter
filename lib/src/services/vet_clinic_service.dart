@@ -12,6 +12,7 @@ class VetClinicService {
   VetClinicService._();
 
   final Map<String, VetClinic> _clinicCache = {};
+  final Set<String> _clinicsWithDetails = {};
   DateTime? _lastSearchTime;
   LatLng? _lastSearchLocation;
 
@@ -59,7 +60,7 @@ class VetClinicService {
 
       final places = (_castList(result.data['places']));
 
-      if (places == null || places.isEmpty) {
+      if (places.isEmpty) {
         _lastSearchTime = DateTime.now();
         _lastSearchLocation = center;
         return [];
@@ -96,8 +97,36 @@ class VetClinicService {
     return _clinicCache[clinicId];
   }
 
+  Future<VetClinic?> fetchClinicDetails(String clinicId) async {
+    if (_clinicsWithDetails.contains(clinicId) && _clinicCache.containsKey(clinicId)) {
+      return _clinicCache[clinicId];
+    }
+
+    try {
+      final callable = FirebaseFunctions.instance.httpsCallable(
+        'getVetClinicDetails',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 15)),
+      );
+
+      final result = await callable.call<Map<String, dynamic>>({'placeId': clinicId});
+      final place = _castMap(result.data['place']);
+      final clinic = VetClinic.fromJson(place);
+
+      _clinicCache[clinicId] = clinic;
+      _clinicsWithDetails.add(clinicId);
+      return clinic;
+    } on FirebaseFunctionsException catch (e) {
+      debugPrint('Cloud Function error: ${e.code} - ${e.message}');
+      return _clinicCache[clinicId];
+    } catch (e) {
+      debugPrint('Vet clinic details error: $e');
+      return _clinicCache[clinicId];
+    }
+  }
+
   void clearCache() {
     _clinicCache.clear();
+    _clinicsWithDetails.clear();
     _lastSearchTime = null;
     _lastSearchLocation = null;
   }

@@ -26,12 +26,24 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
     _loadClinic();
   }
 
-  void _loadClinic() {
-    final clinic = VetClinicService.instance.getClinicById(widget.clinicId);
-    setState(() {
-      _clinic = clinic;
-      _isLoading = false;
-    });
+  Future<void> _loadClinic() async {
+    // Show basic info (name, address) immediately from cache if available
+    final basicClinic = VetClinicService.instance.getClinicById(widget.clinicId);
+    if (basicClinic != null && mounted) {
+      setState(() {
+        _clinic = basicClinic;
+        _isLoading = false;
+      });
+    }
+
+    // Fetch full details (phone, rating, opening hours) on demand
+    final detailedClinic = await VetClinicService.instance.fetchClinicDetails(widget.clinicId);
+    if (mounted) {
+      setState(() {
+        _clinic = detailedClinic ?? _clinic;
+        _isLoading = false;
+      });
+    }
   }
 
   @override

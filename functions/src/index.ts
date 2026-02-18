@@ -651,10 +651,6 @@ export const searchVetClinics = onCall(
       "places.displayName",
       "places.formattedAddress",
       "places.location",
-      "places.internationalPhoneNumber",
-      "places.rating",
-      "places.googleMapsUri",
-      "places.regularOpeningHours",
     ].join(",");
 
     try {
@@ -694,6 +690,67 @@ export const searchVetClinics = onCall(
       }
       console.error("Error searching vet clinics:", error);
       throw new HttpsError("internal", "Failed to search for vet clinics");
+    }
+  }
+);
+
+/**
+ * Cloud Function to fetch full details for a single vet clinic.
+ * Called lazily when the user opens a clinic's details screen.
+ * Fetches Enterprise-tier fields (phone, rating, opening hours) on demand.
+ */
+export const getVetClinicDetails = onCall(
+  {
+    secrets: [placesApiKey],
+    enforceAppCheck: true,
+  },
+  async (request) => {
+    const { placeId } = request.data;
+
+    if (typeof placeId !== "string" || !placeId) {
+      throw new HttpsError(
+        "invalid-argument",
+        "placeId is required"
+      );
+    }
+
+    const detailsUrl = `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`;
+
+    const fieldMask = [
+      "id",
+      "displayName",
+      "formattedAddress",
+      "location",
+      "internationalPhoneNumber",
+      "rating",
+      "googleMapsUri",
+      "regularOpeningHours",
+    ].join(",");
+
+    try {
+      const response = await fetch(detailsUrl, {
+        headers: {
+          "X-Goog-Api-Key": placesApiKey.value(),
+          "X-Goog-FieldMask": fieldMask,
+        },
+      });
+
+      if (!response.ok) {
+        console.error(
+          `Places API error ${response.status}:`,
+          await response.text()
+        );
+        throw new HttpsError("internal", "Failed to get clinic details");
+      }
+
+      const data = await response.json();
+      return { place: data };
+    } catch (error) {
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+      console.error("Error getting clinic details:", error);
+      throw new HttpsError("internal", "Failed to get clinic details");
     }
   }
 );
