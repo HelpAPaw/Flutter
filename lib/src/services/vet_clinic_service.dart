@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:geolocator/geolocator.dart';
 
 import '../models/vet_clinic.dart';
 
@@ -11,41 +10,12 @@ class VetClinicService {
   static final VetClinicService instance = VetClinicService._();
   VetClinicService._();
 
-  final Map<String, VetClinic> _clinicCache = {};
+  // Accumulates all clinics found across searches in this session.
+  // Keyed by Place ID so overlapping searches don't produce duplicates.
+  final Map<String, VetClinic> _clinics = {};
   final Set<String> _clinicsWithDetails = {};
-  DateTime? _lastSearchTime;
-  LatLng? _lastSearchLocation;
-
-  static const int _cacheExpiryMinutes = 15;
-  static const double _cacheLocationThresholdMeters = 1000;
-
-  bool _isCacheValid(LatLng location) {
-    if (_lastSearchTime == null || _lastSearchLocation == null) {
-      return false;
-    }
-
-    final now = DateTime.now();
-    final elapsed = now.difference(_lastSearchTime!);
-
-    if (elapsed.inMinutes >= _cacheExpiryMinutes) {
-      return false;
-    }
-
-    final distance = Geolocator.distanceBetween(
-      _lastSearchLocation!.latitude,
-      _lastSearchLocation!.longitude,
-      location.latitude,
-      location.longitude,
-    );
-
-    return distance < _cacheLocationThresholdMeters;
-  }
 
   Future<List<VetClinic>> searchNearby(LatLng center, double radiusMeters) async {
-    if (_isCacheValid(center)) {
-      return _clinicCache.values.toList();
-    }
-
     try {
       final callable = FirebaseFunctions.instance.httpsCallable(
         'searchVetClinics',
@@ -60,23 +30,12 @@ class VetClinicService {
 
       final places = (_castList(result.data['places']));
 
-      if (places.isEmpty) {
-        _lastSearchTime = DateTime.now();
-        _lastSearchLocation = center;
-        return [];
+      for (final place in places) {
+        final clinic = VetClinic.fromJson(place as Map<String, dynamic>);
+        _clinics[clinic.id] = clinic;
       }
 
-      _clinicCache.clear();
-      final clinics = places.map((place) {
-        final clinic = VetClinic.fromJson(place as Map<String, dynamic>);
-        _clinicCache[clinic.id] = clinic;
-        return clinic;
-      }).toList();
-
-      _lastSearchTime = DateTime.now();
-      _lastSearchLocation = center;
-
-      return clinics;
+      return _clinics.values.toList();
     } on FirebaseFunctionsException catch (e) {
       debugPrint('Cloud Function error: ${e.code} - ${e.message}');
       if (e.code == 'resource-exhausted') {
@@ -94,12 +53,12 @@ class VetClinicService {
   }
 
   VetClinic? getClinicById(String clinicId) {
-    return _clinicCache[clinicId];
+    return _clinics[clinicId];
   }
 
   Future<VetClinic?> fetchClinicDetails(String clinicId) async {
-    if (_clinicsWithDetails.contains(clinicId) && _clinicCache.containsKey(clinicId)) {
-      return _clinicCache[clinicId];
+    if (_clinicsWithDetails.contains(clinicId) && _clinics.containsKey(clinicId)) {
+      return _clinics[clinicId];
     }
 
     try {
@@ -112,23 +71,21 @@ class VetClinicService {
       final place = _castMap(result.data['place']);
       final clinic = VetClinic.fromJson(place);
 
-      _clinicCache[clinicId] = clinic;
+      _clinics[clinicId] = clinic;
       _clinicsWithDetails.add(clinicId);
       return clinic;
     } on FirebaseFunctionsException catch (e) {
       debugPrint('Cloud Function error: ${e.code} - ${e.message}');
-      return _clinicCache[clinicId];
+      return _clinics[clinicId];
     } catch (e) {
       debugPrint('Vet clinic details error: $e');
-      return _clinicCache[clinicId];
+      return _clinics[clinicId];
     }
   }
 
-  void clearCache() {
-    _clinicCache.clear();
+  void clearSession() {
+    _clinics.clear();
     _clinicsWithDetails.clear();
-    _lastSearchTime = null;
-    _lastSearchLocation = null;
   }
 
   static Map<String, dynamic> _castMap(Object? value) {

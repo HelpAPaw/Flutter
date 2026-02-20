@@ -354,7 +354,7 @@ class MapViewModel extends StateNotifier<MapScreenState> {
     state = state.copyWith(
       vetClinicState: state.vetClinicState.clear(),
     );
-    _vetClinicService.clearCache();
+    _vetClinicService.clearSession();
   }
 
   /// Check if "Search this area" button should be shown
