@@ -1,3 +1,6 @@
+# Temporary files (AI session artifacts, screenshots, test scripts)
+/tmp/
+
 # Miscellaneous
 *.class
 *.log
@@ -86,3 +89,6 @@ app.*.map.json
 /android/app/google-services-prod.json
 /lib/src/config/firebase_options_prod.dart
 /android/local.properties
+
+# Integration test credentials (never commit real credentials)
+/integration_test/test_credentials.json

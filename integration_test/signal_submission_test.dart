@@ -3,6 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:help_a_paw/main.dart' as app;
 
+// Credentials are injected via --dart-define-from-file=integration_test/test_credentials.json
+// Never hardcode credentials here. See integration_test/test_credentials.json.example.
+const _testEmail = String.fromEnvironment('TEST_USER_EMAIL');
+const _testPassword = String.fromEnvironment('TEST_USER_PASSWORD');
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -47,7 +52,7 @@ void main() {
         print('⚠️  Email field not found');
         return;
       }
-      await tester.enterText(emailFields.first, 'test-user@example.com');
+      await tester.enterText(emailFields.first, _testEmail);
       await tester.pumpAndSettle();
 
       // Fill in password
@@ -56,7 +61,7 @@ void main() {
         print('⚠️  Password field not found');
         return;
       }
-      await tester.enterText(passwordFields.at(1), 'Test123!');
+      await tester.enterText(passwordFields.at(1), _testPassword);
       await tester.pumpAndSettle();
 
       // Tap sign in button
