@@ -349,14 +349,6 @@ class MapViewModel extends StateNotifier<MapScreenState> {
     }
   }
 
-  /// Clear vet clinics
-  void clearVetClinics() {
-    state = state.copyWith(
-      vetClinicState: state.vetClinicState.clear(),
-    );
-    _vetClinicService.clearSession();
-  }
-
   /// Check if "Search this area" button should be shown
   Future<void> checkVetClinicSearchButton({
     required LatLng currentCenter,

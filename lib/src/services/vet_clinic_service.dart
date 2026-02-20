@@ -83,11 +83,6 @@ class VetClinicService {
     }
   }
 
-  void clearSession() {
-    _clinics.clear();
-    _clinicsWithDetails.clear();
-  }
-
   static Map<String, dynamic> _castMap(Object? value) {
     final map = value as Map;
     return map.map((k, v) => MapEntry(k as String, v is Map ? _castMap(v) : v is List ? _castList(v) : v));
