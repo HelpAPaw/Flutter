@@ -92,3 +92,6 @@ app.*.map.json
 
 # Integration test credentials (never commit real credentials)
 /integration_test/test_credentials.json
+
+# Claude Code local settings
+/.claude/
