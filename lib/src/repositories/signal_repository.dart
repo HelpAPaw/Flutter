@@ -56,10 +56,14 @@ class SignalWithId {
 /// Abstract interface for signal CRUD operations and geo-queries
 abstract class SignalRepository {
   /// Stream signals within a radius from a center point
+  ///
+  /// If [createdAfter] is provided, only signals created after that date
+  /// are included (server-side filter via Firestore query).
   Stream<List<SignalWithId>> getSignalsInRadius({
     required double centerLatitude,
     required double centerLongitude,
     required double radiusInKm,
+    DateTime? createdAfter,
   });
 
   /// Create a new signal

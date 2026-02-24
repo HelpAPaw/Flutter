@@ -114,6 +114,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get signalType => 'Signal Type';
 
   @override
+  String get timeRange => 'Time Range';
+
+  @override
+  String get last24Hours => 'Last 24 hours';
+
+  @override
+  String get last7Days => 'Last 7 days';
+
+  @override
+  String get last30Days => 'Last 30 days';
+
+  @override
+  String get allTime => 'All time';
+
+  @override
   String get applyFilters => 'Apply Filters';
 
   @override

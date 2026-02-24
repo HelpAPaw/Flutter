@@ -308,6 +308,36 @@ abstract class AppLocalizations {
   /// **'Signal Type'**
   String get signalType;
 
+  /// No description provided for @timeRange.
+  ///
+  /// In en, this message translates to:
+  /// **'Time Range'**
+  String get timeRange;
+
+  /// No description provided for @last24Hours.
+  ///
+  /// In en, this message translates to:
+  /// **'Last 24 hours'**
+  String get last24Hours;
+
+  /// No description provided for @last7Days.
+  ///
+  /// In en, this message translates to:
+  /// **'Last 7 days'**
+  String get last7Days;
+
+  /// No description provided for @last30Days.
+  ///
+  /// In en, this message translates to:
+  /// **'Last 30 days'**
+  String get last30Days;
+
+  /// No description provided for @allTime.
+  ///
+  /// In en, this message translates to:
+  /// **'All time'**
+  String get allTime;
+
   /// No description provided for @applyFilters.
   ///
   /// In en, this message translates to:

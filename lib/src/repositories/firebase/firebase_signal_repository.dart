@@ -18,6 +18,7 @@ class FirebaseSignalRepository implements SignalRepository {
     required double centerLatitude,
     required double centerLongitude,
     required double radiusInKm,
+    DateTime? createdAfter,
   }) {
     final center = GeoFirePoint(GeoPoint(centerLatitude, centerLongitude));
     const field = 'location';
@@ -28,6 +29,12 @@ class FirebaseSignalRepository implements SignalRepository {
       field: field,
       geopointFrom: (data) =>
           (data[field] as Map<String, dynamic>)['geopoint'] as GeoPoint,
+      queryBuilder: createdAfter != null
+          ? (query) => query.where(
+                'createdAt',
+                isGreaterThan: Timestamp.fromDate(createdAfter),
+              )
+          : null,
     ).map((docs) => docs.map((doc) => SignalWithId.fromDocument(doc)).toList());
   }
 

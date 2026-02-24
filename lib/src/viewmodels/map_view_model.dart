@@ -18,7 +18,7 @@ final mapViewModelProvider =
   return MapViewModel();
 });
 
-/// Provider for the signals stream based on current map center
+/// Provider for the signals stream based on current map center and time range
 final signalsStreamProvider = StreamProvider<List<SignalWithId>>((ref) {
   final mapState = ref.watch(mapViewModelProvider);
   final signalRepo = RepositoryProvider.instance.signalRepository;
@@ -27,6 +27,7 @@ final signalsStreamProvider = StreamProvider<List<SignalWithId>>((ref) {
     centerLatitude: mapState.centerLatitude,
     centerLongitude: mapState.centerLongitude,
     radiusInKm: 100.0,
+    createdAfter: mapState.filterState.selectedTimeRange.cutoffDate,
   );
 });
 
@@ -103,6 +104,13 @@ class MapViewModel extends StateNotifier<MapScreenState> {
   void toggleStatus(int status) {
     state = state.copyWith(
       filterState: state.filterState.toggleStatus(status),
+    );
+  }
+
+  /// Set the time range filter
+  void setTimeRange(TimeRange timeRange) {
+    state = state.copyWith(
+      filterState: state.filterState.copyWith(selectedTimeRange: timeRange),
     );
   }
 

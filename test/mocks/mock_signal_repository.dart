@@ -37,6 +37,7 @@ class MockSignalRepository implements SignalRepository {
     required double centerLatitude,
     required double centerLongitude,
     required double radiusInKm,
+    DateTime? createdAfter,
   }) {
     // Emit current signals immediately, then stream updates
     return _signalsController.stream;

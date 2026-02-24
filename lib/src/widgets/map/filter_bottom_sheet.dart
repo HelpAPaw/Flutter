@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/signal.dart';
+import '../../state/map_state.dart';
 import '../../viewmodels/map_view_model.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 
@@ -77,6 +78,45 @@ class _FilterBottomSheetContent extends ConsumerWidget {
                         ),
                       ],
                     ),
+                    const Divider(),
+                    Text(
+                      l10n.timeRange,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        _buildTimeRangeChip(
+                          label: l10n.last24Hours,
+                          value: TimeRange.last24Hours,
+                          selected: filterState.selectedTimeRange,
+                          onSelected: (range) => viewModel.setTimeRange(range),
+                        ),
+                        _buildTimeRangeChip(
+                          label: l10n.last7Days,
+                          value: TimeRange.last7Days,
+                          selected: filterState.selectedTimeRange,
+                          onSelected: (range) => viewModel.setTimeRange(range),
+                        ),
+                        _buildTimeRangeChip(
+                          label: l10n.last30Days,
+                          value: TimeRange.last30Days,
+                          selected: filterState.selectedTimeRange,
+                          onSelected: (range) => viewModel.setTimeRange(range),
+                        ),
+                        _buildTimeRangeChip(
+                          label: l10n.allTime,
+                          value: TimeRange.allTime,
+                          selected: filterState.selectedTimeRange,
+                          onSelected: (range) => viewModel.setTimeRange(range),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
                     const Divider(),
                     Text(
                       l10n.status,
@@ -193,6 +233,21 @@ class _FilterBottomSheetContent extends ConsumerWidget {
       activeColor: Colors.orange,
       controlAffinity: ListTileControlAffinity.leading,
       contentPadding: EdgeInsets.zero,
+    );
+  }
+
+  Widget _buildTimeRangeChip({
+    required String label,
+    required TimeRange value,
+    required TimeRange selected,
+    required void Function(TimeRange) onSelected,
+  }) {
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected == value,
+      onSelected: (_) => onSelected(value),
+      selectedColor: Colors.orange.shade100,
+      checkmarkColor: Colors.orange.shade800,
     );
   }
 }

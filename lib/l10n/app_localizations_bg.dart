@@ -114,6 +114,21 @@ class AppLocalizationsBg extends AppLocalizations {
   String get signalType => 'Тип сигнал';
 
   @override
+  String get timeRange => 'Времеви обхват';
+
+  @override
+  String get last24Hours => 'Последните 24 часа';
+
+  @override
+  String get last7Days => 'Последните 7 дни';
+
+  @override
+  String get last30Days => 'Последните 30 дни';
+
+  @override
+  String get allTime => 'Всички';
+
+  @override
   String get applyFilters => 'Приложи филтри';
 
   @override

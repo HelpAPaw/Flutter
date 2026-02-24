@@ -4,15 +4,43 @@ import 'package:image_picker/image_picker.dart';
 
 import '../models/vet_clinic.dart';
 
+/// Time range options for filtering signals by creation date
+enum TimeRange {
+  last24Hours,
+  last7Days,
+  last30Days,
+  allTime;
+
+  /// Returns the cutoff DateTime for this range, or null for allTime
+  DateTime? get cutoffDate {
+    final now = DateTime.now();
+    switch (this) {
+      case TimeRange.last24Hours:
+        return now.subtract(const Duration(hours: 24));
+      case TimeRange.last7Days:
+        return now.subtract(const Duration(days: 7));
+      case TimeRange.last30Days:
+        return now.subtract(const Duration(days: 30));
+      case TimeRange.allTime:
+        return null;
+    }
+  }
+}
+
+/// Default time range for the map
+const defaultTimeRange = TimeRange.last30Days;
+
 /// Immutable state for signal type and status filters
 @immutable
 class MapFilterState {
   final Set<int> selectedSignalTypes;
   final Set<int> selectedStatuses;
+  final TimeRange selectedTimeRange;
 
   const MapFilterState({
     this.selectedSignalTypes = const {0, 1, 2, 3, 4, 5, 6},
     this.selectedStatuses = const {0, 1, 2},
+    this.selectedTimeRange = defaultTimeRange,
   });
 
   /// All signal types selected (no filter active)
@@ -23,7 +51,9 @@ class MapFilterState {
 
   /// Check if any filter is active
   bool get hasActiveFilters =>
-      selectedSignalTypes.length < 7 || selectedStatuses.length < 3;
+      selectedSignalTypes.length < 7 ||
+      selectedStatuses.length < 3 ||
+      selectedTimeRange != defaultTimeRange;
 
   /// Check if a signal passes the current filter
   bool signalPassesFilter(int signalType, int status) {
@@ -34,10 +64,12 @@ class MapFilterState {
   MapFilterState copyWith({
     Set<int>? selectedSignalTypes,
     Set<int>? selectedStatuses,
+    TimeRange? selectedTimeRange,
   }) {
     return MapFilterState(
       selectedSignalTypes: selectedSignalTypes ?? this.selectedSignalTypes,
       selectedStatuses: selectedStatuses ?? this.selectedStatuses,
+      selectedTimeRange: selectedTimeRange ?? this.selectedTimeRange,
     );
   }
 
@@ -65,17 +97,19 @@ class MapFilterState {
 
   /// Select all filters
   MapFilterState selectAll() {
-    return const MapFilterState(
-      selectedSignalTypes: {0, 1, 2, 3, 4, 5, 6},
-      selectedStatuses: {0, 1, 2},
+    return MapFilterState(
+      selectedSignalTypes: const {0, 1, 2, 3, 4, 5, 6},
+      selectedStatuses: const {0, 1, 2},
+      selectedTimeRange: selectedTimeRange,
     );
   }
 
   /// Clear all filters
   MapFilterState clearAll() {
-    return const MapFilterState(
-      selectedSignalTypes: {},
-      selectedStatuses: {},
+    return MapFilterState(
+      selectedSignalTypes: const {},
+      selectedStatuses: const {},
+      selectedTimeRange: selectedTimeRange,
     );
   }
 
@@ -84,13 +118,15 @@ class MapFilterState {
     if (identical(this, other)) return true;
     return other is MapFilterState &&
         setEquals(other.selectedSignalTypes, selectedSignalTypes) &&
-        setEquals(other.selectedStatuses, selectedStatuses);
+        setEquals(other.selectedStatuses, selectedStatuses) &&
+        other.selectedTimeRange == selectedTimeRange;
   }
 
   @override
   int get hashCode => Object.hash(
         Object.hashAll(selectedSignalTypes),
         Object.hashAll(selectedStatuses),
+        selectedTimeRange,
       );
 }
 
