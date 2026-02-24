@@ -148,7 +148,7 @@ class NotificationService {
 
     final signalId = message.data['signalId'];
     if (signalId != null && _router != null) {
-      _router!.go('/signal_details/$signalId');
+      _router!.push('/signal_details/$signalId');
     }
   }
 
@@ -157,11 +157,11 @@ class NotificationService {
 
     final signalId = response.payload;
     if (signalId != null && signalId.isNotEmpty && _router != null) {
-      _router!.go('/signal_details/$signalId');
+      _router!.push('/signal_details/$signalId');
     }
   }
 
-  Future<void> _updateFcmToken() async {
+  Future<void> _updateFcmToken({int retryCount = 0}) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
@@ -191,8 +191,13 @@ class NotificationService {
       }
     } catch (e) {
       debugPrint('FCM token error: $e');
-      // Retry after delay on transient errors (network issues)
-      Future.delayed(const Duration(seconds: 5), _updateFcmToken);
+      // Retry on transient errors with exponential backoff (max 3 retries)
+      if (retryCount < 3) {
+        final delay = Duration(seconds: 10 * (retryCount + 1));
+        Future.delayed(delay, () => _updateFcmToken(retryCount: retryCount + 1));
+      } else {
+        debugPrint('FCM token registration failed after $retryCount retries, giving up');
+      }
     }
   }
 
@@ -215,10 +220,10 @@ class NotificationService {
 
   /// Call this when user logs in or enables notifications
   Future<void> onUserLogin() async {
-    // Complete initialization to set up message handlers
+    // Complete initialization to set up message handlers (also fetches FCM token)
     await completeInitialization();
-    // Update FCM token
-    await _updateFcmToken();
+    // If already initialized, token was not refreshed by completeInitialization - do it now
+    if (_isFullyInitialized) await _updateFcmToken();
   }
 
   /// Request notification permission and return whether it was granted
@@ -252,11 +257,8 @@ class NotificationService {
             ?.createNotificationChannel(_channel);
       }
 
-      // Complete notification service initialization
+      // Complete notification service initialization (also fetches FCM token)
       await completeInitialization();
-
-      // Update FCM token
-      await _updateFcmToken();
     }
 
     return granted;

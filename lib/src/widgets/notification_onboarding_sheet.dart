@@ -1,12 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 
 import '../services/app_preferences_service.dart';
 import '../services/location_service.dart';
 import '../services/notification_service.dart';
+
+enum _OnboardingStep { notifications, location, region }
 
 class NotificationOnboardingSheet extends StatefulWidget {
   final VoidCallback onComplete;
@@ -23,38 +27,95 @@ class NotificationOnboardingSheet extends StatefulWidget {
 }
 
 class _NotificationOnboardingSheetState extends State<NotificationOnboardingSheet> {
-  int _currentStep = 0; // 0: notifications, 1: location, 2: region
+  bool _isLoading = true;
+  List<_OnboardingStep> _stepsToShow = [];
+  int _currentStepIndex = 0;
   bool _isProcessing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _determineSteps();
+  }
+
+  Future<void> _determineSteps() async {
+    final steps = <_OnboardingStep>[];
+
+    // Check notification permission
+    final notifSettings = await FirebaseMessaging.instance.getNotificationSettings();
+    final notifGranted =
+        notifSettings.authorizationStatus == AuthorizationStatus.authorized ||
+        notifSettings.authorizationStatus == AuthorizationStatus.provisional;
+    if (!notifGranted) steps.add(_OnboardingStep.notifications);
+
+    // Check location permission
+    final locationPermission = await Geolocator.checkPermission();
+    final locationGranted =
+        locationPermission == LocationPermission.whileInUse ||
+        locationPermission == LocationPermission.always;
+    if (!locationGranted) steps.add(_OnboardingStep.location);
+
+    // Check region selection
+    final user = FirebaseAuth.instance.currentUser;
+    bool regionSet = false;
+    if (user != null) {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      regionSet = doc.data()?['notificationPreferences']?['regionOfInterest'] != null;
+    }
+    if (!regionSet) steps.add(_OnboardingStep.region);
+
+    if (!mounted) return;
+
+    if (steps.isEmpty) {
+      // All steps already complete - silently finish onboarding
+      await AppPreferencesService().setOnboardingCompleted(true);
+      if (!mounted) return;
+      widget.onComplete();
+      return;
+    }
+
+    setState(() {
+      _stepsToShow = steps;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _completeOnboarding() async {
+    await AppPreferencesService().setOnboardingCompleted(true);
+    widget.onComplete();
+  }
+
+  void _advanceStep() {
+    final nextIndex = _currentStepIndex + 1;
+    if (nextIndex >= _stepsToShow.length) {
+      _completeOnboarding();
+    } else {
+      setState(() {
+        _currentStepIndex = nextIndex;
+        _isProcessing = false;
+      });
+    }
+  }
 
   Future<void> _handleEnableNotifications() async {
     setState(() => _isProcessing = true);
 
     try {
-      // Request notification permission
       final notificationGranted = await NotificationService().requestNotificationPermission();
 
       if (!mounted) return;
 
       if (notificationGranted) {
-        // Save notification preference to Firestore
         final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
           await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
-            {
-              'notificationPreferences': {
-                'enabled': true,
-              },
-            },
+            {'notificationPreferences': {'enabled': true}},
             SetOptions(merge: true),
           );
         }
       }
 
-      // Move to location step (wait for user to click button)
-      setState(() {
-        _currentStep = 1;
-        _isProcessing = false;
-      });
+      _advanceStep();
     } catch (e) {
       setState(() => _isProcessing = false);
     }
@@ -68,14 +129,12 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
 
       if (!mounted) return;
 
-      final granted = locationGranted.toString() != 'LocationPermission.denied' &&
-          locationGranted.toString() != 'LocationPermission.deniedForever';
+      final granted = locationGranted != LocationPermission.denied &&
+          locationGranted != LocationPermission.deniedForever;
 
       if (granted) {
-        // Enable location tracking
         await LocationService().startLocationTracking();
 
-        // Save location preference to Firestore
         final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
           await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
@@ -90,57 +149,47 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
         }
       }
 
-      // Move to region selection step
-      setState(() {
-        _currentStep = 2;
-        _isProcessing = false;
-      });
+      _advanceStep();
     } catch (e) {
       setState(() => _isProcessing = false);
     }
   }
 
-  Future<void> _handleSkipLocation() async {
-    // Skip location, move to region selection
-    setState(() => _currentStep = 2);
-  }
+  void _handleSkipLocation() => _advanceStep();
 
   Future<void> _handleSelectRegion() async {
     if (!mounted) return;
 
-    // Navigate to region selection
     final result = await context.push<Map<String, dynamic>>('/select-region');
 
     if (!mounted) return;
 
     if (result != null) {
-      // Save region to Firestore
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
-          {
-            'notificationPreferences': {
-              'regionOfInterest': result,
-            },
-          },
+          {'notificationPreferences': {'regionOfInterest': result}},
           SetOptions(merge: true),
         );
       }
     }
 
-    // Mark onboarding as complete
-    await AppPreferencesService().setOnboardingCompleted(true);
-    widget.onComplete();
+    _completeOnboarding();
   }
 
-  Future<void> _handleSkipRegion() async {
-    // Mark onboarding as complete without region
-    await AppPreferencesService().setOnboardingCompleted(true);
-    widget.onComplete();
-  }
+  void _handleSkipRegion() => _completeOnboarding();
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const SizedBox(
+        height: 200,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final currentStep = _stepsToShow[_currentStepIndex];
+
     return Container(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -170,24 +219,24 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
 
           const SizedBox(height: 8),
 
-          // Progress indicator
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildProgressDot(0),
-              const SizedBox(width: 8),
-              _buildProgressDot(1),
-              const SizedBox(width: 8),
-              _buildProgressDot(2),
-            ],
-          ),
+          // Progress indicator - only shows dots for steps that are actually shown
+          if (_stepsToShow.length > 1)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (int i = 0; i < _stepsToShow.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  _buildProgressDot(i),
+                ],
+              ],
+            ),
 
           const SizedBox(height: 24),
 
-          // Step-specific content
-          if (_currentStep == 0) _buildNotificationStep(context),
-          if (_currentStep == 1) _buildLocationStep(context),
-          if (_currentStep == 2) _buildRegionStep(context),
+          // Step content
+          if (currentStep == _OnboardingStep.notifications) _buildNotificationStep(context),
+          if (currentStep == _OnboardingStep.location) _buildLocationStep(context),
+          if (currentStep == _OnboardingStep.region) _buildRegionStep(context),
 
           const SizedBox(height: 16),
         ],
@@ -393,8 +442,8 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
     );
   }
 
-  Widget _buildProgressDot(int step) {
-    final isActive = _currentStep >= step;
+  Widget _buildProgressDot(int index) {
+    final isActive = _currentStepIndex >= index;
     return Container(
       width: 8,
       height: 8,
