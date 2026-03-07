@@ -272,12 +272,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
               // Crosshair for new signal placement
               if (mapState.isAddingNewSignal)
                 IgnorePointer(
-                  child: Align(
-                    alignment: Alignment.center,
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 100),
-                      child: const Icon(Icons.gps_fixed, size: 50.0),
-                    ),
+                  child: const Center(
+                    child: Icon(Icons.gps_fixed, size: 50.0),
                   ),
                 ),
               // New signal form
