@@ -2,6 +2,7 @@ import * as admin from "firebase-admin";
 import {
   onDocumentCreated,
   onDocumentUpdated,
+  onDocumentWritten,
 } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
@@ -132,6 +133,58 @@ async function cleanupInvalidTokens(
     await batch.commit();
   }
 }
+
+/**
+ * When a user document is written with FCM tokens, remove those tokens from
+ * all other user documents.  This prevents orphaned anonymous accounts from
+ * receiving notifications meant for the current device owner.
+ */
+export const onUserTokensWritten = onDocumentWritten(
+  "users/{userId}",
+  async (event) => {
+    const userId = event.params.userId;
+    const afterData = event.data?.after.data() as UserData | undefined;
+
+    const afterTokens = afterData?.fcmTokens ?? [];
+    if (afterTokens.length === 0) return;
+
+    // Only run when tokenLastSaved changed (set by the client during FCM
+    // token registration).  This avoids running on unrelated user-doc writes
+    // like location updates or subscription changes.
+    const rawBefore = event.data?.before.data() as Record<string, any> | undefined;
+    const rawAfter = event.data?.after.data() as Record<string, any> | undefined;
+    const beforeSaved = rawBefore?.tokenLastSaved?.toMillis?.() ?? 0;
+    const afterSaved = rawAfter?.tokenLastSaved?.toMillis?.() ?? 0;
+    if (beforeSaved === afterSaved && rawBefore) return;
+
+    // For each token, find other user docs that still hold it and remove it
+    for (const token of afterTokens) {
+      const snapshot = await db
+        .collection("users")
+        .where("fcmTokens", "array-contains", token)
+        .get();
+
+      const batch = db.batch();
+      let hasUpdates = false;
+
+      for (const doc of snapshot.docs) {
+        if (doc.id === userId) continue;
+
+        batch.update(doc.ref, {
+          fcmTokens: admin.firestore.FieldValue.arrayRemove(token),
+        });
+        hasUpdates = true;
+        console.log(
+          `Removing duplicate FCM token from user ${doc.id} (now owned by ${userId})`
+        );
+      }
+
+      if (hasUpdates) {
+        await batch.commit();
+      }
+    }
+  }
+);
 
 /**
  * Send notifications to multiple users

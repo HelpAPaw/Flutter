@@ -205,12 +205,15 @@ class NotificationService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // Use arrayUnion to add token without duplicates (supports multi-device)
+    // Use arrayUnion to add token without duplicates (supports multi-device).
+    // tokenLastSaved lets the Cloud Function detect token re-registration
+    // and clean up orphaned user docs that share the same device token.
     await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
       {
         'fcmTokens': FieldValue.arrayUnion([token]),
         'isAnonymous': user.isAnonymous,
         'updatedAt': FieldValue.serverTimestamp(),
+        'tokenLastSaved': FieldValue.serverTimestamp(),
       },
       SetOptions(merge: true),
     );
