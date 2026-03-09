@@ -1,4 +1,5 @@
 import 'package:adaptive_components/adaptive_components.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
@@ -8,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import '../repositories/repository_provider.dart';
 import '../repositories/signal_repository.dart';
 import '../services/app_preferences_service.dart';
+import '../services/notification_service.dart';
 import '../state/map_state.dart';
 import '../utils/map_marker_builder.dart';
 import '../viewmodels/map_view_model.dart';
@@ -200,7 +202,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
     );
   }
 
-  void _showNewSignalInfoWindow(String signalId) {
+  void _showSignalInfoWindow(String signalId) {
     // Wait for Firestore stream to emit, widget to rebuild with new marker,
     // and native Google Map to render it.
     Future.delayed(const Duration(seconds: 2), () async {
@@ -213,11 +215,60 @@ class _MapScreenState extends ConsumerState<MapScreen>
     });
   }
 
+  Future<void> _focusSignalOnMap(String signalId) async {
+    // Try to find the signal in the already-loaded stream first
+    final signals = ref.read(signalsStreamProvider).valueOrNull;
+    GeoPoint? geoPoint;
+    if (signals != null) {
+      for (final s in signals) {
+        if (s.id == signalId) {
+          geoPoint = s.location;
+          break;
+        }
+      }
+    }
+
+    // Fall back to a direct Firestore fetch and re-center the geo-query
+    // so the signal's marker will be included in the stream
+    if (geoPoint == null) {
+      final fetched = await RepositoryProvider
+          .instance.signalRepository
+          .getSignalById(signalId);
+      if (fetched == null || !mounted) return;
+      geoPoint = fetched.location;
+      ref.read(mapViewModelProvider.notifier).updateMapCenter(
+            geoPoint.latitude,
+            geoPoint.longitude,
+          );
+    }
+
+    if (!mounted) return;
+
+    final lat = geoPoint.latitude;
+    final lng = geoPoint.longitude;
+
+    await _mapController.animateCamera(
+      CameraUpdate.newLatLngZoom(LatLng(lat, lng), 14.0),
+    );
+
+    if (!mounted) return;
+    _showSignalInfoWindow(signalId);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final mapState = ref.watch(mapViewModelProvider);
     final signalsAsync = ref.watch(signalsStreamProvider);
+
+    // After returning from notification-opened signal details, focus the map
+    final pendingId = NotificationService().pendingFocusSignalId;
+    if (pendingId != null) {
+      NotificationService().pendingFocusSignalId = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _focusSignalOnMap(pendingId);
+      });
+    }
 
     return _buildScaffold(context, l10n, mapState, signalsAsync);
   }
@@ -296,7 +347,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                           .read(mapViewModelProvider)
                           .newlyCreatedSignalId;
                       if (signalId != null) {
-                        _showNewSignalInfoWindow(signalId);
+                        _showSignalInfoWindow(signalId);
                       }
                     },
                   ),

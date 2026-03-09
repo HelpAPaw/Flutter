@@ -35,6 +35,10 @@ class NotificationService {
 
   bool _isFullyInitialized = false;
 
+  /// Set by notification tap handlers so the map can focus on the signal
+  /// after the user dismisses signal details.
+  String? pendingFocusSignalId;
+
   /// Phase 1: Basic initialization (no permission triggers)
   Future<void> initialize({GoRouter? router}) async {
     _router = router;
@@ -148,6 +152,7 @@ class NotificationService {
 
     final signalId = message.data['signalId'];
     if (signalId != null && _router != null) {
+      pendingFocusSignalId = signalId;
       _router!.push('/signal_details/$signalId');
     }
   }
@@ -157,6 +162,7 @@ class NotificationService {
 
     final signalId = response.payload;
     if (signalId != null && signalId.isNotEmpty && _router != null) {
+      pendingFocusSignalId = signalId;
       _router!.push('/signal_details/$signalId');
     }
   }
