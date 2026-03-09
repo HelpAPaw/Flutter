@@ -317,6 +317,10 @@ class _NewSignalFormState extends ConsumerState<NewSignalForm> {
 
     if (!mounted) return;
 
+    if (!success) {
+      FocusScope.of(context).unfocus();
+    }
+
     if (success) {
       if (errorMessage == 'photo_upload_failed') {
         ScaffoldMessenger.of(context).showSnackBar(
