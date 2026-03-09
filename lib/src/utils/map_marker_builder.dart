@@ -41,7 +41,7 @@ class MapMarkerBuilder {
 
   Future<BitmapDescriptor> _loadPin(String color) async {
     return BitmapDescriptor.asset(
-      const ImageConfiguration(size: Size(24, 24)),
+      const ImageConfiguration(size: Size(24, 29)),
       'assets/icons/pin_$color.png',
     );
   }
