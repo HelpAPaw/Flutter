@@ -34,6 +34,19 @@ class _MapScreenState extends ConsumerState<MapScreen>
   bool _showOnboardingButton = false;
   bool _onboardingSheetShown = false;
 
+  static const _signalClusterManagerId = ClusterManagerId('signals');
+  late final ClusterManager _signalClusterManager = ClusterManager(
+    clusterManagerId: _signalClusterManagerId,
+    onClusterTap: _onClusterTap,
+  );
+  late final Set<ClusterManager> _clusterManagers = {_signalClusterManager};
+
+  void _onClusterTap(Cluster cluster) {
+    _mapController.animateCamera(
+      CameraUpdate.newLatLngBounds(cluster.bounds, 50),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -287,6 +300,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
         filterPredicate: (signalType, status) =>
             mapState.filterState.signalPassesFilter(signalType, status),
         onSignalTap: (signalId) => context.push('/signal_details/$signalId'),
+        clusterManagerId: _signalClusterManagerId,
       );
     });
 
@@ -325,6 +339,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 zoomControlsEnabled: true,
                 myLocationEnabled: mapState.hasLocationPermission,
                 markers: allMarkers,
+                clusterManagers: _clusterManagers,
               ),
               // Crosshair for new signal placement
               if (mapState.isAddingNewSignal)

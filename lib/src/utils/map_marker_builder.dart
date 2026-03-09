@@ -59,6 +59,7 @@ class MapMarkerBuilder {
     required List<SignalWithId> signals,
     required bool Function(int signalType, int status) filterPredicate,
     required void Function(String signalId) onSignalTap,
+    ClusterManagerId? clusterManagerId,
   }) {
     return signals.where((signal) {
       return filterPredicate(signal.signalType, signal.status);
@@ -74,6 +75,7 @@ class MapMarkerBuilder {
           onTap: () => onSignalTap(signal.id),
         ),
         icon: getSignalPin(signal.status),
+        clusterManagerId: clusterManagerId,
       );
     }).toSet();
   }
