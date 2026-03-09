@@ -20,14 +20,22 @@ final mapViewModelProvider =
 
 /// Provider for the signals stream based on current map center and time range
 final signalsStreamProvider = StreamProvider<List<SignalWithId>>((ref) {
-  final mapState = ref.watch(mapViewModelProvider);
+  final centerLat = ref.watch(
+    mapViewModelProvider.select((s) => s.centerLatitude),
+  );
+  final centerLng = ref.watch(
+    mapViewModelProvider.select((s) => s.centerLongitude),
+  );
+  final timeRange = ref.watch(
+    mapViewModelProvider.select((s) => s.filterState.selectedTimeRange),
+  );
   final signalRepo = RepositoryProvider.instance.signalRepository;
 
   return signalRepo.getSignalsInRadius(
-    centerLatitude: mapState.centerLatitude,
-    centerLongitude: mapState.centerLongitude,
+    centerLatitude: centerLat,
+    centerLongitude: centerLng,
     radiusInKm: 100.0,
-    createdAfter: mapState.filterState.selectedTimeRange.cutoffDate,
+    createdAfter: timeRange.cutoffDate,
   );
 });
 
@@ -290,11 +298,6 @@ class MapViewModel extends StateNotifier<MapScreenState> {
       );
       return (false, e.toString());
     }
-  }
-
-  /// Clear the newly created signal ID (after showing info window)
-  void clearNewlyCreatedSignalId() {
-    state = state.copyWith(clearNewlyCreatedSignalId: true);
   }
 
   // ============================================================

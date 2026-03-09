@@ -316,15 +316,13 @@ class MapScreenState {
     MapFilterState? filterState,
     NewSignalFormState? formState,
     VetClinicState? vetClinicState,
-    bool clearNewlyCreatedSignalId = false,
   }) {
     return MapScreenState(
       centerLatitude: centerLatitude ?? this.centerLatitude,
       centerLongitude: centerLongitude ?? this.centerLongitude,
       isAddingNewSignal: isAddingNewSignal ?? this.isAddingNewSignal,
-      newlyCreatedSignalId: clearNewlyCreatedSignalId
-          ? null
-          : (newlyCreatedSignalId ?? this.newlyCreatedSignalId),
+      newlyCreatedSignalId:
+          newlyCreatedSignalId ?? this.newlyCreatedSignalId,
       hasLocationPermission:
           hasLocationPermission ?? this.hasLocationPermission,
       filterState: filterState ?? this.filterState,

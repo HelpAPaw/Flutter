@@ -200,6 +200,19 @@ class _MapScreenState extends ConsumerState<MapScreen>
     );
   }
 
+  void _showNewSignalInfoWindow(String signalId) {
+    // Wait for Firestore stream to emit, widget to rebuild with new marker,
+    // and native Google Map to render it.
+    Future.delayed(const Duration(seconds: 2), () async {
+      if (!mounted) return;
+      try {
+        await _mapController.showMarkerInfoWindow(MarkerId(signalId));
+      } catch (_) {
+        // Marker may not be rendered yet; ignore silently
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -223,13 +236,6 @@ class _MapScreenState extends ConsumerState<MapScreen>
         filterPredicate: (signalType, status) =>
             mapState.filterState.signalPassesFilter(signalType, status),
         onSignalTap: (signalId) => context.push('/signal_details/$signalId'),
-        newlyCreatedSignalId: mapState.newlyCreatedSignalId,
-        onNewlyCreatedSignalFound: (signalId) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _mapController.showMarkerInfoWindow(MarkerId(signalId));
-            ref.read(mapViewModelProvider.notifier).clearNewlyCreatedSignalId();
-          });
-        },
       );
     });
 
@@ -286,6 +292,12 @@ class _MapScreenState extends ConsumerState<MapScreen>
                     getMapCenter: _getMapCenter,
                     onSubmitSuccess: () {
                       _fabAnimationController.reverse();
+                      final signalId = ref
+                          .read(mapViewModelProvider)
+                          .newlyCreatedSignalId;
+                      if (signalId != null) {
+                        _showNewSignalInfoWindow(signalId);
+                      }
                     },
                   ),
                 ),

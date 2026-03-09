@@ -59,17 +59,10 @@ class MapMarkerBuilder {
     required List<SignalWithId> signals,
     required bool Function(int signalType, int status) filterPredicate,
     required void Function(String signalId) onSignalTap,
-    String? newlyCreatedSignalId,
-    void Function(String signalId)? onNewlyCreatedSignalFound,
   }) {
     return signals.where((signal) {
       return filterPredicate(signal.signalType, signal.status);
     }).map((signal) {
-      // Notify about newly created signal
-      if (newlyCreatedSignalId != null && signal.id == newlyCreatedSignalId) {
-        onNewlyCreatedSignalFound?.call(signal.id);
-      }
-
       final GeoPoint location = signal.location;
 
       return Marker(

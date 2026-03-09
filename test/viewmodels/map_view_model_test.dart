@@ -272,15 +272,12 @@ void main() {
       expect(errorMessage, 'not_authenticated');
     });
 
-    test('clearNewlyCreatedSignalId clears ID', () async {
+    test('submitSignal stores newly created signal ID', () async {
       viewModel.updateFormTitle('Title');
       viewModel.updateFormDescription('Description');
 
       await viewModel.submitSignal(latitude: 42.0, longitude: 23.0);
       expect(viewModel.state.newlyCreatedSignalId, isNotNull);
-
-      viewModel.clearNewlyCreatedSignalId();
-      expect(viewModel.state.newlyCreatedSignalId, isNull);
     });
   });
 
@@ -370,12 +367,11 @@ void main() {
       expect(state.centerLongitude, MapScreenState.defaultLongitude);
     });
 
-    test('clearNewlyCreatedSignalId works', () {
-      const state = MapScreenState(newlyCreatedSignalId: 'test_id');
-      final cleared = state.copyWith(clearNewlyCreatedSignalId: true);
+    test('newlyCreatedSignalId is overwritten on next creation', () {
+      const state = MapScreenState(newlyCreatedSignalId: 'old_id');
+      final updated = state.copyWith(newlyCreatedSignalId: 'new_id');
 
-      expect(state.newlyCreatedSignalId, 'test_id');
-      expect(cleared.newlyCreatedSignalId, isNull);
+      expect(updated.newlyCreatedSignalId, 'new_id');
     });
   });
 }
