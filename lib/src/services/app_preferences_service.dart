@@ -10,6 +10,7 @@ class AppPreferencesService {
   // Keys
   static const String _onboardingCompletedKey = 'notification_onboarding_completed';
   static const String _onboardingDismissedKey = 'notification_onboarding_dismissed';
+  static const String _testModeKey = 'test_mode_enabled';
 
   /// Initialize SharedPreferences - must be called before using any other methods
   Future<void> initialize() async {
@@ -51,4 +52,18 @@ class AppPreferencesService {
   bool shouldShowOnboardingButton() {
     return !isOnboardingCompleted() && isOnboardingDismissed();
   }
+
+  /// Check if test mode is enabled
+  bool isTestMode() {
+    return _prefs?.getBool(_testModeKey) ?? false;
+  }
+
+  /// Enable or disable test mode
+  Future<void> setTestMode(bool enabled) async {
+    await _prefs?.setBool(_testModeKey, enabled);
+  }
+
+  /// Returns the Firestore collection name based on test mode state
+  String get signalsCollectionName =>
+      isTestMode() ? 'signals_test' : 'signals';
 }

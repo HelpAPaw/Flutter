@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/src/models/signal.dart';
+import 'package:help_a_paw/src/services/app_preferences_service.dart';
 import 'package:intl/intl.dart';
 
 class MySignalsPage extends StatelessWidget {
@@ -93,7 +94,7 @@ class MySignalsPage extends StatelessWidget {
             )
           : StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
-                  .collection('signals')
+                  .collection(AppPreferencesService().signalsCollectionName)
                   .where('reporter',
                       isEqualTo: FirebaseFirestore.instance
                           .collection('users')

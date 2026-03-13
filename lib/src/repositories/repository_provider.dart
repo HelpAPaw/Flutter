@@ -1,3 +1,4 @@
+import '../services/app_preferences_service.dart';
 import 'signal_repository.dart';
 import 'storage_repository.dart';
 import 'user_repository.dart';
@@ -14,12 +15,19 @@ class RepositoryProvider {
   RepositoryProvider._();
 
   SignalRepository? _signalRepository;
+  String? _currentCollectionName;
   StorageRepository? _storageRepository;
   UserRepository? _userRepository;
 
-  /// Get the signal repository
-  SignalRepository get signalRepository =>
-      _signalRepository ??= FirebaseSignalRepository();
+  /// Get the signal repository, recreating if test mode changed
+  SignalRepository get signalRepository {
+    final collectionName = AppPreferencesService().signalsCollectionName;
+    if (_signalRepository == null || _currentCollectionName != collectionName) {
+      _currentCollectionName = collectionName;
+      _signalRepository = FirebaseSignalRepository(collectionName: collectionName);
+    }
+    return _signalRepository!;
+  }
 
   /// Get the storage repository
   StorageRepository get storageRepository =>
@@ -44,9 +52,16 @@ class RepositoryProvider {
     _userRepository = repository;
   }
 
+  /// Reset the signal repository so it picks up the current collection name
+  void resetSignalRepository() {
+    _signalRepository = null;
+    _currentCollectionName = null;
+  }
+
   /// Reset all repositories to defaults (for testing cleanup)
   void reset() {
     _signalRepository = null;
+    _currentCollectionName = null;
     _storageRepository = null;
     _userRepository = null;
   }

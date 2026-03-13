@@ -6,6 +6,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:go_router/go_router.dart';
+import 'app_preferences_service.dart';
 
 /// Background message handler - must be a top-level function
 @pragma('vm:entry-point')
@@ -218,6 +219,7 @@ class NotificationService {
       {
         'fcmTokens': FieldValue.arrayUnion([token]),
         'isAnonymous': user.isAnonymous,
+        'testMode': AppPreferencesService().isTestMode(),
         'updatedAt': FieldValue.serverTimestamp(),
         'tokenLastSaved': FieldValue.serverTimestamp(),
       },

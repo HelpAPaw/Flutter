@@ -57,6 +57,7 @@ interface UserNotificationPrefs {
 interface UserData {
   fcmTokens?: string[];
   isAnonymous?: boolean;
+  testMode?: boolean;
   signalSubscriptions?: string[];
   currentLocation?: {
     geopoint: GeoPoint;
@@ -241,296 +242,333 @@ async function sendNotificationsToUsers(
 }
 
 /**
+ * Shared handler for signal creation (used by both prod and test triggers)
+ */
+async function handleSignalCreated(
+  event: Parameters<Parameters<typeof onDocumentCreated>[1]>[0],
+  isTestMode: boolean
+): Promise<void> {
+  const signalId = event.params.signalId;
+  const signalData = event.data?.data();
+
+  if (!signalData) {
+    return;
+  }
+
+  const signalLocation = signalData.location;
+  const signalGeopoint = signalLocation?.geopoint as
+    | admin.firestore.GeoPoint
+    | undefined;
+  const signalGeohash = signalLocation?.geohash as string | undefined;
+  const signalType = signalData.signalType as number;
+  const signalTitle = signalData.title as string;
+  const reporterRef = signalData.reporter as
+    | admin.firestore.DocumentReference
+    | undefined;
+
+  if (!signalGeopoint || !signalGeohash) {
+    return;
+  }
+
+  // Find users to notify
+  const userTokens: Map<string, string[]> = new Map();
+
+  // Query all users with notification preferences enabled
+  const usersSnapshot = await db
+    .collection("users")
+    .where("notificationPreferences.enabled", "==", true)
+    .get();
+
+  for (const userDoc of usersSnapshot.docs) {
+    const userId = userDoc.id;
+    const userData = userDoc.data() as UserData;
+
+    // Skip users in the wrong mode
+    const userTestMode = userData.testMode === true;
+    if (userTestMode !== isTestMode) continue;
+
+    // Skip the signal reporter
+    if (reporterRef && reporterRef.id === userId) {
+      continue;
+    }
+
+    // Skip if no FCM tokens
+    if (!userData.fcmTokens || userData.fcmTokens.length === 0) {
+      continue;
+    }
+
+    const prefs = userData.notificationPreferences;
+    if (!prefs || !prefs.enabled) {
+      continue;
+    }
+
+    // Check signal type preference
+    if (
+      prefs.signalTypes &&
+      prefs.signalTypes.length > 0 &&
+      !prefs.signalTypes.includes(signalType)
+    ) {
+      continue;
+    }
+
+    let shouldNotify = false;
+
+    // Check 1: User's current location
+    if (prefs.locationTrackingEnabled && userData.currentLocation) {
+      const userLat = userData.currentLocation.geopoint.latitude;
+      const userLon = userData.currentLocation.geopoint.longitude;
+      const distance = calculateDistanceKm(
+        signalGeopoint.latitude,
+        signalGeopoint.longitude,
+        userLat,
+        userLon
+      );
+
+      const radius = prefs.locationRadiusKm || 10;
+      if (distance <= radius) {
+        shouldNotify = true;
+      }
+    }
+
+    // Check 2: User's region of interest
+    if (!shouldNotify && prefs.regionOfInterest) {
+      const regionCenter = prefs.regionOfInterest.center;
+      const regionRadius = prefs.regionOfInterest.radiusKm;
+      const distance = calculateDistanceKm(
+        signalGeopoint.latitude,
+        signalGeopoint.longitude,
+        regionCenter.latitude,
+        regionCenter.longitude
+      );
+
+      if (distance <= regionRadius) {
+        shouldNotify = true;
+      }
+    }
+
+    if (shouldNotify) {
+      userTokens.set(userId, userData.fcmTokens);
+    }
+  }
+
+  if (userTokens.size === 0) {
+    return;
+  }
+
+  const signalTypeName =
+    SIGNAL_TYPES[signalType] || SIGNAL_TYPES[SIGNAL_TYPES.length - 1];
+
+  await sendNotificationsToUsers(
+    userTokens,
+    {
+      title: "New signal nearby!",
+      body: `${signalTypeName}: ${signalTitle}`,
+    },
+    {
+      signalId,
+      type: "new_signal",
+    }
+  );
+}
+
+/**
  * Cloud Function triggered when a new signal is created
  */
 export const onSignalCreated = onDocumentCreated(
   "signals/{signalId}",
-  async (event) => {
-    const signalId = event.params.signalId;
-    const signalData = event.data?.data();
-
-    if (!signalData) {
-      return;
-    }
-
-    const signalLocation = signalData.location;
-    const signalGeopoint = signalLocation?.geopoint as
-      | admin.firestore.GeoPoint
-      | undefined;
-    const signalGeohash = signalLocation?.geohash as string | undefined;
-    const signalType = signalData.signalType as number;
-    const signalTitle = signalData.title as string;
-    const reporterRef = signalData.reporter as
-      | admin.firestore.DocumentReference
-      | undefined;
-
-    if (!signalGeopoint || !signalGeohash) {
-      return;
-    }
-
-    // Find users to notify
-    const userTokens: Map<string, string[]> = new Map();
-
-    // Query all users with notification preferences enabled
-    const usersSnapshot = await db
-      .collection("users")
-      .where("notificationPreferences.enabled", "==", true)
-      .get();
-
-    for (const userDoc of usersSnapshot.docs) {
-      const userId = userDoc.id;
-      const userData = userDoc.data() as UserData;
-
-      // Skip the signal reporter
-      if (reporterRef && reporterRef.id === userId) {
-        continue;
-      }
-
-      // Skip if no FCM tokens
-      if (!userData.fcmTokens || userData.fcmTokens.length === 0) {
-        continue;
-      }
-
-      const prefs = userData.notificationPreferences;
-      if (!prefs || !prefs.enabled) {
-        continue;
-      }
-
-      // Check signal type preference
-      if (
-        prefs.signalTypes &&
-        prefs.signalTypes.length > 0 &&
-        !prefs.signalTypes.includes(signalType)
-      ) {
-        continue;
-      }
-
-      let shouldNotify = false;
-
-      // Check 1: User's current location
-      if (prefs.locationTrackingEnabled && userData.currentLocation) {
-        const userLat = userData.currentLocation.geopoint.latitude;
-        const userLon = userData.currentLocation.geopoint.longitude;
-        const distance = calculateDistanceKm(
-          signalGeopoint.latitude,
-          signalGeopoint.longitude,
-          userLat,
-          userLon
-        );
-
-        const radius = prefs.locationRadiusKm || 10;
-        if (distance <= radius) {
-          shouldNotify = true;
-        }
-      }
-
-      // Check 2: User's region of interest
-      if (!shouldNotify && prefs.regionOfInterest) {
-        const regionCenter = prefs.regionOfInterest.center;
-        const regionRadius = prefs.regionOfInterest.radiusKm;
-        const distance = calculateDistanceKm(
-          signalGeopoint.latitude,
-          signalGeopoint.longitude,
-          regionCenter.latitude,
-          regionCenter.longitude
-        );
-
-        if (distance <= regionRadius) {
-          shouldNotify = true;
-        }
-      }
-
-      if (shouldNotify) {
-        userTokens.set(userId, userData.fcmTokens);
-      }
-    }
-
-    if (userTokens.size === 0) {
-      return;
-    }
-
-    const signalTypeName =
-      SIGNAL_TYPES[signalType] || SIGNAL_TYPES[SIGNAL_TYPES.length - 1];
-
-    await sendNotificationsToUsers(
-      userTokens,
-      {
-        title: "New signal nearby!",
-        body: `${signalTypeName}: ${signalTitle}`,
-      },
-      {
-        signalId,
-        type: "new_signal",
-      }
-    );
-  }
+  (event) => handleSignalCreated(event, false)
 );
+
+/**
+ * Shared handler for signal update (used by both prod and test triggers)
+ */
+async function handleSignalUpdated(
+  event: Parameters<Parameters<typeof onDocumentUpdated>[1]>[0],
+  isTestMode: boolean
+): Promise<void> {
+  const signalId = event.params.signalId;
+  const beforeData = event.data?.before.data();
+  const afterData = event.data?.after.data();
+
+  if (!beforeData || !afterData) {
+    return;
+  }
+
+  // Check if status changed
+  const statusChanged = beforeData.status !== afterData.status;
+  if (!statusChanged) {
+    return;
+  }
+
+  const signalTitle = afterData.title as string;
+  const newStatus = afterData.status as number;
+  const updatedByRef = afterData.lastUpdatedBy as
+    | admin.firestore.DocumentReference
+    | undefined;
+
+  // Find users subscribed to this signal
+  const userTokens: Map<string, string[]> = new Map();
+
+  const subscribedUsersSnapshot = await db
+    .collection("users")
+    .where("signalSubscriptions", "array-contains", signalId)
+    .get();
+
+  for (const userDoc of subscribedUsersSnapshot.docs) {
+    const userId = userDoc.id;
+    const userData = userDoc.data() as UserData;
+
+    // Skip users in the wrong mode
+    const userTestMode = userData.testMode === true;
+    if (userTestMode !== isTestMode) continue;
+
+    // Skip the user who made the update
+    if (updatedByRef && updatedByRef.id === userId) {
+      continue;
+    }
+
+    // Skip if no FCM tokens
+    if (!userData.fcmTokens || userData.fcmTokens.length === 0) {
+      continue;
+    }
+
+    userTokens.set(userId, userData.fcmTokens);
+  }
+
+  if (userTokens.size === 0) {
+    return;
+  }
+
+  const statusName = SIGNAL_STATUSES[newStatus] || "Updated";
+
+  await sendNotificationsToUsers(
+    userTokens,
+    {
+      title: "Signal status updated",
+      body: `${signalTitle}: ${statusName}`,
+    },
+    {
+      signalId,
+      type: "status_change",
+    }
+  );
+}
 
 /**
  * Cloud Function triggered when a signal is updated (status change)
  */
 export const onSignalUpdated = onDocumentUpdated(
   "signals/{signalId}",
-  async (event) => {
-    const signalId = event.params.signalId;
-    const beforeData = event.data?.before.data();
-    const afterData = event.data?.after.data();
-
-    if (!beforeData || !afterData) {
-      return;
-    }
-
-    // Check if status changed
-    const statusChanged = beforeData.status !== afterData.status;
-    if (!statusChanged) {
-      return;
-    }
-
-    const signalTitle = afterData.title as string;
-    const newStatus = afterData.status as number;
-    const updatedByRef = afterData.lastUpdatedBy as
-      | admin.firestore.DocumentReference
-      | undefined;
-
-    // Find users subscribed to this signal
-    const userTokens: Map<string, string[]> = new Map();
-
-    const subscribedUsersSnapshot = await db
-      .collection("users")
-      .where("signalSubscriptions", "array-contains", signalId)
-      .get();
-
-    for (const userDoc of subscribedUsersSnapshot.docs) {
-      const userId = userDoc.id;
-      const userData = userDoc.data() as UserData;
-
-      // Skip the user who made the update
-      if (updatedByRef && updatedByRef.id === userId) {
-        continue;
-      }
-
-      // Skip if no FCM tokens
-      if (!userData.fcmTokens || userData.fcmTokens.length === 0) {
-        continue;
-      }
-
-      userTokens.set(userId, userData.fcmTokens);
-    }
-
-    if (userTokens.size === 0) {
-      return;
-    }
-
-    const statusName = SIGNAL_STATUSES[newStatus] || "Updated";
-
-    await sendNotificationsToUsers(
-      userTokens,
-      {
-        title: "Signal status updated",
-        body: `${signalTitle}: ${statusName}`,
-      },
-      {
-        signalId,
-        type: "status_change",
-      }
-    );
-  }
+  (event) => handleSignalUpdated(event, false)
 );
+
+/**
+ * Shared handler for comment creation (used by both prod and test triggers)
+ */
+async function handleCommentCreated(
+  event: Parameters<Parameters<typeof onDocumentCreated>[1]>[0],
+  isTestMode: boolean
+): Promise<void> {
+  const signalId = event.params.signalId;
+  const commentData = event.data?.data();
+
+  console.log("handleCommentCreated triggered for signal:", signalId, "testMode:", isTestMode);
+
+  if (!commentData) {
+    console.log("No comment data found, exiting");
+    return;
+  }
+
+  const authorRef = commentData.author as
+    | admin.firestore.DocumentReference
+    | undefined;
+  const commentText = commentData.text as string;
+
+  // Get the signal to get its title — use the correct collection
+  const signalsCollection = isTestMode ? "signals_test" : "signals";
+  const signalDoc = await db.collection(signalsCollection).doc(signalId).get();
+  if (!signalDoc.exists) {
+    console.log("Signal document not found, exiting");
+    return;
+  }
+
+  const signalData = signalDoc.data();
+  const signalTitle = signalData?.title as string;
+
+  // Find users subscribed to this signal
+  const userTokens: Map<string, string[]> = new Map();
+
+  const subscribedUsersSnapshot = await db
+    .collection("users")
+    .where("signalSubscriptions", "array-contains", signalId)
+    .get();
+
+  for (const userDoc of subscribedUsersSnapshot.docs) {
+    const userId = userDoc.id;
+    const userData = userDoc.data() as UserData;
+
+    // Skip users in the wrong mode
+    const userTestMode = userData.testMode === true;
+    if (userTestMode !== isTestMode) continue;
+
+    // Skip the comment author
+    if (authorRef && authorRef.id === userId) {
+      continue;
+    }
+
+    // Skip if no FCM tokens
+    if (!userData.fcmTokens || userData.fcmTokens.length === 0) {
+      continue;
+    }
+
+    userTokens.set(userId, userData.fcmTokens);
+  }
+
+  if (userTokens.size === 0) {
+    return;
+  }
+
+  // Truncate comment text for notification
+  const truncatedComment =
+    commentText.length > 50 ? commentText.substring(0, 47) + "..." : commentText;
+
+  await sendNotificationsToUsers(
+    userTokens,
+    {
+      title: `New comment on: ${signalTitle}`,
+      body: truncatedComment,
+    },
+    {
+      signalId,
+      type: "new_comment",
+    }
+  );
+}
 
 /**
  * Cloud Function triggered when a new comment is added to a signal
  */
 export const onCommentCreated = onDocumentCreated(
   "signals/{signalId}/comments/{commentId}",
-  async (event) => {
-    const signalId = event.params.signalId;
-    const commentData = event.data?.data();
+  (event) => handleCommentCreated(event, false)
+);
 
-    console.log("onCommentCreated triggered for signal:", signalId);
-    console.log("Comment data:", JSON.stringify(commentData));
+/**
+ * Test mode triggers — same logic, different collection paths
+ */
+export const onTestSignalCreated = onDocumentCreated(
+  "signals_test/{signalId}",
+  (event) => handleSignalCreated(event, true)
+);
 
-    if (!commentData) {
-      console.log("No comment data found, exiting");
-      return;
-    }
+export const onTestSignalUpdated = onDocumentUpdated(
+  "signals_test/{signalId}",
+  (event) => handleSignalUpdated(event, true)
+);
 
-    const authorRef = commentData.author as
-      | admin.firestore.DocumentReference
-      | undefined;
-    const commentText = commentData.text as string;
-
-    console.log("Author ref:", authorRef?.path);
-    console.log("Comment text:", commentText);
-
-    // Get the signal to get its title
-    const signalDoc = await db.collection("signals").doc(signalId).get();
-    if (!signalDoc.exists) {
-      console.log("Signal document not found, exiting");
-      return;
-    }
-
-    const signalData = signalDoc.data();
-    const signalTitle = signalData?.title as string;
-    console.log("Signal title:", signalTitle);
-
-    // Find users subscribed to this signal
-    const userTokens: Map<string, string[]> = new Map();
-
-    const subscribedUsersSnapshot = await db
-      .collection("users")
-      .where("signalSubscriptions", "array-contains", signalId)
-      .get();
-
-    console.log("Found subscribed users:", subscribedUsersSnapshot.size);
-
-    for (const userDoc of subscribedUsersSnapshot.docs) {
-      const userId = userDoc.id;
-      const userData = userDoc.data() as UserData;
-
-      console.log("Processing user:", userId);
-      console.log("User has FCM tokens:", userData.fcmTokens?.length || 0);
-
-      // Skip the comment author
-      if (authorRef && authorRef.id === userId) {
-        console.log("Skipping comment author:", userId);
-        continue;
-      }
-
-      // Skip if no FCM tokens
-      if (!userData.fcmTokens || userData.fcmTokens.length === 0) {
-        console.log("User has no FCM tokens, skipping:", userId);
-        continue;
-      }
-
-      console.log("Adding user to notification list:", userId);
-      userTokens.set(userId, userData.fcmTokens);
-    }
-
-    console.log("Total users to notify:", userTokens.size);
-
-    if (userTokens.size === 0) {
-      console.log("No users to notify, exiting");
-      return;
-    }
-
-    // Truncate comment text for notification
-    const truncatedComment =
-      commentText.length > 50 ? commentText.substring(0, 47) + "..." : commentText;
-
-    console.log("Sending notifications...");
-    await sendNotificationsToUsers(
-      userTokens,
-      {
-        title: `New comment on: ${signalTitle}`,
-        body: truncatedComment,
-      },
-      {
-        signalId,
-        type: "new_comment",
-      }
-    );
-    console.log("Notifications sent successfully");
-  }
+export const onTestCommentCreated = onDocumentCreated(
+  "signals_test/{signalId}/comments/{commentId}",
+  (event) => handleCommentCreated(event, true)
 );
 
 // Feedback type labels

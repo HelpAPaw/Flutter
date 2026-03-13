@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 import 'package:geolocator/geolocator.dart';
+import 'app_preferences_service.dart';
 
 
 class LocationService {
@@ -173,7 +174,7 @@ class LocationService {
     final geoPoint = GeoPoint(position.latitude, position.longitude);
     final geoFirePoint = GeoFirePoint(geoPoint);
 
-    final signalsCollection = FirebaseFirestore.instance.collection('signals');
+    final signalsCollection = FirebaseFirestore.instance.collection(AppPreferencesService().signalsCollectionName);
 
     // Use GeoFlutterFire to query nearby signals
     final stream = GeoCollectionReference(signalsCollection).subscribeWithin(

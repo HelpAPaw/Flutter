@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
+import 'package:help_a_paw/src/services/app_preferences_service.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
@@ -62,7 +63,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
     try {
       final signalsSnapshot = await FirebaseFirestore.instance
-          .collection('signals')
+          .collection(AppPreferencesService().signalsCollectionName)
           .where('reporter', isEqualTo: userRef)
           .count()
           .get();

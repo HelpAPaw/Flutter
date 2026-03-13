@@ -9,9 +9,14 @@ class FirebaseSignalRepository implements SignalRepository {
   final FirebaseFirestore _firestore;
   final CollectionReference<Map<String, dynamic>> _signalsRef;
 
-  FirebaseSignalRepository({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance,
-        _signalsRef = (firestore ?? FirebaseFirestore.instance).collection('signals');
+  final String collectionName;
+
+  FirebaseSignalRepository({
+    FirebaseFirestore? firestore,
+    String collectionName = 'signals',
+  })  : collectionName = collectionName,
+        _firestore = firestore ?? FirebaseFirestore.instance,
+        _signalsRef = (firestore ?? FirebaseFirestore.instance).collection(collectionName);
 
   @override
   Stream<List<SignalWithId>> getSignalsInRadius({

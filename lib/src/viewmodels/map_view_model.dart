@@ -9,8 +9,14 @@ import 'package:image_picker/image_picker.dart';
 import '../models/vet_clinic.dart';
 import '../repositories/repository_provider.dart';
 import '../repositories/signal_repository.dart';
+import '../services/app_preferences_service.dart';
 import '../services/vet_clinic_service.dart';
 import '../state/map_state.dart';
+
+/// Provider for test mode state. Toggling this invalidates the signals stream.
+final testModeProvider = StateProvider<bool>((ref) {
+  return AppPreferencesService().isTestMode();
+});
 
 /// Provider for the map view model
 final mapViewModelProvider =
@@ -20,6 +26,9 @@ final mapViewModelProvider =
 
 /// Provider for the signals stream based on current map center and time range
 final signalsStreamProvider = StreamProvider<List<SignalWithId>>((ref) {
+  // Watch test mode so toggling it re-subscribes to the correct collection
+  ref.watch(testModeProvider);
+
   final centerLat = ref.watch(
     mapViewModelProvider.select((s) => s.centerLatitude),
   );

@@ -1,5 +1,6 @@
 import 'package:adaptive_components/adaptive_components.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
@@ -33,6 +34,10 @@ class _MapScreenState extends ConsumerState<MapScreen>
   final _markerBuilder = MapMarkerBuilder();
   bool _showOnboardingButton = false;
   bool _onboardingSheetShown = false;
+
+  // Test mode toggle state
+  int _titleTapCount = 0;
+  DateTime? _lastTitleTap;
 
   static const _signalClusterManagerId = ClusterManagerId('signals');
   late final ClusterManager _signalClusterManager = ClusterManager(
@@ -76,6 +81,49 @@ class _MapScreenState extends ConsumerState<MapScreen>
       _showOnboardingSheet();
     } else if (prefs.shouldShowOnboardingButton()) {
       setState(() => _showOnboardingButton = true);
+    }
+  }
+
+  void _handleTitleTap() async {
+    final now = DateTime.now();
+    if (_lastTitleTap != null &&
+        now.difference(_lastTitleTap!).inSeconds > 2) {
+      _titleTapCount = 0;
+    }
+    _lastTitleTap = now;
+    _titleTapCount++;
+
+    if (_titleTapCount >= 7) {
+      _titleTapCount = 0;
+      final prefs = AppPreferencesService();
+      final newTestMode = !prefs.isTestMode();
+      await prefs.setTestMode(newTestMode);
+
+      // Update Riverpod state — this invalidates the signals stream
+      ref.read(testModeProvider.notifier).state = newTestMode;
+
+      // Reset the signal repository so it picks up the new collection
+      RepositoryProvider.instance.resetSignalRepository();
+
+      // Sync testMode flag to Firestore user document
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        FirebaseFirestore.instance.collection('users').doc(user.uid).set(
+          {'testMode': newTestMode},
+          SetOptions(merge: true),
+        );
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(newTestMode
+                ? 'Test mode enabled'
+                : 'Test mode disabled'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
     }
   }
 
@@ -437,7 +485,13 @@ class _MapScreenState extends ConsumerState<MapScreen>
           ),
         ),
         appBar: AppBar(
-          title: const Text('Help a Paw'),
+          title: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _handleTitleTap,
+            child: Text(
+              ref.watch(testModeProvider) ? 'Help a Paw (TEST)' : 'Help a Paw',
+            ),
+          ),
           backgroundColor: Colors.orange,
           foregroundColor: Colors.white,
           actions: <Widget>[

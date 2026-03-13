@@ -16,6 +16,7 @@ import 'package:photo_view/photo_view_gallery.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/signal.dart';
+import '../services/app_preferences_service.dart';
 
 class SignalDetailsScreen extends StatefulWidget {
   const SignalDetailsScreen({super.key, required this.signalId});
@@ -40,7 +41,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final locale = Localizations.localeOf(context).languageCode;
-    _signalStream ??= FirebaseFirestore.instance.collection('signals').doc(widget.signalId).snapshots();
+    _signalStream ??= FirebaseFirestore.instance.collection(AppPreferencesService().signalsCollectionName).doc(widget.signalId).snapshots();
     Signal signal;
 
     return StreamBuilder(stream: _signalStream, builder: (BuildContext context, AsyncSnapshot<DocumentSnapshot> snapshot) {
@@ -438,7 +439,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                             children: [
                               Text(l10n.comments),
                               StreamBuilder(
-                                stream: FirebaseFirestore.instance.collection('signals').doc(widget.signalId).collection('comments')
+                                stream: FirebaseFirestore.instance.collection(AppPreferencesService().signalsCollectionName).doc(widget.signalId).collection('comments')
                                   .orderBy('createdAt').snapshots(),
                                 builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
                                   if (snapshot.hasError) {
@@ -625,7 +626,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   Future<void> _addComment() async {
     final userId = FirebaseAuth.instance.currentUser!.uid;
 
-    await FirebaseFirestore.instance.collection('signals').doc(widget.signalId).collection('comments').add({
+    await FirebaseFirestore.instance.collection(AppPreferencesService().signalsCollectionName).doc(widget.signalId).collection('comments').add({
       'text': _newCommentController.text,
       'createdAt': DateTime.now(),
       'author': FirebaseFirestore.instance.collection('users').doc(userId),
@@ -697,7 +698,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       return;
     }
 
-    final signalRef = FirebaseFirestore.instance.collection('signals').doc(widget.signalId);
+    final signalRef = FirebaseFirestore.instance.collection(AppPreferencesService().signalsCollectionName).doc(widget.signalId);
 
     await signalRef.update({
       'status': newStatus,
@@ -765,7 +766,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         final photoUrl = await _uploadImageToStorage(image);
 
         await FirebaseFirestore.instance
-            .collection('signals')
+            .collection(AppPreferencesService().signalsCollectionName)
             .doc(widget.signalId)
             .update({
           'photoUrls': FieldValue.arrayUnion([photoUrl])
@@ -833,7 +834,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
 
     try {
       await FirebaseFirestore.instance
-          .collection('signals')
+          .collection(AppPreferencesService().signalsCollectionName)
           .doc(widget.signalId)
           .update({
         'photoUrls': FieldValue.arrayRemove([photoUrl])
