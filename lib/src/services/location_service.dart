@@ -14,7 +14,10 @@ class LocationService {
   LocationService._internal();
 
   StreamSubscription<Position>? _positionSubscription;
-  final Set<String> _notifiedSignalIds = {};
+  final Map<String, DateTime> _notifiedSignals = {};
+
+  /// Cached notification preferences to avoid Firestore reads on every location update
+  Map<String, dynamic>? _cachedPrefs;
 
   /// Default radius in km for checking nearby signals
   static const double defaultRadiusKm = 10.0;
@@ -157,14 +160,18 @@ class LocationService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // Get user's notification preferences
-    final userDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .get()
-        .timeout(const Duration(seconds: 10));
+    // Use cached preferences to avoid a Firestore read on every location update.
+    // Cache is invalidated when preferences change via setLocationTrackingEnabled.
+    if (_cachedPrefs == null) {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get()
+          .timeout(const Duration(seconds: 10));
+      _cachedPrefs = userDoc.data()?['notificationPreferences'];
+    }
 
-    final prefs = userDoc.data()?['notificationPreferences'];
+    final prefs = _cachedPrefs;
     if (prefs == null || prefs['enabled'] != true) return;
 
     final radiusKm = (prefs['locationRadiusKm'] as num?)?.toDouble() ?? defaultRadiusKm;
@@ -187,6 +194,9 @@ class LocationService {
       geopointFrom: (data) => (data['location'] as Map<String, dynamic>)['geopoint'] as GeoPoint,
     );
 
+    // Prune notified signals older than 24 hours
+    _notifiedSignals.removeWhere((_, createdAt) => createdAt.isBefore(twentyFourHoursAgo));
+
     // Get first emission and process
     final signals = await stream.first;
 
@@ -195,12 +205,13 @@ class LocationService {
       final data = doc.data() as Map<String, dynamic>;
 
       // Skip if already notified
-      if (_notifiedSignalIds.contains(signalId)) continue;
+      if (_notifiedSignals.containsKey(signalId)) continue;
 
       // Check if signal is within last 24 hours
       final createdAt = data['createdAt'] as Timestamp?;
       if (createdAt == null) continue;
-      if (createdAt.toDate().isBefore(twentyFourHoursAgo)) continue;
+      final createdAtDate = createdAt.toDate();
+      if (createdAtDate.isBefore(twentyFourHoursAgo)) continue;
 
       // Check if signal type is in user's preferences
       final signalType = data['signalType'] as int?;
@@ -213,7 +224,7 @@ class LocationService {
       if (reporter != null && reporter.id == user.uid) continue;
 
       // Mark as notified (local notification not yet implemented)
-      _notifiedSignalIds.add(signalId);
+      _notifiedSignals[signalId] = createdAtDate;
       debugPrint('New signal nearby: $signalId');
     }
   }
@@ -241,23 +252,26 @@ class LocationService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
-      {
-        'notificationPreferences': {
-          'locationTrackingEnabled': enabled,
-        },
-      },
-      SetOptions(merge: true),
-    ).timeout(const Duration(seconds: 10));
+    // Invalidate cached preferences so next location update re-fetches
+    _cachedPrefs = null;
 
     if (enabled) {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
+        {
+          'notificationPreferences': {
+            'locationTrackingEnabled': true,
+          },
+        },
+        SetOptions(merge: true),
+      ).timeout(const Duration(seconds: 10));
       await startLocationTracking();
     } else {
-      await stopLocationTracking();
-      // Clear current location
+      // Combine preference update and location clear in a single write
       await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+        'notificationPreferences.locationTrackingEnabled': false,
         'currentLocation': FieldValue.delete(),
       }).timeout(const Duration(seconds: 10));
+      await stopLocationTracking();
     }
   }
 }
