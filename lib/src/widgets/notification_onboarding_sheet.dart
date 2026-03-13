@@ -55,12 +55,20 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
         locationPermission == LocationPermission.always;
     if (!locationGranted) steps.add(_OnboardingStep.location);
 
-    // Check region selection
+    // Check region selection — use timeout to prevent hang while waiting for App Check token
     final user = FirebaseAuth.instance.currentUser;
     bool regionSet = false;
     if (user != null) {
-      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      regionSet = doc.data()?['notificationPreferences']?['regionOfInterest'] != null;
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get()
+            .timeout(const Duration(seconds: 10));
+        regionSet = doc.data()?['notificationPreferences']?['regionOfInterest'] != null;
+      } catch (e) {
+        // Timeout or Firestore error — treat as region not set
+      }
     }
     if (!regionSet) steps.add(_OnboardingStep.region);
 
@@ -108,10 +116,14 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
       if (notificationGranted) {
         final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
-          await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
-            {'notificationPreferences': {'enabled': true}},
-            SetOptions(merge: true),
-          );
+          try {
+            await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
+              {'notificationPreferences': {'enabled': true}},
+              SetOptions(merge: true),
+            ).timeout(const Duration(seconds: 10));
+          } catch (e) {
+            // Timeout or Firestore error — continue onboarding
+          }
         }
       }
 
@@ -137,15 +149,19 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
 
         final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
-          await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
-            {
-              'notificationPreferences': {
-                'locationTrackingEnabled': true,
-                'locationRadiusKm': 10.0,
+          try {
+            await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
+              {
+                'notificationPreferences': {
+                  'locationTrackingEnabled': true,
+                  'locationRadiusKm': 10.0,
+                },
               },
-            },
-            SetOptions(merge: true),
-          );
+              SetOptions(merge: true),
+            ).timeout(const Duration(seconds: 10));
+          } catch (e) {
+            // Timeout or Firestore error — continue onboarding
+          }
         }
       }
 
@@ -167,10 +183,14 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
     if (result != null) {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
-          {'notificationPreferences': {'regionOfInterest': result}},
-          SetOptions(merge: true),
-        );
+        try {
+          await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
+            {'notificationPreferences': {'regionOfInterest': result}},
+            SetOptions(merge: true),
+          ).timeout(const Duration(seconds: 10));
+        } catch (e) {
+          // Timeout or Firestore error — continue onboarding
+        }
       }
     }
 

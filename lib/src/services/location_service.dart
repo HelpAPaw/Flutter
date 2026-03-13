@@ -121,10 +121,12 @@ class LocationService {
   Future<void> _onLocationChanged(Position position) async {
     debugPrint('Location changed: ${position.latitude}, ${position.longitude}');
 
-    // Update location in Firestore
-    await _updateLocationInFirestore(position);
+    try {
+      await _updateLocationInFirestore(position);
+    } catch (e) {
+      debugPrint('Error updating location in Firestore: $e');
+    }
 
-    // Check for nearby signals
     await _checkForNearbySignals(position);
   }
 
@@ -145,7 +147,7 @@ class LocationService {
         },
       },
       SetOptions(merge: true),
-    );
+    ).timeout(const Duration(seconds: 10));
 
     debugPrint('Updated location in Firestore: ${geoFirePoint.geohash}');
   }
@@ -159,7 +161,8 @@ class LocationService {
     final userDoc = await FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
-        .get();
+        .get()
+        .timeout(const Duration(seconds: 10));
 
     final prefs = userDoc.data()?['notificationPreferences'];
     if (prefs == null || prefs['enabled'] != true) return;
@@ -245,7 +248,7 @@ class LocationService {
         },
       },
       SetOptions(merge: true),
-    );
+    ).timeout(const Duration(seconds: 10));
 
     if (enabled) {
       await startLocationTracking();
@@ -254,7 +257,7 @@ class LocationService {
       // Clear current location
       await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
         'currentLocation': FieldValue.delete(),
-      });
+      }).timeout(const Duration(seconds: 10));
     }
   }
 }
