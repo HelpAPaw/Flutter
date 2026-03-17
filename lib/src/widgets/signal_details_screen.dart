@@ -48,7 +48,9 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       if (snapshot.hasError) {
         return Text(l10n.somethingWentWrong);
       } else if (snapshot.connectionState == ConnectionState.waiting) {
-        return const CircularProgressIndicator();
+        return const Scaffold(
+          body: Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.orange))),
+        );
       } else {
         final signalData = snapshot.data!.data() as Map<String, dynamic>;
         signal = Signal.fromJson(signalData);
