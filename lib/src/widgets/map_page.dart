@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:adaptive_components/adaptive_components.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -29,11 +31,24 @@ class MapScreen extends ConsumerStatefulWidget {
 
 class _MapScreenState extends ConsumerState<MapScreen>
     with SingleTickerProviderStateMixin {
+  // Approximate native InfoWindow dimensions for invisible tap target
+  static const _kInfoWindowWidth = 220.0;
+  static const _kInfoWindowHeight = 80.0;
+  static const _kPinHeight = 29.0;
+
   late AnimationController _fabAnimationController;
   late GoogleMapController _mapController;
   final _markerBuilder = MapMarkerBuilder();
   bool _showOnboardingButton = false;
   bool _onboardingSheetShown = false;
+
+  // Invisible tap-target state for the native InfoWindow workaround.
+  // Native InfoWindow.onTap is broken with ClusterManager
+  // (flutter/flutter#159636), so we show the native InfoWindow for display
+  // and overlay an invisible GestureDetector for tap handling.
+  SignalWithId? _selectedSignal;
+  double? _overlayX;
+  double? _overlayY;
 
   // Test mode toggle state
   int _titleTapCount = 0;
@@ -263,15 +278,67 @@ class _MapScreenState extends ConsumerState<MapScreen>
     );
   }
 
+  /// Convert a [ScreenCoordinate] to logical pixels.
+  /// Android returns physical pixels; iOS returns logical points.
+  (double x, double y) _screenCoordToLogical(ScreenCoordinate coord) {
+    final dpr = Platform.isAndroid
+        ? MediaQuery.of(context).devicePixelRatio
+        : 1.0;
+    return (coord.x.toDouble() / dpr, coord.y.toDouble() / dpr);
+  }
+
+  Future<void> _showSignalOverlay(SignalWithId signal) async {
+    // Show the native InfoWindow (moves perfectly with the map).
+    // Fire-and-forget — independent of screen coordinate calculation.
+    _mapController.showMarkerInfoWindow(MarkerId(signal.id));
+
+    final screenCoord = await _mapController.getScreenCoordinate(
+      LatLng(signal.location.latitude, signal.location.longitude),
+    );
+    if (!mounted) return;
+    final (x, y) = _screenCoordToLogical(screenCoord);
+    setState(() {
+      _selectedSignal = signal;
+      _overlayX = x;
+      _overlayY = y;
+    });
+  }
+
+  void _dismissOverlay() {
+    if (_selectedSignal != null) {
+      _mapController.hideMarkerInfoWindow(MarkerId(_selectedSignal!.id));
+      setState(() {
+        _selectedSignal = null;
+        _overlayX = null;
+        _overlayY = null;
+      });
+    }
+  }
+
+  Future<void> _updateOverlayPosition() async {
+    if (_selectedSignal == null) return;
+    final signal = _selectedSignal!;
+    final screenCoord = await _mapController.getScreenCoordinate(
+      LatLng(signal.location.latitude, signal.location.longitude),
+    );
+    if (!mounted || _selectedSignal?.id != signal.id) return;
+    final (x, y) = _screenCoordToLogical(screenCoord);
+    setState(() {
+      _overlayX = x;
+      _overlayY = y;
+    });
+  }
+
   void _showSignalInfoWindow(String signalId) {
     // Wait for Firestore stream to emit, widget to rebuild with new marker,
-    // and native Google Map to render it.
-    Future.delayed(const Duration(seconds: 2), () async {
+    // and native Google Map to render it, then show custom overlay.
+    Future.delayed(const Duration(seconds: 2), () {
       if (!mounted) return;
-      try {
-        await _mapController.showMarkerInfoWindow(MarkerId(signalId));
-      } catch (_) {
-        // Marker may not be rendered yet; ignore silently
+      final signals = ref.read(signalsStreamProvider).valueOrNull;
+      if (signals == null) return;
+      final signal = signals.where((s) => s.id == signalId).firstOrNull;
+      if (signal != null) {
+        _showSignalOverlay(signal);
       }
     });
   }
@@ -347,7 +414,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
         signals: signals,
         filterPredicate: (signalType, status) =>
             mapState.filterState.signalPassesFilter(signalType, status),
-        onSignalTap: (signalId) => context.push('/signal_details/$signalId'),
+        onMarkerTap: _showSignalOverlay,
         clusterManagerId: _signalClusterManagerId,
       );
     });
@@ -383,12 +450,41 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 onMapCreated: (GoogleMapController controller) {
                   _mapController = controller;
                 },
-                onCameraIdle: _onCameraIdle,
+                onTap: (_) => _dismissOverlay(),
+                onCameraIdle: () {
+                  _onCameraIdle();
+                  _updateOverlayPosition();
+                },
                 zoomControlsEnabled: true,
                 myLocationEnabled: mapState.hasLocationPermission,
                 markers: allMarkers,
                 clusterManagers: _clusterManagers,
               ),
+              // Invisible tap target over the native InfoWindow.
+              // The native InfoWindow renders & tracks the marker perfectly,
+              // but its onTap is broken with ClusterManager
+              // (flutter/flutter#159636). This transparent overlay catches taps.
+              if (_selectedSignal != null &&
+                  _overlayX != null &&
+                  _overlayY != null)
+                Positioned(
+                  left: (_overlayX! - _kInfoWindowWidth / 2).clamp(
+                      0.0, MediaQuery.of(context).size.width - _kInfoWindowWidth),
+                  top: (_overlayY! - _kInfoWindowHeight - _kPinHeight)
+                      .clamp(0.0, double.infinity),
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTap: () {
+                      final signalId = _selectedSignal!.id;
+                      _dismissOverlay();
+                      context.push('/signal_details/$signalId');
+                    },
+                    child: const SizedBox(
+                      width: _kInfoWindowWidth,
+                      height: _kInfoWindowHeight,
+                    ),
+                  ),
+                ),
               // Crosshair for new signal placement
               if (mapState.isAddingNewSignal)
                 IgnorePointer(

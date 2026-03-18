@@ -54,11 +54,16 @@ class MapMarkerBuilder {
         : BitmapDescriptor.defaultMarker;
   }
 
-  /// Build a set of markers from a list of signals
+  /// Build a set of markers from a list of signals.
+  ///
+  /// Native [InfoWindow.onTap] is broken when markers use [ClusterManager]
+  /// (flutter/flutter#159636). As a workaround, the native InfoWindow is kept
+  /// for display (it tracks the map perfectly), and [onMarkerTap] is called
+  /// via [Marker.onTap] so the caller can overlay an invisible tap target.
   Set<Marker> buildSignalMarkers({
     required List<SignalWithId> signals,
     required bool Function(int signalType, int status) filterPredicate,
-    required void Function(String signalId) onSignalTap,
+    required void Function(SignalWithId signal) onMarkerTap,
     ClusterManagerId? clusterManagerId,
   }) {
     return signals.where((signal) {
@@ -72,10 +77,10 @@ class MapMarkerBuilder {
         infoWindow: InfoWindow(
           title: signal.signal.title,
           snippet: signal.signal.description,
-          onTap: () => onSignalTap(signal.id),
         ),
         icon: getSignalPin(signal.status),
         clusterManagerId: clusterManagerId,
+        onTap: () => onMarkerTap(signal),
       );
     }).toSet();
   }
