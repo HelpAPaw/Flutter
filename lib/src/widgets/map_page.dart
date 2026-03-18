@@ -50,6 +50,10 @@ class _MapScreenState extends ConsumerState<MapScreen>
   double? _overlayX;
   double? _overlayY;
 
+  // Listener that waits for a specific signal to appear in the stream
+  // before showing its info window (used after signal creation / notification).
+  ProviderSubscription<AsyncValue<List<SignalWithId>>>? _pendingInfoWindowSub;
+
   // Test mode toggle state
   int _titleTapCount = 0;
   DateTime? _lastTitleTap;
@@ -85,6 +89,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
   @override
   void dispose() {
+    _pendingInfoWindowSub?.close();
     _fabAnimationController.dispose();
     super.dispose();
   }
@@ -329,17 +334,34 @@ class _MapScreenState extends ConsumerState<MapScreen>
     });
   }
 
+  /// Show overlay after a short delay for the native map to render the marker.
+  void _showOverlayAfterRender(SignalWithId signal) {
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) _showSignalOverlay(signal);
+    });
+  }
+
   void _showSignalInfoWindow(String signalId) {
-    // Wait for Firestore stream to emit, widget to rebuild with new marker,
-    // and native Google Map to render it, then show custom overlay.
-    Future.delayed(const Duration(seconds: 2), () {
-      if (!mounted) return;
-      final signals = ref.read(signalsStreamProvider).valueOrNull;
-      if (signals == null) return;
-      final signal = signals.where((s) => s.id == signalId).firstOrNull;
+    // Listen for the signal to appear in the stream. fireImmediately replays
+    // the current value, so if the signal is already present it's found
+    // without waiting for the next emission (also avoids a race between a
+    // separate ref.read and the listener setup).
+    _pendingInfoWindowSub?.close();
+    _pendingInfoWindowSub = ref.listenManual(signalsStreamProvider, (_, next) {
+      final signal = next.valueOrNull
+          ?.where((s) => s.id == signalId)
+          .firstOrNull;
       if (signal != null) {
-        _showSignalOverlay(signal);
+        _pendingInfoWindowSub?.close();
+        _pendingInfoWindowSub = null;
+        _showOverlayAfterRender(signal);
       }
+    }, fireImmediately: true);
+
+    // Safety timeout: stop listening if the signal never arrives
+    Future.delayed(const Duration(seconds: 10), () {
+      _pendingInfoWindowSub?.close();
+      _pendingInfoWindowSub = null;
     });
   }
 
