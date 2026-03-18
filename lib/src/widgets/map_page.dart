@@ -497,9 +497,17 @@ class _MapScreenState extends ConsumerState<MapScreen>
                   child: GestureDetector(
                     behavior: HitTestBehavior.translucent,
                     onTap: () {
-                      final signalId = _selectedSignal!.id;
-                      _dismissOverlay();
-                      context.push('/signal_details/$signalId');
+                      final signal = _selectedSignal!;
+                      context.push('/signal_details/${signal.id}').then((_) {
+                        // Re-show the native InfoWindow when returning;
+                        // the platform hides it during route transitions.
+                        if (mounted && _selectedSignal?.id == signal.id) {
+                          _mapController.showMarkerInfoWindow(
+                            MarkerId(signal.id),
+                          );
+                          _updateOverlayPosition();
+                        }
+                      });
                     },
                     child: const SizedBox(
                       width: _kInfoWindowWidth,
