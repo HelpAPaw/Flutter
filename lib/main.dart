@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:io' show Platform;
+import 'dart:ui' show PlatformDispatcher;
 
 import 'package:firebase_auth/firebase_auth.dart'
     hide PhoneAuthProvider, EmailAuthProvider;
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_ui_auth/firebase_ui_auth.dart';
 import 'package:firebase_ui_oauth_google/firebase_ui_oauth_google.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
@@ -60,6 +62,15 @@ Future<void> main() async {
     // Firebase already initialized, which is fine
   }
 
+  // Pass all Flutter framework errors to Crashlytics
+  FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+
+  // Pass all uncaught async errors to Crashlytics
+  PlatformDispatcher.instance.onError = (error, stack) {
+    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    return true;
+  };
+
   // Initialize App Check
   await FirebaseAppCheck.instance.activate(
     androidProvider: kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
@@ -88,6 +99,14 @@ Future<void> main() async {
       debugPrint('Anonymous sign-in failed: $e');
     }
   }
+
+  // Set Crashlytics user identifier (UID only, no PII)
+  FirebaseCrashlytics.instance.setUserIdentifier(
+    FirebaseAuth.instance.currentUser?.uid ?? '',
+  );
+  FirebaseAuth.instance.authStateChanges().listen((user) {
+    FirebaseCrashlytics.instance.setUserIdentifier(user?.uid ?? '');
+  });
 
   // Initialize notification service (router will be passed after it's created)
   await NotificationService().initialize(router: _router);

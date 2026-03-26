@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -204,6 +205,7 @@ class NotificationService {
         Future.delayed(delay, () => _updateFcmToken(retryCount: retryCount + 1));
       } else {
         debugPrint('FCM token registration failed after $retryCount retries, giving up');
+        FirebaseCrashlytics.instance.recordError(e, StackTrace.current, reason: 'FCM token registration failed after $retryCount retries');
       }
     }
   }
