@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -232,6 +233,8 @@ class MapViewModel extends StateNotifier<MapScreenState> {
       return (false, 'invalid_form');
     }
 
+    FirebaseCrashlytics.instance.log('Signal: Submitting - type: ${state.formState.signalType}, location: $latitude/$longitude');
+
     state = state.copyWith(
       formState: state.formState.copyWith(isSubmitting: true),
     );
@@ -295,6 +298,7 @@ class MapViewModel extends StateNotifier<MapScreenState> {
         }
       }
 
+      FirebaseCrashlytics.instance.log('Signal: Created successfully - id: ${result.signalId}');
       state = state.copyWith(
         isAddingNewSignal: false,
         newlyCreatedSignalId: result.signalId,
@@ -316,6 +320,7 @@ class MapViewModel extends StateNotifier<MapScreenState> {
   /// Toggle vet clinics visibility
   void toggleVetClinics() {
     final show = !state.vetClinicState.showVetClinics;
+    FirebaseCrashlytics.instance.log('Map: Vet clinics toggled - show: $show');
     state = state.copyWith(
       vetClinicState: state.vetClinicState.copyWith(
         showVetClinics: show,

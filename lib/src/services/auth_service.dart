@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 
 import 'notification_service.dart';
@@ -52,11 +53,12 @@ class AuthService {
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
+      FirebaseCrashlytics.instance.log('Auth: Anonymous account linked successfully');
       debugPrint('Successfully linked anonymous account');
       return LinkResult.linked;
     } on FirebaseAuthException catch (e) {
       if (e.code == 'credential-already-in-use') {
-        // The credential is already associated with a different account
+        FirebaseCrashlytics.instance.log('Auth: Credential already in use - needs merge');
         debugPrint('Credential already in use, needs merge');
         return LinkResult.needsMerge;
       }
@@ -83,6 +85,7 @@ class AuthService {
   ///
   /// The existing account keeps its settings, we just add the anonymous tokens
   Future<void> mergeAnonymousIntoExisting(String anonymousUid, String existingUid) async {
+    FirebaseCrashlytics.instance.log('Auth: Merging anonymous into existing account');
     debugPrint('Merging anonymous $anonymousUid into existing $existingUid');
 
     // Get anonymous user data
@@ -113,6 +116,7 @@ class AuthService {
   /// Transfer all data from anonymous account to a new account
   /// This is used when creating a brand new account from anonymous
   Future<void> transferAnonymousData(String anonymousUid, String newUid) async {
+    FirebaseCrashlytics.instance.log('Auth: Transferring anonymous data to new account');
     debugPrint('Transferring data from anonymous $anonymousUid to new $newUid');
 
     // Get anonymous user data
@@ -167,7 +171,7 @@ class AuthService {
   Future<User?> handleAnonymousSignIn(AuthCredential credential) async {
     final currentUser = _auth.currentUser;
     if (currentUser == null || !currentUser.isAnonymous) {
-      // Not anonymous, just sign in normally
+      FirebaseCrashlytics.instance.log('Auth: Direct sign-in (not anonymous)');
       final result = await _auth.signInWithCredential(credential);
 
       // Save FCM token for the signed-in user

@@ -94,6 +94,7 @@ Future<void> main() async {
   // This allows anonymous users to save notification preferences
   if (FirebaseAuth.instance.currentUser == null) {
     try {
+      FirebaseCrashlytics.instance.log('Auth: Anonymous sign-in started');
       await FirebaseAuth.instance.signInAnonymously();
     } catch (e) {
       debugPrint('Anonymous sign-in failed: $e');
@@ -106,6 +107,7 @@ Future<void> main() async {
   );
   FirebaseAuth.instance.authStateChanges().listen((user) {
     FirebaseCrashlytics.instance.setUserIdentifier(user?.uid ?? '');
+    FirebaseCrashlytics.instance.log('Auth: State changed - ${user != null ? (user.isAnonymous ? "anonymous" : "authenticated") : "signed out"}');
   });
 
   // Initialize notification service (router will be passed after it's created)
@@ -131,6 +133,7 @@ final GoRouter _router = GoRouter(
       
       // Redirect unverified email users to verification screen
       if (hasPasswordProvider && !user.emailVerified && !isVerifyingEmail && !isCompletingProfile) {
+        FirebaseCrashlytics.instance.log('Navigation: Redirecting to /verify_email - email not verified');
         return '/verify_email';
       }
       

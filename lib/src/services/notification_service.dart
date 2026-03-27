@@ -44,6 +44,7 @@ class NotificationService {
   /// Phase 1: Basic initialization (no permission triggers)
   Future<void> initialize({GoRouter? router}) async {
     _router = router;
+    FirebaseCrashlytics.instance.log('Notification: Phase 1 init started');
 
     // Initialize local notifications (minimal setup)
     await _initializeLocalNotifications();
@@ -91,6 +92,7 @@ class NotificationService {
     });
 
     _isFullyInitialized = true;
+    FirebaseCrashlytics.instance.log('Notification: Phase 2 init completed');
 
     // Get and save the current FCM token
     // This ensures token is saved for users who already have permissions
@@ -120,6 +122,7 @@ class NotificationService {
   }
 
   void _handleForegroundMessage(RemoteMessage message) {
+    FirebaseCrashlytics.instance.log('Notification: Foreground message received - signalId: ${message.data['signalId']}');
     debugPrint('Received foreground message: ${message.messageId}');
 
     final notification = message.notification;
@@ -150,9 +153,10 @@ class NotificationService {
   }
 
   void _handleNotificationTap(RemoteMessage message) {
+    final signalId = message.data['signalId'];
+    FirebaseCrashlytics.instance.log('Notification: Tapped - signalId: $signalId');
     debugPrint('Notification tapped: ${message.data}');
 
-    final signalId = message.data['signalId'];
     if (signalId != null && _router != null) {
       pendingFocusSignalId = signalId;
       _router!.push('/signal_details/$signalId');
@@ -254,6 +258,7 @@ class NotificationService {
 
     final granted = settings.authorizationStatus == AuthorizationStatus.authorized ||
         settings.authorizationStatus == AuthorizationStatus.provisional;
+    FirebaseCrashlytics.instance.log('Notification: Permission ${granted ? "granted" : "denied"} (${settings.authorizationStatus})');
 
     if (granted) {
       // Request local notification permissions on Android 13+
@@ -279,6 +284,7 @@ class NotificationService {
 
   /// Call this when user explicitly logs out - removes only this device's token
   Future<void> onUserLogout() async {
+    FirebaseCrashlytics.instance.log('Notification: User logout - removing FCM token');
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 

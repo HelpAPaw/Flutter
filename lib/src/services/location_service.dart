@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 import 'package:geolocator/geolocator.dart';
@@ -54,6 +55,7 @@ class LocationService {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
+    FirebaseCrashlytics.instance.log('Location: Permission result - $permission');
 
     return permission;
   }
@@ -98,6 +100,7 @@ class LocationService {
       },
     );
 
+    FirebaseCrashlytics.instance.log('Location: Tracking started');
     debugPrint('Location tracking started');
 
     // Get initial position and update
@@ -249,6 +252,7 @@ class LocationService {
 
   /// Save location tracking preference
   Future<void> setLocationTrackingEnabled(bool enabled) async {
+    FirebaseCrashlytics.instance.log('Location: Tracking ${enabled ? "enabled" : "disabled"} by user');
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 

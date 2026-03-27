@@ -1,6 +1,7 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide EmailAuthProvider;
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_ui_auth/firebase_ui_auth.dart';
 import 'package:firebase_ui_oauth_google/firebase_ui_oauth_google.dart';
 import 'package:flutter/material.dart';
@@ -161,6 +162,7 @@ class _SignInPageState extends State<SignInPage> {
                 actions: [
                   AuthStateChangeAction<SignedIn>((context, state) async {
                     final user = state.user;
+                    FirebaseCrashlytics.instance.log('Auth: User signed in - isAnonymous: ${user?.isAnonymous}');
 
                     // Handle anonymous data merge if user was previously anonymous
                     if (previousAnonymousUid != null && user != null) {
@@ -183,6 +185,7 @@ class _SignInPageState extends State<SignInPage> {
                     }
                   }),
                   AuthStateChangeAction<UserCreated>((context, state) async {
+                    FirebaseCrashlytics.instance.log('Auth: New account created');
                     final user = FirebaseAuth.instance.currentUser;
 
                     // Handle anonymous data merge for new account creation
