@@ -1,3 +1,4 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:help_a_paw/src/repositories/repository_provider.dart';
 import 'package:help_a_paw/src/state/map_state.dart';
@@ -8,6 +9,7 @@ import '../mocks/mock_storage_repository.dart';
 import '../mocks/mock_user_repository.dart';
 
 void main() {
+  late ProviderContainer container;
   late MapViewModel viewModel;
   late MockSignalRepository mockSignalRepo;
   late MockStorageRepository mockStorageRepo;
@@ -24,11 +26,12 @@ void main() {
     RepositoryProvider.instance.setStorageRepository(mockStorageRepo);
     RepositoryProvider.instance.setUserRepository(mockUserRepo);
 
-    viewModel = MapViewModel();
+    container = ProviderContainer();
+    viewModel = container.read(mapViewModelProvider.notifier);
   });
 
   tearDown(() {
-    viewModel.dispose();
+    container.dispose();
     mockSignalRepo.dispose();
     mockUserRepo.dispose();
     RepositoryProvider.resetInstance();
