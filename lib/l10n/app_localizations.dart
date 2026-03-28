@@ -1777,6 +1777,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Upload photo'**
   String get uploadPhoto;
+
+  /// No description provided for @errorAddingComment.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to add comment. Please try again.'**
+  String get errorAddingComment;
+
+  /// No description provided for @errorUpdatingStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to update status. Please try again.'**
+  String get errorUpdatingStatus;
+
+  /// No description provided for @errorGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong. Please try again.'**
+  String get errorGeneric;
 }
 
 class _AppLocalizationsDelegate

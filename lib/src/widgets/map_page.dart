@@ -120,7 +120,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
       await prefs.setTestMode(newTestMode);
 
       // Update Riverpod state — this invalidates the signals stream
-      ref.read(testModeProvider.notifier).state = newTestMode;
+      ref.read(testModeProvider.notifier).toggle(newTestMode);
 
       // Reset the signal repository so it picks up the new collection
       RepositoryProvider.instance.resetSignalRepository();
@@ -348,7 +348,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
     // separate ref.read and the listener setup).
     _pendingInfoWindowSub?.close();
     _pendingInfoWindowSub = ref.listenManual(signalsStreamProvider, (_, next) {
-      final signal = next.valueOrNull
+      final signal = next.value
           ?.where((s) => s.id == signalId)
           .firstOrNull;
       if (signal != null) {
@@ -367,7 +367,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
   Future<void> _focusSignalOnMap(String signalId) async {
     // Try to find the signal in the already-loaded stream first
-    final signals = ref.read(signalsStreamProvider).valueOrNull;
+    final signals = ref.read(signalsStreamProvider).value;
     GeoPoint? geoPoint;
     if (signals != null) {
       for (final s in signals) {

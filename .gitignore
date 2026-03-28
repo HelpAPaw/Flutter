@@ -1,5 +1,7 @@
 # Temporary files (AI session artifacts, screenshots, test scripts)
 /tmp/
+/screenshots/
+selfIdentity.plist
 
 # Miscellaneous
 *.class

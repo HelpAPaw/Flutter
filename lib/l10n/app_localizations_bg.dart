@@ -958,4 +958,15 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get uploadPhoto => 'Качи снимка';
+
+  @override
+  String get errorAddingComment =>
+      'Неуспешно добавяне на коментар. Моля, опитайте отново.';
+
+  @override
+  String get errorUpdatingStatus =>
+      'Неуспешна промяна на статуса. Моля, опитайте отново.';
+
+  @override
+  String get errorGeneric => 'Нещо се обърка. Моля, опитайте отново.';
 }

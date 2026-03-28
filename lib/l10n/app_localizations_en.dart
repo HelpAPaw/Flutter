@@ -948,4 +948,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get uploadPhoto => 'Upload photo';
+
+  @override
+  String get errorAddingComment => 'Failed to add comment. Please try again.';
+
+  @override
+  String get errorUpdatingStatus =>
+      'Failed to update status. Please try again.';
+
+  @override
+  String get errorGeneric => 'Something went wrong. Please try again.';
 }

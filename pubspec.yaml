@@ -27,8 +27,8 @@ dependencies:
   firebase_in_app_messaging: ^0.9.0
   firebase_messaging: ^16.0.0
   firebase_storage: ^13.0.0
-  flutter_local_notifications: ^18.0.1
-  go_router: ^16.1.0
+  flutter_local_notifications: ^21.0.0
+  go_router: ^17.1.0
   image_picker: ^1.1.2
   google_maps_flutter: ^2.9.0
   google_sign_in: ^6.1.5
@@ -38,10 +38,10 @@ dependencies:
   url_launcher: ^6.2.1
   geoflutterfire_plus: ^0.0.31
   geolocator: ^14.0.0
-  flutter_riverpod: ^2.5.1
+  flutter_riverpod: ^3.3.1
   cached_network_image: ^3.3.1
-  share_plus: ^10.1.4
-  package_info_plus: ^8.3.0
+  share_plus: ^12.0.1
+  package_info_plus: ^9.0.0
   shared_preferences: ^2.3.5
 
 dev_dependencies:
@@ -49,7 +49,7 @@ dev_dependencies:
     sdk: flutter
   integration_test:
     sdk: flutter
-  flutter_lints: ^3.0.1
+  flutter_lints: ^6.0.0
 
 environment:
   sdk: '>=3.0.0 <6.0.0'

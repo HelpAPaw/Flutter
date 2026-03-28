@@ -16,7 +16,7 @@ Android: $_playStoreUrl
 
 Or visit: $_websiteUrl''';
 
-    await Share.share(message, subject: 'Help A Paw - Help animals in need');
+    await SharePlus.instance.share(ShareParams(text: message, subject: 'Help A Paw - Help animals in need'));
   }
 
   static Future<void> shareSignal({
@@ -46,6 +46,6 @@ View on Help A Paw: $deepLink
 Don't have the app? Download it:
 $_websiteUrl''';
 
-    await Share.share(message, subject: 'Help A Paw - Animal needs help');
+    await SharePlus.instance.share(ShareParams(text: message, subject: 'Help A Paw - Animal needs help'));
   }
 }

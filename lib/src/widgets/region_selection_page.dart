@@ -38,7 +38,7 @@ class _RegionSelectionPageState extends State<RegionSelectionPage> {
       }
 
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium),
       );
 
       _mapController?.animateCamera(

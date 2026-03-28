@@ -15,15 +15,20 @@ import '../services/vet_clinic_service.dart';
 import '../state/map_state.dart';
 
 /// Provider for test mode state. Toggling this invalidates the signals stream.
-final testModeProvider = StateProvider<bool>((ref) {
-  return AppPreferencesService().isTestMode();
-});
+final testModeProvider = NotifierProvider<TestModeNotifier, bool>(
+  TestModeNotifier.new,
+);
+
+class TestModeNotifier extends Notifier<bool> {
+  @override
+  bool build() => AppPreferencesService().isTestMode();
+
+  void toggle(bool value) => state = value;
+}
 
 /// Provider for the map view model
 final mapViewModelProvider =
-    StateNotifierProvider<MapViewModel, MapScreenState>((ref) {
-  return MapViewModel();
-});
+    NotifierProvider<MapViewModel, MapScreenState>(MapViewModel.new);
 
 /// Provider for the signals stream based on current map center and time range
 final signalsStreamProvider = StreamProvider<List<SignalWithId>>((ref) {
@@ -49,18 +54,13 @@ final signalsStreamProvider = StreamProvider<List<SignalWithId>>((ref) {
   );
 });
 
-/// ViewModel for the map screen using Riverpod StateNotifier
-class MapViewModel extends StateNotifier<MapScreenState> {
-  MapViewModel() : super(const MapScreenState());
-
+/// ViewModel for the map screen using Riverpod Notifier
+class MapViewModel extends Notifier<MapScreenState> {
   final _vetClinicService = VetClinicService.instance;
   Timer? _searchButtonDebounce;
 
   @override
-  void dispose() {
-    _searchButtonDebounce?.cancel();
-    super.dispose();
-  }
+  MapScreenState build() => const MapScreenState();
 
   // ============================================================
   // Location Management

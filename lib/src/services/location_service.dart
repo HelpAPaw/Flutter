@@ -106,7 +106,7 @@ class LocationService {
     // Get initial position and update
     try {
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium),
       );
       await _updateLocationInFirestore(position);
     } catch (e) {
@@ -245,7 +245,7 @@ class LocationService {
       }
 
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium),
       );
       await _updateLocationInFirestore(position);
     } catch (e) {
