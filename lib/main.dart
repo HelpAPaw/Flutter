@@ -72,10 +72,14 @@ Future<void> main() async {
   };
 
   // Initialize App Check
-  await FirebaseAppCheck.instance.activate(
-    androidProvider: kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
-    appleProvider: kDebugMode ? AppleProvider.debug : AppleProvider.appAttestWithDeviceCheckFallback,
-  );
+  try {
+    await FirebaseAppCheck.instance.activate(
+      androidProvider: kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
+      appleProvider: kDebugMode ? AppleProvider.debug : AppleProvider.appAttestWithDeviceCheckFallback,
+    );
+  } catch (e) {
+    debugPrint('App Check activation failed: $e');
+  }
 
   // Configure Firebase UI Auth providers
   FirebaseUIAuth.configureProviders([
@@ -118,7 +122,7 @@ Future<void> main() async {
 }
 
 final GoRouter _router = GoRouter(
-  debugLogDiagnostics: true,
+  debugLogDiagnostics: kDebugMode,
   initialLocation: '/home',
   redirect: (context, state) {
     final user = FirebaseAuth.instance.currentUser;
