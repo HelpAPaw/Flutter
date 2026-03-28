@@ -131,7 +131,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
         FirebaseFirestore.instance.collection('users').doc(user.uid).set(
           {'testMode': newTestMode},
           SetOptions(merge: true),
-        );
+        ).catchError((_) {});
       }
 
       if (mounted) {

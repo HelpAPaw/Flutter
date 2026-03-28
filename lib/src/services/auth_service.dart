@@ -72,12 +72,16 @@ class AuthService {
     final user = _auth.currentUser;
     if (user == null) return;
 
-    await _db.collection('users').doc(user.uid).update({
-      'isAnonymous': false,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-
-    debugPrint('Account marked as permanent');
+    try {
+      await _db.collection('users').doc(user.uid).update({
+        'isAnonymous': false,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      debugPrint('Account marked as permanent');
+    } catch (e) {
+      debugPrint('Error marking account as permanent: $e');
+      rethrow;
+    }
   }
 
   /// Merge anonymous user's FCM tokens into an existing account
@@ -98,19 +102,24 @@ class AuthService {
     final anonymousData = anonymousDoc.data()!;
     final anonymousTokens = (anonymousData['fcmTokens'] as List<dynamic>?)?.cast<String>() ?? [];
 
-    if (anonymousTokens.isNotEmpty) {
-      // Add anonymous tokens to existing account
-      await _db.collection('users').doc(existingUid).update({
-        'fcmTokens': FieldValue.arrayUnion(anonymousTokens),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+    try {
+      if (anonymousTokens.isNotEmpty) {
+        // Add anonymous tokens to existing account
+        await _db.collection('users').doc(existingUid).update({
+          'fcmTokens': FieldValue.arrayUnion(anonymousTokens),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
 
-      debugPrint('Merged ${anonymousTokens.length} tokens into existing account');
+        debugPrint('Merged ${anonymousTokens.length} tokens into existing account');
+      }
+
+      // Delete the anonymous user document
+      await _db.collection('users').doc(anonymousUid).delete();
+      debugPrint('Deleted anonymous user document');
+    } catch (e) {
+      debugPrint('Error merging anonymous into existing: $e');
+      rethrow;
     }
-
-    // Delete the anonymous user document
-    await _db.collection('users').doc(anonymousUid).delete();
-    debugPrint('Deleted anonymous user document');
   }
 
   /// Transfer all data from anonymous account to a new account
@@ -154,16 +163,21 @@ class AuthService {
       dataToTransfer['signalSubscriptions'] = anonymousData['signalSubscriptions'];
     }
 
-    // Save to new account
-    await _db.collection('users').doc(newUid).set(
-      dataToTransfer,
-      SetOptions(merge: true),
-    );
+    try {
+      // Save to new account
+      await _db.collection('users').doc(newUid).set(
+        dataToTransfer,
+        SetOptions(merge: true),
+      );
 
-    // Delete the anonymous user document
-    await _db.collection('users').doc(anonymousUid).delete();
+      // Delete the anonymous user document
+      await _db.collection('users').doc(anonymousUid).delete();
 
-    debugPrint('Successfully transferred anonymous data to new account');
+      debugPrint('Successfully transferred anonymous data to new account');
+    } catch (e) {
+      debugPrint('Error transferring anonymous data: $e');
+      rethrow;
+    }
   }
 
   /// Handle the complete sign-in flow for an anonymous user

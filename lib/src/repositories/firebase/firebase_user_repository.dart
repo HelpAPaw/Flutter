@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 import '../user_repository.dart';
 
@@ -57,12 +58,17 @@ class FirebaseUserRepository implements UserRepository {
     required String userId,
     required String signalId,
   }) async {
-    await _firestore.collection('users').doc(userId).set(
-      {
-        'signalSubscriptions': FieldValue.arrayUnion([signalId]),
-      },
-      SetOptions(merge: true),
-    );
+    try {
+      await _firestore.collection('users').doc(userId).set(
+        {
+          'signalSubscriptions': FieldValue.arrayUnion([signalId]),
+        },
+        SetOptions(merge: true),
+      );
+    } catch (e) {
+      debugPrint('Error subscribing to signal: $e');
+      rethrow;
+    }
   }
 
   @override
@@ -70,8 +76,13 @@ class FirebaseUserRepository implements UserRepository {
     required String userId,
     required String signalId,
   }) async {
-    await _firestore.collection('users').doc(userId).update({
-      'signalSubscriptions': FieldValue.arrayRemove([signalId]),
-    });
+    try {
+      await _firestore.collection('users').doc(userId).update({
+        'signalSubscriptions': FieldValue.arrayRemove([signalId]),
+      });
+    } catch (e) {
+      debugPrint('Error unsubscribing from signal: $e');
+      rethrow;
+    }
   }
 }

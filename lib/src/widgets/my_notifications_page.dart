@@ -62,31 +62,39 @@ class MyNotificationsPage extends StatelessWidget {
           if (user != null)
             PopupMenuButton<String>(
               onSelected: (value) async {
-                if (value == 'mark_all_read') {
-                  final batch = FirebaseFirestore.instance.batch();
-                  final docs = await FirebaseFirestore.instance
-                      .collection('users')
-                      .doc(user.uid)
-                      .collection('notifications')
-                      .where('read', isEqualTo: false)
-                      .get();
+                try {
+                  if (value == 'mark_all_read') {
+                    final batch = FirebaseFirestore.instance.batch();
+                    final docs = await FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(user.uid)
+                        .collection('notifications')
+                        .where('read', isEqualTo: false)
+                        .get();
 
-                  for (var doc in docs.docs) {
-                    batch.update(doc.reference, {'read': true});
-                  }
-                  await batch.commit();
-                } else if (value == 'clear_all') {
-                  final docs = await FirebaseFirestore.instance
-                      .collection('users')
-                      .doc(user.uid)
-                      .collection('notifications')
-                      .get();
+                    for (var doc in docs.docs) {
+                      batch.update(doc.reference, {'read': true});
+                    }
+                    await batch.commit();
+                  } else if (value == 'clear_all') {
+                    final docs = await FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(user.uid)
+                        .collection('notifications')
+                        .get();
 
-                  final batch = FirebaseFirestore.instance.batch();
-                  for (var doc in docs.docs) {
-                    batch.delete(doc.reference);
+                    final batch = FirebaseFirestore.instance.batch();
+                    for (var doc in docs.docs) {
+                      batch.delete(doc.reference);
+                    }
+                    await batch.commit();
                   }
-                  await batch.commit();
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(l10n.errorGeneric)),
+                    );
+                  }
                 }
               },
               itemBuilder: (context) => [
@@ -209,7 +217,9 @@ class MyNotificationsPage extends StatelessWidget {
                         color: Colors.red,
                         child: const Icon(Icons.delete, color: Colors.white),
                       ),
-                      onDismissed: (_) => doc.reference.delete(),
+                      onDismissed: (_) {
+                        doc.reference.delete().catchError((_) {});
+                      },
                       child: ListTile(
                         leading: CircleAvatar(
                           backgroundColor: _getNotificationColor(type).withAlpha(51),
@@ -254,7 +264,9 @@ class MyNotificationsPage extends StatelessWidget {
                             : null,
                         onTap: () async {
                           if (!read) {
-                            await doc.reference.update({'read': true});
+                            try {
+                              await doc.reference.update({'read': true});
+                            } catch (_) {}
                           }
                           if (signalId != null && context.mounted) {
                             context.push('/signal_details/$signalId');

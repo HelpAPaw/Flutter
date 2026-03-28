@@ -454,5 +454,9 @@
   "sendComment": "Send comment",
   "closePhotoViewer": "Close photo viewer",
   "uploadPhoto": "Upload photo",
-  "removePhoto": "Remove photo"
+  "removePhoto": "Remove photo",
+
+  "errorAddingComment": "Failed to add comment. Please try again.",
+  "errorUpdatingStatus": "Failed to update status. Please try again.",
+  "errorGeneric": "Something went wrong. Please try again."
 }

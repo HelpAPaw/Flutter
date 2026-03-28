@@ -245,7 +245,7 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
                           .set({
                         'profileCompleted': true,
                         'createdAt': FieldValue.serverTimestamp(),
-                      }, SetOptions(merge: true));
+                      }, SetOptions(merge: true)).catchError((_) {});
                       // Pop back through auth screens to return to original screen
                       _popAuthStack(context);
                     },

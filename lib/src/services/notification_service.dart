@@ -218,21 +218,25 @@ class NotificationService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // Use arrayUnion to add token without duplicates (supports multi-device).
-    // tokenLastSaved lets the Cloud Function detect token re-registration
-    // and clean up orphaned user docs that share the same device token.
-    await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
-      {
-        'fcmTokens': FieldValue.arrayUnion([token]),
-        'isAnonymous': user.isAnonymous,
-        'testMode': AppPreferencesService().isTestMode(),
-        'updatedAt': FieldValue.serverTimestamp(),
-        'tokenLastSaved': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
-
-    debugPrint('FCM token saved to Firestore (isAnonymous: ${user.isAnonymous})');
+    try {
+      // Use arrayUnion to add token without duplicates (supports multi-device).
+      // tokenLastSaved lets the Cloud Function detect token re-registration
+      // and clean up orphaned user docs that share the same device token.
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
+        {
+          'fcmTokens': FieldValue.arrayUnion([token]),
+          'isAnonymous': user.isAnonymous,
+          'testMode': AppPreferencesService().isTestMode(),
+          'updatedAt': FieldValue.serverTimestamp(),
+          'tokenLastSaved': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+      debugPrint('FCM token saved to Firestore (isAnonymous: ${user.isAnonymous})');
+    } catch (e) {
+      debugPrint('Error saving FCM token to Firestore: $e');
+      rethrow;
+    }
   }
 
   /// Call this when user logs in or enables notifications
@@ -288,12 +292,16 @@ class NotificationService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // Remove only this device's token, don't delete the user doc
-    final token = await _messaging.getToken();
-    if (token != null) {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-        'fcmTokens': FieldValue.arrayRemove([token]),
-      });
+    try {
+      // Remove only this device's token, don't delete the user doc
+      final token = await _messaging.getToken();
+      if (token != null) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+          'fcmTokens': FieldValue.arrayRemove([token]),
+        });
+      }
+    } catch (e) {
+      debugPrint('Error removing FCM token on logout: $e');
     }
   }
 }

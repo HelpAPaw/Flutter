@@ -144,18 +144,21 @@ class LocationService {
     final geoPoint = GeoPoint(position.latitude, position.longitude);
     final geoFirePoint = GeoFirePoint(geoPoint);
 
-    await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
-      {
-        'currentLocation': {
-          'geopoint': geoPoint,
-          'geohash': geoFirePoint.geohash,
-          'updatedAt': FieldValue.serverTimestamp(),
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
+        {
+          'currentLocation': {
+            'geopoint': geoPoint,
+            'geohash': geoFirePoint.geohash,
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
         },
-      },
-      SetOptions(merge: true),
-    ).timeout(const Duration(seconds: 10));
-
-    debugPrint('Updated location in Firestore: ${geoFirePoint.geohash}');
+        SetOptions(merge: true),
+      ).timeout(const Duration(seconds: 10));
+      debugPrint('Updated location in Firestore: ${geoFirePoint.geohash}');
+    } catch (e) {
+      debugPrint('Error updating location in Firestore: $e');
+    }
   }
 
   /// Check for signals created in the last 24 hours near this location
@@ -259,23 +262,28 @@ class LocationService {
     // Invalidate cached preferences so next location update re-fetches
     _cachedPrefs = null;
 
-    if (enabled) {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
-        {
-          'notificationPreferences': {
-            'locationTrackingEnabled': true,
+    try {
+      if (enabled) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
+          {
+            'notificationPreferences': {
+              'locationTrackingEnabled': true,
+            },
           },
-        },
-        SetOptions(merge: true),
-      ).timeout(const Duration(seconds: 10));
-      await startLocationTracking();
-    } else {
-      // Combine preference update and location clear in a single write
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-        'notificationPreferences.locationTrackingEnabled': false,
-        'currentLocation': FieldValue.delete(),
-      }).timeout(const Duration(seconds: 10));
-      await stopLocationTracking();
+          SetOptions(merge: true),
+        ).timeout(const Duration(seconds: 10));
+        await startLocationTracking();
+      } else {
+        // Combine preference update and location clear in a single write
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+          'notificationPreferences.locationTrackingEnabled': false,
+          'currentLocation': FieldValue.delete(),
+        }).timeout(const Duration(seconds: 10));
+        await stopLocationTracking();
+      }
+    } catch (e) {
+      debugPrint('Error setting location tracking preference: $e');
+      rethrow;
     }
   }
 }

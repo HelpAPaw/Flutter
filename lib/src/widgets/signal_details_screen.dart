@@ -56,6 +56,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         signal = Signal.fromJson(signalData);
         if (reporterName.isEmpty) {
           signal.reporter.get().then((DocumentSnapshot reporterSnapshot) {
+            if (!mounted) return;
             if (reporterSnapshot.exists) {
               Map<String, dynamic> reporterData = reporterSnapshot.data() as Map<String, dynamic>;
               setState(() {
@@ -628,21 +629,29 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   Future<void> _addComment() async {
     final userId = FirebaseAuth.instance.currentUser!.uid;
 
-    await FirebaseFirestore.instance.collection(AppPreferencesService().signalsCollectionName).doc(widget.signalId).collection('comments').add({
-      'text': _newCommentController.text,
-      'createdAt': DateTime.now(),
-      'author': FirebaseFirestore.instance.collection('users').doc(userId),
-    });
+    try {
+      await FirebaseFirestore.instance.collection(AppPreferencesService().signalsCollectionName).doc(widget.signalId).collection('comments').add({
+        'text': _newCommentController.text,
+        'createdAt': DateTime.now(),
+        'author': FirebaseFirestore.instance.collection('users').doc(userId),
+      });
 
-    await _subscribeToSignal(userId);
+      await _subscribeToSignal(userId);
 
-    _newCommentController.clear();
-    FocusManager.instance.primaryFocus?.unfocus();
-    _scrollController.animateTo(
-      _scrollController.position.maxScrollExtent,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOut,
-    );
+      _newCommentController.clear();
+      FocusManager.instance.primaryFocus?.unfocus();
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context).errorAddingComment)),
+        );
+      }
+    }
   }
 
   Future<void> _subscribeToSignal(String userId) async {
@@ -702,20 +711,28 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
 
     final signalRef = FirebaseFirestore.instance.collection(AppPreferencesService().signalsCollectionName).doc(widget.signalId);
 
-    await signalRef.update({
-      'status': newStatus,
-      'lastUpdatedBy': FirebaseFirestore.instance.collection('users').doc(user.uid),
-    });
+    try {
+      await signalRef.update({
+        'status': newStatus,
+        'lastUpdatedBy': FirebaseFirestore.instance.collection('users').doc(user.uid),
+      });
 
-    await signalRef.collection('comments').add({
-      'type': 'status_change',
-      'oldStatus': oldStatus,
-      'newStatus': newStatus,
-      'createdAt': DateTime.now(),
-      'author': FirebaseFirestore.instance.collection('users').doc(user.uid),
-    });
+      await signalRef.collection('comments').add({
+        'type': 'status_change',
+        'oldStatus': oldStatus,
+        'newStatus': newStatus,
+        'createdAt': DateTime.now(),
+        'author': FirebaseFirestore.instance.collection('users').doc(user.uid),
+      });
 
-    await _subscribeToSignal(user.uid);
+      await _subscribeToSignal(user.uid);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context).errorUpdatingStatus)),
+        );
+      }
+    }
   }
 
   void _showImageSourceDialog() {

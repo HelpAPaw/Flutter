@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 
 import '../../models/signal.dart';
@@ -84,14 +85,24 @@ class FirebaseSignalRepository implements SignalRepository {
     required String signalId,
     required int newStatus,
   }) async {
-    await _signalsRef.doc(signalId).update({'status': newStatus});
+    try {
+      await _signalsRef.doc(signalId).update({'status': newStatus});
+    } catch (e) {
+      debugPrint('Error updating signal status: $e');
+      rethrow;
+    }
   }
 
   @override
   Future<void> addPhotoUrl(String signalId, String photoUrl) async {
-    await _signalsRef.doc(signalId).update({
-      'photoUrls': FieldValue.arrayUnion([photoUrl]),
-    });
+    try {
+      await _signalsRef.doc(signalId).update({
+        'photoUrls': FieldValue.arrayUnion([photoUrl]),
+      });
+    } catch (e) {
+      debugPrint('Error adding photo URL: $e');
+      rethrow;
+    }
   }
 
   @override
@@ -106,11 +117,16 @@ class FirebaseSignalRepository implements SignalRepository {
     required String signalId,
     required String userId,
   }) async {
-    await _firestore.collection('users').doc(userId).set(
-      {
-        'signalSubscriptions': FieldValue.arrayUnion([signalId]),
-      },
-      SetOptions(merge: true),
-    );
+    try {
+      await _firestore.collection('users').doc(userId).set(
+        {
+          'signalSubscriptions': FieldValue.arrayUnion([signalId]),
+        },
+        SetOptions(merge: true),
+      );
+    } catch (e) {
+      debugPrint('Error subscribing creator to signal: $e');
+      rethrow;
+    }
   }
 }
