@@ -1,3 +1,7 @@
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_core_platform_interface/firebase_core_platform_interface.dart';
+import 'package:firebase_core_platform_interface/test.dart';
+import 'package:firebase_crashlytics_platform_interface/firebase_crashlytics_platform_interface.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:help_a_paw/src/repositories/repository_provider.dart';
@@ -8,7 +12,61 @@ import '../mocks/mock_signal_repository.dart';
 import '../mocks/mock_storage_repository.dart';
 import '../mocks/mock_user_repository.dart';
 
+const _pluginConstants = <String, Map<String, Object>>{
+  'plugins.flutter.io/firebase_crashlytics': {
+    'isCrashlyticsCollectionEnabled': true,
+  },
+};
+
+class _MockFirebaseApp implements TestFirebaseCoreHostApi {
+  @override
+  Future<CoreInitializeResponse> initializeApp(
+    String appName,
+    CoreFirebaseOptions options,
+  ) async {
+    return CoreInitializeResponse(
+      name: appName,
+      options: CoreFirebaseOptions(
+        apiKey: '123', projectId: '123', appId: '123', messagingSenderId: '123',
+      ),
+      pluginConstants: _pluginConstants,
+    );
+  }
+
+  @override
+  Future<List<CoreInitializeResponse>> initializeCore() async {
+    return [
+      CoreInitializeResponse(
+        name: defaultFirebaseAppName,
+        options: CoreFirebaseOptions(
+          apiKey: '123', projectId: '123', appId: '123', messagingSenderId: '123',
+        ),
+        pluginConstants: _pluginConstants,
+      ),
+    ];
+  }
+
+  @override
+  Future<CoreFirebaseOptions> optionsFromResource() async {
+    return CoreFirebaseOptions(
+      apiKey: '123', projectId: '123', appId: '123', messagingSenderId: '123',
+    );
+  }
+}
+
 void main() {
+  setUpAll(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    TestFirebaseCoreHostApi.setUp(_MockFirebaseApp());
+    await Firebase.initializeApp();
+
+    // Stub the Crashlytics method channel so .log() calls are no-ops in tests
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      MethodChannelFirebaseCrashlytics.channel,
+      (methodCall) async => null,
+    );
+  });
   late ProviderContainer container;
   late MapViewModel viewModel;
   late MockSignalRepository mockSignalRepo;
@@ -226,8 +284,8 @@ void main() {
         longitude: 23.0,
       );
 
+      expect(errorMessage, isNull, reason: 'submitSignal error: $errorMessage');
       expect(success, true);
-      expect(errorMessage, isNull);
 
       // Verify signal was created
       expect(mockSignalRepo.createdSignals.length, 1);

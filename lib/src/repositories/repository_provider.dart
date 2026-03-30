@@ -16,11 +16,13 @@ class RepositoryProvider {
 
   SignalRepository? _signalRepository;
   String? _currentCollectionName;
+  bool _signalRepositoryOverridden = false;
   StorageRepository? _storageRepository;
   UserRepository? _userRepository;
 
   /// Get the signal repository, recreating if test mode changed
   SignalRepository get signalRepository {
+    if (_signalRepositoryOverridden) return _signalRepository!;
     final collectionName = AppPreferencesService().signalsCollectionName;
     if (_signalRepository == null || _currentCollectionName != collectionName) {
       _currentCollectionName = collectionName;
@@ -40,6 +42,7 @@ class RepositoryProvider {
   /// Override signal repository (for testing)
   void setSignalRepository(SignalRepository repository) {
     _signalRepository = repository;
+    _signalRepositoryOverridden = true;
   }
 
   /// Override storage repository (for testing)
@@ -62,6 +65,7 @@ class RepositoryProvider {
   void reset() {
     _signalRepository = null;
     _currentCollectionName = null;
+    _signalRepositoryOverridden = false;
     _storageRepository = null;
     _userRepository = null;
   }
