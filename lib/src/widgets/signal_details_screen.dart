@@ -63,6 +63,8 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                 reporterName = reporterData['name'];
               });
             }
+          }).catchError((_) {
+            // Silently handle permission-denied errors (e.g. anonymous users)
           });
         }
       }
