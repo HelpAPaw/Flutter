@@ -37,7 +37,11 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
       url,
       mode: LaunchMode.externalApplication,
     )) {
-      throw Exception('Browser Launch Failed: $url');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open $url')),
+        );
+      }
     }
   }
 
