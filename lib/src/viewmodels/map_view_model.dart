@@ -243,7 +243,7 @@ class MapViewModel extends Notifier<MapScreenState> {
       final userRepo = RepositoryProvider.instance.userRepository;
       final userId = userRepo.currentUserId;
 
-      if (userId == null) {
+      if (userId == null || !userRepo.canModifyData) {
         state = state.copyWith(
           formState: state.formState.copyWith(isSubmitting: false),
         );

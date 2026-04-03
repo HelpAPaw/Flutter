@@ -8,6 +8,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
+import 'package:help_a_paw/src/repositories/repository_provider.dart';
 import 'package:help_a_paw/src/services/share_service.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -596,7 +597,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                 child: IconButton(
                                   icon: const Icon(Icons.send),
                                   onPressed: () {
-                                    if (FirebaseAuth.instance.currentUser == null) {
+                                    if (!RepositoryProvider.instance.userRepository.canModifyData) {
                                       _showSignInDialog();
                                     } else {
                                       _addComment();
@@ -705,12 +706,12 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   Future<void> _updateSignalStatus(int oldStatus, int newStatus) async {
     if (oldStatus == newStatus) return;
 
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
+    if (!RepositoryProvider.instance.userRepository.canModifyData) {
       _showSignInDialog();
       return;
     }
 
+    final user = FirebaseAuth.instance.currentUser!;
     final signalRef = FirebaseFirestore.instance.collection(AppPreferencesService().signalsCollectionName).doc(widget.signalId);
 
     try {

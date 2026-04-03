@@ -686,7 +686,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
             enableFeedback: true,
             shape: const CircleBorder(),
             onPressed: () {
-              if (!RepositoryProvider.instance.userRepository.canCreateSignals) {
+              if (!RepositoryProvider.instance.userRepository.canModifyData) {
                 _showSignInDialog();
               } else {
                 final viewModel = ref.read(mapViewModelProvider.notifier);

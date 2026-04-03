@@ -39,8 +39,8 @@ class AuthState {
   /// User ID or null if not authenticated
   String? get userId => user?.uid;
 
-  /// Whether the user can create signals (authenticated and not anonymous)
-  bool get canCreateSignals => isAuthenticated && !isAnonymous;
+  /// Whether the user can perform active operations (authenticated and not anonymous)
+  bool get canModifyData => isAuthenticated && !isAnonymous;
 }
 
 /// Abstract interface for user authentication and data operations
@@ -54,8 +54,8 @@ abstract class UserRepository {
   /// Get the current user ID (null if not authenticated)
   String? get currentUserId;
 
-  /// Check if the current user can create signals
-  bool get canCreateSignals;
+  /// Check if the current user can perform active operations (submit signals, change status, comment)
+  bool get canModifyData;
 
   /// Sign in anonymously
   Future<void> signInAnonymously();
