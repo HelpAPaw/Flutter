@@ -221,6 +221,14 @@ class AppLocalizationsBg extends AppLocalizations {
   }
 
   @override
+  String get signInSubtitle =>
+      'Влезте, за да докладвате и помагате на животни в нужда';
+
+  @override
+  String get signInSideMessage =>
+      'Присъединете се към нашата общност от любители на животни';
+
+  @override
   String get signInRequired => 'Необходим е вход';
 
   @override
@@ -958,6 +966,14 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get uploadPhoto => 'Качи снимка';
+
+  @override
+  String couldNotOpenUrl(String url) {
+    return 'Не може да се отвори $url';
+  }
+
+  @override
+  String get completeNotificationSetup => 'Завършете настройката на известията';
 
   @override
   String get errorAddingComment =>

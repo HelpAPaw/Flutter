@@ -75,9 +75,10 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
         await user.sendEmailVerification();
 
         if (mounted) {
+          final l10n = AppLocalizations.of(context);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Verification email sent! Check your inbox.'),
+            SnackBar(
+              content: Text(l10n.verificationEmailSentCheck),
               backgroundColor: Colors.green,
             ),
           );
@@ -94,19 +95,20 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
         });
       }
     } on FirebaseAuthException catch (e) {
-      String errorMessage;
-
-      if (e.code == 'too-many-requests') {
-        errorMessage = 'Too many requests. Please try again later or contact support.';
-      } else if (e.code == 'user-disabled') {
-        errorMessage = 'This account has been disabled. Please contact support.';
-      } else if (e.code == 'network-request-failed') {
-        errorMessage = 'Network error. Please check your connection.';
-      } else {
-        errorMessage = 'Error: ${e.message ?? e.code}';
-      }
-
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
+        String errorMessage;
+
+        if (e.code == 'too-many-requests') {
+          errorMessage = l10n.tooManyRequests;
+        } else if (e.code == 'user-disabled') {
+          errorMessage = l10n.accountDisabled;
+        } else if (e.code == 'network-request-failed') {
+          errorMessage = l10n.networkError;
+        } else {
+          errorMessage = l10n.errorWithCode(e.message ?? e.code);
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(errorMessage),
@@ -117,9 +119,10 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
       }
     } catch (e) {
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Unexpected error: ${e.toString()}'),
+            content: Text(l10n.unexpectedErrorWithMessage(e.toString())),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 5),
           ),
@@ -255,8 +258,8 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
                               : const Icon(Icons.refresh),
                           label: Text(
                             _countdown > 0
-                                ? 'Resend in ${_countdown}s'
-                                : 'Resend Verification Email',
+                                ? l10n.resendInSeconds(_countdown)
+                                : l10n.resendVerificationEmail,
                           ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.orange,
@@ -277,7 +280,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                           ),
-                          child: const Text('I\'ve verified my email'),
+                          child: Text(l10n.iveVerifiedMyEmail),
                         ),
                       ],
                     ),
@@ -299,18 +302,18 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
                           context.go('/home');
                         }
                       },
-                      child: const Text(
-                        'Cancel and sign out',
-                        style: TextStyle(color: Colors.grey),
+                      child: Text(
+                        l10n.cancelAndSignOut,
+                        style: const TextStyle(color: Colors.grey),
                       ),
                     ),
                     // Development bypass (remove in production)
                     if (kDebugMode)
                       TextButton(
                         onPressed: () => context.push('/complete_profile'),
-                        child: const Text(
-                          'Skip (Dev Only)',
-                          style: TextStyle(color: Colors.red, fontSize: 12),
+                        child: Text(
+                          l10n.skipDevOnly,
+                          style: const TextStyle(color: Colors.red, fontSize: 12),
                         ),
                       ),
                   ],

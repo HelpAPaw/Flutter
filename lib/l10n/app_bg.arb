@@ -73,6 +73,9 @@
   "errorAccessingCamera": "Грешка при достъп до камерата: {error}",
   "errorAccessingGallery": "Грешка при достъп до галерията: {error}",
 
+  "signInSubtitle": "Влезте, за да докладвате и помагате на животни в нужда",
+  "signInSideMessage": "Присъединете се към нашата общност от любители на животни",
+
   "signInRequired": "Необходим е вход",
   "signInToCreateSignals": "Трябва да влезете, за да създавате сигнали",
   "signInToComment": "Трябва да влезете, за да коментирате",
@@ -321,6 +324,9 @@
   "closePhotoViewer": "Затвори снимката",
   "uploadPhoto": "Качи снимка",
   "removePhoto": "Премахни снимка",
+
+  "couldNotOpenUrl": "Не може да се отвори {url}",
+  "completeNotificationSetup": "Завършете настройката на известията",
 
   "errorAddingComment": "Неуспешно добавяне на коментар. Моля, опитайте отново.",
   "errorUpdatingStatus": "Неуспешна промяна на статуса. Моля, опитайте отново.",

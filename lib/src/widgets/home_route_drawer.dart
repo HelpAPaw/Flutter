@@ -39,7 +39,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
     )) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not open $url')),
+          SnackBar(content: Text(AppLocalizations.of(context).couldNotOpenUrl(url.toString()))),
         );
       }
     }

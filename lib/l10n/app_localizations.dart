@@ -494,6 +494,18 @@ abstract class AppLocalizations {
   /// **'Error accessing gallery: {error}'**
   String errorAccessingGallery(String error);
 
+  /// No description provided for @signInSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to report and help animals in need'**
+  String get signInSubtitle;
+
+  /// No description provided for @signInSideMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Join our community of animal lovers'**
+  String get signInSideMessage;
+
   /// No description provided for @signInRequired.
   ///
   /// In en, this message translates to:
@@ -1777,6 +1789,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Upload photo'**
   String get uploadPhoto;
+
+  /// No description provided for @couldNotOpenUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open {url}'**
+  String couldNotOpenUrl(String url);
+
+  /// No description provided for @completeNotificationSetup.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete notification setup'**
+  String get completeNotificationSetup;
 
   /// No description provided for @errorAddingComment.
   ///

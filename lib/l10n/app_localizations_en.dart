@@ -220,6 +220,12 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get signInSubtitle => 'Sign in to report and help animals in need';
+
+  @override
+  String get signInSideMessage => 'Join our community of animal lovers';
+
+  @override
   String get signInRequired => 'Sign in required';
 
   @override
@@ -948,6 +954,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get uploadPhoto => 'Upload photo';
+
+  @override
+  String couldNotOpenUrl(String url) {
+    return 'Could not open $url';
+  }
+
+  @override
+  String get completeNotificationSetup => 'Complete notification setup';
 
   @override
   String get errorAddingComment => 'Failed to add comment. Please try again.';

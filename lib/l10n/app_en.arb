@@ -83,6 +83,9 @@
     }
   },
 
+  "signInSubtitle": "Sign in to report and help animals in need",
+  "signInSideMessage": "Join our community of animal lovers",
+
   "signInRequired": "Sign in required",
   "signInToCreateSignals": "You need to sign in to create signals",
   "signInToComment": "You need to sign in to comment",
@@ -455,6 +458,14 @@
   "closePhotoViewer": "Close photo viewer",
   "uploadPhoto": "Upload photo",
   "removePhoto": "Remove photo",
+
+  "couldNotOpenUrl": "Could not open {url}",
+  "@couldNotOpenUrl": {
+    "placeholders": {
+      "url": {"type": "String"}
+    }
+  },
+  "completeNotificationSetup": "Complete notification setup",
 
   "errorAddingComment": "Failed to add comment. Please try again.",
   "errorUpdatingStatus": "Failed to update status. Please try again.",

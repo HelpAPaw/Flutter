@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:help_a_paw/l10n/app_localizations.dart';
 
 class NotificationOnboardingButton extends StatefulWidget {
   final VoidCallback onTap;
@@ -76,7 +77,7 @@ class _NotificationOnboardingButtonState extends State<NotificationOnboardingBut
       bottom: 100,
       right: 16,
       child: Semantics(
-        label: 'Complete notification setup',
+        label: AppLocalizations.of(context).completeNotificationSetup,
         button: true,
         enabled: true,
         child: AnimatedBuilder(

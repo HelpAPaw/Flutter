@@ -6,6 +6,7 @@ import 'package:firebase_ui_auth/firebase_ui_auth.dart';
 import 'package:firebase_ui_oauth_google/firebase_ui_oauth_google.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:help_a_paw/l10n/app_localizations.dart';
 
 import '../../main.dart' show googleClientId;
 import '../services/auth_service.dart';
@@ -143,7 +144,7 @@ class _SignInPageState extends State<SignInPage> {
               }
             },
           ),
-          title: const Text('Sign In'),
+          title: Text(AppLocalizations.of(context).signIn),
         ),
         body: SafeArea(
           child: SingleChildScrollView(
@@ -228,14 +229,14 @@ class _SignInPageState extends State<SignInPage> {
                       children: [
                         Image.asset('assets/logo.png', height: 40),
                         const SizedBox(height: 4),
-                        const Text(
-                          'Help A Paw',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        Text(
+                          AppLocalizations.of(context).helpAPaw,
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 2),
-                        const Text(
-                          'Sign in to report and help animals in need',
-                          style: TextStyle(fontSize: 12),
+                        Text(
+                          AppLocalizations.of(context).signInSubtitle,
+                          style: const TextStyle(fontSize: 12),
                           textAlign: TextAlign.center,
                         ),
                       ],
@@ -250,9 +251,9 @@ class _SignInPageState extends State<SignInPage> {
                       children: [
                         Image.asset('assets/logo.png', height: 200),
                         const SizedBox(height: 20),
-                        const Text(
-                          'Join our community of animal lovers',
-                          style: TextStyle(fontSize: 18),
+                        Text(
+                          AppLocalizations.of(context).signInSideMessage,
+                          style: const TextStyle(fontSize: 18),
                           textAlign: TextAlign.center,
                         ),
                       ],
