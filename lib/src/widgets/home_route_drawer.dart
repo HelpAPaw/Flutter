@@ -56,7 +56,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final Uri launchUrl = Uri(
-        scheme: 'https', host: 'www.helpapaw.org', path: 'subjects/view-all');
+        scheme: 'https', host: 'www.helpapaw.org');
     FutureBuilder<void>(
         future: _browserLaunched, builder: (context, snapshot) => _browserLaunchStatus(context, snapshot, l10n));
     return StreamBuilder<User?>(
