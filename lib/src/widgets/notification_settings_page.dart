@@ -121,13 +121,17 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   }
 
   Future<void> _toggleNotifications(bool value) async {
-    setState(() => _notificationsEnabled = value);
-
     if (value) {
-      // Request notification permissions
-      await NotificationService().onUserLogin();
+      // Request notification permissions from the OS
+      try {
+        final granted = await NotificationService().requestNotificationPermission();
+        if (!granted) return;
+      } catch (_) {
+        return;
+      }
     }
 
+    setState(() => _notificationsEnabled = value);
     await _savePreferences();
   }
 
