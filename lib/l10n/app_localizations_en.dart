@@ -659,7 +659,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get faqChangeNotificationRadiusAnswer =>
-      'Go to Settings > Notification Radius and adjust the slider. You can set it from 1km to 50km depending on how far you\'re willing to help.';
+      'Go to Notification Settings > Location Tracking > Notification radius and adjust the slider. You can set it from 1km to 50km depending on how far you\'re willing to help.';
 
   @override
   String get faqPersonalInfoSafe => 'Is my personal information safe?';

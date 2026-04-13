@@ -1265,7 +1265,7 @@ abstract class AppLocalizations {
   /// No description provided for @faqChangeNotificationRadiusAnswer.
   ///
   /// In en, this message translates to:
-  /// **'Go to Settings > Notification Radius and adjust the slider. You can set it from 1km to 50km depending on how far you\'re willing to help.'**
+  /// **'Go to Notification Settings > Location Tracking > Notification radius and adjust the slider. You can set it from 1km to 50km depending on how far you\'re willing to help.'**
   String get faqChangeNotificationRadiusAnswer;
 
   /// No description provided for @faqPersonalInfoSafe.

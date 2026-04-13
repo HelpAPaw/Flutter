@@ -310,7 +310,7 @@
   "faqHowNotificationsWorkAnswer": "You'll receive notifications when: a new signal appears in your area, someone comments on your signal, or the status of a signal you're following changes. You can customize notification settings in the app.",
 
   "faqChangeNotificationRadius": "How do I change my notification radius?",
-  "faqChangeNotificationRadiusAnswer": "Go to Settings > Notification Radius and adjust the slider. You can set it from 1km to 50km depending on how far you're willing to help.",
+  "faqChangeNotificationRadiusAnswer": "Go to Notification Settings > Location Tracking > Notification radius and adjust the slider. You can set it from 1km to 50km depending on how far you're willing to help.",
 
   "faqPersonalInfoSafe": "Is my personal information safe?",
   "faqPersonalInfoSafeAnswer": "We take privacy seriously. Your email is only used for account management. Phone numbers shared in signals are optional and at your discretion. Location data is only used to show relevant signals.",
