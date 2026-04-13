@@ -187,14 +187,27 @@ class _MapScreenState extends ConsumerState<MapScreen>
     return (centerLatitude, centerLongitude);
   }
 
+  /// Monotonically increasing token so that stale [_onCameraIdle] callbacks
+  /// (from earlier pans that are still awaiting [getVisibleRegion]) are
+  /// discarded when a newer idle event has already been dispatched.
+  int _cameraIdleToken = 0;
+
   void _onCameraIdle() async {
-    final viewModel = ref.read(mapViewModelProvider.notifier);
+    final token = ++_cameraIdleToken;
     final region = await _mapController.getVisibleRegion();
+    if (!mounted || token != _cameraIdleToken) return;
+
     final centerLat =
         (region.northeast.latitude + region.southwest.latitude) / 2;
     final centerLng =
         (region.northeast.longitude + region.southwest.longitude) / 2;
     final zoom = await _mapController.getZoomLevel();
+    if (!mounted || token != _cameraIdleToken) return;
+
+    final viewModel = ref.read(mapViewModelProvider.notifier);
+
+    // Update the map center so the signals geo-query follows the viewport
+    viewModel.updateMapCenter(centerLat, centerLng);
 
     viewModel.checkVetClinicSearchButton(
       currentCenter: LatLng(centerLat, centerLng),
@@ -389,6 +402,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
       ref.read(mapViewModelProvider.notifier).updateMapCenter(
             geoPoint.latitude,
             geoPoint.longitude,
+            force: true,
           );
     }
 

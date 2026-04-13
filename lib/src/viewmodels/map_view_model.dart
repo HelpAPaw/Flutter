@@ -66,8 +66,24 @@ class MapViewModel extends Notifier<MapScreenState> {
   // Location Management
   // ============================================================
 
-  /// Update the map center location
-  void updateMapCenter(double latitude, double longitude) {
+  /// Update the map center location.
+  /// Only triggers a state change (and thus a signals re-query) when the new
+  /// center is more than [_kReQueryThresholdKm] from the current one, to
+  /// avoid excessive Firestore reads on small pans.
+  /// Pass [force] = true to bypass the threshold (e.g. initial location set).
+  static const _kReQueryThresholdKm = 30.0;
+
+  void updateMapCenter(double latitude, double longitude,
+      {bool force = false}) {
+    if (!force) {
+      final distanceMeters = Geolocator.distanceBetween(
+        state.centerLatitude,
+        state.centerLongitude,
+        latitude,
+        longitude,
+      );
+      if (distanceMeters / 1000 < _kReQueryThresholdKm) return;
+    }
     state = state.copyWith(
       centerLatitude: latitude,
       centerLongitude: longitude,
@@ -101,7 +117,7 @@ class MapViewModel extends Notifier<MapScreenState> {
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );
-      updateMapCenter(position.latitude, position.longitude);
+      updateMapCenter(position.latitude, position.longitude, force: true);
     } catch (e) {
       // Silently fail - keep default location
     }
