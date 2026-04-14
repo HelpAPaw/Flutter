@@ -38,6 +38,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
   late AnimationController _fabAnimationController;
   late GoogleMapController _mapController;
+  bool _mapControllerReady = false;
   final _markerBuilder = MapMarkerBuilder();
   bool _showOnboardingButton = false;
   bool _onboardingSheetShown = false;
@@ -80,8 +81,10 @@ class _MapScreenState extends ConsumerState<MapScreen>
     );
     _markerBuilder.loadAllPins();
 
-    // Initialize location in ViewModel
-    ref.read(mapViewModelProvider.notifier).getUserLocation();
+    // Initialize location in ViewModel, then animate camera to it
+    ref.read(mapViewModelProvider.notifier).getUserLocation().then((_) {
+      _flyToUserLocation();
+    });
 
     WidgetsBinding.instance
         .addPostFrameCallback((_) => _checkOnboardingState());
@@ -163,7 +166,9 @@ class _MapScreenState extends ConsumerState<MapScreen>
         onComplete: () {
           Navigator.pop(context);
           setState(() => _showOnboardingButton = false);
-          ref.read(mapViewModelProvider.notifier).getUserLocation();
+          ref.read(mapViewModelProvider.notifier).getUserLocation().then((_) {
+            _flyToUserLocation();
+          });
         },
         onDismiss: () async {
           Navigator.pop(context);
@@ -174,6 +179,21 @@ class _MapScreenState extends ConsumerState<MapScreen>
     ).whenComplete(() {
       _onboardingSheetShown = false;
     });
+  }
+
+  /// Call after [getUserLocation] completes to move the camera to the
+  /// resolved position. Safe to call before the map controller is ready
+  /// (the [onMapCreated] handler covers that race).
+  void _flyToUserLocation() {
+    if (!mounted || !_mapControllerReady) return;
+    final s = ref.read(mapViewModelProvider);
+    if (s.centerLatitude == MapScreenState.defaultLatitude &&
+        s.centerLongitude == MapScreenState.defaultLongitude) {
+      return;
+    }
+    _mapController.animateCamera(
+      CameraUpdate.newLatLng(LatLng(s.centerLatitude, s.centerLongitude)),
+    );
   }
 
   Future<(double, double)> _getMapCenter() async {
@@ -485,6 +505,18 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 ),
                 onMapCreated: (GoogleMapController controller) {
                   _mapController = controller;
+                  _mapControllerReady = true;
+                  // If getUserLocation() resolved before the map was ready,
+                  // animate now.
+                  final s = ref.read(mapViewModelProvider);
+                  if (s.centerLatitude != MapScreenState.defaultLatitude ||
+                      s.centerLongitude != MapScreenState.defaultLongitude) {
+                    _mapController.animateCamera(
+                      CameraUpdate.newLatLng(
+                        LatLng(s.centerLatitude, s.centerLongitude),
+                      ),
+                    );
+                  }
                 },
                 onTap: (_) => _dismissOverlay(),
                 onCameraIdle: () {
