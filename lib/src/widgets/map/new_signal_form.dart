@@ -370,16 +370,13 @@ class _NewSignalFormState extends ConsumerState<NewSignalForm> {
         errorMessage = l10n.failedToCreateSignal;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
       SnackBar(
         content: Text(errorMessage),
         backgroundColor: Colors.red,
         duration: const Duration(seconds: 5),
-        action: SnackBarAction(
-          label: l10n.retry,
-          textColor: Colors.white,
-          onPressed: () {},
-        ),
       ),
     );
   }
