@@ -378,7 +378,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get feedbackHelpsImprove =>
-      'Your feedback helps us improve Help A Paw for everyone.';
+      'Your feedback helps us improve Help a Paw for everyone.';
 
   @override
   String get feedbackType => 'Feedback Type';
@@ -575,11 +575,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get faqSectionPrivacySafety => 'Privacy & Safety';
 
   @override
-  String get faqWhatIsHelpAPaw => 'What is Help A Paw?';
+  String get faqWhatIsHelpAPaw => 'What is Help a Paw?';
 
   @override
   String get faqWhatIsHelpAPawAnswer =>
-      'Help A Paw is a mobile application that helps connect people who spot animals in distress with volunteers who can provide assistance. By creating signals on the map, you can alert the community about animals that need help.';
+      'Help a Paw is a mobile application that helps connect people who spot animals in distress with volunteers who can provide assistance. By creating signals on the map, you can alert the community about animals that need help.';
 
   @override
   String get faqNeedAccount => 'Do I need to create an account?';
@@ -593,7 +593,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get faqIsFreeAnswer =>
-      'Yes, Help A Paw is completely free to use. We are a non-profit initiative dedicated to helping animals in need.';
+      'Yes, Help a Paw is completely free to use. We are a non-profit initiative dedicated to helping animals in need.';
 
   @override
   String get faqHowCreateSignal => 'How do I create a signal?';
@@ -712,7 +712,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aboutTitle => 'About';
 
   @override
-  String get helpAPaw => 'Help A Paw';
+  String get helpAPaw => 'Help a Paw';
 
   @override
   String version(String version, String build) {
@@ -724,7 +724,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutDescription =>
-      'Help A Paw is a platform that connects people who spot animals in distress with volunteers who can help. Together, we can make a difference in the lives of animals.';
+      'Help a Paw is a platform that connects people who spot animals in distress with volunteers who can help. Together, we can make a difference in the lives of animals.';
 
   @override
   String get connectWithUs => 'Connect with us';
@@ -743,7 +743,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String copyright(int year) {
-    return '© $year Help A Paw';
+    return '© $year Help a Paw';
   }
 
   @override

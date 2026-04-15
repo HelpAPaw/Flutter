@@ -6,7 +6,7 @@ class ShareService {
   static const String _websiteUrl = 'https://www.helpapaw.org';
 
   static Future<void> shareApp() async {
-    const message = '''Help animals in need with Help A Paw! 🐾
+    const message = '''Help animals in need with Help a Paw! 🐾
 
 Spot an animal in distress? Report it on the map and connect with nearby volunteers who can help.
 
@@ -16,7 +16,7 @@ Android: $_playStoreUrl
 
 Or visit: $_websiteUrl''';
 
-    await SharePlus.instance.share(ShareParams(text: message, subject: 'Help A Paw - Help animals in need'));
+    await SharePlus.instance.share(ShareParams(text: message, subject: 'Help a Paw - Help animals in need'));
   }
 
   static Future<void> shareSignal({
@@ -41,11 +41,11 @@ $description''';
 
     message += '''
 
-View on Help A Paw: $deepLink
+View on Help a Paw: $deepLink
 
 Don't have the app? Download it:
 $_websiteUrl''';
 
-    await SharePlus.instance.share(ShareParams(text: message, subject: 'Help A Paw - Animal needs help'));
+    await SharePlus.instance.share(ShareParams(text: message, subject: 'Help a Paw - Animal needs help'));
   }
 }

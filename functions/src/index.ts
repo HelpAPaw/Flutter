@@ -618,7 +618,7 @@ Device Information:
     }
 
     const emailBody = `
-New feedback submitted to Help A Paw
+New feedback submitted to Help a Paw
 
 Type: ${typeLabel}
 Date: ${createdAt.toISOString()}
@@ -635,7 +635,7 @@ View in Firebase Console: https://console.firebase.google.com/project/help-a-paw
 `;
 
     const htmlBody = `
-<h2>New feedback submitted to Help A Paw</h2>
+<h2>New feedback submitted to Help a Paw</h2>
 
 <table style="border-collapse: collapse; margin-bottom: 20px;">
   <tr><td style="padding: 5px 10px; font-weight: bold;">Type:</td><td style="padding: 5px 10px;">${typeLabel}</td></tr>
@@ -678,10 +678,10 @@ ${deviceInfo ? `
       const replyTo = userEmail || undefined;
 
       await transporter.sendMail({
-        from: `"Help A Paw Feedback" <${smtpUser.value()}>`,
+        from: `"Help a Paw Feedback" <${smtpUser.value()}>`,
         to: feedbackRecipient.value(),
         replyTo,
-        subject: `[Help A Paw] ${typeLabel}${userEmail ? ` from ${userEmail}` : ""}`,
+        subject: `[Help a Paw] ${typeLabel}${userEmail ? ` from ${userEmail}` : ""}`,
         text: emailBody,
         html: htmlBody,
       });

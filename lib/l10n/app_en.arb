@@ -186,7 +186,7 @@
 
   "sendFeedback": "Send Feedback",
   "weLoveToHear": "We'd love to hear from you!",
-  "feedbackHelpsImprove": "Your feedback helps us improve Help A Paw for everyone.",
+  "feedbackHelpsImprove": "Your feedback helps us improve Help a Paw for everyone.",
   "feedbackType": "Feedback Type",
   "general": "General",
   "bugReport": "Bug Report",
@@ -276,14 +276,14 @@
   "faqSectionNotifications": "Notifications",
   "faqSectionPrivacySafety": "Privacy & Safety",
 
-  "faqWhatIsHelpAPaw": "What is Help A Paw?",
-  "faqWhatIsHelpAPawAnswer": "Help A Paw is a mobile application that helps connect people who spot animals in distress with volunteers who can provide assistance. By creating signals on the map, you can alert the community about animals that need help.",
+  "faqWhatIsHelpAPaw": "What is Help a Paw?",
+  "faqWhatIsHelpAPawAnswer": "Help a Paw is a mobile application that helps connect people who spot animals in distress with volunteers who can provide assistance. By creating signals on the map, you can alert the community about animals that need help.",
 
   "faqNeedAccount": "Do I need to create an account?",
   "faqNeedAccountAnswer": "You can browse signals without an account, but to create new signals or leave comments, you'll need to sign in. This helps us maintain the quality of reports and allows you to track your contributions.",
 
   "faqIsFree": "Is the app free to use?",
-  "faqIsFreeAnswer": "Yes, Help A Paw is completely free to use. We are a non-profit initiative dedicated to helping animals in need.",
+  "faqIsFreeAnswer": "Yes, Help a Paw is completely free to use. We are a non-profit initiative dedicated to helping animals in need.",
 
   "faqHowCreateSignal": "How do I create a signal?",
   "faqHowCreateSignalAnswer": "Tap the \"+\" button on the map, select the location where you spotted the animal, choose the signal type (Emergency, Lost/Found, etc.), add a description, and optionally include photos. Your signal will be visible to other users in the area.",
@@ -332,7 +332,7 @@
   "selectRegion": "Select Region",
 
   "aboutTitle": "About",
-  "helpAPaw": "Help A Paw",
+  "helpAPaw": "Help a Paw",
   "version": "Version {version} ({build})",
   "@version": {
     "placeholders": {
@@ -341,13 +341,13 @@
     }
   },
   "appDescription": "Send emergency signals about animals in need",
-  "aboutDescription": "Help A Paw is a platform that connects people who spot animals in distress with volunteers who can help. Together, we can make a difference in the lives of animals.",
+  "aboutDescription": "Help a Paw is a platform that connects people who spot animals in distress with volunteers who can help. Together, we can make a difference in the lives of animals.",
   "connectWithUs": "Connect with us",
   "website": "Website",
   "facebook": "Facebook",
   "gitHub": "GitHub",
   "openSourceLicenses": "Open Source Licenses",
-  "copyright": "\u00a9 {year} Help A Paw",
+  "copyright": "\u00a9 {year} Help a Paw",
   "@copyright": {
     "placeholders": {
       "year": {"type": "int"}

@@ -253,14 +253,14 @@ class GoRouterRefreshStream extends ChangeNotifier {
 class HelpAPaw extends StatefulWidget {
   const HelpAPaw({super.key});
 
-  // Help A Paw State
+  // Help a Paw State
   @override
   State<HelpAPaw> createState() => _HelpAPawState();
 }
 
 class _HelpAPawState extends State<HelpAPaw> {
 
-  // Help A Paw Widgets
+  // Help a Paw Widgets
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(

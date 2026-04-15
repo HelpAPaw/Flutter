@@ -767,7 +767,7 @@ abstract class AppLocalizations {
   /// No description provided for @feedbackHelpsImprove.
   ///
   /// In en, this message translates to:
-  /// **'Your feedback helps us improve Help A Paw for everyone.'**
+  /// **'Your feedback helps us improve Help a Paw for everyone.'**
   String get feedbackHelpsImprove;
 
   /// No description provided for @feedbackType.
@@ -1127,13 +1127,13 @@ abstract class AppLocalizations {
   /// No description provided for @faqWhatIsHelpAPaw.
   ///
   /// In en, this message translates to:
-  /// **'What is Help A Paw?'**
+  /// **'What is Help a Paw?'**
   String get faqWhatIsHelpAPaw;
 
   /// No description provided for @faqWhatIsHelpAPawAnswer.
   ///
   /// In en, this message translates to:
-  /// **'Help A Paw is a mobile application that helps connect people who spot animals in distress with volunteers who can provide assistance. By creating signals on the map, you can alert the community about animals that need help.'**
+  /// **'Help a Paw is a mobile application that helps connect people who spot animals in distress with volunteers who can provide assistance. By creating signals on the map, you can alert the community about animals that need help.'**
   String get faqWhatIsHelpAPawAnswer;
 
   /// No description provided for @faqNeedAccount.
@@ -1157,7 +1157,7 @@ abstract class AppLocalizations {
   /// No description provided for @faqIsFreeAnswer.
   ///
   /// In en, this message translates to:
-  /// **'Yes, Help A Paw is completely free to use. We are a non-profit initiative dedicated to helping animals in need.'**
+  /// **'Yes, Help a Paw is completely free to use. We are a non-profit initiative dedicated to helping animals in need.'**
   String get faqIsFreeAnswer;
 
   /// No description provided for @faqHowCreateSignal.
@@ -1361,7 +1361,7 @@ abstract class AppLocalizations {
   /// No description provided for @helpAPaw.
   ///
   /// In en, this message translates to:
-  /// **'Help A Paw'**
+  /// **'Help a Paw'**
   String get helpAPaw;
 
   /// No description provided for @version.
@@ -1379,7 +1379,7 @@ abstract class AppLocalizations {
   /// No description provided for @aboutDescription.
   ///
   /// In en, this message translates to:
-  /// **'Help A Paw is a platform that connects people who spot animals in distress with volunteers who can help. Together, we can make a difference in the lives of animals.'**
+  /// **'Help a Paw is a platform that connects people who spot animals in distress with volunteers who can help. Together, we can make a difference in the lives of animals.'**
   String get aboutDescription;
 
   /// No description provided for @connectWithUs.
@@ -1415,7 +1415,7 @@ abstract class AppLocalizations {
   /// No description provided for @copyright.
   ///
   /// In en, this message translates to:
-  /// **'© {year} Help A Paw'**
+  /// **'© {year} Help a Paw'**
   String copyright(int year);
 
   /// No description provided for @verifyEmail.

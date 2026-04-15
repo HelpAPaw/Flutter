@@ -1,7 +1,7 @@
 {
   "name": "help-a-paw-functions",
   "version": "1.0.0",
-  "description": "Cloud Functions for Help A Paw notifications",
+  "description": "Cloud Functions for Help a Paw notifications",
   "main": "lib/index.js",
   "scripts": {
     "build": "tsc",

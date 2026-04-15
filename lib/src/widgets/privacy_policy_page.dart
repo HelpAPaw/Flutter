@@ -51,7 +51,7 @@ class PrivacyPolicyPage extends StatelessWidget {
             const _PolicySection(
               title: 'Introduction',
               content:
-                  'Help A Paw ("we", "our", or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile application.',
+                  'Help a Paw ("we", "our", or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile application.',
             ),
             const _PolicySection(
               title: 'Information We Collect',
@@ -124,7 +124,7 @@ To exercise these rights, please contact us through the Feedback section of the 
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Help A Paw',
+                      'Help a Paw',
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 8),
