@@ -976,6 +976,33 @@ class AppLocalizationsBg extends AppLocalizations {
   String get completeNotificationSetup => 'Завършете настройката на известията';
 
   @override
+  String get editSignal => 'Редактирай сигнал';
+
+  @override
+  String get deleteSignal => 'Изтрий сигнал';
+
+  @override
+  String get confirmDeleteSignal =>
+      'Сигурни ли сте, че искате да изтриете този сигнал? Това действие не може да бъде отменено.';
+
+  @override
+  String get signalUpdatedSuccessfully => 'Сигналът е обновен успешно';
+
+  @override
+  String get signalDeletedSuccessfully => 'Сигналът е изтрит успешно';
+
+  @override
+  String get failedToUpdateSignal =>
+      'Неуспешно обновяване на сигнала. Моля, опитайте отново.';
+
+  @override
+  String get failedToDeleteSignal =>
+      'Неуспешно изтриване на сигнала. Моля, опитайте отново.';
+
+  @override
+  String get contactPhone => 'Телефон за връзка';
+
+  @override
   String get errorAddingComment =>
       'Неуспешно добавяне на коментар. Моля, опитайте отново.';
 

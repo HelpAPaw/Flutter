@@ -89,6 +89,26 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
               backgroundColor: Colors.orange,
               foregroundColor: Colors.white,
               actions: [
+                if (_isUserAuthor(signal))
+                  Semantics(
+                    label: l10n.editSignal,
+                    button: true,
+                    enabled: true,
+                    child: IconButton(
+                      icon: const Icon(Icons.edit),
+                      onPressed: () => context.push('/edit_signal/${widget.signalId}'),
+                    ),
+                  ),
+                if (_isUserAuthor(signal))
+                  Semantics(
+                    label: l10n.deleteSignal,
+                    button: true,
+                    enabled: true,
+                    child: IconButton(
+                      icon: const Icon(Icons.delete),
+                      onPressed: () => _confirmDeleteSignal(),
+                    ),
+                  ),
                 Semantics(
                   label: l10n.shareSignal,
                   button: true,
@@ -741,6 +761,91 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(AppLocalizations.of(context).errorUpdatingStatus)),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmDeleteSignal() async {
+    final l10n = AppLocalizations.of(context);
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.deleteSignal),
+        content: Text(l10n.confirmDeleteSignal),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: Text(l10n.delete),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+
+    try {
+      final signalRef = FirebaseFirestore.instance
+          .collection(AppPreferencesService().signalsCollectionName)
+          .doc(widget.signalId);
+
+      // Read signal data to get photo URLs before deletion
+      final signalDoc = await signalRef.get();
+      if (signalDoc.exists) {
+        final signal = Signal.fromJson(signalDoc.data()!);
+
+        // Delete photos from Storage (best-effort)
+        for (final photoUrl in signal.photoUrls) {
+          try {
+            final ref = FirebaseStorage.instanceFor(
+                    bucket: 'gs://help-a-paw-dev.appspot.com')
+                .refFromURL(photoUrl);
+            await ref.delete();
+          } catch (_) {
+            // Storage deletion failed, continue with the rest
+          }
+        }
+      }
+
+      // Batch-delete subcollection comments
+      final comments = await signalRef.collection('comments').get();
+      if (comments.docs.isNotEmpty) {
+        final batch = FirebaseFirestore.instance.batch();
+        for (final doc in comments.docs) {
+          batch.delete(doc.reference);
+        }
+        await batch.commit();
+      }
+
+      // Delete the signal document
+      await signalRef.delete();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.signalDeletedSuccessfully),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      if (Navigator.of(context).canPop()) {
+        context.pop();
+      } else {
+        context.go('/home');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.failedToDeleteSignal),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }

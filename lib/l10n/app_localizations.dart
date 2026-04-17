@@ -1802,6 +1802,54 @@ abstract class AppLocalizations {
   /// **'Complete notification setup'**
   String get completeNotificationSetup;
 
+  /// No description provided for @editSignal.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit Signal'**
+  String get editSignal;
+
+  /// No description provided for @deleteSignal.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete Signal'**
+  String get deleteSignal;
+
+  /// No description provided for @confirmDeleteSignal.
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to delete this signal? This action cannot be undone.'**
+  String get confirmDeleteSignal;
+
+  /// No description provided for @signalUpdatedSuccessfully.
+  ///
+  /// In en, this message translates to:
+  /// **'Signal updated successfully'**
+  String get signalUpdatedSuccessfully;
+
+  /// No description provided for @signalDeletedSuccessfully.
+  ///
+  /// In en, this message translates to:
+  /// **'Signal deleted successfully'**
+  String get signalDeletedSuccessfully;
+
+  /// No description provided for @failedToUpdateSignal.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to update signal. Please try again.'**
+  String get failedToUpdateSignal;
+
+  /// No description provided for @failedToDeleteSignal.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to delete signal. Please try again.'**
+  String get failedToDeleteSignal;
+
+  /// No description provided for @contactPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact Phone'**
+  String get contactPhone;
+
   /// No description provided for @errorAddingComment.
   ///
   /// In en, this message translates to:

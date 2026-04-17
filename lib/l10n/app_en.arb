@@ -467,6 +467,15 @@
   },
   "completeNotificationSetup": "Complete notification setup",
 
+  "editSignal": "Edit Signal",
+  "deleteSignal": "Delete Signal",
+  "confirmDeleteSignal": "Are you sure you want to delete this signal? This action cannot be undone.",
+  "signalUpdatedSuccessfully": "Signal updated successfully",
+  "signalDeletedSuccessfully": "Signal deleted successfully",
+  "failedToUpdateSignal": "Failed to update signal. Please try again.",
+  "failedToDeleteSignal": "Failed to delete signal. Please try again.",
+  "contactPhone": "Contact Phone",
+
   "errorAddingComment": "Failed to add comment. Please try again.",
   "errorUpdatingStatus": "Failed to update status. Please try again.",
   "errorGeneric": "Something went wrong. Please try again."

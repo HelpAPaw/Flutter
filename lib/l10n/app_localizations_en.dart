@@ -964,6 +964,33 @@ class AppLocalizationsEn extends AppLocalizations {
   String get completeNotificationSetup => 'Complete notification setup';
 
   @override
+  String get editSignal => 'Edit Signal';
+
+  @override
+  String get deleteSignal => 'Delete Signal';
+
+  @override
+  String get confirmDeleteSignal =>
+      'Are you sure you want to delete this signal? This action cannot be undone.';
+
+  @override
+  String get signalUpdatedSuccessfully => 'Signal updated successfully';
+
+  @override
+  String get signalDeletedSuccessfully => 'Signal deleted successfully';
+
+  @override
+  String get failedToUpdateSignal =>
+      'Failed to update signal. Please try again.';
+
+  @override
+  String get failedToDeleteSignal =>
+      'Failed to delete signal. Please try again.';
+
+  @override
+  String get contactPhone => 'Contact Phone';
+
+  @override
   String get errorAddingComment => 'Failed to add comment. Please try again.';
 
   @override

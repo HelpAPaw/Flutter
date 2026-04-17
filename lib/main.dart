@@ -27,6 +27,7 @@ import 'package:help_a_paw/src/widgets/privacy_policy_page.dart';
 import 'package:help_a_paw/src/widgets/profile_completion_page.dart';
 import 'package:help_a_paw/src/widgets/profile_page.dart';
 import 'package:help_a_paw/src/widgets/sign_in_page.dart';
+import 'package:help_a_paw/src/widgets/edit_signal_screen.dart';
 import 'package:help_a_paw/src/widgets/signal_details_screen.dart';
 import 'package:help_a_paw/src/widgets/clinic_details_screen.dart';
 import 'package:help_a_paw/src/widgets/notification_settings_page.dart';
@@ -169,6 +170,11 @@ final GoRouter _router = GoRouter(
       name: 'signal_details',
       path: '/signal_details/:signalId',
       builder: (BuildContext context, GoRouterState state) => SignalDetailsScreen(signalId: state.pathParameters['signalId']!),
+    ),
+    GoRoute(
+      name: 'edit_signal',
+      path: '/edit_signal/:signalId',
+      builder: (BuildContext context, GoRouterState state) => EditSignalScreen(signalId: state.pathParameters['signalId']!),
     ),
     GoRoute(
       name: 'clinic_details',

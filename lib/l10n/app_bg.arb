@@ -328,6 +328,15 @@
   "couldNotOpenUrl": "Не може да се отвори {url}",
   "completeNotificationSetup": "Завършете настройката на известията",
 
+  "editSignal": "Редактирай сигнал",
+  "deleteSignal": "Изтрий сигнал",
+  "confirmDeleteSignal": "Сигурни ли сте, че искате да изтриете този сигнал? Това действие не може да бъде отменено.",
+  "signalUpdatedSuccessfully": "Сигналът е обновен успешно",
+  "signalDeletedSuccessfully": "Сигналът е изтрит успешно",
+  "failedToUpdateSignal": "Неуспешно обновяване на сигнала. Моля, опитайте отново.",
+  "failedToDeleteSignal": "Неуспешно изтриване на сигнала. Моля, опитайте отново.",
+  "contactPhone": "Телефон за връзка",
+
   "errorAddingComment": "Неуспешно добавяне на коментар. Моля, опитайте отново.",
   "errorUpdatingStatus": "Неуспешна промяна на статуса. Моля, опитайте отново.",
   "errorGeneric": "Нещо се обърка. Моля, опитайте отново."
