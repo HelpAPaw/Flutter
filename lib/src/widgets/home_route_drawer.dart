@@ -226,19 +226,25 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
               softWrap: true,
             ),
           ),
-          ListTile(
-            enableFeedback: true,
-            leading: const Icon(Icons.share),
-            onTap: () => {
-              ShareService.shareApp(),
-              homeRouteTile(9),
-            },
-            selected: _homeRouteTile == 9,
-            title: Text(
-              l10n.share,
-              softWrap: true,
-            ),
-          ),
+          Builder(builder: (context) {
+            return ListTile(
+              enableFeedback: true,
+              leading: const Icon(Icons.share),
+              onTap: () {
+                final box = context.findRenderObject() as RenderBox?;
+                final origin = box != null
+                    ? box.localToGlobal(Offset.zero) & box.size
+                    : null;
+                ShareService.shareApp(sharePositionOrigin: origin);
+                homeRouteTile(9);
+              },
+              selected: _homeRouteTile == 9,
+              title: Text(
+                l10n.share,
+                softWrap: true,
+              ),
+            );
+          }),
         ],
       ),
     );

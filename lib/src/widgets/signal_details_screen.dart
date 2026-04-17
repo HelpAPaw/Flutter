@@ -93,19 +93,26 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                   label: l10n.shareSignal,
                   button: true,
                   enabled: true,
-                  child: IconButton(
-                    icon: const Icon(Icons.share),
-                    onPressed: () {
-                      final GeoPoint? geopoint = signal.location['geopoint'] as GeoPoint?;
-                      ShareService.shareSignal(
-                        signalId: widget.signalId,
-                        signalType: Signal.getLocalizedSignalTypeName(context, signal.signalType),
-                        description: signal.description,
-                        latitude: geopoint?.latitude,
-                        longitude: geopoint?.longitude,
-                      );
-                    },
-                  ),
+                  child: Builder(builder: (context) {
+                    return IconButton(
+                      icon: const Icon(Icons.share),
+                      onPressed: () {
+                        final box = context.findRenderObject() as RenderBox?;
+                        final origin = box != null
+                            ? box.localToGlobal(Offset.zero) & box.size
+                            : null;
+                        final GeoPoint? geopoint = signal.location['geopoint'] as GeoPoint?;
+                        ShareService.shareSignal(
+                          signalId: widget.signalId,
+                          signalType: Signal.getLocalizedSignalTypeName(context, signal.signalType),
+                          description: signal.description,
+                          latitude: geopoint?.latitude,
+                          longitude: geopoint?.longitude,
+                          sharePositionOrigin: origin,
+                        );
+                      },
+                    );
+                  }),
                 ),
               ],
             ),

@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:share_plus/share_plus.dart';
 
 class ShareService {
@@ -5,7 +7,7 @@ class ShareService {
   static const String _playStoreUrl = 'https://play.google.com/store/apps/details?id=org.helpapaw.helpapaw';
   static const String _websiteUrl = 'https://www.helpapaw.org';
 
-  static Future<void> shareApp() async {
+  static Future<void> shareApp({Rect? sharePositionOrigin}) async {
     const message = '''Help animals in need with Help a Paw! 🐾
 
 Spot an animal in distress? Report it on the map and connect with nearby volunteers who can help.
@@ -16,7 +18,7 @@ Android: $_playStoreUrl
 
 Or visit: $_websiteUrl''';
 
-    await SharePlus.instance.share(ShareParams(text: message, subject: 'Help a Paw - Help animals in need'));
+    await SharePlus.instance.share(ShareParams(text: message, subject: 'Help a Paw - Help animals in need', sharePositionOrigin: sharePositionOrigin));
   }
 
   static Future<void> shareSignal({
@@ -25,6 +27,7 @@ Or visit: $_websiteUrl''';
     required String description,
     double? latitude,
     double? longitude,
+    Rect? sharePositionOrigin,
   }) async {
     final deepLink = 'https://www.helpapaw.org/signal/$signalId';
 
@@ -46,6 +49,6 @@ View on Help a Paw: $deepLink
 Don't have the app? Download it:
 $_websiteUrl''';
 
-    await SharePlus.instance.share(ShareParams(text: message, subject: 'Help a Paw - Animal needs help'));
+    await SharePlus.instance.share(ShareParams(text: message, subject: 'Help a Paw - Animal needs help', sharePositionOrigin: sharePositionOrigin));
   }
 }
