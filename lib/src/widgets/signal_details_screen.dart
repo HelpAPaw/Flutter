@@ -372,28 +372,29 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                   backgroundColor: WidgetStateProperty.all<Color>(Colors.orange),
                                 )
                               ),
-                              TextButton.icon(
-                                onPressed: () async {
-                                  Uri phoneUri = Uri(scheme: 'tel', path: signal.contactPhone);
-                                  if (await canLaunchUrl(phoneUri)) {
-                                    launchUrl(phoneUri);
-                                  } else {
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text(l10n.cannotCall(signal.contactPhone)),
-                                        ),
-                                      );
+                              if (signal.contactPhone.isNotEmpty)
+                                TextButton.icon(
+                                  onPressed: () async {
+                                    Uri phoneUri = Uri(scheme: 'tel', path: signal.contactPhone);
+                                    if (await canLaunchUrl(phoneUri)) {
+                                      launchUrl(phoneUri);
+                                    } else {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text(l10n.cannotCall(signal.contactPhone)),
+                                          ),
+                                        );
+                                      }
                                     }
-                                  }
-                                },
-                                icon: const Icon(Icons.phone),
-                                label: Text(signal.contactPhone),
-                                style: ButtonStyle(
-                                  foregroundColor: WidgetStateProperty.all<Color>(Colors.white),
-                                  backgroundColor: WidgetStateProperty.all<Color>(Colors.orange),
-                                )
-                              ),
+                                  },
+                                  icon: const Icon(Icons.phone),
+                                  label: Text(signal.contactPhone),
+                                  style: ButtonStyle(
+                                    foregroundColor: WidgetStateProperty.all<Color>(Colors.white),
+                                    backgroundColor: WidgetStateProperty.all<Color>(Colors.orange),
+                                  )
+                                ),
                             ],
                           ),
                           Text(' ${l10n.status}'),
