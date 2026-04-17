@@ -572,10 +572,16 @@ abstract class AppLocalizations {
   /// **'Navigate Me'**
   String get navigateMe;
 
+  /// No description provided for @chooseNavigationApp.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose Navigation App'**
+  String get chooseNavigationApp;
+
   /// No description provided for @cannotNavigate.
   ///
   /// In en, this message translates to:
-  /// **'Cannot navigate to signal location, please try to do so manually.'**
+  /// **'No navigation apps found on this device.'**
   String get cannotNavigate;
 
   /// No description provided for @cannotCall.

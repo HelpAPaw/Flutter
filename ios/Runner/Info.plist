@@ -81,6 +81,19 @@
 	</array>
 	<key>GMSApiKey</key>
 	<string>AIzaSyDX000zOUB-F2qL4Wcf-pas3q3ThyHAOVc</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>comgooglemaps</string>
+		<string>waze</string>
+		<string>citymapper</string>
+		<string>ul</string>
+		<string>tomtomhome</string>
+		<string>com.sygic.aura</string>
+		<string>dgis</string>
+		<string>yandexnavi</string>
+		<string>moovit</string>
+		<string>osmandmaps</string>
+	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

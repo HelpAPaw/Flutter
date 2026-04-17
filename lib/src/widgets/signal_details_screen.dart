@@ -14,7 +14,10 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
+import 'package:map_launcher/map_launcher.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import '../services/navigation_service.dart';
 
 import '../models/signal.dart';
 import '../services/app_preferences_service.dart';
@@ -360,30 +363,13 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                             children: [
                               TextButton.icon(
                                 onPressed: () async {
-                                  // Open navigation app with signal location
                                   GeoPoint location = signal.location['geopoint'];
-                                  Uri url = Uri.parse(
-                                    'geo:${location.latitude},${location.longitude}?q=${location.latitude},${location.longitude}(${Uri.encodeComponent(signal.title)})'
+                                  final coords = Coords(location.latitude, location.longitude);
+                                  await NavigationService.navigateTo(
+                                    context: context,
+                                    coords: coords,
+                                    destinationTitle: signal.title,
                                   );
-                                  if (await canLaunchUrl(url)) {
-                                    launchUrl(url);
-                                  } else {
-                                    // Fallback to Google Maps web URL if geo: scheme not supported
-                                    final fallbackUri = Uri.parse(
-                                      'https://www.google.com/maps/dir/?api=1&destination=${location.latitude},${location.longitude}'
-                                    );
-                                    if (await canLaunchUrl(fallbackUri)) {
-                                      await launchUrl(fallbackUri, mode: LaunchMode.externalApplication);
-                                    } else {
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text(l10n.cannotNavigate),
-                                          ),
-                                        );
-                                      }
-                                    }
-                                  }
                                 },
                                 icon: const Icon(Icons.directions),
                                 label: Text(l10n.navigateMe),

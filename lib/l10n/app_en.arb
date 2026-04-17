@@ -109,7 +109,8 @@
     }
   },
   "navigateMe": "Navigate Me",
-  "cannotNavigate": "Cannot navigate to signal location, please try to do so manually.",
+  "chooseNavigationApp": "Choose Navigation App",
+  "cannotNavigate": "No navigation apps found on this device.",
   "cannotCall": "Cannot call {phone}, please try to connect manually.",
   "@cannotCall": {
     "placeholders": {

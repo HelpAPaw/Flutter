@@ -263,8 +263,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get navigateMe => 'Navigate Me';
 
   @override
-  String get cannotNavigate =>
-      'Cannot navigate to signal location, please try to do so manually.';
+  String get chooseNavigationApp => 'Choose Navigation App';
+
+  @override
+  String get cannotNavigate => 'No navigation apps found on this device.';
 
   @override
   String cannotCall(String phone) {

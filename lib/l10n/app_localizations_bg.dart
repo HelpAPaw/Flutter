@@ -267,8 +267,11 @@ class AppLocalizationsBg extends AppLocalizations {
   String get navigateMe => 'Навигирай ме';
 
   @override
+  String get chooseNavigationApp => 'Изберете навигационно приложение';
+
+  @override
   String get cannotNavigate =>
-      'Не може да се навигира до местоположението на сигнала, моля опитайте ръчно.';
+      'Не са намерени навигационни приложения на устройството.';
 
   @override
   String cannotCall(String phone) {

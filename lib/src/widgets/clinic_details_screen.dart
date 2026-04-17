@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
+import 'package:map_launcher/map_launcher.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import '../services/navigation_service.dart';
 import 'package:adaptive_components/adaptive_components.dart';
 
 import '../models/vet_clinic.dart';
@@ -252,31 +255,12 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
   }
 
   Future<void> _navigateToClinic() async {
-    final l10n = AppLocalizations.of(context);
-    // Use geo URI with query parameter - allows user to choose navigation app
-    // This works on both Android and iOS, letting the system handle app selection
-    final uri = Uri.parse(
-        'geo:${_clinic!.latitude},${_clinic!.longitude}?q=${_clinic!.latitude},${_clinic!.longitude}(${Uri.encodeComponent(_clinic!.name)})');
-
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    } else {
-      // Fallback to Google Maps web URL if geo: scheme not supported
-      final fallbackUri = Uri.parse(
-          'https://www.google.com/maps/dir/?api=1&destination=${_clinic!.latitude},${_clinic!.longitude}');
-      if (await canLaunchUrl(fallbackUri)) {
-        await launchUrl(fallbackUri, mode: LaunchMode.externalApplication);
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(l10n.cannotOpenNavigationApp),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    }
+    final coords = Coords(_clinic!.latitude, _clinic!.longitude);
+    await NavigationService.navigateTo(
+      context: context,
+      coords: coords,
+      destinationTitle: _clinic!.name,
+    );
   }
 
   Future<void> _callClinic() async {
