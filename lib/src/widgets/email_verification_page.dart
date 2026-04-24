@@ -16,6 +16,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
   bool _isResending = false;
   bool _isChecking = false;
   Timer? _timer;
+  Timer? _countdownTimer;
   int _countdown = 60;
 
   @override
@@ -28,6 +29,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
   @override
   void dispose() {
     _timer?.cancel();
+    _countdownTimer?.cancel();
     super.dispose();
   }
 
@@ -85,8 +87,13 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
         }
 
         // Start countdown for resend button
+        _countdownTimer?.cancel();
         setState(() => _countdown = 60);
-        Timer.periodic(const Duration(seconds: 1), (timer) {
+        _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+          if (!mounted) {
+            timer.cancel();
+            return;
+          }
           if (_countdown > 0) {
             setState(() => _countdown--);
           } else {
