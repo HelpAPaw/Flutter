@@ -51,8 +51,9 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
         if (refreshedUser?.emailVerified ?? false) {
           _timer?.cancel();
           if (mounted) {
-            // Push profile completion to preserve navigation stack
-            context.push('/complete_profile');
+            // go (not push): /verify_email must not remain in the stack, or the
+            // return-to-origin logic in profile_completion_page gets stuck on it.
+            context.go('/complete_profile');
           }
         }
       }
@@ -136,27 +137,36 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
     setState(() => _isResending = false);
   }
 
+  void _exitVerification(BuildContext context) {
+    FirebaseAuth.instance.signOut();
+    // User can continue as anonymous; prior stack is often missing because the
+    // router redirect navigated here via go, so fall back to /home.
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/home');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final user = FirebaseAuth.instance.currentUser;
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _exitVerification(context);
+      },
+      child: Scaffold(
         appBar: AppBar(
           title: Text(l10n.verifyEmail),
           backgroundColor: Colors.orange,
           foregroundColor: Colors.white,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
-            onPressed: () {
-              FirebaseAuth.instance.signOut();
-              // Pop back to previous screen (user can continue as anonymous)
-              if (context.canPop()) {
-                context.pop();
-              } else {
-                context.go('/home');
-              }
-            },
+            onPressed: () => _exitVerification(context),
           ),
         ),
         body: SafeArea(
@@ -293,14 +303,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     TextButton(
-                      onPressed: () {
-                        FirebaseAuth.instance.signOut();
-                        if (context.canPop()) {
-                          context.pop();
-                        } else {
-                          context.go('/home');
-                        }
-                      },
+                      onPressed: () => _exitVerification(context),
                       child: Text(
                         l10n.cancelAndSignOut,
                         style: const TextStyle(color: Colors.grey),
@@ -321,6 +324,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
             ],
           ),
         ),
+      ),
     );
   }
 }

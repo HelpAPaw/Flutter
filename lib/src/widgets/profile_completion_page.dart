@@ -41,31 +41,27 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
   }
 
   /// Pops back through the auth stack to return to the original screen.
-  /// The stack may be: original → sign_in → [verify_email] → complete_profile
+  /// The stack may be: original → sign_in → [verify_email] → complete_profile.
+  /// If nothing non-auth is underneath (router redirects replace the stack),
+  /// fall back to /home so the user doesn't get stranded on an auth screen.
   void _popAuthStack(BuildContext context) {
-    // Auth routes that should be popped
     const authRoutes = {'/complete_profile', '/verify_email', '/sign_in'};
 
     void popNext() {
       if (!context.mounted) return;
 
       final currentPath = GoRouterState.of(context).matchedLocation;
+      if (!authRoutes.contains(currentPath)) return;
 
-      // If we're still on an auth route and can pop, continue popping
-      if (authRoutes.contains(currentPath) && context.canPop()) {
+      if (context.canPop()) {
         context.pop();
-        // Schedule next check after this pop completes
         WidgetsBinding.instance.addPostFrameCallback((_) => popNext());
+      } else {
+        context.go('/home');
       }
-      // Otherwise we've reached the original screen - stop popping
     }
 
-    if (context.canPop()) {
-      popNext();
-    } else {
-      // Fallback if somehow we can't pop
-      context.go('/home');
-    }
+    popNext();
   }
 
   Future<void> _saveProfile() async {
