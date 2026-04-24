@@ -17,6 +17,7 @@ import 'package:photo_view/photo_view_gallery.dart';
 import 'package:map_launcher/map_launcher.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../config/routes.dart';
 import '../services/navigation_service.dart';
 
 import '../models/signal.dart';
@@ -80,7 +81,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
             if (Navigator.of(context).canPop()) {
               context.pop();
             } else {
-              context.go('/home');
+              context.go(Routes.home);
             }
           }
         },
@@ -99,7 +100,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                     enabled: true,
                     child: IconButton(
                       icon: const Icon(Icons.edit),
-                      onPressed: () => context.push('/edit_signal/${widget.signalId}'),
+                      onPressed: () => context.push(Routes.editSignal(widget.signalId)),
                     ),
                   ),
                 if (_isUserAuthor(signal))
@@ -823,7 +824,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       if (Navigator.of(context).canPop()) {
         context.pop();
       } else {
-        context.go('/home');
+        context.go(Routes.home);
       }
     } catch (e) {
       if (mounted) {
@@ -1027,7 +1028,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
             ElevatedButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                context.push('/sign_in');
+                context.push(Routes.signIn);
               },
               child: Text(l10n.signIn),
             ),

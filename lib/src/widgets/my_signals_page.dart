@@ -7,6 +7,7 @@ import 'package:help_a_paw/src/models/signal.dart';
 import 'package:help_a_paw/src/services/app_preferences_service.dart';
 import 'package:intl/intl.dart';
 
+import '../config/routes.dart';
 import '../utils/nav_extensions.dart';
 
 class MySignalsPage extends StatelessWidget {
@@ -82,7 +83,7 @@ class MySignalsPage extends StatelessWidget {
                   Text(l10n.pleaseSignInToViewSignals),
                   const SizedBox(height: 16),
                   ElevatedButton(
-                    onPressed: () => context.push('/sign_in'),
+                    onPressed: () => context.push(Routes.signIn),
                     child: Text(l10n.signIn),
                   ),
                 ],
@@ -212,7 +213,7 @@ class MySignalsPage extends StatelessWidget {
                           ],
                         ),
                         trailing: const Icon(Icons.chevron_right),
-                        onTap: () => context.push('/signal_details/${doc.id}'),
+                        onTap: () => context.push(Routes.signalDetails(doc.id)),
                       ),
                     );
                   },

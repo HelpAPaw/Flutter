@@ -9,6 +9,7 @@ import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:go_router/go_router.dart';
 
+import '../config/routes.dart';
 import '../repositories/repository_provider.dart';
 import '../repositories/signal_repository.dart';
 import '../services/app_preferences_service.dart';
@@ -251,7 +252,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
         center: LatLng(centerLat, centerLng),
         zoomLevel: zoom,
         hospitalPin: _markerBuilder.hospitalPin,
-        onClinicTap: (clinicId) => context.push('/clinic_details/$clinicId'),
+        onClinicTap: (clinicId) => context.push(Routes.clinicDetails(clinicId)),
       );
 
       if (mounted) {
@@ -306,7 +307,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
             ElevatedButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                context.push('/sign_in');
+                context.push(Routes.signIn);
               },
               child: Text(l10n.signIn),
             ),
@@ -544,7 +545,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                     behavior: HitTestBehavior.translucent,
                     onTap: () {
                       final signal = _selectedSignal!;
-                      context.push('/signal_details/${signal.id}').then((_) {
+                      context.push(Routes.signalDetails(signal.id)).then((_) {
                         // Re-show the native InfoWindow when returning;
                         // the platform hides it during route transitions.
                         if (mounted && _selectedSignal?.id == signal.id) {

@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 
+import '../config/routes.dart';
 import '../services/app_preferences_service.dart';
 import '../services/location_service.dart';
 import '../services/notification_service.dart';
@@ -176,7 +177,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
   Future<void> _handleSelectRegion() async {
     if (!mounted) return;
 
-    final result = await context.push<Map<String, dynamic>>('/select-region');
+    final result = await context.push<Map<String, dynamic>>(Routes.selectRegion);
 
     if (!mounted) return;
 

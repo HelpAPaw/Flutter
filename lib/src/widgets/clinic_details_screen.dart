@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:map_launcher/map_launcher.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../config/routes.dart';
 import '../services/navigation_service.dart';
 import 'package:adaptive_components/adaptive_components.dart';
 
@@ -75,7 +76,7 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
               Text(l10n.clinicNotFound),
               const SizedBox(height: 16),
               ElevatedButton(
-                onPressed: () => context.go('/home'),
+                onPressed: () => context.go(Routes.home),
                 child: Text(l10n.returnToMap),
               ),
             ],
@@ -88,7 +89,7 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop) {
-          context.go('/home');
+          context.go(Routes.home);
         }
       },
       child: Scaffold(

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 
+import '../config/routes.dart';
 import '../utils/nav_extensions.dart';
 
 class EmailVerificationPage extends StatefulWidget {
@@ -57,7 +58,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
           if (mounted) {
             // go (not push): /verify_email must not remain in the stack, or the
             // return-to-origin logic in profile_completion_page gets stuck on it.
-            context.go('/complete_profile');
+            context.go(Routes.completeProfile);
           }
         }
       }
@@ -317,7 +318,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
                     // Development bypass (remove in production)
                     if (kDebugMode)
                       TextButton(
-                        onPressed: () => context.push('/complete_profile'),
+                        onPressed: () => context.push(Routes.completeProfile),
                         child: Text(
                           l10n.skipDevOnly,
                           style: const TextStyle(color: Colors.red, fontSize: 12),

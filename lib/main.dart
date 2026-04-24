@@ -16,6 +16,7 @@ import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/src/config/firebase_options.dart';
+import 'package:help_a_paw/src/config/routes.dart';
 import 'package:help_a_paw/src/widgets/about_page.dart';
 import 'package:help_a_paw/src/widgets/email_verification_page.dart';
 import 'package:help_a_paw/src/widgets/faqs_page.dart';
@@ -125,40 +126,36 @@ Future<void> main() async {
 
 final GoRouter _router = GoRouter(
   debugLogDiagnostics: kDebugMode,
-  initialLocation: '/home',
+  initialLocation: Routes.home,
   redirect: (context, state) {
     final user = FirebaseAuth.instance.currentUser;
-    final isSigningIn = state.matchedLocation == '/sign_in';
-    final isVerifyingEmail = state.matchedLocation == '/verify_email';
-    final isCompletingProfile = state.matchedLocation == '/complete_profile';
-    
-    // If user is authenticated
+    final onAuthRoute = Routes.authRoutes.contains(state.matchedLocation);
+
     if (user != null) {
       // Redirect unverified email users to verification screen
-      if (AuthService.hasPasswordProvider(user) && !user.emailVerified && !isVerifyingEmail && !isCompletingProfile) {
-        FirebaseCrashlytics.instance.log('Navigation: Redirecting to /verify_email - email not verified');
-        return '/verify_email';
+      if (AuthService.hasPasswordProvider(user) &&
+          !user.emailVerified &&
+          state.matchedLocation != Routes.verifyEmail &&
+          state.matchedLocation != Routes.completeProfile) {
+        FirebaseCrashlytics.instance.log('Navigation: Redirecting to ${Routes.verifyEmail} - email not verified');
+        return Routes.verifyEmail;
       }
-      
-      // Don't redirect if user is on auth-related screens
-      if (isSigningIn || isVerifyingEmail || isCompletingProfile) {
-        return null;
-      }
+
+      if (onAuthRoute) return null;
     }
-    
-    // Allow guests to access all pages - no forced sign-in redirect
+
     return null;
   },
   refreshListenable: GoRouterRefreshStream(FirebaseAuth.instance.authStateChanges()),
   routes: <GoRoute>[
     GoRoute(
       name: 'initial_route',
-      path: '/home',
+      path: Routes.home,
       builder: (BuildContext context, GoRouterState state) => const HomeRoute(),
     ),
     GoRoute(
       name: 'sign_in',
-      path: '/sign_in',
+      path: Routes.signIn,
       builder: (BuildContext context, GoRouterState state) => SignInPage(
         prefilledEmail: state.uri.queryParameters['email'],
         prefilledPassword: state.uri.queryParameters['password'],
@@ -166,72 +163,72 @@ final GoRouter _router = GoRouter(
     ),
     GoRoute(
       name: 'signal_details',
-      path: '/signal_details/:signalId',
+      path: Routes.signalDetailsPath,
       builder: (BuildContext context, GoRouterState state) => SignalDetailsScreen(signalId: state.pathParameters['signalId']!),
     ),
     GoRoute(
       name: 'edit_signal',
-      path: '/edit_signal/:signalId',
+      path: Routes.editSignalPath,
       builder: (BuildContext context, GoRouterState state) => EditSignalScreen(signalId: state.pathParameters['signalId']!),
     ),
     GoRoute(
       name: 'clinic_details',
-      path: '/clinic_details/:clinicId',
+      path: Routes.clinicDetailsPath,
       builder: (BuildContext context, GoRouterState state) => ClinicDetailsScreen(clinicId: state.pathParameters['clinicId']!),
     ),
     GoRoute(
       name: 'verify_email',
-      path: '/verify_email',
+      path: Routes.verifyEmail,
       builder: (BuildContext context, GoRouterState state) => const EmailVerificationPage(),
     ),
     GoRoute(
       name: 'complete_profile',
-      path: '/complete_profile',
+      path: Routes.completeProfile,
       builder: (BuildContext context, GoRouterState state) => const ProfileCompletionPage(),
     ),
     GoRoute(
       name: 'notification_settings',
-      path: '/notification-settings',
+      path: Routes.notificationSettings,
       builder: (BuildContext context, GoRouterState state) => const NotificationSettingsPage(),
     ),
     GoRoute(
       name: 'select_region',
-      path: '/select-region',
+      path: Routes.selectRegion,
       builder: (BuildContext context, GoRouterState state) => const RegionSelectionPage(),
     ),
     GoRoute(
       name: 'profile',
-      path: '/profile',
+      path: Routes.profile,
       builder: (BuildContext context, GoRouterState state) => const ProfilePage(),
     ),
     GoRoute(
       name: 'my_signals',
-      path: '/my_signals',
+      path: Routes.mySignals,
       builder: (BuildContext context, GoRouterState state) => const MySignalsPage(),
     ),
     GoRoute(
       name: 'my_notifications',
-      path: '/my_notifications',
+      path: Routes.myNotifications,
       builder: (BuildContext context, GoRouterState state) => const MyNotificationsPage(),
     ),
     GoRoute(
       name: 'faqs',
-      path: '/faqs',
+      path: Routes.faqs,
       builder: (BuildContext context, GoRouterState state) => const FaqsPage(),
     ),
     GoRoute(
       name: 'feedback',
-      path: '/feedback',
+      path: Routes.feedback,
       builder: (BuildContext context, GoRouterState state) => const FeedbackPage(),
     ),
     GoRoute(
       name: 'privacy_policy',
-      path: '/privacy_policy',
+      path: Routes.privacyPolicy,
       builder: (BuildContext context, GoRouterState state) => const PrivacyPolicyPage(),
     ),
     GoRoute(
       name: 'about',
-      path: '/about',
+      path: Routes.about,
       builder: (BuildContext context, GoRouterState state) => const AboutPage(),
     ),
   ],

@@ -5,6 +5,7 @@ import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../config/routes.dart';
 import '../utils/nav_extensions.dart';
 
 class MyNotificationsPage extends StatelessWidget {
@@ -128,7 +129,7 @@ class MyNotificationsPage extends StatelessWidget {
                   Text(l10n.pleaseSignInToViewNotifications),
                   const SizedBox(height: 16),
                   ElevatedButton(
-                    onPressed: () => context.push('/sign_in'),
+                    onPressed: () => context.push(Routes.signIn),
                     child: Text(l10n.signIn),
                   ),
                 ],
@@ -265,7 +266,7 @@ class MyNotificationsPage extends StatelessWidget {
                             } catch (_) {}
                           }
                           if (signalId != null && context.mounted) {
-                            context.push('/signal_details/$signalId');
+                            context.push(Routes.signalDetails(signalId));
                           }
                         },
                       ),

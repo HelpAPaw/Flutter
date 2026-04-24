@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 
+import '../config/routes.dart';
+
 class ProfileCompletionPage extends StatefulWidget {
   const ProfileCompletionPage({super.key});
 
@@ -45,19 +47,17 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
   /// If nothing non-auth is underneath (router redirects replace the stack),
   /// fall back to /home so the user doesn't get stranded on an auth screen.
   void _popAuthStack(BuildContext context) {
-    const authRoutes = {'/complete_profile', '/verify_email', '/sign_in'};
-
     void popNext() {
       if (!context.mounted) return;
 
       final currentPath = GoRouterState.of(context).matchedLocation;
-      if (!authRoutes.contains(currentPath)) return;
+      if (!Routes.authRoutes.contains(currentPath)) return;
 
       if (context.canPop()) {
         context.pop();
         WidgetsBinding.instance.addPostFrameCallback((_) => popNext());
       } else {
-        context.go('/home');
+        context.go(Routes.home);
       }
     }
 

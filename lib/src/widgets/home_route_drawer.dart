@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
+import 'package:help_a_paw/src/config/routes.dart';
 import 'package:help_a_paw/src/services/share_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -81,7 +82,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
                   enableFeedback: true,
                   leading: const Icon(Icons.login),
                   onTap: () => {
-                    context.push('/sign_in'),
+                    context.push(Routes.signIn),
                     homeRouteTile(0),
                   },
                   selected: _homeRouteTile == 0,
@@ -103,7 +104,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
                             : null,
                       ),
                       onTap: () => {
-                        context.push('/profile'),
+                        context.push(Routes.profile),
                         homeRouteTile(1),
                       },
                       selected: _homeRouteTile == 1,
@@ -137,7 +138,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             enableFeedback: true,
             leading: const Icon(Icons.pin_drop),
             onTap: () => {
-              context.push('/my_signals'),
+              context.push(Routes.mySignals),
               homeRouteTile(2),
             },
             selected: _homeRouteTile == 2,
@@ -150,7 +151,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             enableFeedback: true,
             leading: const Icon(Icons.notifications),
             onTap: () => {
-              context.push('/notification-settings'),
+              context.push(Routes.notificationSettings),
               homeRouteTile(3),
             },
             selected: _homeRouteTile == 3,
@@ -163,7 +164,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             enableFeedback: true,
             leading: const Icon(Icons.question_mark),
             onTap: () => {
-              context.push('/faqs'),
+              context.push(Routes.faqs),
               homeRouteTile(4),
             },
             selected: _homeRouteTile == 4,
@@ -176,7 +177,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             enableFeedback: true,
             leading: const Icon(Icons.feedback),
             onTap: () => {
-              context.push('/feedback'),
+              context.push(Routes.feedback),
               homeRouteTile(5),
             },
             selected: _homeRouteTile == 5,
@@ -189,7 +190,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             enableFeedback: true,
             leading: const Icon(Icons.privacy_tip),
             onTap: () => {
-              context.push('/privacy_policy'),
+              context.push(Routes.privacyPolicy),
               homeRouteTile(6),
             },
             selected: _homeRouteTile == 6,
@@ -217,7 +218,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             enableFeedback: true,
             leading: const Icon(Icons.info),
             onTap: () => {
-              context.push('/about'),
+              context.push(Routes.about),
               homeRouteTile(8),
             },
             selected: _homeRouteTile == 8,

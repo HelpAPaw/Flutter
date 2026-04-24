@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
 
+import '../config/routes.dart';
 import '../utils/nav_extensions.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -217,7 +218,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   Text(l10n.pleaseSignInToViewProfile),
                   const SizedBox(height: 16),
                   ElevatedButton(
-                    onPressed: () => context.push('/sign_in'),
+                    onPressed: () => context.push(Routes.signIn),
                     child: Text(l10n.signIn),
                   ),
                 ],

@@ -5,6 +5,7 @@ import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 
+import '../config/routes.dart';
 import '../models/signal.dart';
 import '../services/location_service.dart';
 import '../services/notification_service.dart';
@@ -237,7 +238,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
             ),
           ),
           TextButton(
-            onPressed: () => context.push('/sign_in'),
+            onPressed: () => context.push(Routes.signIn),
             child: Text(l10n.signUp),
           ),
         ],
@@ -311,7 +312,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
           trailing: const Icon(Icons.map),
           onTap: _notificationsEnabled
               ? () async {
-                  final result = await context.push<Map<String, dynamic>>('/select-region');
+                  final result = await context.push<Map<String, dynamic>>(Routes.selectRegion);
                   if (result != null) {
                     setState(() => _regionOfInterest = result);
                     await _savePreferences();

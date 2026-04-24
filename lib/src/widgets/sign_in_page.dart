@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 
 import '../../main.dart' show googleClientId;
+import '../config/routes.dart';
 import '../services/auth_service.dart';
 import '../utils/nav_extensions.dart';
 
@@ -50,7 +51,7 @@ Future<void> _checkProfileCompletion(BuildContext context, User? user) async {
     // Use go (not push) so this can't stack with the router's redirect in main.dart.
     if (AuthService.hasPasswordProvider(refreshedUser) &&
         !(refreshedUser?.emailVerified ?? false)) {
-      if (context.mounted) context.go('/verify_email');
+      if (context.mounted) context.go(Routes.verifyEmail);
       return;
     }
 
@@ -63,7 +64,7 @@ Future<void> _checkProfileCompletion(BuildContext context, User? user) async {
     if (!doc.exists || doc.data()?['profileCompleted'] != true) {
       // Profile not complete, push completion screen to preserve stack
       if (context.mounted) {
-        context.push('/complete_profile');
+        context.push(Routes.completeProfile);
       }
     } else {
       // Profile is complete, return to previous screen if possible
@@ -74,7 +75,7 @@ Future<void> _checkProfileCompletion(BuildContext context, User? user) async {
   } catch (e) {
     // On error, push profile completion to be safe
     if (context.mounted) {
-      context.push('/complete_profile');
+      context.push(Routes.completeProfile);
     }
   }
 }
@@ -187,7 +188,7 @@ class _SignInPageState extends State<SignInPage> {
                     } else {
                       // For OAuth providers (Google), push profile completion
                       if (context.mounted) {
-                        context.push('/complete_profile');
+                        context.push(Routes.completeProfile);
                       }
                     }
                   }),

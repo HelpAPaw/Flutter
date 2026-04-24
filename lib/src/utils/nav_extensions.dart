@@ -1,6 +1,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
+import '../config/routes.dart';
+
 extension NavContext on BuildContext {
   /// Pop if there's something to pop, otherwise navigate to /home.
   /// The router redirect sometimes replaces the entire stack, leaving
@@ -9,7 +11,7 @@ extension NavContext on BuildContext {
     if (canPop()) {
       pop();
     } else {
-      go('/home');
+      go(Routes.home);
     }
   }
 }

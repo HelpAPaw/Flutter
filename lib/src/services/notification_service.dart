@@ -7,6 +7,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:go_router/go_router.dart';
+import '../config/routes.dart';
 import 'app_preferences_service.dart';
 
 /// Background message handler - must be a top-level function
@@ -159,7 +160,7 @@ class NotificationService {
 
     if (signalId != null && _router != null) {
       pendingFocusSignalId = signalId;
-      _router!.push('/signal_details/$signalId');
+      _router!.push(Routes.signalDetails(signalId));
     }
   }
 
@@ -169,7 +170,7 @@ class NotificationService {
     final signalId = response.payload;
     if (signalId != null && signalId.isNotEmpty && _router != null) {
       pendingFocusSignalId = signalId;
-      _router!.push('/signal_details/$signalId');
+      _router!.push(Routes.signalDetails(signalId));
     }
   }
 
