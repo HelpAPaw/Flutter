@@ -30,6 +30,10 @@ class AuthService {
   /// Get the current user's UID (works for both anonymous and authenticated)
   String? get currentUserId => _auth.currentUser?.uid;
 
+  /// Whether [user] has an email/password provider linked.
+  static bool hasPasswordProvider(User? user) =>
+      user?.providerData.any((info) => info.providerId == 'password') ?? false;
+
   /// Attempt to link anonymous account to a credential
   /// Returns the result of the linking attempt
   Future<LinkResult> linkAnonymousAccount(AuthCredential credential) async {

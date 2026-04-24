@@ -45,14 +45,11 @@ Future<void> _checkProfileCompletion(BuildContext context, User? user) async {
     await user.reload();
     final refreshedUser = FirebaseAuth.instance.currentUser;
 
-    // Double-check email verification after reload
-    if (refreshedUser != null &&
-        refreshedUser.providerData.any((info) => info.providerId == 'password') &&
-        !refreshedUser.emailVerified) {
-      if (context.mounted) {
-        // Push verification screen to preserve navigation stack
-        context.push('/verify_email');
-      }
+    // Defensive re-check after reload refreshed verification status from the server.
+    // Use go (not push) so this can't stack with the router's redirect in main.dart.
+    if (AuthService.hasPasswordProvider(refreshedUser) &&
+        !(refreshedUser?.emailVerified ?? false)) {
+      if (context.mounted) context.go('/verify_email');
       return;
     }
 
@@ -170,14 +167,9 @@ class _SignInPageState extends State<SignInPage> {
                       await _handleAnonymousDataMerge(previousAnonymousUid, user);
                     }
 
-                    // Check if email verification is required for email/password users
-                    if (user != null &&
-                        user.providerData.any((info) => info.providerId == 'password') &&
-                        !user.emailVerified) {
-                      // Push verification screen on top to preserve navigation stack
-                      if (context.mounted) {
-                        context.push('/verify_email');
-                      }
+                    // The router's redirect handles navigation to /verify_email for
+                    // unverified password users; pushing here would duplicate the screen.
+                    if (AuthService.hasPasswordProvider(user) && !user!.emailVerified) {
                       return;
                     }
                     // User is authenticated, check if profile is complete
@@ -194,24 +186,12 @@ class _SignInPageState extends State<SignInPage> {
                       await _handleAnonymousDataMerge(previousAnonymousUid, user);
                     }
 
-                    if (user != null &&
-                        user.providerData.any((info) => info.providerId == 'password')) {
-                      // Send verification email with proper action code settings
+                    if (AuthService.hasPasswordProvider(user)) {
+                      // Router's redirect handles navigation to /verify_email.
                       try {
-                        await user.sendEmailVerification(
-                          ActionCodeSettings(
-                            url: 'https://help-a-paw-dev.firebaseapp.com/__/auth/action',
-                            handleCodeInApp: false,
-                            androidPackageName: 'org.helpapaw.helpapaw',
-                            androidInstallApp: false,
-                          ),
-                        );
+                        await user!.sendEmailVerification();
                       } catch (e) {
                         debugPrint('Error sending verification email: $e');
-                      }
-                      // Push verification screen to preserve navigation stack
-                      if (context.mounted) {
-                        context.push('/verify_email');
                       }
                     } else {
                       // For OAuth providers (Google), push profile completion

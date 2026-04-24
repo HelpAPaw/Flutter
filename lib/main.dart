@@ -32,6 +32,7 @@ import 'package:help_a_paw/src/widgets/signal_details_screen.dart';
 import 'package:help_a_paw/src/widgets/clinic_details_screen.dart';
 import 'package:help_a_paw/src/widgets/notification_settings_page.dart';
 import 'package:help_a_paw/src/widgets/region_selection_page.dart';
+import 'package:help_a_paw/src/services/auth_service.dart';
 import 'package:help_a_paw/src/services/notification_service.dart';
 import 'package:help_a_paw/src/services/app_preferences_service.dart';
 
@@ -133,11 +134,8 @@ final GoRouter _router = GoRouter(
     
     // If user is authenticated
     if (user != null) {
-      // Check if user used email/password and email is not verified
-      final hasPasswordProvider = user.providerData.any((info) => info.providerId == 'password');
-      
       // Redirect unverified email users to verification screen
-      if (hasPasswordProvider && !user.emailVerified && !isVerifyingEmail && !isCompletingProfile) {
+      if (AuthService.hasPasswordProvider(user) && !user.emailVerified && !isVerifyingEmail && !isCompletingProfile) {
         FirebaseCrashlytics.instance.log('Navigation: Redirecting to /verify_email - email not verified');
         return '/verify_email';
       }
