@@ -7,6 +7,8 @@ import 'package:help_a_paw/src/models/signal.dart';
 import 'package:help_a_paw/src/services/app_preferences_service.dart';
 import 'package:intl/intl.dart';
 
+import '../utils/nav_extensions.dart';
+
 class MySignalsPage extends StatelessWidget {
   const MySignalsPage({super.key});
 
@@ -66,13 +68,7 @@ class MySignalsPage extends StatelessWidget {
         foregroundColor: Colors.white,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/home');
-            }
-          },
+          onPressed: () => context.popOrHome(),
         ),
         title: Text(l10n.mySignals),
       ),

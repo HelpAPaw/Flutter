@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
-import 'package:go_router/go_router.dart';
+
+import '../utils/nav_extensions.dart';
 
 class FaqsPage extends StatelessWidget {
   const FaqsPage({super.key});
@@ -14,13 +15,7 @@ class FaqsPage extends StatelessWidget {
         foregroundColor: Colors.white,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/home');
-            }
-          },
+          onPressed: () => context.popOrHome(),
         ),
         title: Text(l10n.faqsTitle),
       ),

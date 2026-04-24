@@ -10,6 +10,7 @@ import 'package:help_a_paw/l10n/app_localizations.dart';
 
 import '../../main.dart' show googleClientId;
 import '../services/auth_service.dart';
+import '../utils/nav_extensions.dart';
 
 /// Handle merging anonymous user data after sign-in
 Future<void> _handleAnonymousDataMerge(String? previousAnonymousUid, User newUser) async {
@@ -67,11 +68,7 @@ Future<void> _checkProfileCompletion(BuildContext context, User? user) async {
     } else {
       // Profile is complete, return to previous screen if possible
       if (context.mounted) {
-        if (context.canPop()) {
-          context.pop();
-        } else {
-          context.go('/home');
-        }
+        context.popOrHome();
       }
     }
   } catch (e) {
@@ -133,13 +130,7 @@ class _SignInPageState extends State<SignInPage> {
           foregroundColor: Colors.white,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
-            onPressed: () {
-              if (context.canPop()) {
-                context.pop();
-              } else {
-                context.go('/home');
-              }
-            },
+            onPressed: () => context.popOrHome(),
           ),
           title: Text(AppLocalizations.of(context).signIn),
         ),

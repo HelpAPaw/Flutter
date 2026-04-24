@@ -5,6 +5,8 @@ import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../utils/nav_extensions.dart';
+
 class MyNotificationsPage extends StatelessWidget {
   const MyNotificationsPage({super.key});
 
@@ -49,13 +51,7 @@ class MyNotificationsPage extends StatelessWidget {
         foregroundColor: Colors.white,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/home');
-            }
-          },
+          onPressed: () => context.popOrHome(),
         ),
         title: Text(l10n.myNotifications),
         actions: [

@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 
+import '../utils/nav_extensions.dart';
+
 class EmailVerificationPage extends StatefulWidget {
   const EmailVerificationPage({super.key});
 
@@ -146,13 +148,9 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
 
   void _exitVerification(BuildContext context) {
     FirebaseAuth.instance.signOut();
-    // User can continue as anonymous; prior stack is often missing because the
-    // router redirect navigated here via go, so fall back to /home.
-    if (context.canPop()) {
-      context.pop();
-    } else {
-      context.go('/home');
-    }
+    // User can continue as anonymous; popOrHome falls back to /home because
+    // the router redirect often replaces the stack with just /verify_email.
+    context.popOrHome();
   }
 
   @override

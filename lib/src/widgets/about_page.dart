@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
-import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import '../utils/nav_extensions.dart';
 
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
@@ -51,13 +52,7 @@ class _AboutPageState extends State<AboutPage> {
         foregroundColor: Colors.white,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/home');
-            }
-          },
+          onPressed: () => context.popOrHome(),
         ),
         title: Text(l10n.aboutTitle),
       ),
