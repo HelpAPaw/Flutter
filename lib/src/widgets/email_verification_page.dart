@@ -32,8 +32,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
   }
 
   void _startPolling() {
-    // Check verification status every 3 seconds
-    _timer = Timer.periodic(const Duration(seconds: 3), (timer) async {
+    _timer = Timer.periodic(const Duration(seconds: 5), (timer) async {
       await _checkEmailVerified();
     });
   }
