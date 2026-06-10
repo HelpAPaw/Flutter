@@ -1,7 +1,12 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 import 'notification_service.dart';
 
@@ -243,6 +248,58 @@ class AuthService {
       case LinkResult.notAnonymous:
         // Shouldn't happen since we checked above, but handle it
         return currentUser;
+    }
+  }
+
+  /// Permanently delete the current user's account.
+  ///
+  /// Delegates to the `deleteAccount` callable function, which anonymizes the
+  /// user's signals, tombstones their user document, removes their stored
+  /// personal data, and deletes the Firebase Auth user. On success the caller
+  /// should sign out to return the app to a fresh anonymous state.
+  ///
+  /// Uses a direct HTTPS call rather than the cloud_functions plugin for the
+  /// same reason as [VetClinicService] (Swift runtime crash in release builds).
+  Future<void> deleteAccount() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw Exception('No current user');
+    }
+
+    final projectId = Firebase.app().options.projectId;
+    final url = 'https://us-central1-$projectId.cloudfunctions.net/deleteAccount';
+
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+    };
+
+    final idToken = await user.getIdToken();
+    if (idToken != null) {
+      headers['Authorization'] = 'Bearer $idToken';
+    }
+
+    try {
+      final appCheckToken = await FirebaseAppCheck.instance.getToken();
+      if (appCheckToken != null) {
+        headers['X-Firebase-AppCheck'] = appCheckToken;
+      }
+    } catch (e) {
+      debugPrint('App Check token error: $e');
+    }
+
+    FirebaseCrashlytics.instance.log('Auth: Deleting account');
+
+    final response = await http
+        .post(
+          Uri.parse(url),
+          headers: headers,
+          body: jsonEncode({'data': <String, dynamic>{}}),
+        )
+        .timeout(const Duration(seconds: 30));
+
+    if (response.statusCode != 200) {
+      debugPrint('Delete account failed: ${response.statusCode} ${response.body}');
+      throw Exception('Failed to delete account. Please try again.');
     }
   }
 }

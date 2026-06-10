@@ -479,5 +479,11 @@
 
   "errorAddingComment": "Failed to add comment. Please try again.",
   "errorUpdatingStatus": "Failed to update status. Please try again.",
-  "errorGeneric": "Something went wrong. Please try again."
+  "errorGeneric": "Something went wrong. Please try again.",
+
+  "deleteAccount": "Delete Account",
+  "deleteAccountConfirmTitle": "Delete account?",
+  "deleteAccountConfirmBody": "This permanently deletes your account and personal data and cannot be undone. Your past reports will remain but will no longer be linked to you.",
+  "deleteAccountSuccess": "Your account has been deleted.",
+  "deleteAccountError": "Failed to delete account. Please try again."
 }

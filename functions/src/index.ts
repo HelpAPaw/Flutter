@@ -845,3 +845,100 @@ export const getVetClinicDetails = onCall(
     }
   }
 );
+
+/**
+ * Cloud Function to delete a user's account and anonymize their data.
+ *
+ * Removes the authenticated user's personal data and auth record while
+ * preserving their signals/comments in anonymized form:
+ *  1. Strips phone numbers from authored signals (signals + signals_test)
+ *  2. Deletes the user's notifications subcollection
+ *  3. Tombstones the user document ({ name: "Deleted user", deleted: true })
+ *     so existing reporter/author/lastUpdatedBy references resolve cleanly
+ *  4. Deletes the user's profile photo from Storage
+ *  5. Deletes the Firebase Auth user (last - irreversible)
+ */
+export const deleteAccount = onCall(
+  {
+    enforceAppCheck: true,
+  },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) {
+      throw new HttpsError(
+        "unauthenticated",
+        "You must be signed in to delete your account."
+      );
+    }
+
+    const userRef = db.collection("users").doc(uid);
+
+    // Commit document operations in chunks within Firestore's 500-write limit.
+    const commitInChunks = async (
+      docs: admin.firestore.QueryDocumentSnapshot[],
+      apply: (
+        batch: admin.firestore.WriteBatch,
+        ref: admin.firestore.DocumentReference
+      ) => void
+    ) => {
+      for (let i = 0; i < docs.length; i += 450) {
+        const batch = db.batch();
+        for (const doc of docs.slice(i, i + 450)) {
+          apply(batch, doc.ref);
+        }
+        await batch.commit();
+      }
+    };
+
+    try {
+      // 1. Anonymize authored signals in production and test collections.
+      for (const collectionName of ["signals", "signals_test"]) {
+        const authored = await db
+          .collection(collectionName)
+          .where("reporter", "==", userRef)
+          .get();
+        await commitInChunks(authored.docs, (batch, ref) =>
+          batch.update(ref, { contactPhone: "", phoneNumber: "" })
+        );
+      }
+
+      // 2. Delete the notifications subcollection.
+      const notifications = await userRef.collection("notifications").get();
+      await commitInChunks(notifications.docs, (batch, ref) =>
+        batch.delete(ref)
+      );
+
+      // 3. Tombstone the user document - strip all PII, keep a neutral name
+      //    so existing references still resolve to "Deleted user".
+      await userRef.set({
+        name: "Deleted user",
+        deleted: true,
+        deletedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // 4. Delete the user's profile photo from Storage (ignore if missing).
+      try {
+        await admin
+          .storage()
+          .bucket()
+          .deleteFiles({ prefix: `profile_photos/${uid}` });
+      } catch (error) {
+        console.error(`Failed to delete profile photo for ${uid}:`, error);
+      }
+
+      // 5. Delete the Firebase Auth user (irreversible).
+      await admin.auth().deleteUser(uid);
+
+      return { success: true };
+    } catch (error) {
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+      console.error(`Error deleting account for ${uid}:`, error);
+      throw new HttpsError(
+        "internal",
+        "Failed to delete account. Please try again."
+      );
+    }
+  }
+);

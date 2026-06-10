@@ -1015,4 +1015,21 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get errorGeneric => 'Нещо се обърка. Моля, опитайте отново.';
+
+  @override
+  String get deleteAccount => 'Изтриване на профила';
+
+  @override
+  String get deleteAccountConfirmTitle => 'Изтриване на профила?';
+
+  @override
+  String get deleteAccountConfirmBody =>
+      'Това изтрива безвъзвратно профила и личните ви данни и не може да бъде отменено. Подадените от вас сигнали ще останат, но вече няма да са свързани с вас.';
+
+  @override
+  String get deleteAccountSuccess => 'Профилът ви беше изтрит.';
+
+  @override
+  String get deleteAccountError =>
+      'Неуспешно изтриване на профила. Моля, опитайте отново.';
 }

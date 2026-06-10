@@ -1001,4 +1001,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get errorGeneric => 'Something went wrong. Please try again.';
+
+  @override
+  String get deleteAccount => 'Delete Account';
+
+  @override
+  String get deleteAccountConfirmTitle => 'Delete account?';
+
+  @override
+  String get deleteAccountConfirmBody =>
+      'This permanently deletes your account and personal data and cannot be undone. Your past reports will remain but will no longer be linked to you.';
+
+  @override
+  String get deleteAccountSuccess => 'Your account has been deleted.';
+
+  @override
+  String get deleteAccountError =>
+      'Failed to delete account. Please try again.';
 }

@@ -12,6 +12,9 @@ service cloud.firestore {
       allow read: if true;  // Public read - signals are public data
       allow create: if request.auth != null;
       allow update: if request.auth != null;
+      // Only the signal's reporter may delete it
+      allow delete: if request.auth != null
+                    && resource.data.reporter == /databases/$(database)/documents/users/$(request.auth.uid);
 
       // Comments subcollection
       match /comments/{commentId} {
@@ -25,6 +28,8 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null;
       allow update: if request.auth != null;
+      allow delete: if request.auth != null
+                    && resource.data.reporter == /databases/$(database)/documents/users/$(request.auth.uid);
 
       match /comments/{commentId} {
         allow read: if true;

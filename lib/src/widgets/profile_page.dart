@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/src/services/app_preferences_service.dart';
+import 'package:help_a_paw/src/services/auth_service.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
@@ -38,6 +39,54 @@ class _ProfilePageState extends State<ProfilePage> {
     _displayNameController.dispose();
     _phoneController.dispose();
     super.dispose();
+  }
+
+  Future<void> _confirmDeleteAccount() async {
+    final l10n = AppLocalizations.of(context);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.deleteAccountConfirmTitle),
+        content: Text(l10n.deleteAccountConfirmBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.cancel),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.delete),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      await AuthService().deleteAccount();
+      await FirebaseAuth.instance.signOut();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.deleteAccountSuccess)),
+        );
+        context.go(Routes.home);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.deleteAccountError),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _loadUserData() async {
@@ -367,6 +416,19 @@ class _ProfilePageState extends State<ProfilePage> {
                         user.metadata.creationTime != null
                             ? '${user.metadata.creationTime!.day}/${user.metadata.creationTime!.month}/${user.metadata.creationTime!.year}'
                             : l10n.unknown,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    const Divider(),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: TextButton.icon(
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red,
+                        ),
+                        onPressed: _isLoading ? null : _confirmDeleteAccount,
+                        icon: const Icon(Icons.delete_forever),
+                        label: Text(l10n.deleteAccount),
                       ),
                     ),
                   ],
