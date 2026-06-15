@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/src/config/routes.dart';
+import 'package:help_a_paw/src/services/notification_service.dart';
 import 'package:help_a_paw/src/services/share_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -22,6 +23,9 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
 
   Future<void> _signOut() async {
     try {
+      // Remove this device's FCM token before signing out, so a signed-out
+      // device no longer receives the account's push notifications.
+      await NotificationService().onUserLogout();
       await FirebaseAuth.instance.signOut();
       if (mounted) {
         // Close the drawer and stay on home screen for anonymous usage
