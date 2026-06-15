@@ -102,7 +102,12 @@ Future<void> main() async {
   if (FirebaseAuth.instance.currentUser == null) {
     try {
       FirebaseCrashlytics.instance.log('Auth: Anonymous sign-in started');
-      await FirebaseAuth.instance.signInAnonymously();
+      // Time-boxed so a cold launch with no network doesn't block the first
+      // frame (offline the anonymous sign-in hangs; authStateChanges + a retry
+      // pick it up once connectivity returns).
+      await FirebaseAuth.instance
+          .signInAnonymously()
+          .timeout(const Duration(seconds: 6));
     } catch (e) {
       debugPrint('Anonymous sign-in failed: $e');
     }
@@ -117,8 +122,16 @@ Future<void> main() async {
     FirebaseCrashlytics.instance.log('Auth: State changed - ${user != null ? (user.isAnonymous ? "anonymous" : "authenticated") : "signed out"}');
   });
 
-  // Initialize notification service (router will be passed after it's created)
-  await NotificationService().initialize(router: _router);
+  // Initialize notification service (router will be passed after it's created).
+  // Guarded + time-boxed so it can never block the first frame on a cold
+  // offline launch (FCM/token calls hang with no network).
+  try {
+    await NotificationService()
+        .initialize(router: _router)
+        .timeout(const Duration(seconds: 6));
+  } catch (e) {
+    debugPrint('Notification service init failed/timed out: $e');
+  }
 
   runApp(const ProviderScope(child: HelpAPaw()));
   usePathUrlStrategy();
