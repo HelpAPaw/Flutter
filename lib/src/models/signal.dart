@@ -9,9 +9,6 @@ class Signal {
   final int signalType;
   final Map<String, dynamic> location;
   final DocumentReference reporter;
-  /// Denormalized reporter display name, stored at creation time so the name
-  /// resolves for every viewer without reading the (owner-only) user doc.
-  final String reporterName;
   final String contactPhone;
   final dynamic createdAt;
   final List<String> photoUrls;
@@ -26,7 +23,6 @@ class Signal {
     required this.reporter,
     required this.contactPhone,
     required this.createdAt,
-    this.reporterName = '',
     this.photoUrls = const [],
     this.status = 0,
   });
@@ -39,7 +35,6 @@ class Signal {
       'signalType': signalType,
       'location': location,
       'reporter': reporter,
-      'reporterName': reporterName,
       'contactPhone': contactPhone,
       'createdAt': createdAt,
       'status': status,
@@ -55,7 +50,6 @@ class Signal {
       signalType: json['signalType'] ?? 0,
       location: json['location'] ?? {},
       reporter: json['reporter'] ?? FirebaseFirestore.instance.collection('users').doc('unknown'),
-      reporterName: json['reporterName'] ?? '',
       contactPhone: json['contactPhone'] ?? '',
       createdAt: json['createdAt'] ?? Timestamp.now(),
       status: json['status'] ?? 0,

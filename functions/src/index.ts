@@ -916,6 +916,15 @@ export const deleteAccount = onCall(
         deletedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
+      // 3b. Overwrite the public profile so the deleted user's name no longer
+      //     appears on any signal/comment - dynamic name resolution now shows
+      //     "Deleted user" everywhere (right-to-erasure).
+      await db.collection("publicProfiles").doc(uid).set({
+        name: "Deleted user",
+        deleted: true,
+        deletedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
       // 4. Delete the user's profile photo from Storage (ignore if missing).
       try {
         await admin

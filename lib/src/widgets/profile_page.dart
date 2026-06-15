@@ -5,6 +5,7 @@ import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/src/services/app_preferences_service.dart';
 import 'package:help_a_paw/src/services/auth_service.dart';
+import 'package:help_a_paw/src/services/public_profile_service.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
@@ -157,6 +158,10 @@ class _ProfilePageState extends State<ProfilePage> {
             'phone': _phoneController.text.trim(),
             'updatedAt': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
+
+      // Mirror the new name to the world-readable public profile.
+      await PublicProfileService.setName(
+          user.uid, _displayNameController.text.trim());
 
       await user.reload();
 

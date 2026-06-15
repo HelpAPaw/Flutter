@@ -5,6 +5,7 @@ import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 
 import '../config/routes.dart';
+import '../services/public_profile_service.dart';
 
 class ProfileCompletionPage extends StatefulWidget {
   const ProfileCompletionPage({super.key});
@@ -92,6 +93,10 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
+
+      // Mirror the display name to the world-readable public profile so it
+      // resolves for every viewer (see PublicProfileService).
+      await PublicProfileService.setName(user.uid, _nameController.text.trim());
 
       if (mounted) {
         // Pop back through auth screens to return to original screen

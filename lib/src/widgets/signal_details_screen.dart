@@ -23,6 +23,7 @@ import '../services/navigation_service.dart';
 import '../models/signal.dart';
 import '../models/signal_status.dart';
 import '../services/app_preferences_service.dart';
+import '../services/public_profile_service.dart';
 
 class SignalDetailsScreen extends StatefulWidget {
   const SignalDetailsScreen({super.key, required this.signalId});
@@ -60,19 +61,12 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       } else {
         final signalData = snapshot.data!.data() as Map<String, dynamic>;
         signal = Signal.fromJson(signalData);
-        // Prefer the denormalized name; fall back to a best-effort user-doc
-        // read only for legacy signals created before the name was stored.
-        if (reporterName.isEmpty && signal.reporterName.isEmpty) {
-          signal.reporter.get().then((DocumentSnapshot reporterSnapshot) {
-            if (!mounted) return;
-            if (reporterSnapshot.exists) {
-              Map<String, dynamic> reporterData = reporterSnapshot.data() as Map<String, dynamic>;
-              setState(() {
-                reporterName = reporterData['name'];
-              });
-            }
-          }).catchError((_) {
-            // Silently handle permission-denied errors (e.g. anonymous users)
+        // Resolve the reporter name from the world-readable public profile so
+        // it shows for every viewer and reflects renames / deletion.
+        if (reporterName.isEmpty) {
+          PublicProfileService.getName(signal.reporter.id).then((name) {
+            if (!mounted || name == null || name.isEmpty) return;
+            setState(() => reporterName = name);
           });
         }
       }
@@ -359,7 +353,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(DateFormat.yMd(locale).add_jm().format((signal.createdAt as Timestamp).toDate())),
-                              Text(signal.reporterName.isNotEmpty ? signal.reporterName : reporterName)
+                              Text(reporterName)
                             ],
                           ),
                           Row(
@@ -481,12 +475,21 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                                     ),
                                                     const SizedBox(width: 8),
                                                     Expanded(
-                                                      child: Text(
-                                                        l10n.changedStatusTo(
-                                                          _commentAuthorName(commentData, l10n.someone),
-                                                          _getStatusName(context, commentData['newStatus']),
-                                                        ),
-                                                        style: const TextStyle(fontStyle: FontStyle.italic),
+                                                      child: FutureBuilder<String?>(
+                                                        future: PublicProfileService.getName(
+                                                            (commentData['author'] as DocumentReference).id),
+                                                        builder: (context, snapshot) {
+                                                          final authorName = (snapshot.data?.isNotEmpty ?? false)
+                                                              ? snapshot.data!
+                                                              : l10n.someone;
+                                                          return Text(
+                                                            l10n.changedStatusTo(
+                                                              authorName,
+                                                              _getStatusName(context, commentData['newStatus']),
+                                                            ),
+                                                            style: const TextStyle(fontStyle: FontStyle.italic),
+                                                          );
+                                                        },
                                                       ),
                                                     ),
                                                   ],
@@ -519,7 +522,15 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                             children: [
                                               Text(DateFormat.yMd(locale).add_jm().format(commentData['createdAt'].toDate())),
-                                              Text(_commentAuthorName(commentData, l10n.unknown)),
+                                              FutureBuilder<String?>(
+                                                future: PublicProfileService.getName(
+                                                    (commentData['author'] as DocumentReference).id),
+                                                builder: (context, snapshot) {
+                                                  return Text((snapshot.data?.isNotEmpty ?? false)
+                                                      ? snapshot.data!
+                                                      : l10n.unknown);
+                                                },
+                                              ),
                                             ],
                                           )
                                         );
@@ -605,16 +616,13 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   }
 
   Future<void> _addComment() async {
-    final currentUser = FirebaseAuth.instance.currentUser!;
-    final userId = currentUser.uid;
+    final userId = FirebaseAuth.instance.currentUser!.uid;
 
     try {
       await FirebaseFirestore.instance.collection(AppPreferencesService().signalsCollectionName).doc(widget.signalId).collection('comments').add({
         'text': _newCommentController.text,
         'createdAt': DateTime.now(),
         'author': FirebaseFirestore.instance.collection('users').doc(userId),
-        // Denormalized so the author name resolves for every viewer.
-        'authorName': currentUser.displayName ?? '',
       });
 
       await _subscribeToSignal(userId);
@@ -659,13 +667,6 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
 
   String _getStatusIcon(int status) => SignalStatus.fromCode(status).pinAsset;
 
-  /// Denormalized author name written with a comment; falls back to [fallback]
-  /// for legacy comments created before the name was stored.
-  String _commentAuthorName(Map<String, dynamic> commentData, String fallback) {
-    final name = commentData['authorName'] as String?;
-    return (name != null && name.isNotEmpty) ? name : fallback;
-  }
-
   Future<void> _updateSignalStatus(int oldStatus, int newStatus) async {
     if (oldStatus == newStatus) return;
 
@@ -689,8 +690,6 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         'newStatus': newStatus,
         'createdAt': DateTime.now(),
         'author': FirebaseFirestore.instance.collection('users').doc(user.uid),
-        // Denormalized so the actor's name resolves for every viewer.
-        'authorName': user.displayName ?? '',
       });
 
       await _subscribeToSignal(user.uid);

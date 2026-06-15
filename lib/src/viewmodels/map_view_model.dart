@@ -275,7 +275,6 @@ class MapViewModel extends Notifier<MapScreenState> {
         latitude: latitude,
         longitude: longitude,
         reporterUserId: userId,
-        reporterName: userRepo.currentUserDisplayName ?? '',
       );
 
       if (!result.success) {

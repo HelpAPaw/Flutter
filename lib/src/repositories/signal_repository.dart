@@ -75,7 +75,6 @@ abstract class SignalRepository {
     required double latitude,
     required double longitude,
     required String reporterUserId,
-    required String reporterName,
   });
 
   /// Update signal status

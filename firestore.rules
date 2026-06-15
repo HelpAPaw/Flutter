@@ -2,9 +2,19 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Users collection - users can read/write their own document
+    // Users collection - private profile (tokens, location, prefs, phone).
+    // Owner-only: never expose to other users.
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Public profiles - just the display name, readable by any signed-in user
+    // (incl. anonymous) so reporter/comment-author names resolve for everyone.
+    // Writable only by the owner. On account deletion this is overwritten with
+    // "Deleted user" so erasure propagates to all signals/comments dynamically.
+    match /publicProfiles/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
 
     // Signals collection - public read, authenticated write
