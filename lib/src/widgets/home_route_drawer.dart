@@ -23,9 +23,16 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
 
   Future<void> _signOut() async {
     try {
-      // Remove this device's FCM token before signing out, so a signed-out
-      // device no longer receives the account's push notifications.
-      await NotificationService().onUserLogout();
+      // Best-effort: remove this device's FCM token before signing out so a
+      // signed-out device stops receiving the account's pushes. Time-boxed and
+      // isolated so it can never block or prevent the actual sign-out.
+      try {
+        await NotificationService()
+            .onUserLogout()
+            .timeout(const Duration(seconds: 5));
+      } catch (e) {
+        debugPrint('FCM token removal on sign-out failed/timed out: $e');
+      }
       await FirebaseAuth.instance.signOut();
       if (mounted) {
         // Close the drawer and stay on home screen for anonymous usage
