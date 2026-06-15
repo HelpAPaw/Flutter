@@ -179,12 +179,9 @@ class _SignInPageState extends State<SignInPage> {
                     }
 
                     if (AuthService.hasPasswordProvider(user)) {
-                      // Router's redirect handles navigation to /verify_email.
-                      try {
-                        await user!.sendEmailVerification();
-                      } catch (e) {
-                        debugPrint('Error sending verification email: $e');
-                      }
+                      // Router's redirect navigates to /verify_email, whose
+                      // initState sends the verification email. Don't send here
+                      // too, or the user gets two identical emails (F-003).
                     } else {
                       // For OAuth providers (Google), push profile completion
                       if (context.mounted) {
