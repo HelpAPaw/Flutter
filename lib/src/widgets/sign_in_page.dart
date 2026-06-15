@@ -1,4 +1,6 @@
 
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide EmailAuthProvider;
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
@@ -11,6 +13,7 @@ import 'package:help_a_paw/l10n/app_localizations.dart';
 import '../../main.dart' show googleClientId;
 import '../config/routes.dart';
 import '../services/auth_service.dart';
+import '../services/notification_service.dart';
 import '../utils/nav_extensions.dart';
 
 /// Handle merging anonymous user data after sign-in
@@ -158,6 +161,12 @@ class _SignInPageState extends State<SignInPage> {
                     if (previousAnonymousUid != null && user != null) {
                       await _handleAnonymousDataMerge(previousAnonymousUid, user);
                     }
+
+                    // Register this device for push if the account already has
+                    // notifications enabled (multi-device sign-in - F-010).
+                    // Fire-and-forget: on iOS token fetch can wait on APNs, so
+                    // don't block sign-in navigation on it.
+                    unawaited(NotificationService().onUserLogin());
 
                     // The router's redirect handles navigation to /verify_email for
                     // unverified password users; pushing here would duplicate the screen.

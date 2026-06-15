@@ -240,12 +240,40 @@ class NotificationService {
     }
   }
 
-  /// Call this when user logs in or enables notifications
+  /// Call this when a user signs in. Registers this device for push (FCM token
+  /// + handlers) only when the signed-in account already has notifications
+  /// enabled, so a user who enabled notifications on one device starts
+  /// receiving on a newly signed-in device without re-enabling locally (F-010).
+  ///
+  /// It deliberately does NOT request OS notification permission (that stays in
+  /// the onboarding/settings flow); on Android the token registers regardless,
+  /// and on iOS [_updateFcmToken] no-ops until APNs/permission is available.
   Future<void> onUserLogin() async {
-    // Complete initialization to set up message handlers (also fetches FCM token)
-    await completeInitialization();
-    // If already initialized, token was not refreshed by completeInitialization - do it now
-    if (_isFullyInitialized) await _updateFcmToken();
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    if (!await _accountNotificationsEnabled(user.uid)) return;
+
+    try {
+      // Complete initialization to set up message handlers (also fetches token)
+      await completeInitialization();
+      // If already initialized, token wasn't refreshed above - do it now
+      if (_isFullyInitialized) await _updateFcmToken();
+    } catch (e) {
+      debugPrint('onUserLogin token registration failed: $e');
+    }
+  }
+
+  /// Whether the account's stored preferences have notifications enabled.
+  Future<bool> _accountNotificationsEnabled(String uid) async {
+    try {
+      final doc =
+          await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      final prefs =
+          doc.data()?['notificationPreferences'] as Map<String, dynamic>?;
+      return prefs?['enabled'] == true;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Request notification permission and return whether it was granted
