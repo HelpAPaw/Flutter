@@ -96,11 +96,11 @@ class Signal {
     final l10n = AppLocalizations.of(context);
     switch (status) {
       case 0:
-        return l10n.statusHelpNeeded;
+        return l10n.statusNeedsHelp;
       case 1:
-        return l10n.statusSomebodyOnTheWay;
+        return l10n.statusInProgress;
       case 2:
-        return l10n.statusSolved;
+        return l10n.statusResolved;
       default:
         return l10n.statusUnknown;
     }

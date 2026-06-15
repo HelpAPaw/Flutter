@@ -182,34 +182,16 @@ abstract class AppLocalizations {
   /// **'Something went wrong'**
   String get somethingWentWrong;
 
-  /// No description provided for @statusHelpNeeded.
-  ///
-  /// In en, this message translates to:
-  /// **'Help needed'**
-  String get statusHelpNeeded;
-
-  /// No description provided for @statusSomebodyOnTheWay.
-  ///
-  /// In en, this message translates to:
-  /// **'Somebody on the way'**
-  String get statusSomebodyOnTheWay;
-
-  /// No description provided for @statusSolved.
-  ///
-  /// In en, this message translates to:
-  /// **'Solved'**
-  String get statusSolved;
-
   /// No description provided for @statusNeedsHelp.
   ///
   /// In en, this message translates to:
-  /// **'Needs Help'**
+  /// **'Needs help'**
   String get statusNeedsHelp;
 
   /// No description provided for @statusInProgress.
   ///
   /// In en, this message translates to:
-  /// **'In Progress'**
+  /// **'In progress'**
   String get statusInProgress;
 
   /// No description provided for @statusResolved.
@@ -1235,7 +1217,7 @@ abstract class AppLocalizations {
   /// No description provided for @faqWhatStatusesMeanAnswer.
   ///
   /// In en, this message translates to:
-  /// **'Red (Needs Help): The animal still needs assistance.\nOrange (In Progress): Someone is working on helping.\nGreen (Resolved): The animal has received help or the situation is resolved.'**
+  /// **'Red (Needs help): The animal still needs assistance.\nOrange (In progress): Someone is working on helping.\nGreen (Resolved): The animal has received help or the situation is resolved.'**
   String get faqWhatStatusesMeanAnswer;
 
   /// No description provided for @faqCantHelpDirectly.

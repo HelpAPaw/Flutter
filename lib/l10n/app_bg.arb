@@ -16,9 +16,6 @@
   "loading": "Зареждане...",
   "somethingWentWrong": "Нещо се обърка",
 
-  "statusHelpNeeded": "Нужна е помощ",
-  "statusSomebodyOnTheWay": "Някой е на път",
-  "statusSolved": "Решен",
   "statusNeedsHelp": "Нужна е помощ",
   "statusInProgress": "В процес",
   "statusResolved": "Решен",

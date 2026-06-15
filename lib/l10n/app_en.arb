@@ -16,11 +16,8 @@
   "loading": "Loading...",
   "somethingWentWrong": "Something went wrong",
 
-  "statusHelpNeeded": "Help needed",
-  "statusSomebodyOnTheWay": "Somebody on the way",
-  "statusSolved": "Solved",
-  "statusNeedsHelp": "Needs Help",
-  "statusInProgress": "In Progress",
+  "statusNeedsHelp": "Needs help",
+  "statusInProgress": "In progress",
   "statusResolved": "Resolved",
   "statusUnknown": "Unknown",
 
@@ -302,7 +299,7 @@
   "faqHowHelpAnswer": "When you see a signal on the map, tap it to view details. You can leave a comment to coordinate with others, update the signal status if you're helping, or contact the person who created the signal.",
 
   "faqWhatStatusesMean": "What do the signal statuses mean?",
-  "faqWhatStatusesMeanAnswer": "Red (Needs Help): The animal still needs assistance.\nOrange (In Progress): Someone is working on helping.\nGreen (Resolved): The animal has received help or the situation is resolved.",
+  "faqWhatStatusesMeanAnswer": "Red (Needs help): The animal still needs assistance.\nOrange (In progress): Someone is working on helping.\nGreen (Resolved): The animal has received help or the situation is resolved.",
 
   "faqCantHelpDirectly": "I'm not able to help directly. What can I do?",
   "faqCantHelpDirectlyAnswer": "You can share the signal with friends who might be able to help, leave helpful comments with advice or contacts of local animal rescue organizations, or simply spread awareness about the app to grow our community of helpers.",

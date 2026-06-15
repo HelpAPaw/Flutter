@@ -51,19 +51,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get somethingWentWrong => 'Something went wrong';
 
   @override
-  String get statusHelpNeeded => 'Help needed';
+  String get statusNeedsHelp => 'Needs help';
 
   @override
-  String get statusSomebodyOnTheWay => 'Somebody on the way';
-
-  @override
-  String get statusSolved => 'Solved';
-
-  @override
-  String get statusNeedsHelp => 'Needs Help';
-
-  @override
-  String get statusInProgress => 'In Progress';
+  String get statusInProgress => 'In progress';
 
   @override
   String get statusResolved => 'Resolved';
@@ -638,7 +629,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get faqWhatStatusesMeanAnswer =>
-      'Red (Needs Help): The animal still needs assistance.\nOrange (In Progress): Someone is working on helping.\nGreen (Resolved): The animal has received help or the situation is resolved.';
+      'Red (Needs help): The animal still needs assistance.\nOrange (In progress): Someone is working on helping.\nGreen (Resolved): The animal has received help or the situation is resolved.';
 
   @override
   String get faqCantHelpDirectly =>

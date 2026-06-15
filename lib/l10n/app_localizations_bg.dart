@@ -51,15 +51,6 @@ class AppLocalizationsBg extends AppLocalizations {
   String get somethingWentWrong => 'Нещо се обърка';
 
   @override
-  String get statusHelpNeeded => 'Нужна е помощ';
-
-  @override
-  String get statusSomebodyOnTheWay => 'Някой е на път';
-
-  @override
-  String get statusSolved => 'Решен';
-
-  @override
   String get statusNeedsHelp => 'Нужна е помощ';
 
   @override

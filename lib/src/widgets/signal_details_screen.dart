@@ -419,7 +419,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                         child: Image.asset('assets/icons/pin_red.png'),
                                       ),
                                       SizedBox.fromSize(size: const Size(8, 8)),
-                                      Text(l10n.statusHelpNeeded),
+                                      Text(l10n.statusNeedsHelp),
                                     ],
                                   ),
                                 ),
@@ -432,7 +432,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                         child: Image.asset('assets/icons/pin_orange.png'),
                                       ),
                                       SizedBox.fromSize(size: const Size(8, 8)),
-                                      Text(l10n.statusSomebodyOnTheWay),
+                                      Text(l10n.statusInProgress),
                                     ],
                                   ),
                                 ),
@@ -445,7 +445,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                         child: Image.asset('assets/icons/pin_green.png'),
                                       ),
                                       SizedBox.fromSize(size: const Size(8, 8)),
-                                      Text(l10n.statusSolved),
+                                      Text(l10n.statusResolved),
                                     ],
                                   ),
                                 ),
@@ -695,11 +695,11 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     final l10n = AppLocalizations.of(context);
     switch (status) {
       case 0:
-        return l10n.statusHelpNeeded;
+        return l10n.statusNeedsHelp;
       case 1:
-        return l10n.statusSomebodyOnTheWay;
+        return l10n.statusInProgress;
       case 2:
-        return l10n.statusSolved;
+        return l10n.statusResolved;
       default:
         return l10n.unknown;
     }
