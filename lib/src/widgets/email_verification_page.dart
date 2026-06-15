@@ -147,10 +147,14 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
     setState(() => _isResending = false);
   }
 
-  void _exitVerification(BuildContext context) {
-    FirebaseAuth.instance.signOut();
-    // User can continue as anonymous; popOrHome falls back to /home because
-    // the router redirect often replaces the stack with just /verify_email.
+  Future<void> _exitVerification() async {
+    // Await sign-out before navigating: once the user is anonymous the router
+    // redirect no longer bounces back to /verify_email, so navigation works on
+    // the first tap (previously it took two taps - F-004).
+    _timer?.cancel();
+    _countdownTimer?.cancel();
+    await FirebaseAuth.instance.signOut();
+    if (!mounted) return;
     context.popOrHome();
   }
 
@@ -163,7 +167,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        _exitVerification(context);
+        _exitVerification();
       },
       child: Scaffold(
         appBar: AppBar(
@@ -172,7 +176,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
           foregroundColor: Colors.white,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
-            onPressed: () => _exitVerification(context),
+            onPressed: () => _exitVerification(),
           ),
         ),
         body: SafeArea(
@@ -309,7 +313,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     TextButton(
-                      onPressed: () => _exitVerification(context),
+                      onPressed: () => _exitVerification(),
                       child: Text(
                         l10n.cancelAndSignOut,
                         style: const TextStyle(color: Colors.grey),
