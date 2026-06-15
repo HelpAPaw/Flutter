@@ -11,7 +11,7 @@ Fixes are **batched** — items below are to be fixed together, then retested in
 |----|-----|--------|
 | F-001 | Comments `delete` rule for reporter | ✅ Fixed + **deployed** (rules) |
 | F-011 | Call `onUserLogout()` on sign-out | ✅ Fixed (code; needs new build) |
-| F-009 | Time-box offline init before `runApp()` | ✅ Fixed (code) |
+| F-009 | Run anon sign-in + notif init AFTER `runApp()` (non-blocking) | ✅ Fixed (code) |
 | F-003 | Drop duplicate verification email | ✅ Fixed (code) |
 | F-004 | Await sign-out on verify screen | ✅ Fixed (code) |
 | F-007 | Anon→auth (merge/transfer) | ✅ Not a bug (by design) |
