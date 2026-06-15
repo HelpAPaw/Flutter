@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "757136327951-3nogujggi60387brp0ajm431ui3duac4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "org.helpapaw.helpapaw",
+            "certificate_hash": "5333ed46bc4c23bada016e5422254a7d2f0ef067"
+          }
+        },
+        {
           "client_id": "757136327951-fqauq707jhajcjujtglkru63oamssjr6.apps.googleusercontent.com",
           "client_type": 3
         }
@@ -29,9 +37,6 @@
       "api_key": [
         {
           "current_key": "AIzaSyDFn3Cexv_aWaSIQ6w4i53YQJf-j5_EsNk"
-        },
-        {
-          "current_key": "AIzaSyAAYJbeJjWlxxntf5GQfJk17fdod_g2jH4"
         }
       ],
       "services": {
@@ -40,6 +45,13 @@
             {
               "client_id": "757136327951-fqauq707jhajcjujtglkru63oamssjr6.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "757136327951-ov7ddq4eu2psocbs5dk7r1l80ol0917l.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.helpapaw.helpapaw.debug"
+              }
             }
           ]
         }
@@ -62,6 +74,14 @@
           }
         },
         {
+          "client_id": "757136327951-n1581ld2uf5iim01bib01e297ok227dj.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "org.helpapaw.helpapaw.debug",
+            "certificate_hash": "a1e3ff3a3cc0d40331c6112cb2bce33499b20c6a"
+          }
+        },
+        {
           "client_id": "757136327951-fqauq707jhajcjujtglkru63oamssjr6.apps.googleusercontent.com",
           "client_type": 3
         }
@@ -69,9 +89,6 @@
       "api_key": [
         {
           "current_key": "AIzaSyDFn3Cexv_aWaSIQ6w4i53YQJf-j5_EsNk"
-        },
-        {
-          "current_key": "AIzaSyAAYJbeJjWlxxntf5GQfJk17fdod_g2jH4"
         }
       ],
       "services": {
@@ -80,6 +97,13 @@
             {
               "client_id": "757136327951-fqauq707jhajcjujtglkru63oamssjr6.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "757136327951-ov7ddq4eu2psocbs5dk7r1l80ol0917l.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.helpapaw.helpapaw.debug"
+              }
             }
           ]
         }
