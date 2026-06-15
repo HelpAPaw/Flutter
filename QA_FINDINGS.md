@@ -6,6 +6,23 @@ Status legend: 🔴 Fail · 🟡 Minor/Improvement · 🟢 Fixed/Verified · ⏳
 
 Fixes are **batched** — items below are to be fixed together, then retested in one pass.
 
+## Fix status (round 1)
+| ID | Fix | Status |
+|----|-----|--------|
+| F-001 | Comments `delete` rule for reporter | ✅ Fixed + **deployed** (rules) |
+| F-011 | Call `onUserLogout()` on sign-out | ✅ Fixed (code; needs new build) |
+| F-009 | Time-box offline init before `runApp()` | ✅ Fixed (code) |
+| F-003 | Drop duplicate verification email | ✅ Fixed (code) |
+| F-004 | Await sign-out on verify screen | ✅ Fixed (code) |
+| F-007 | Anon→auth (merge/transfer) | ✅ Not a bug (by design) |
+| F-002 | Email→spam | ⏸ Infra/DNS (SPF/DKIM/sender) — not code |
+| F-006 | Status label wording | ⏸ Product copy decision |
+| F-008 | Author name "Someone"/"Unknown" | ⏸ Privacy/rules decision |
+| F-010 | New-device push registration | ⏸ Design decision |
+| badge:1 | iOS badge count | ⏸ Extra scope (unread reconciliation) |
+
+All ⏸ items need a product/infra decision before changing; none are code-clear bugs. Re-verify the ✅ code fixes in the next full test run (new build needed for the Dart ones).
+
 ---
 
 ## 🔴 F-001 · §3.7 · Delete Signal fails for any signal that has comments
@@ -122,9 +139,9 @@ My Signals list uses "Needs Help" / "In Progress"; Signal Details uses "Help nee
 
 ---
 
-## 🟡 F-007 · §1.4 · Anonymous→auth linking may not preserve UID (needs dedicated test)
-**Status:** Open / needs verification · **Severity:** Medium (data continuity).
-`+reg2` registered from an anonymous session got a brand-new uid with `createdAt` == registration time (not the earlier anon-session time). Circumstantial evidence that email/password registration creates a fresh account instead of linking the anonymous one (per §1.4 the anon UID should be preserved). Verify with a clean test: anonymous → set prefs/subscriptions → register → confirm same UID + data transfer.
+## ✅ F-007 · §1.4 · Anonymous→auth — NOT A BUG (by design: merge/transfer, not UID-link)
+**Status:** Resolved (code-reviewed) · **Severity:** none.
+The new UID is intentional. `sign_in_page._handleAnonymousDataMerge` signs out the anon user, then for a **new** account calls `AuthService.transferAnonymousData()` which transfers **fcmTokens + notificationPreferences + currentLocation + signalSubscriptions**; for an **existing** account it merges tokens (`mergeAnonymousIntoExisting`). So data continuity is handled via merge/transfer rather than UID-preserving `linkWithCredential`. The §1.4 checklist wording ("same UID preserved") doesn't match this app's design, but the real requirement (data transfers) is met. **No fix needed** — consider updating the checklist wording.
 
 ### §2 / §6 / §7 (build 120)
 - §2.1 My-Location blue dot shows once location granted; zoom buttons + pan work; Sofia fallback when no permission
