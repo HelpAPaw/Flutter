@@ -1,7 +1,7 @@
 name: help_a_paw
 description: Send emergency signals about animals in need
 publish_to: 'none'
-version: 6.0.1+118
+version: 6.0.1+120
 
 dependencies:
   flutter:
