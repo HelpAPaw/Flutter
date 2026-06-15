@@ -20,6 +20,10 @@ service cloud.firestore {
       match /comments/{commentId} {
         allow read: if true;  // Public read
         allow create: if request.auth != null;
+        // The signal's reporter may delete comments (enables delete-signal cascade)
+        allow delete: if request.auth != null
+                      && get(/databases/$(database)/documents/signals/$(signalId)).data.reporter
+                         == /databases/$(database)/documents/users/$(request.auth.uid);
       }
     }
 
@@ -34,6 +38,9 @@ service cloud.firestore {
       match /comments/{commentId} {
         allow read: if true;
         allow create: if request.auth != null;
+        allow delete: if request.auth != null
+                      && get(/databases/$(database)/documents/signals_test/$(signalId)).data.reporter
+                         == /databases/$(database)/documents/users/$(request.auth.uid);
       }
     }
 
