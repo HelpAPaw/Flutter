@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/src/models/signal.dart';
+import 'package:help_a_paw/src/models/signal_status.dart';
 import 'package:help_a_paw/src/services/app_preferences_service.dart';
 import 'package:intl/intl.dart';
 
@@ -13,31 +14,10 @@ import '../utils/nav_extensions.dart';
 class MySignalsPage extends StatelessWidget {
   const MySignalsPage({super.key});
 
-  Color _getStatusColor(int status) {
-    switch (status) {
-      case 0:
-        return Colors.red;
-      case 1:
-        return Colors.orange;
-      case 2:
-        return Colors.green;
-      default:
-        return Colors.grey;
-    }
-  }
+  Color _getStatusColor(int status) => SignalStatus.fromCode(status).color;
 
-  String _getStatusText(int status, AppLocalizations l10n) {
-    switch (status) {
-      case 0:
-        return l10n.statusNeedsHelp;
-      case 1:
-        return l10n.statusInProgress;
-      case 2:
-        return l10n.statusResolved;
-      default:
-        return l10n.statusUnknown;
-    }
-  }
+  String _getStatusText(int status, AppLocalizations l10n) =>
+      SignalStatus.fromCode(status).label(l10n);
 
   IconData _getSignalTypeIcon(int type) {
     switch (type) {

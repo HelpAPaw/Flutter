@@ -91,21 +91,6 @@ class Signal {
     ];
   }
 
-  /// Returns localized status name for the given status index
-  static String getLocalizedStatusName(BuildContext context, int status) {
-    final l10n = AppLocalizations.of(context);
-    switch (status) {
-      case 0:
-        return l10n.statusNeedsHelp;
-      case 1:
-        return l10n.statusInProgress;
-      case 2:
-        return l10n.statusResolved;
-      default:
-        return l10n.statusUnknown;
-    }
-  }
-
   /// Signal type identifiers (for indexing/length only - use getLocalizedSignalTypeName for display)
   static const List<String> signalTypes = [
     'Emergency',

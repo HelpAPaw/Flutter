@@ -2,13 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
+import '../models/signal_status.dart';
 import '../repositories/signal_repository.dart';
 
 /// Utility for loading map pins and building signal markers
 class MapMarkerBuilder {
-  BitmapDescriptor? redPin;
-  BitmapDescriptor? orangePin;
-  BitmapDescriptor? greenPin;
+  /// Loaded signal pins keyed by [SignalStatus.code].
+  final Map<int, BitmapDescriptor> _statusPins = {};
   BitmapDescriptor? hospitalPin;
 
   bool _pinsLoaded = false;
@@ -17,11 +17,15 @@ class MapMarkerBuilder {
   bool get arePinsLoaded => _pinsLoaded;
   bool get isHospitalPinLoaded => _hospitalPinLoaded;
 
-  /// Load signal status pins (red, orange, green)
+  /// Load a map pin for every [SignalStatus]. Adding a status automatically
+  /// loads its pin — nothing to change here.
   Future<void> loadSignalPins() async {
-    redPin = await _loadPin('red');
-    orangePin = await _loadPin('orange');
-    greenPin = await _loadPin('green');
+    for (final status in SignalStatus.values) {
+      _statusPins[status.code] = await BitmapDescriptor.asset(
+        const ImageConfiguration(size: Size(24, 29)),
+        status.pinAsset,
+      );
+    }
     _pinsLoaded = true;
   }
 
@@ -39,20 +43,10 @@ class MapMarkerBuilder {
     await Future.wait([loadSignalPins(), loadHospitalPin()]);
   }
 
-  Future<BitmapDescriptor> _loadPin(String color) async {
-    return BitmapDescriptor.asset(
-      const ImageConfiguration(size: Size(24, 29)),
-      'assets/icons/pin_$color.png',
-    );
-  }
-
-  /// Get the pin for a signal status
-  BitmapDescriptor getSignalPin(int status) {
-    final pins = [redPin, orangePin, greenPin];
-    return (status >= 0 && status < pins.length)
-        ? (pins[status] ?? BitmapDescriptor.defaultMarker)
-        : BitmapDescriptor.defaultMarker;
-  }
+  /// Get the loaded pin for a signal status code.
+  BitmapDescriptor getSignalPin(int status) =>
+      _statusPins[SignalStatus.fromCode(status).code] ??
+      BitmapDescriptor.defaultMarker;
 
   /// Build a set of markers from a list of signals.
   ///

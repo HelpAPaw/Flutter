@@ -21,6 +21,7 @@ import '../config/routes.dart';
 import '../services/navigation_service.dart';
 
 import '../models/signal.dart';
+import '../models/signal_status.dart';
 import '../services/app_preferences_service.dart';
 
 class SignalDetailsScreen extends StatefulWidget {
@@ -409,47 +410,23 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                             itemHeight: 64,
                             isExpanded: true,
                             value: signal.status,
-                              items: [
-                                DropdownMenuItem(
-                                  value: 0,
-                                  child: Row(
-                                    children: [
-                                      Padding(
-                                        padding: const EdgeInsets.all(12.0),
-                                        child: Image.asset('assets/icons/pin_red.png'),
+                              items: SignalStatus.values
+                                  .map(
+                                    (status) => DropdownMenuItem(
+                                      value: status.code,
+                                      child: Row(
+                                        children: [
+                                          Padding(
+                                            padding: const EdgeInsets.all(12.0),
+                                            child: Image.asset(status.pinAsset),
+                                          ),
+                                          SizedBox.fromSize(size: const Size(8, 8)),
+                                          Text(status.label(l10n)),
+                                        ],
                                       ),
-                                      SizedBox.fromSize(size: const Size(8, 8)),
-                                      Text(l10n.statusNeedsHelp),
-                                    ],
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 1,
-                                  child: Row(
-                                    children: [
-                                      Padding(
-                                        padding: const EdgeInsets.all(12.0),
-                                        child: Image.asset('assets/icons/pin_orange.png'),
-                                      ),
-                                      SizedBox.fromSize(size: const Size(8, 8)),
-                                      Text(l10n.statusInProgress),
-                                    ],
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 2,
-                                  child: Row(
-                                    children: [
-                                      Padding(
-                                        padding: const EdgeInsets.all(12.0),
-                                        child: Image.asset('assets/icons/pin_green.png'),
-                                      ),
-                                      SizedBox.fromSize(size: const Size(8, 8)),
-                                      Text(l10n.statusResolved),
-                                    ],
-                                  ),
-                                ),
-                              ],
+                                    ),
+                                  )
+                                  .toList(),
                               onChanged: (value) {
                                 if (value != null) {
                                   _updateSignalStatus(signal.status, value);
@@ -691,32 +668,10 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     return signal.reporter.id == currentUser.uid;
   }
 
-  String _getStatusName(BuildContext context, int status) {
-    final l10n = AppLocalizations.of(context);
-    switch (status) {
-      case 0:
-        return l10n.statusNeedsHelp;
-      case 1:
-        return l10n.statusInProgress;
-      case 2:
-        return l10n.statusResolved;
-      default:
-        return l10n.unknown;
-    }
-  }
+  String _getStatusName(BuildContext context, int status) =>
+      SignalStatus.fromCode(status).label(AppLocalizations.of(context));
 
-  String _getStatusIcon(int status) {
-    switch (status) {
-      case 0:
-        return 'assets/icons/pin_red.png';
-      case 1:
-        return 'assets/icons/pin_orange.png';
-      case 2:
-        return 'assets/icons/pin_green.png';
-      default:
-        return 'assets/icons/pin_red.png';
-    }
-  }
+  String _getStatusIcon(int status) => SignalStatus.fromCode(status).pinAsset;
 
   Future<void> _updateSignalStatus(int oldStatus, int newStatus) async {
     if (oldStatus == newStatus) return;

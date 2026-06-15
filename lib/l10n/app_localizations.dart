@@ -200,12 +200,6 @@ abstract class AppLocalizations {
   /// **'Resolved'**
   String get statusResolved;
 
-  /// No description provided for @statusUnknown.
-  ///
-  /// In en, this message translates to:
-  /// **'Unknown'**
-  String get statusUnknown;
-
   /// No description provided for @signalTypeEmergency.
   ///
   /// In en, this message translates to:

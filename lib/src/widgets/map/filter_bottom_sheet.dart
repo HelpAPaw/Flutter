@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/signal.dart';
+import '../../models/signal_status.dart';
 import '../../state/map_state.dart';
 import '../../viewmodels/map_view_model.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
@@ -126,26 +127,15 @@ class _FilterBottomSheetContent extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    _buildStatusCheckbox(
-                      status: 0,
-                      label: l10n.statusNeedsHelp,
-                      iconPath: 'assets/icons/pin_red.png',
-                      isSelected: filterState.selectedStatuses.contains(0),
-                      onToggle: () => viewModel.toggleStatus(0),
-                    ),
-                    _buildStatusCheckbox(
-                      status: 1,
-                      label: l10n.statusInProgress,
-                      iconPath: 'assets/icons/pin_orange.png',
-                      isSelected: filterState.selectedStatuses.contains(1),
-                      onToggle: () => viewModel.toggleStatus(1),
-                    ),
-                    _buildStatusCheckbox(
-                      status: 2,
-                      label: l10n.statusResolved,
-                      iconPath: 'assets/icons/pin_green.png',
-                      isSelected: filterState.selectedStatuses.contains(2),
-                      onToggle: () => viewModel.toggleStatus(2),
+                    ...SignalStatus.values.map(
+                      (status) => _buildStatusCheckbox(
+                        status: status.code,
+                        label: status.label(l10n),
+                        iconPath: status.pinAsset,
+                        isSelected:
+                            filterState.selectedStatuses.contains(status.code),
+                        onToggle: () => viewModel.toggleStatus(status.code),
+                      ),
                     ),
                     const SizedBox(height: 16),
                     const Divider(),

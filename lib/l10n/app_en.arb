@@ -19,7 +19,6 @@
   "statusNeedsHelp": "Needs help",
   "statusInProgress": "In progress",
   "statusResolved": "Resolved",
-  "statusUnknown": "Unknown",
 
   "signalTypeEmergency": "Emergency",
   "signalTypeLostOrFound": "Lost or Found",

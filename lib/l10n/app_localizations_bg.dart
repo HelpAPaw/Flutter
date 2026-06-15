@@ -60,9 +60,6 @@ class AppLocalizationsBg extends AppLocalizations {
   String get statusResolved => 'Решен';
 
   @override
-  String get statusUnknown => 'Неизвестен';
-
-  @override
   String get signalTypeEmergency => 'Спешен случай';
 
   @override

@@ -60,9 +60,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get statusResolved => 'Resolved';
 
   @override
-  String get statusUnknown => 'Unknown';
-
-  @override
   String get signalTypeEmergency => 'Emergency';
 
   @override

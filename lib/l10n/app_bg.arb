@@ -19,7 +19,6 @@
   "statusNeedsHelp": "Нужна е помощ",
   "statusInProgress": "В процес",
   "statusResolved": "Решен",
-  "statusUnknown": "Неизвестен",
 
   "signalTypeEmergency": "Спешен случай",
   "signalTypeLostOrFound": "Изгубено или намерено",
