@@ -26,6 +26,9 @@ class FirebaseUserRepository implements UserRepository {
   String? get currentUserId => _auth.currentUser?.uid;
 
   @override
+  String? get currentUserDisplayName => _auth.currentUser?.displayName;
+
+  @override
   bool get canModifyData {
     final user = _auth.currentUser;
     return user != null && !user.isAnonymous;

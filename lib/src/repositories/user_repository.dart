@@ -54,6 +54,9 @@ abstract class UserRepository {
   /// Get the current user ID (null if not authenticated)
   String? get currentUserId;
 
+  /// Get the current user's display name (null if unset / not authenticated).
+  String? get currentUserDisplayName;
+
   /// Check if the current user can perform active operations (submit signals, change status, comment)
   bool get canModifyData;
 

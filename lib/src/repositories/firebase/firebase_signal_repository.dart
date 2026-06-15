@@ -53,6 +53,7 @@ class FirebaseSignalRepository implements SignalRepository {
     required double latitude,
     required double longitude,
     required String reporterUserId,
+    required String reporterName,
   }) async {
     try {
       final signalLocation = {
@@ -66,6 +67,7 @@ class FirebaseSignalRepository implements SignalRepository {
         phoneNumber: phoneNumber,
         signalType: signalType,
         reporter: _firestore.collection('users').doc(reporterUserId),
+        reporterName: reporterName,
         contactPhone: phoneNumber,
         location: signalLocation,
         createdAt: Timestamp.now(),

@@ -60,7 +60,9 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       } else {
         final signalData = snapshot.data!.data() as Map<String, dynamic>;
         signal = Signal.fromJson(signalData);
-        if (reporterName.isEmpty) {
+        // Prefer the denormalized name; fall back to a best-effort user-doc
+        // read only for legacy signals created before the name was stored.
+        if (reporterName.isEmpty && signal.reporterName.isEmpty) {
           signal.reporter.get().then((DocumentSnapshot reporterSnapshot) {
             if (!mounted) return;
             if (reporterSnapshot.exists) {
@@ -357,7 +359,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(DateFormat.yMd(locale).add_jm().format((signal.createdAt as Timestamp).toDate())),
-                              Text(reporterName)
+                              Text(signal.reporterName.isNotEmpty ? signal.reporterName : reporterName)
                             ],
                           ),
                           Row(
@@ -479,19 +481,12 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                                     ),
                                                     const SizedBox(width: 8),
                                                     Expanded(
-                                                      child: FutureBuilder<DocumentSnapshot>(
-                                                        future: commentData['author'].get(),
-                                                        builder: (BuildContext context, AsyncSnapshot<DocumentSnapshot> snapshot) {
-                                                          String authorName = l10n.someone;
-                                                          if (snapshot.hasData && snapshot.data?.data() != null) {
-                                                            Map<String, dynamic> authorData = snapshot.data!.data() as Map<String, dynamic>;
-                                                            authorName = authorData['name'] ?? l10n.someone;
-                                                          }
-                                                          return Text(
-                                                            l10n.changedStatusTo(authorName, _getStatusName(context, commentData['newStatus'])),
-                                                            style: const TextStyle(fontStyle: FontStyle.italic),
-                                                          );
-                                                        },
+                                                      child: Text(
+                                                        l10n.changedStatusTo(
+                                                          _commentAuthorName(commentData, l10n.someone),
+                                                          _getStatusName(context, commentData['newStatus']),
+                                                        ),
+                                                        style: const TextStyle(fontStyle: FontStyle.italic),
                                                       ),
                                                     ),
                                                   ],
@@ -524,19 +519,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                             children: [
                                               Text(DateFormat.yMd(locale).add_jm().format(commentData['createdAt'].toDate())),
-                                              FutureBuilder<DocumentSnapshot>(
-                                                future: commentData['author'].get(),
-                                                builder: (BuildContext context, AsyncSnapshot<DocumentSnapshot> snapshot) {
-                                                  if (snapshot.hasError) {
-                                                    return Text(l10n.unknown);
-                                                  } else if (snapshot.connectionState == ConnectionState.waiting) {
-                                                    return const Text('');
-                                                  } else {
-                                                    Map<String, dynamic>? authorData = snapshot.data?.data() as Map<String, dynamic>?;
-                                                    return Text(authorData?['name'] ?? l10n.unknown);
-                                                  }
-                                                }
-                                              ),
+                                              Text(_commentAuthorName(commentData, l10n.unknown)),
                                             ],
                                           )
                                         );
@@ -622,13 +605,16 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   }
 
   Future<void> _addComment() async {
-    final userId = FirebaseAuth.instance.currentUser!.uid;
+    final currentUser = FirebaseAuth.instance.currentUser!;
+    final userId = currentUser.uid;
 
     try {
       await FirebaseFirestore.instance.collection(AppPreferencesService().signalsCollectionName).doc(widget.signalId).collection('comments').add({
         'text': _newCommentController.text,
         'createdAt': DateTime.now(),
         'author': FirebaseFirestore.instance.collection('users').doc(userId),
+        // Denormalized so the author name resolves for every viewer.
+        'authorName': currentUser.displayName ?? '',
       });
 
       await _subscribeToSignal(userId);
@@ -673,6 +659,13 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
 
   String _getStatusIcon(int status) => SignalStatus.fromCode(status).pinAsset;
 
+  /// Denormalized author name written with a comment; falls back to [fallback]
+  /// for legacy comments created before the name was stored.
+  String _commentAuthorName(Map<String, dynamic> commentData, String fallback) {
+    final name = commentData['authorName'] as String?;
+    return (name != null && name.isNotEmpty) ? name : fallback;
+  }
+
   Future<void> _updateSignalStatus(int oldStatus, int newStatus) async {
     if (oldStatus == newStatus) return;
 
@@ -696,6 +689,8 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         'newStatus': newStatus,
         'createdAt': DateTime.now(),
         'author': FirebaseFirestore.instance.collection('users').doc(user.uid),
+        // Denormalized so the actor's name resolves for every viewer.
+        'authorName': user.displayName ?? '',
       });
 
       await _subscribeToSignal(user.uid);

@@ -17,7 +17,7 @@ Fixes are **batched** — items below are to be fixed together, then retested in
 | F-007 | Anon→auth (merge/transfer) | ✅ Not a bug (by design) |
 | F-002 | Email→spam | ⏸ Infra/DNS (SPF/DKIM/sender) — not code |
 | F-006 | Unify status labels to "Needs help"/"In progress"; drop alias keys | ✅ Fixed (code) |
-| F-008 | Author name "Someone"/"Unknown" | ⏸ Privacy/rules decision |
+| F-008 | Denormalize reporter/author names onto docs | ✅ Fixed (code) — **was a real bug, not by design** |
 | F-010 | New-device push registration | ⏸ Design decision |
 | badge:1 | iOS badge count | ⏸ Extra scope (unread reconciliation) |
 

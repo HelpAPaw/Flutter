@@ -60,7 +60,11 @@ class MockUserRepository implements UserRepository {
       _currentAuthState.isAuthenticated ? 'mock_user_id' : null;
 
   @override
-  bool get canCreateSignals =>
+  String? get currentUserDisplayName =>
+      _currentAuthState.isAuthenticated ? 'Mock User' : null;
+
+  @override
+  bool get canModifyData =>
       _currentAuthState.isAuthenticated && !_currentAuthState.isAnonymous;
 
   @override
