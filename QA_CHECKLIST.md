@@ -386,6 +386,7 @@
 - [ ] Signal creation on Device A visible on Device B in real time (Firestore streams)
 - [ ] Signal **edits** (title/description/type/phone) on Device A propagate to Device B's details view and map marker
 - [ ] Signal **deletion** on Device A removes the marker and closes the details view on Device B
+- [ ] Signal **deletion** on Device A while its **info window/overlay is open on the map** on Device B: the marker disappears and the open info window + invisible tap target are dismissed cleanly — no crash (`PlatformException: Invalid markerId`) and tapping where the window was does **not** navigate to the deleted signal
 - [ ] Status changes propagate across all devices viewing the same signal
 - [ ] Comments appear in real time on all devices viewing the signal
 - [ ] Profile edits (name, phone, photo) sync via Firestore across devices
