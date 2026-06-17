@@ -136,7 +136,12 @@ class LocationService {
     await _checkForNearbySignals(position);
   }
 
-  /// Update user's current location in Firestore
+  /// Update user's current location in Firestore.
+  ///
+  /// Written to the dedicated `userLocations/{uid}` collection rather than the
+  /// user doc, so these high-frequency writes don't invoke the token-dedupe
+  /// Cloud Function that watches `users/{uid}`. The notification fan-out reads
+  /// location from here.
   Future<void> _updateLocationInFirestore(Position position) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -145,13 +150,14 @@ class LocationService {
     final geoFirePoint = GeoFirePoint(geoPoint);
 
     try {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
+      await FirebaseFirestore.instance
+          .collection('userLocations')
+          .doc(user.uid)
+          .set(
         {
-          'currentLocation': {
-            'geopoint': geoPoint,
-            'geohash': geoFirePoint.geohash,
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
+          'geopoint': geoPoint,
+          'geohash': geoFirePoint.geohash,
+          'updatedAt': FieldValue.serverTimestamp(),
         },
         SetOptions(merge: true),
       ).timeout(const Duration(seconds: 10));
@@ -274,11 +280,15 @@ class LocationService {
         ).timeout(const Duration(seconds: 10));
         await startLocationTracking();
       } else {
-        // Combine preference update and location clear in a single write
         await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
           'notificationPreferences.locationTrackingEnabled': false,
-          'currentLocation': FieldValue.delete(),
         }).timeout(const Duration(seconds: 10));
+        // Clear the stored location so the fan-out stops matching this user.
+        await FirebaseFirestore.instance
+            .collection('userLocations')
+            .doc(user.uid)
+            .delete()
+            .timeout(const Duration(seconds: 10));
         await stopLocationTracking();
       }
     } catch (e) {

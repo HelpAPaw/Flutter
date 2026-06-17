@@ -162,10 +162,8 @@ class AuthService {
       dataToTransfer['notificationPreferences'] = anonymousData['notificationPreferences'];
     }
 
-    // Transfer current location
-    if (anonymousData['currentLocation'] != null) {
-      dataToTransfer['currentLocation'] = anonymousData['currentLocation'];
-    }
+    // NOTE: current location lives in userLocations/{uid}, not the user doc, and
+    // self-heals on the next GPS update, so there is nothing to transfer here.
 
     // Transfer signal subscriptions
     if (anonymousData['signalSubscriptions'] != null) {
@@ -179,8 +177,9 @@ class AuthService {
         SetOptions(merge: true),
       );
 
-      // Delete the anonymous user document
+      // Delete the anonymous user document and its stored location
       await _db.collection('users').doc(anonymousUid).delete();
+      await _db.collection('userLocations').doc(anonymousUid).delete();
 
       debugPrint('Successfully transferred anonymous data to new account');
     } catch (e) {

@@ -8,6 +8,13 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
+    // User live location - kept separate from the user doc so high-frequency
+    // location writes don't trigger the token-dedupe Cloud Function. Owner-only;
+    // the notification fan-out reads it via the Admin SDK (bypasses rules).
+    match /userLocations/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
     // Public profiles - just the display name, readable by any signed-in user
     // (incl. anonymous) so reporter/comment-author names resolve for everyone.
     // Writable only by the owner. On account deletion this is overwritten with

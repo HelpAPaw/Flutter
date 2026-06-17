@@ -6,6 +6,7 @@ import {
 } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
+import { geohashQueryBounds, geohashForLocation } from "geofire-common";
 import * as nodemailer from "nodemailer";
 
 admin.initializeApp();
@@ -37,6 +38,17 @@ const SIGNAL_TYPES = [
 // Signal status names
 const SIGNAL_STATUSES = ["Help needed", "Somebody on the way", "Solved"];
 
+// Maximum radii (km) a user can configure in the app UI. These bound how far
+// from a new signal we look for candidate recipients via geohash range queries,
+// so the fan-out reads only geographically-nearby users instead of the entire
+// enabled-user base. Keep these >= the UI caps (location 1-50, region 1-100) or
+// far-edge matches would be missed; raising them only widens candidate reads.
+const MAX_LOCATION_RADIUS_KM = 50;
+const MAX_REGION_RADIUS_KM = 100;
+
+// How long cached Places API results stay fresh (vet clinics rarely change).
+const PLACES_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
 interface GeoPoint {
   latitude: number;
   longitude: number;
@@ -59,10 +71,9 @@ interface UserData {
   isAnonymous?: boolean;
   testMode?: boolean;
   signalSubscriptions?: string[];
-  currentLocation?: {
-    geopoint: GeoPoint;
-    geohash: string;
-  };
+  // NOTE: a user's live location lives in the separate `userLocations/{uid}`
+  // collection (not here) so high-frequency location writes don't invoke the
+  // `onUserTokensWritten` trigger on `users/{uid}`.
   notificationPreferences?: UserNotificationPrefs;
 }
 
@@ -270,19 +281,83 @@ async function handleSignalCreated(
     return;
   }
 
-  // Find users to notify
+  // Find users to notify. Instead of scanning every enabled user, gather only
+  // candidates geographically near the signal via geohash range queries (the
+  // standard Firestore geoquery pattern), then apply the precise per-user radius
+  // check below. This bounds reads by locality rather than total user count.
+  const center: [number, number] = [
+    signalGeopoint.latitude,
+    signalGeopoint.longitude,
+  ];
+
+  // Candidate user docs keyed by uid, plus each candidate's live location (if any).
+  const usersById = new Map<string, UserData>();
+  const currentLocationByUid = new Map<string, admin.firestore.GeoPoint>();
+
+  // Path 1: users whose tracked location is near the signal. Their location
+  // lives in `userLocations/{uid}`; collect uids + geopoints, then load the
+  // matching user docs for preferences/tokens.
+  const locBounds = geohashQueryBounds(center, MAX_LOCATION_RADIUS_KM * 1000);
+  const locSnaps = await Promise.all(
+    locBounds.map(([start, end]) =>
+      db
+        .collection("userLocations")
+        .orderBy("geohash")
+        .startAt(start)
+        .endAt(end)
+        .get()
+    )
+  );
+  for (const snap of locSnaps) {
+    for (const doc of snap.docs) {
+      const geopoint = doc.data().geopoint as
+        | admin.firestore.GeoPoint
+        | undefined;
+      if (geopoint) {
+        currentLocationByUid.set(doc.id, geopoint);
+      }
+    }
+  }
+
+  // Path 2: users whose region-of-interest covers the signal. The region
+  // geohash is stored on the user doc, so these queries return full user docs.
+  const regBounds = geohashQueryBounds(center, MAX_REGION_RADIUS_KM * 1000);
+  const regSnaps = await Promise.all(
+    regBounds.map(([start, end]) =>
+      db
+        .collection("users")
+        .where("notificationPreferences.enabled", "==", true)
+        .orderBy("notificationPreferences.regionOfInterest.geohash")
+        .startAt(start)
+        .endAt(end)
+        .get()
+    )
+  );
+  for (const snap of regSnaps) {
+    for (const doc of snap.docs) {
+      usersById.set(doc.id, doc.data() as UserData);
+    }
+  }
+
+  // Load user docs for location-path candidates not already fetched above.
+  const missingUids = [...currentLocationByUid.keys()].filter(
+    (uid) => !usersById.has(uid)
+  );
+  for (let i = 0; i < missingUids.length; i += 300) {
+    const refs = missingUids
+      .slice(i, i + 300)
+      .map((uid) => db.collection("users").doc(uid));
+    const userDocs = await db.getAll(...refs);
+    for (const doc of userDocs) {
+      if (doc.exists) {
+        usersById.set(doc.id, doc.data() as UserData);
+      }
+    }
+  }
+
   const userTokens: Map<string, string[]> = new Map();
 
-  // Query all users with notification preferences enabled
-  const usersSnapshot = await db
-    .collection("users")
-    .where("notificationPreferences.enabled", "==", true)
-    .get();
-
-  for (const userDoc of usersSnapshot.docs) {
-    const userId = userDoc.id;
-    const userData = userDoc.data() as UserData;
-
+  for (const [userId, userData] of usersById.entries()) {
     // Skip users in the wrong mode
     const userTestMode = userData.testMode === true;
     if (userTestMode !== isTestMode) continue;
@@ -313,15 +388,14 @@ async function handleSignalCreated(
 
     let shouldNotify = false;
 
-    // Check 1: User's current location
-    if (prefs.locationTrackingEnabled && userData.currentLocation) {
-      const userLat = userData.currentLocation.geopoint.latitude;
-      const userLon = userData.currentLocation.geopoint.longitude;
+    // Check 1: User's current location (from userLocations/{uid})
+    const currentGeo = currentLocationByUid.get(userId);
+    if (prefs.locationTrackingEnabled && currentGeo) {
       const distance = calculateDistanceKm(
         signalGeopoint.latitude,
         signalGeopoint.longitude,
-        userLat,
-        userLon
+        currentGeo.latitude,
+        currentGeo.longitude
       );
 
       const radius = prefs.locationRadiusKm || 10;
@@ -694,8 +768,20 @@ ${deviceInfo ? `
 );
 
 /**
+ * Whether a cached Places result is still within the freshness TTL.
+ */
+function isPlacesCacheFresh(
+  cachedAt: admin.firestore.Timestamp | undefined
+): boolean {
+  if (!cachedAt) return false;
+  return Date.now() - cachedAt.toMillis() < PLACES_CACHE_TTL_MS;
+}
+
+/**
  * Cloud Function to search for nearby vet clinics via Places API.
  * Keeps the API key server-side so it cannot be extracted from client apps.
+ * Results are cached in Firestore (keyed by ~5km geohash cell + radius bucket)
+ * to avoid repeat Places API charges for overlapping searches of the same area.
  */
 export const searchVetClinics = onCall(
   {
@@ -721,6 +807,21 @@ export const searchVetClinics = onCall(
         "invalid-argument",
         "radius must be between 0 and 50000 meters"
       );
+    }
+
+    // Cache key: ~5km geohash cell (precision 5) + radius rounded to the km.
+    // Overlapping searches of the same area reuse a cached result.
+    const cellHash = geohashForLocation([latitude, longitude]).slice(0, 5);
+    const cacheKey = `${cellHash}_${Math.round(radius / 1000)}`;
+    const cacheRef = db.collection("vetClinicCache").doc(cacheKey);
+
+    const cached = await cacheRef.get();
+    if (cached.exists) {
+      const cachedData = cached.data();
+      if (isPlacesCacheFresh(cachedData?.cachedAt)) {
+        console.log(`searchVetClinics cache hit: ${cacheKey}`);
+        return { places: cachedData?.places || [] };
+      }
     }
 
     const placesUrl =
@@ -774,7 +875,20 @@ export const searchVetClinics = onCall(
       }
 
       const data = await response.json();
-      return { places: data.places || [] };
+      const places = data.places || [];
+
+      // Cache for subsequent searches of the same cell (best-effort - a cache
+      // write failure must not fail an otherwise successful search).
+      await cacheRef
+        .set({
+          places,
+          cachedAt: admin.firestore.FieldValue.serverTimestamp(),
+        })
+        .catch((error) =>
+          console.error("Failed to cache vet clinic search:", error)
+        );
+
+      return { places };
     } catch (error) {
       if (error instanceof HttpsError) {
         throw error;
@@ -803,6 +917,17 @@ export const getVetClinicDetails = onCall(
         "invalid-argument",
         "placeId is required"
       );
+    }
+
+    // Return cached details when still fresh (clinic details rarely change).
+    const cacheRef = db.collection("vetClinicDetails").doc(placeId);
+    const cached = await cacheRef.get();
+    if (cached.exists) {
+      const cachedData = cached.data();
+      if (isPlacesCacheFresh(cachedData?.cachedAt)) {
+        console.log(`getVetClinicDetails cache hit: ${placeId}`);
+        return { place: cachedData?.place };
+      }
     }
 
     const detailsUrl = `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`;
@@ -835,6 +960,17 @@ export const getVetClinicDetails = onCall(
       }
 
       const data = await response.json();
+
+      // Best-effort cache write (must not fail a successful lookup).
+      await cacheRef
+        .set({
+          place: data,
+          cachedAt: admin.firestore.FieldValue.serverTimestamp(),
+        })
+        .catch((error) =>
+          console.error("Failed to cache vet clinic details:", error)
+        );
+
       return { place: data };
     } catch (error) {
       if (error instanceof HttpsError) {
@@ -853,6 +989,7 @@ export const getVetClinicDetails = onCall(
  * preserving their signals/comments in anonymized form:
  *  1. Strips phone numbers from authored signals (signals + signals_test)
  *  2. Deletes the user's notifications subcollection
+ *  2b. Deletes the user's stored live location (userLocations/{uid})
  *  3. Tombstones the user document ({ name: "Deleted user", deleted: true })
  *     so existing reporter/author/lastUpdatedBy references resolve cleanly
  *  4. Deletes the user's profile photo from Storage
@@ -907,6 +1044,16 @@ export const deleteAccount = onCall(
       await commitInChunks(notifications.docs, (batch, ref) =>
         batch.delete(ref)
       );
+
+      // 2b. Delete the user's stored live location (PII) - it lives in the
+      //     separate userLocations collection, not the user doc.
+      await db
+        .collection("userLocations")
+        .doc(uid)
+        .delete()
+        .catch((error) =>
+          console.error(`Failed to delete userLocations for ${uid}:`, error)
+        );
 
       // 3. Tombstone the user document - strip all PII, keep a neutral name
       //    so existing references still resolve to "Deleted user".

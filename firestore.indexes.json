@@ -55,6 +55,20 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "notificationPreferences.enabled",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "notificationPreferences.regionOfInterest.geohash",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [

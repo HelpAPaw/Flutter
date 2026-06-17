@@ -37,7 +37,8 @@
 ### 1.4 Anonymous → Authenticated Account Linking
 - [ ] When an anonymous user signs in, the anonymous account is linked to the new credential (same UID preserved)
 - [ ] If credential already exists on a different account, FCM tokens are **merged** from anonymous account into existing account
-- [ ] Data (tokens, notification preferences, location, signal subscriptions) transfers correctly on account upgrade
+- [ ] Data (tokens, notification preferences, signal subscriptions) transfers correctly on account upgrade
+- [ ] Live location is **not** transferred (it lives in `userLocations/{uid}` and self-heals on the next GPS update); the anonymous account's `userLocations` doc is cleaned up
 
 ### 1.5 Profile Completion
 - [ ] After first sign-in, user sees Profile Completion screen
@@ -70,10 +71,11 @@
 - [ ] Cancel aborts with no changes
 - [ ] On confirm: `deleteAccount` Cloud Function runs, then the app signs out and returns to a fresh anonymous state at home
 - [ ] Auth record is deleted (user can no longer sign in with the same credentials)
-- [ ] User doc is tombstoned: name shows "Deleted user", PII removed (fcmTokens, notificationPreferences, currentLocation, signalSubscriptions, phone, photo)
+- [ ] User doc is tombstoned: name shows "Deleted user", PII removed (fcmTokens, notificationPreferences, signalSubscriptions, phone, photo)
 - [ ] Authored signals remain on the map but show "Deleted user" as reporter and have phone numbers stripped (`contactPhone`/`phoneNumber` empty)
 - [ ] Comments by the user resolve to "Deleted user"
 - [ ] `users/{uid}/notifications` subcollection removed; profile photo deleted from Storage
+- [ ] Stored live location removed: `userLocations/{uid}` document is deleted (location PII no longer lives on the user doc)
 - [ ] Device no longer receives push notifications meant for the deleted account
 - [ ] Works for email/password, Google, and anonymous accounts
 - [ ] Multi-device: deletion removes the account globally (other signed-in devices lose access)
@@ -239,6 +241,10 @@
 - [ ] Requires Firebase Auth token and App Check token (verify the onCall envelope is accepted)
 - [ ] 15-second timeout on requests
 - [ ] Rate limit handling (429 → "Too many searches" message)
+- [ ] **Server-side cache**: repeating a search of the same area (same ~5km cell + radius) returns results **without** a new Places API call — served from `vetClinicCache` (check function logs for "cache hit")
+- [ ] **Details cache**: opening the same clinic's details twice calls the Places details API once, then serves from `vetClinicDetails`
+- [ ] Cached entries refresh after the 30-day TTL (stale entries trigger a fresh Places call)
+- [ ] Results are unchanged from the user's perspective whether served fresh or cached
 
 ---
 
@@ -278,6 +284,8 @@
 - [ ] Cloud Function deduplicates tokens across user documents (prevents orphaned anonymous accounts from receiving notifications)
 - [ ] Token refresh handled automatically via `onTokenRefresh` listener
 - [ ] Retry logic with exponential backoff (3 retries, up to 30 seconds)
+- [ ] Moving the device (location updates every 500m) writes to `userLocations/{uid}` and does **not** rewrite the user doc — confirm `onUserTokensWritten` is **not** invoked by location updates (check function logs/invocation count)
+- [ ] Token dedup (`onUserTokensWritten`) still fires on genuine token registration and removes the token from other user docs
 
 ### 6.6 In-App Notifications Inbox (My Notifications) — ⏸ DEFERRED TO NEXT RELEASE
 > **Decision (this release): keep the code, do not ship the feature.** `MyNotificationsPage` + route `/my_notifications` stay in the codebase but remain **deliberately unreachable** (no drawer item, no AppBar bell). Nothing for QA to test this release — and the orphaned page/route should **not** be reported as a bug.
@@ -308,6 +316,19 @@
 - [ ] "Mark all as read" and "Clear all" overflow actions work
 - [ ] Empty state and unauthenticated ("please sign in") states render correctly
 
+### 6.7 Notification Fan-out Scoping & Efficiency (geohash)
+> `handleSignalCreated` now selects recipients via geohash range queries (`geofire-common`) over the `userLocations` collection (live-location path) and `users` region-of-interest geohash (region path), instead of scanning every enabled user. Bounded by `MAX_LOCATION_RADIUS_KM=50` / `MAX_REGION_RADIUS_KM=100`. The precise per-user radius is still enforced by a Haversine check. See `COST_ANALYSIS.md`.
+- [ ] **Location path**: a user with location tracking on, within their `locationRadiusKm` of a new signal, receives the `new_signal` push
+- [ ] **Region path**: a user whose region of interest covers the new signal receives the push (even with no live location tracking)
+- [ ] **Just-out-of-range**: a user just beyond both their location radius and region radius does **not** receive the push (Haversine boundary, not just the geohash bucket)
+- [ ] **Far-away user** (different city/country, beyond the 50/100 km query bounds) is excluded — no notification and no wasted read
+- [ ] Signal **type filter** still applies (notified only for subscribed signal types)
+- [ ] Signal **reporter** is not notified about their own signal
+- [ ] Users with notifications enabled but **no** live location and **no** region of interest receive no `new_signal` pushes (nothing to match on)
+- [ ] **Test-mode isolation** still holds: `testMode` users only receive `signals_test` notifications, prod users only `signals`
+- [ ] Multiple recipients in one area all receive the push (union of location + region paths, deduped by uid — a user matching both paths is notified once)
+- [ ] **Geohash compatibility**: a known-near user stored by the client (`geoflutterfire_plus`) is matched by the server's `geofire-common` bounds (precision mismatch does not cause misses)
+
 ---
 
 ## 7. Location & Permissions
@@ -320,7 +341,8 @@
 
 ### 7.2 Background Location Tracking
 - [ ] Medium accuracy, 500m distance filter
-- [ ] Updates `currentLocation` in Firestore with geopoint and geohash
+- [ ] Updates the user's location in the `userLocations/{uid}` collection with geopoint and geohash (kept off the user doc so location writes don't trigger the token-dedup function)
+- [ ] Disabling location tracking deletes the `userLocations/{uid}` doc and sets `notificationPreferences.locationTrackingEnabled = false`
 - [ ] Auto-initializes if user enabled location tracking in preferences
 - [ ] Can be toggled on/off from settings
 
