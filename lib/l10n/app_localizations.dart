@@ -1814,6 +1814,12 @@ abstract class AppLocalizations {
   /// **'Signal deleted successfully'**
   String get signalDeletedSuccessfully;
 
+  /// No description provided for @signalNoLongerAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This signal is no longer available'**
+  String get signalNoLongerAvailable;
+
   /// No description provided for @failedToUpdateSignal.
   ///
   /// In en, this message translates to:

@@ -983,6 +983,9 @@ class AppLocalizationsBg extends AppLocalizations {
   String get signalDeletedSuccessfully => 'Сигналът е изтрит успешно';
 
   @override
+  String get signalNoLongerAvailable => 'Този сигнал вече не е наличен';
+
+  @override
   String get failedToUpdateSignal =>
       'Неуспешно обновяване на сигнала. Моля, опитайте отново.';
 

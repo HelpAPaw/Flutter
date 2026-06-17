@@ -469,6 +469,7 @@
   "confirmDeleteSignal": "Are you sure you want to delete this signal? This action cannot be undone.",
   "signalUpdatedSuccessfully": "Signal updated successfully",
   "signalDeletedSuccessfully": "Signal deleted successfully",
+  "signalNoLongerAvailable": "This signal is no longer available",
   "failedToUpdateSignal": "Failed to update signal. Please try again.",
   "failedToDeleteSignal": "Failed to delete signal. Please try again.",
   "contactPhone": "Contact Phone",

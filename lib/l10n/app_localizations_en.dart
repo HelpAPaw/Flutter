@@ -970,6 +970,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get signalDeletedSuccessfully => 'Signal deleted successfully';
 
   @override
+  String get signalNoLongerAvailable => 'This signal is no longer available';
+
+  @override
   String get failedToUpdateSignal =>
       'Failed to update signal. Please try again.';
 

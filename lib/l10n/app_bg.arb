@@ -330,6 +330,7 @@
   "confirmDeleteSignal": "Сигурни ли сте, че искате да изтриете този сигнал? Това действие не може да бъде отменено.",
   "signalUpdatedSuccessfully": "Сигналът е обновен успешно",
   "signalDeletedSuccessfully": "Сигналът е изтрит успешно",
+  "signalNoLongerAvailable": "Този сигнал вече не е наличен",
   "failedToUpdateSignal": "Неуспешно обновяване на сигнала. Моля, опитайте отново.",
   "failedToDeleteSignal": "Неуспешно изтриване на сигнала. Моля, опитайте отново.",
   "contactPhone": "Телефон за връзка",

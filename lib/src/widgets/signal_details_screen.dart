@@ -43,6 +43,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   bool _isUploadingPhoto = false;
   final PageController _photoPageController = PageController();
   int _currentPhotoPage = 0;
+  bool _hasNavigatedAway = false;
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +56,29 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       if (snapshot.hasError) {
         return Text(l10n.somethingWentWrong);
       } else if (snapshot.connectionState == ConnectionState.waiting) {
+        return const Scaffold(
+          body: Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.orange))),
+        );
+      } else if (!(snapshot.data?.exists ?? false)) {
+        // The signal was deleted while this screen was open (e.g. the author
+        // removed it while another user was reading it). Pop back to the map
+        // instead of rendering a blank view. Navigation can't happen during
+        // build, so defer it to after the current frame.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || _hasNavigatedAway) return;
+          _hasNavigatedAway = true;
+          // Capture the (app-level) messenger before popping, since this
+          // screen's element is torn down by the navigation.
+          final messenger = ScaffoldMessenger.of(context);
+          if (Navigator.of(context).canPop()) {
+            context.pop();
+          } else {
+            context.go(Routes.home);
+          }
+          messenger.showSnackBar(
+            SnackBar(content: Text(l10n.signalNoLongerAvailable)),
+          );
+        });
         return const Scaffold(
           body: Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.orange))),
         );
