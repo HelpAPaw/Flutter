@@ -15,7 +15,8 @@ class EmailVerificationPage extends StatefulWidget {
   State<EmailVerificationPage> createState() => _EmailVerificationPageState();
 }
 
-class _EmailVerificationPageState extends State<EmailVerificationPage> {
+class _EmailVerificationPageState extends State<EmailVerificationPage>
+    with WidgetsBindingObserver {
   bool _isResending = false;
   bool _isChecking = false;
   Timer? _timer;
@@ -25,19 +26,36 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
   @override
   void initState() {
     super.initState();
-    _sendVerificationEmail();
+    // The verification email is sent once at account creation (see sign_in_page
+    // UserCreated handler), not on every mount - otherwise a returning unverified
+    // sign-in would re-send an email each time the router redirects here (R2-005).
+    // The resend cooldown still starts at 60s: a returning user already has an
+    // earlier email to find, so we don't invite an immediate reflexive resend.
+    _startResendCountdown();
+    // Verification usually completes after the user leaves the app to click the
+    // link in their email, so re-check the instant they return (didChange...
+    // resumed). The periodic poll is just a slow fallback.
+    WidgetsBinding.instance.addObserver(this);
     _startPolling();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     _countdownTimer?.cancel();
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkEmailVerified();
+    }
+  }
+
   void _startPolling() {
-    _timer = Timer.periodic(const Duration(seconds: 5), (timer) async {
+    _timer = Timer.periodic(const Duration(seconds: 15), (timer) async {
       await _checkEmailVerified();
     });
   }
@@ -71,6 +89,26 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
     }
   }
 
+  /// (Re)starts the 60s resend cooldown. Called on mount and after each send so
+  /// the Resend button is rate-limited consistently whether or not an email was
+  /// just sent. Uses a plain assignment for the initial value so it is safe to
+  /// call from initState; the per-second ticks use setState.
+  void _startResendCountdown() {
+    _countdownTimer?.cancel();
+    _countdown = 60;
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_countdown > 0) {
+        setState(() => _countdown--);
+      } else {
+        timer.cancel();
+      }
+    });
+  }
+
   Future<void> _sendVerificationEmail() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -89,20 +127,8 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
           );
         }
 
-        // Start countdown for resend button
-        _countdownTimer?.cancel();
-        setState(() => _countdown = 60);
-        _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-          if (!mounted) {
-            timer.cancel();
-            return;
-          }
-          if (_countdown > 0) {
-            setState(() => _countdown--);
-          } else {
-            timer.cancel();
-          }
-        });
+        // Restart the resend cooldown.
+        _startResendCountdown();
       }
     } on FirebaseAuthException catch (e) {
       if (mounted) {

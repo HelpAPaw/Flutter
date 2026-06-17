@@ -188,9 +188,18 @@ class _SignInPageState extends State<SignInPage> {
                     }
 
                     if (AuthService.hasPasswordProvider(user)) {
-                      // Router's redirect navigates to /verify_email, whose
-                      // initState sends the verification email. Don't send here
-                      // too, or the user gets two identical emails (F-003).
+                      // Send the verification email once, here at account
+                      // creation. The /verify_email screen is a passive status
+                      // view that no longer auto-sends, so returning unverified
+                      // sign-ins don't re-send an email each time (R2-005, F-003).
+                      try {
+                        await user!.sendEmailVerification();
+                      } catch (e) {
+                        // Non-fatal: the verify screen's Resend button recovers
+                        // from a failed initial send.
+                        FirebaseCrashlytics.instance.log(
+                            'Auth: initial sendEmailVerification failed: $e');
+                      }
                     } else {
                       // For OAuth providers (Google), push profile completion
                       if (context.mounted) {
