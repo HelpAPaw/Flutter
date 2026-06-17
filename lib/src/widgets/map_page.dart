@@ -4,6 +4,7 @@ import 'package:adaptive_components/adaptive_components.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -326,10 +327,34 @@ class _MapScreenState extends ConsumerState<MapScreen>
     return (coord.x.toDouble() / dpr, coord.y.toDouble() / dpr);
   }
 
+  /// Best-effort native InfoWindow show. Throws [PlatformException]
+  /// ("Invalid markerId") if the marker was removed from the map between the
+  /// overlay opening and this call — e.g. the signal was deleted, filtered
+  /// out, or moved outside the geo-query radius while its window was open.
+  /// The window is gone anyway, so swallow it rather than crashing.
+  Future<void> _showMarkerInfoWindow(String signalId) async {
+    if (!_mapControllerReady) return;
+    try {
+      await _mapController.showMarkerInfoWindow(MarkerId(signalId));
+    } on PlatformException {
+      // Marker no longer on the map — nothing to show.
+    }
+  }
+
+  /// Best-effort native InfoWindow hide. See [_showMarkerInfoWindow].
+  Future<void> _hideMarkerInfoWindow(String signalId) async {
+    if (!_mapControllerReady) return;
+    try {
+      await _mapController.hideMarkerInfoWindow(MarkerId(signalId));
+    } on PlatformException {
+      // Marker no longer on the map — nothing to hide.
+    }
+  }
+
   Future<void> _showSignalOverlay(SignalWithId signal) async {
     // Show the native InfoWindow (moves perfectly with the map).
     // Fire-and-forget — independent of screen coordinate calculation.
-    _mapController.showMarkerInfoWindow(MarkerId(signal.id));
+    _showMarkerInfoWindow(signal.id);
 
     final screenCoord = await _mapController.getScreenCoordinate(
       LatLng(signal.location.latitude, signal.location.longitude),
@@ -345,7 +370,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
   void _dismissOverlay() {
     if (_selectedSignal != null) {
-      _mapController.hideMarkerInfoWindow(MarkerId(_selectedSignal!.id));
+      _hideMarkerInfoWindow(_selectedSignal!.id);
       setState(() {
         _selectedSignal = null;
         _overlayX = null;
@@ -474,6 +499,21 @@ class _MapScreenState extends ConsumerState<MapScreen>
         onMarkerTap: _showSignalOverlay,
         clusterManagerId: _signalClusterManagerId,
       );
+
+      // If the open info window's signal is no longer rendered — deleted,
+      // filtered out, or moved outside the geo-query radius — its native
+      // InfoWindow has vanished. Dismiss the orphaned invisible tap target so
+      // it can't navigate to a signal that's gone. Guarded by whenData so a
+      // transient reload (empty markers during re-query) doesn't dismiss it.
+      final selected = _selectedSignal;
+      if (selected != null &&
+          !signalMarkers.any((m) => m.markerId.value == selected.id)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _selectedSignal?.id == selected.id) {
+            _dismissOverlay();
+          }
+        });
+      }
     });
 
     final allMarkers = {
@@ -549,9 +589,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                         // Re-show the native InfoWindow when returning;
                         // the platform hides it during route transitions.
                         if (mounted && _selectedSignal?.id == signal.id) {
-                          _mapController.showMarkerInfoWindow(
-                            MarkerId(signal.id),
-                          );
+                          _showMarkerInfoWindow(signal.id);
                           _updateOverlayPosition();
                         }
                       });
