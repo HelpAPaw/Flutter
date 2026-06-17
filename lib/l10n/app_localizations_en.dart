@@ -750,14 +750,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get instructionsSteps =>
-      '1. Open the email in your inbox\n2. Click the verification link\n3. Return to this app\n4. You\'ll be automatically redirected';
+      '1. Open the email in your inbox (or SPAM)\n2. Click the verification link\n3. Return to this app\n4. You\'ll be automatically redirected';
 
   @override
   String get checkingVerificationStatus => 'Checking verification status...';
 
   @override
   String get verificationEmailSentCheck =>
-      'Verification email sent! Check your inbox.';
+      'Verification email sent! Check your inbox (or SPAM).';
 
   @override
   String get tooManyRequests =>

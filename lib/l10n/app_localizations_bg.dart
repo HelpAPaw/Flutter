@@ -759,7 +759,7 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get instructionsSteps =>
-      '1. Отворете имейла във входящата си поща\n2. Кликнете върху линка за потвърждение\n3. Върнете се в това приложение\n4. Ще бъдете автоматично пренасочени';
+      '1. Отворете имейла във входящата си поща (или SPAM)\n2. Кликнете върху линка за потвърждение\n3. Върнете се в това приложение\n4. Ще бъдете автоматично пренасочени';
 
   @override
   String get checkingVerificationStatus =>
@@ -767,7 +767,7 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get verificationEmailSentCheck =>
-      'Имейл за потвърждение е изпратен! Проверете входящата си поща.';
+      'Имейл за потвърждение е изпратен! Проверете входящата си поща (или SPAM).';
 
   @override
   String get tooManyRequests =>

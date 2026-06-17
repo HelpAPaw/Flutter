@@ -1427,7 +1427,7 @@ abstract class AppLocalizations {
   /// No description provided for @instructionsSteps.
   ///
   /// In en, this message translates to:
-  /// **'1. Open the email in your inbox\n2. Click the verification link\n3. Return to this app\n4. You\'ll be automatically redirected'**
+  /// **'1. Open the email in your inbox (or SPAM)\n2. Click the verification link\n3. Return to this app\n4. You\'ll be automatically redirected'**
   String get instructionsSteps;
 
   /// No description provided for @checkingVerificationStatus.
@@ -1439,7 +1439,7 @@ abstract class AppLocalizations {
   /// No description provided for @verificationEmailSentCheck.
   ///
   /// In en, this message translates to:
-  /// **'Verification email sent! Check your inbox.'**
+  /// **'Verification email sent! Check your inbox (or SPAM).'**
   String get verificationEmailSentCheck;
 
   /// No description provided for @tooManyRequests.
