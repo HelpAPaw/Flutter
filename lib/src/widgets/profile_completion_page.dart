@@ -28,12 +28,29 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
 
   void _prefillFromAuth() {
     final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      // Pre-fill name from Google OAuth or existing display name
-      if (user.displayName != null && user.displayName!.isNotEmpty) {
-        _nameController.text = user.displayName!;
-      }
+    if (user == null) return;
+    // Pre-fill the name field so it's never blank: prefer the Google/Auth
+    // display name, otherwise fall back to the local part of the email.
+    final suggested = _suggestedName(user);
+    if (suggested != null) {
+      _nameController.text = suggested;
     }
+  }
+
+  /// Best-available display name for [user]: the Auth display name (Google
+  /// OAuth / existing), else the local part of the email (e.g. "john.doe"
+  /// from "john.doe@example.com"). Returns null if neither is available.
+  String? _suggestedName(User user) {
+    final displayName = user.displayName?.trim();
+    if (displayName != null && displayName.isNotEmpty) {
+      return displayName;
+    }
+    final email = user.email;
+    if (email != null && email.contains('@')) {
+      final local = email.split('@').first.trim();
+      if (local.isNotEmpty) return local;
+    }
+    return null;
   }
 
   @override
@@ -239,14 +256,28 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
                   // Skip link (for optional completion)
                   TextButton(
                     onPressed: _isLoading ? null : () {
+                      final user = FirebaseAuth.instance.currentUser;
                       // Still save minimal profile data even if skipped
                       FirebaseFirestore.instance
                           .collection('users')
-                          .doc(FirebaseAuth.instance.currentUser?.uid)
+                          .doc(user?.uid)
                           .set({
                         'profileCompleted': true,
                         'createdAt': FieldValue.serverTimestamp(),
                       }, SetOptions(merge: true)).catchError((_) {});
+                      // Mirror a name to the world-readable public profile so the
+                      // user resolves for every viewer instead of showing as
+                      // "Unknown". Use whatever is in the field (it's editable),
+                      // falling back to the Auth/email-derived suggestion.
+                      if (user != null) {
+                        final typed = _nameController.text.trim();
+                        final name =
+                            typed.isNotEmpty ? typed : _suggestedName(user);
+                        if (name != null && name.isNotEmpty) {
+                          PublicProfileService.setName(user.uid, name)
+                              .catchError((_) {});
+                        }
+                      }
                       // Pop back through auth screens to return to original screen
                       _popAuthStack(context);
                     },
