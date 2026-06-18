@@ -554,6 +554,14 @@ async function handleCommentCreated(
     return;
   }
 
+  // Status-change comments are auto-generated and have no `text` field; their
+  // notifications are sent separately by onSignalUpdated (status_change push).
+  // Skip them here to avoid a TypeError on commentText.length below.
+  if (commentData.type === "status_change") {
+    console.log("Status-change comment, skipping new_comment notification");
+    return;
+  }
+
   const authorRef = commentData.author as
     | admin.firestore.DocumentReference
     | undefined;
