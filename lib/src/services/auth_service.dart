@@ -14,8 +14,10 @@ import 'notification_service.dart';
 enum LinkResult {
   /// Successfully linked anonymous account to the credential
   linked,
+
   /// Credential already in use by another account - needs data merge
   needsMerge,
+
   /// Current user is not anonymous
   notAnonymous,
 }
@@ -62,12 +64,14 @@ class AuthService {
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      FirebaseCrashlytics.instance.log('Auth: Anonymous account linked successfully');
+      FirebaseCrashlytics.instance
+          .log('Auth: Anonymous account linked successfully');
       debugPrint('Successfully linked anonymous account');
       return LinkResult.linked;
     } on FirebaseAuthException catch (e) {
       if (e.code == 'credential-already-in-use') {
-        FirebaseCrashlytics.instance.log('Auth: Credential already in use - needs merge');
+        FirebaseCrashlytics.instance
+            .log('Auth: Credential already in use - needs merge');
         debugPrint('Credential already in use, needs merge');
         return LinkResult.needsMerge;
       }
@@ -75,21 +79,22 @@ class AuthService {
     }
   }
 
-  /// Migrate all data from anonymous account to a new permanent account
-  /// This is called when linking succeeds (same UID, just upgrading)
+  /// Mark the current user's doc as no longer anonymous after an in-place
+  /// upgrade (linkWithCredential keeps the same UID). Best-effort: uses
+  /// set(merge) so it also works if the anon never wrote a user doc, and never
+  /// throws into the sign-in flow.
   Future<void> markAccountAsPermanent() async {
     final user = _auth.currentUser;
     if (user == null) return;
 
     try {
-      await _db.collection('users').doc(user.uid).update({
+      await _db.collection('users').doc(user.uid).set({
         'isAnonymous': false,
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      }, SetOptions(merge: true));
       debugPrint('Account marked as permanent');
     } catch (e) {
       debugPrint('Error marking account as permanent: $e');
-      rethrow;
     }
   }
 
@@ -97,8 +102,10 @@ class AuthService {
   /// This is called when the credential is already linked to another account
   ///
   /// The existing account keeps its settings, we just add the anonymous tokens
-  Future<void> mergeAnonymousIntoExisting(String anonymousUid, String existingUid) async {
-    FirebaseCrashlytics.instance.log('Auth: Merging anonymous into existing account');
+  Future<void> mergeAnonymousIntoExisting(
+      String anonymousUid, String existingUid) async {
+    FirebaseCrashlytics.instance
+        .log('Auth: Merging anonymous into existing account');
     debugPrint('Merging anonymous $anonymousUid into existing $existingUid');
 
     // Get anonymous user data
@@ -109,32 +116,73 @@ class AuthService {
     }
 
     final anonymousData = anonymousDoc.data()!;
-    final anonymousTokens = (anonymousData['fcmTokens'] as List<dynamic>?)?.cast<String>() ?? [];
+    final anonymousTokens =
+        (anonymousData['fcmTokens'] as List<dynamic>?)?.cast<String>() ?? [];
 
+    if (anonymousTokens.isNotEmpty) {
+      // Add anonymous tokens to the existing (now signed-in) account.
+      await _db.collection('users').doc(existingUid).update({
+        'fcmTokens': FieldValue.arrayUnion(anonymousTokens),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      debugPrint(
+          'Merged ${anonymousTokens.length} tokens into existing account');
+    }
+
+    // Best-effort delete of the anonymous doc. This path runs after we've
+    // already signed into the existing account (the email sign-in flow switches
+    // accounts before our handler runs), so Firestore rules forbid deleting the
+    // anonymous user's doc and this throws. That's expected: the scheduled
+    // `cleanupAnonymousUsers` function reaps the leftover anonymous account. We
+    // must never let this abort the sign-in flow.
     try {
-      if (anonymousTokens.isNotEmpty) {
-        // Add anonymous tokens to existing account
-        await _db.collection('users').doc(existingUid).update({
-          'fcmTokens': FieldValue.arrayUnion(anonymousTokens),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-
-        debugPrint('Merged ${anonymousTokens.length} tokens into existing account');
-      }
-
-      // Delete the anonymous user document
       await _db.collection('users').doc(anonymousUid).delete();
       debugPrint('Deleted anonymous user document');
     } catch (e) {
-      debugPrint('Error merging anonymous into existing: $e');
-      rethrow;
+      debugPrint('Anonymous doc delete skipped (reaped by cleanup later): $e');
+    }
+  }
+
+  /// Read the anonymous user's FCM tokens and delete its own Firestore docs.
+  ///
+  /// MUST be called while still signed in as the anonymous user: Firestore
+  /// rules only allow a user to delete its own `users`/`userLocations` docs, so
+  /// this can't be done after switching to the destination account. Returns the
+  /// tokens so the caller can merge them in once signed into that account.
+  Future<List<String>> detachAnonymousData(String anonymousUid) async {
+    var tokens = <String>[];
+    try {
+      final doc = await _db.collection('users').doc(anonymousUid).get();
+      tokens =
+          (doc.data()?['fcmTokens'] as List<dynamic>?)?.cast<String>() ?? [];
+      await _db.collection('users').doc(anonymousUid).delete();
+      await _db.collection('userLocations').doc(anonymousUid).delete();
+      debugPrint(
+          'Detached anonymous data for $anonymousUid (${tokens.length} tokens)');
+    } catch (e) {
+      debugPrint('Error detaching anonymous data: $e');
+    }
+    return tokens;
+  }
+
+  /// Merge FCM tokens into the currently signed-in account's own user doc.
+  Future<void> mergeFcmTokens(String uid, List<String> tokens) async {
+    if (tokens.isEmpty) return;
+    try {
+      await _db.collection('users').doc(uid).update({
+        'fcmTokens': FieldValue.arrayUnion(tokens),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint('Error merging FCM tokens into account: $e');
     }
   }
 
   /// Transfer all data from anonymous account to a new account
   /// This is used when creating a brand new account from anonymous
   Future<void> transferAnonymousData(String anonymousUid, String newUid) async {
-    FirebaseCrashlytics.instance.log('Auth: Transferring anonymous data to new account');
+    FirebaseCrashlytics.instance
+        .log('Auth: Transferring anonymous data to new account');
     debugPrint('Transferring data from anonymous $anonymousUid to new $newUid');
 
     // Get anonymous user data
@@ -159,7 +207,8 @@ class AuthService {
 
     // Transfer notification preferences
     if (anonymousData['notificationPreferences'] != null) {
-      dataToTransfer['notificationPreferences'] = anonymousData['notificationPreferences'];
+      dataToTransfer['notificationPreferences'] =
+          anonymousData['notificationPreferences'];
     }
 
     // NOTE: current location lives in userLocations/{uid}, not the user doc, and
@@ -167,15 +216,16 @@ class AuthService {
 
     // Transfer signal subscriptions
     if (anonymousData['signalSubscriptions'] != null) {
-      dataToTransfer['signalSubscriptions'] = anonymousData['signalSubscriptions'];
+      dataToTransfer['signalSubscriptions'] =
+          anonymousData['signalSubscriptions'];
     }
 
     try {
       // Save to new account
       await _db.collection('users').doc(newUid).set(
-        dataToTransfer,
-        SetOptions(merge: true),
-      );
+            dataToTransfer,
+            SetOptions(merge: true),
+          );
 
       // Delete the anonymous user document and its stored location
       await _db.collection('users').doc(anonymousUid).delete();
@@ -266,7 +316,8 @@ class AuthService {
     }
 
     final projectId = Firebase.app().options.projectId;
-    final url = 'https://us-central1-$projectId.cloudfunctions.net/deleteAccount';
+    final url =
+        'https://us-central1-$projectId.cloudfunctions.net/deleteAccount';
 
     final headers = <String, String>{
       'Content-Type': 'application/json',
@@ -297,7 +348,8 @@ class AuthService {
         .timeout(const Duration(seconds: 30));
 
     if (response.statusCode != 200) {
-      debugPrint('Delete account failed: ${response.statusCode} ${response.body}');
+      debugPrint(
+          'Delete account failed: ${response.statusCode} ${response.body}');
       throw Exception('Failed to delete account. Please try again.');
     }
   }
