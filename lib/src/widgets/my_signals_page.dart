@@ -41,7 +41,6 @@ class MySignalsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
       appBar: AppBar(
@@ -53,8 +52,14 @@ class MySignalsPage extends StatelessWidget {
         ),
         title: Text(l10n.mySignals),
       ),
-      body: user == null
-          ? Center(
+      body: StreamBuilder<User?>(
+        initialData: FirebaseAuth.instance.currentUser,
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, authSnapshot) {
+          final user = authSnapshot.data;
+
+          if (user == null) {
+            return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -68,8 +73,10 @@ class MySignalsPage extends StatelessWidget {
                   ),
                 ],
               ),
-            )
-          : StreamBuilder<QuerySnapshot>(
+            );
+          }
+
+          return StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection(AppPreferencesService().signalsCollectionName)
                   .where('reporter',
@@ -199,7 +206,9 @@ class MySignalsPage extends StatelessWidget {
                   },
                 );
               },
-            ),
+            );
+        },
+      ),
     );
   }
 }
