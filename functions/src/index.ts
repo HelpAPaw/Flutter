@@ -36,8 +36,9 @@ const SIGNAL_TYPES = [
   "Other",
 ];
 
-// Signal status names
-const SIGNAL_STATUSES = ["Help needed", "Somebody on the way", "Solved"];
+// Signal status names — must match the app's unified F-006 labels
+// (statusNeedsHelp / statusInProgress / statusResolved in l10n).
+const SIGNAL_STATUSES = ["Needs help", "In progress", "Resolved"];
 
 // Maximum radii (km) a user can configure in the app UI. These bound how far
 // from a new signal we look for candidate recipients via geohash range queries,
