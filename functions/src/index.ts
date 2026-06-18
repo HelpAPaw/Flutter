@@ -5,6 +5,7 @@ import {
   onDocumentWritten,
 } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
 import { geohashQueryBounds, geohashForLocation } from "geofire-common";
 import * as nodemailer from "nodemailer";
@@ -1096,5 +1097,142 @@ export const deleteAccount = onCall(
         "Failed to delete account. Please try again."
       );
     }
+  }
+);
+
+// How long an inactive anonymous account is kept before the scheduled cleanup
+// reaps it. "Inactive" = no ID-token refresh (the app hasn't been opened on
+// that anonymous session) within this window.
+const ANON_RETENTION_DAYS = 90;
+
+// When true, the cleanup logs the accounts it would remove but deletes nothing.
+// Flip to true and redeploy to preview a run before letting it delete.
+const ANON_CLEANUP_DRY_RUN = false;
+
+/**
+ * Remove the per-user Firestore data an anonymous session can produce. There is
+ * no authored content to anonymize because signal/comment creation is guarded
+ * to non-anonymous users, so this only clears the anonymous user's own docs.
+ */
+async function deleteAnonymousUserData(uid: string): Promise<void> {
+  const userRef = db.collection("users").doc(uid);
+
+  // Delete the notifications subcollection (usually empty for anon users).
+  const notifications = await userRef.collection("notifications").get();
+  for (let i = 0; i < notifications.docs.length; i += 450) {
+    const batch = db.batch();
+    for (const doc of notifications.docs.slice(i, i + 450)) {
+      batch.delete(doc.ref);
+    }
+    await batch.commit();
+  }
+
+  // Delete the stored live location and the user document itself.
+  await db
+    .collection("userLocations")
+    .doc(uid)
+    .delete()
+    .catch((error) =>
+      console.error(`Failed to delete userLocations for ${uid}:`, error)
+    );
+  await userRef.delete();
+}
+
+/**
+ * Scheduled reaper for abandoned anonymous accounts.
+ *
+ * On-device, anonymous upgrades are linked in place (same UID) so the common
+ * register/Google paths never orphan an account. The one residual is an
+ * anonymous user signing into an EXISTING email account: Firebase requires a
+ * plain sign-in there (to verify the password), which switches away from the
+ * anonymous user before the client can delete it, and the client SDK cannot
+ * delete a user by UID. This job — using the Admin SDK, the Firebase-intended
+ * mechanism — sweeps up those leftovers plus any anonymous session that was
+ * created and never returned (e.g. an install that never signed in).
+ *
+ * Runs weekly and pages through all Auth users, deleting anonymous ones
+ * (no linked providers) whose last token refresh is older than
+ * ANON_RETENTION_DAYS. Firestore data is cleared first so a record is only
+ * removed from Auth once its data is gone (a failed cleanup is retried next run).
+ */
+export const cleanupAnonymousUsers = onSchedule(
+  {
+    schedule: "0 3 * * 0", // 03:00 UTC every Sunday
+    timeZone: "Etc/UTC",
+    timeoutSeconds: 540,
+    memory: "256MiB",
+    retryCount: 0,
+  },
+  async () => {
+    const cutoff = Date.now() - ANON_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+    let nextPageToken: string | undefined = undefined;
+    let scanned = 0;
+    let staleFound = 0;
+    let deleted = 0;
+
+    do {
+      const result = await admin.auth().listUsers(1000, nextPageToken);
+      nextPageToken = result.pageToken;
+
+      const staleAnonUids: string[] = [];
+      for (const user of result.users) {
+        scanned++;
+
+        // Anonymous users have no linked auth providers; anything that has been
+        // upgraded/linked has providerData and is skipped.
+        if (user.providerData.length > 0) continue;
+
+        // "Last active" = last ID-token refresh (updates when the app opens).
+        // Fall back to creation time if the token was never refreshed.
+        const lastActiveRaw =
+          user.metadata.lastRefreshTime ?? user.metadata.creationTime;
+        const lastActive = Date.parse(lastActiveRaw);
+        if (Number.isNaN(lastActive) || lastActive >= cutoff) continue;
+
+        staleAnonUids.push(user.uid);
+      }
+      staleFound += staleAnonUids.length;
+
+      if (ANON_CLEANUP_DRY_RUN) {
+        if (staleAnonUids.length > 0) {
+          console.log(
+            `cleanupAnonymousUsers [DRY RUN]: would delete ${staleAnonUids.length} anon users: ${staleAnonUids.join(", ")}`
+          );
+        }
+        continue;
+      }
+
+      // Clear Firestore data first; only Auth-delete the UIDs we cleaned, so a
+      // failed cleanup leaves the account to be retried on the next run.
+      const cleanedUids: string[] = [];
+      for (const uid of staleAnonUids) {
+        try {
+          await deleteAnonymousUserData(uid);
+          cleanedUids.push(uid);
+        } catch (error) {
+          console.error(
+            `cleanupAnonymousUsers: data cleanup failed for ${uid}:`,
+            error
+          );
+        }
+      }
+
+      // deleteUsers removes up to 1000 Auth accounts per call.
+      for (let i = 0; i < cleanedUids.length; i += 1000) {
+        const chunk = cleanedUids.slice(i, i + 1000);
+        const res = await admin.auth().deleteUsers(chunk);
+        deleted += res.successCount;
+        if (res.failureCount > 0) {
+          console.error(
+            `cleanupAnonymousUsers: ${res.failureCount} Auth deletions failed:`,
+            res.errors.map((e) => e.error.message)
+          );
+        }
+      }
+    } while (nextPageToken);
+
+    console.log(
+      `cleanupAnonymousUsers: scanned ${scanned} users, found ${staleFound} stale anonymous (> ${ANON_RETENTION_DAYS}d inactive), deleted ${deleted}${ANON_CLEANUP_DRY_RUN ? " [DRY RUN — nothing deleted]" : ""}.`
+    );
   }
 );
