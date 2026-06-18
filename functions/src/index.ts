@@ -36,9 +36,18 @@ const SIGNAL_TYPES = [
   "Other",
 ];
 
-// Signal status names — must match the app's unified F-006 labels
-// (statusNeedsHelp / statusInProgress / statusResolved in l10n).
-const SIGNAL_STATUSES = ["Needs help", "In progress", "Resolved"];
+// Signal status names, keyed by the stable Firestore status `code` (NOT array
+// position). Source of truth is the app's SignalStatus enum
+// (lib/src/models/signal_status.dart), where `code` is an opaque, stable id and
+// declaration order is a separate display-ordering concern. Labels mirror the
+// app's unified F-006 EN labels (statusNeedsHelp / statusInProgress /
+// statusResolved). Push text is English-only (function has no i18n). Unknown
+// codes fall back to "Updated" at the lookup site.
+const SIGNAL_STATUSES: Record<number, string> = {
+  0: "Needs help",
+  1: "In progress",
+  2: "Resolved",
+};
 
 // Maximum radii (km) a user can configure in the app UI. These bound how far
 // from a new signal we look for candidate recipients via geohash range queries,
