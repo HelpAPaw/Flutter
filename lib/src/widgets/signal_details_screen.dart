@@ -36,7 +36,10 @@ class SignalDetailsScreen extends StatefulWidget {
 
 class _SignalDetailsState extends State<SignalDetailsScreen> {
   Stream<DocumentSnapshot>? _signalStream;
-  String reporterName = '';
+  // Memoized reporter-name lookup, keyed by reporter uid so it is resolved
+  // once per signal rather than on every rebuild.
+  String? _reporterId;
+  Future<String?>? _reporterNameFuture;
   final TextEditingController _newCommentController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _imagePicker = ImagePicker();
@@ -85,14 +88,6 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       } else {
         final signalData = snapshot.data!.data() as Map<String, dynamic>;
         signal = Signal.fromJson(signalData);
-        // Resolve the reporter name from the world-readable public profile so
-        // it shows for every viewer and reflects renames / deletion.
-        if (reporterName.isEmpty) {
-          PublicProfileService.getName(signal.reporter.id).then((name) {
-            if (!mounted || name == null || name.isEmpty) return;
-            setState(() => reporterName = name);
-          });
-        }
       }
 
       return PopScope(
@@ -377,7 +372,21 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(DateFormat.yMd(locale).add_jm().format((signal.createdAt as Timestamp).toDate())),
-                              Text(reporterName)
+                              FutureBuilder<String?>(
+                                future: _reporterNameFor(signal.reporter.id),
+                                builder: (context, snapshot) {
+                                  // While the (auth-gated) lookup is still in
+                                  // flight, show nothing rather than flashing a
+                                  // fallback. Once it completes, always show a
+                                  // name — falling back to "Unknown" so a failed
+                                  // or empty lookup never renders blank.
+                                  if (snapshot.connectionState != ConnectionState.done) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  final name = snapshot.data;
+                                  return Text((name != null && name.isNotEmpty) ? name : l10n.unknown);
+                                },
+                              ),
                             ],
                           ),
                           Row(
@@ -678,6 +687,33 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     } catch (e) {
       debugPrint('Error subscribing to signal: $e');
     }
+  }
+
+  /// Resolves (and memoizes) the reporter's public display name. The future is
+  /// created once per reporter uid so rebuilds reuse the in-flight/completed
+  /// result instead of re-fetching.
+  Future<String?> _reporterNameFor(String reporterId) {
+    if (_reporterId != reporterId) {
+      _reporterId = reporterId;
+      _reporterNameFuture = _resolveReporterName(reporterId);
+    }
+    return _reporterNameFuture!;
+  }
+
+  /// Reads the reporter's name from the world-readable public profile, with a
+  /// short retry. The `publicProfiles` read is auth-gated, and right after a
+  /// fresh (anonymous) sign-in the ID token may not be valid yet, so the first
+  /// read can transiently return null; retrying lets the name resolve without
+  /// the user having to reopen the screen.
+  Future<String?> _resolveReporterName(String reporterId) async {
+    const maxAttempts = 4;
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      final name = await PublicProfileService.getName(reporterId);
+      if (name != null && name.isNotEmpty) return name;
+      if (attempt == maxAttempts - 1 || !mounted) return null;
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
+    return null;
   }
 
   bool _isUserAuthor(Signal signal) {
