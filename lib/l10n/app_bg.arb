@@ -71,6 +71,8 @@
 
   "signInSubtitle": "Влезте, за да докладвате и помагате на животни в нужда",
   "signInSideMessage": "Присъединете се към нашата общност от любители на животни",
+  "signInWithGoogle": "Вход с Google",
+  "googleSignInFailed": "Входът с Google не бе успешен. Моля, опитайте отново.",
 
   "signInRequired": "Необходим е вход",
   "signInToCreateSignals": "Трябва да влезете, за да създавате сигнали",

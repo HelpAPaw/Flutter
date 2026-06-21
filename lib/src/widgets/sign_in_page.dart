@@ -4,12 +4,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide EmailAuthProvider;
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_ui_auth/firebase_ui_auth.dart';
-import 'package:firebase_ui_oauth_google/firebase_ui_oauth_google.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
+import 'package:sign_in_button/sign_in_button.dart';
 
-import '../../main.dart' show googleClientId;
 import '../config/routes.dart';
 import '../services/auth_service.dart';
 import '../services/notification_service.dart';
@@ -108,6 +109,9 @@ class _SignInPageState extends State<SignInPage> {
 
   /// Shows a blocking overlay while anonymous data is migrated after auth.
   bool _migrating = false;
+
+  /// Guards against re-entrant taps on the Google button.
+  bool _googleBusy = false;
 
   @override
   void initState() {
@@ -265,6 +269,75 @@ class _SignInPageState extends State<SignInPage> {
     }
   }
 
+  /// Native Google sign-in (google_sign_in v7 → FirebaseAuth credential).
+  ///
+  /// Mirrors the account routing firebase_ui used to drive via AuthStateChange
+  /// actions: an anonymous user is upgraded in place with [User.linkWithCredential]
+  /// (same UID, no orphaned data → [_onCredentialLinked]); a collision with an
+  /// existing Google account surfaces as `credential-already-in-use` and is
+  /// merged via [_onAuthFailed]; otherwise we sign in and branch on whether the
+  /// account is new ([_onUserCreated]) or existing ([_onSignedIn]).
+  Future<void> _signInWithGoogle(BuildContext context) async {
+    if (_googleBusy) return;
+    setState(() => _googleBusy = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = AppLocalizations.of(context);
+    try {
+      final GoogleSignInAccount account =
+          await GoogleSignIn.instance.authenticate();
+      final idToken = account.authentication.idToken;
+      if (idToken == null) {
+        throw FirebaseAuthException(
+          code: 'missing-google-id-token',
+          message: 'Google sign-in returned no ID token',
+        );
+      }
+      final credential = GoogleAuthProvider.credential(idToken: idToken);
+
+      final current = FirebaseAuth.instance.currentUser;
+      if (current != null && current.isAnonymous) {
+        // Upgrade the anonymous account in place (preserves UID + data, R3-001).
+        try {
+          final result = await current.linkWithCredential(credential);
+          if (context.mounted && result.user != null) {
+            await _onCredentialLinked(context, result.user!);
+          }
+        } on FirebaseAuthException catch (e) {
+          if (e.code == 'credential-already-in-use') {
+            // This Google account already exists: sign into it and merge.
+            if (context.mounted) await _onAuthFailed(context, e);
+          } else {
+            rethrow;
+          }
+        }
+      } else {
+        final result =
+            await FirebaseAuth.instance.signInWithCredential(credential);
+        final isNewUser = result.additionalUserInfo?.isNewUser ?? false;
+        if (context.mounted) {
+          if (isNewUser) {
+            await _onUserCreated(context);
+          } else {
+            await _onSignedIn(context, result.user);
+          }
+        }
+      }
+    } on GoogleSignInException catch (e) {
+      // A user-cancelled chooser is not an error.
+      if (e.code != GoogleSignInExceptionCode.canceled) {
+        FirebaseCrashlytics.instance.log('Google sign-in failed: ${e.code}');
+        messenger.showSnackBar(
+            SnackBar(content: Text(l10n.googleSignInFailed)));
+      }
+    } catch (e) {
+      FirebaseCrashlytics.instance.log('Google sign-in error: $e');
+      messenger
+          .showSnackBar(SnackBar(content: Text(l10n.googleSignInFailed)));
+    } finally {
+      if (mounted) setState(() => _googleBusy = false);
+    }
+  }
+
   /// Send the single account-creation verification email for password accounts.
   /// The /verify_email screen is a passive status view that no longer auto-sends,
   /// so returning unverified sign-ins don't re-send each time (R2-005, F-003).
@@ -308,8 +381,38 @@ class _SignInPageState extends State<SignInPage> {
                     showAuthActionSwitch: true,
                     providers: [
                       EmailAuthProvider(),
-                      GoogleProvider(clientId: googleClientId),
                     ],
+                    footerBuilder: (context, action) {
+                      // Official Google-branded sign-in button. Replaces the
+                      // firebase_ui OAuth provider button to avoid the legacy
+                      // GoogleSignIn SignInHubActivity crash; the tap runs the
+                      // google_sign_in v7 flow in _signInWithGoogle.
+                      if (kIsWeb ||
+                          !GoogleSignIn.instance.supportsAuthenticate()) {
+                        return const SizedBox.shrink();
+                      }
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: _googleBusy
+                            ? const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(8),
+                                  child: SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  ),
+                                ),
+                              )
+                            : SignInButton(
+                                Buttons.google,
+                                text: AppLocalizations.of(context)
+                                    .signInWithGoogle,
+                                onPressed: () => _signInWithGoogle(context),
+                              ),
+                      );
+                    },
                     actions: [
                       AuthStateChangeAction<SignedIn>(
                           (context, state) => _onSignedIn(context, state.user)),

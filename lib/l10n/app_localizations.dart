@@ -482,6 +482,18 @@ abstract class AppLocalizations {
   /// **'Join our community of animal lovers'**
   String get signInSideMessage;
 
+  /// No description provided for @signInWithGoogle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in with Google'**
+  String get signInWithGoogle;
+
+  /// No description provided for @googleSignInFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Google sign-in failed. Please try again.'**
+  String get googleSignInFailed;
+
   /// No description provided for @signInRequired.
   ///
   /// In en, this message translates to:

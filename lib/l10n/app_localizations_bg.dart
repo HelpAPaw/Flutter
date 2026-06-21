@@ -217,6 +217,13 @@ class AppLocalizationsBg extends AppLocalizations {
       'Присъединете се към нашата общност от любители на животни';
 
   @override
+  String get signInWithGoogle => 'Вход с Google';
+
+  @override
+  String get googleSignInFailed =>
+      'Входът с Google не бе успешен. Моля, опитайте отново.';
+
+  @override
   String get signInRequired => 'Необходим е вход';
 
   @override

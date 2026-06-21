@@ -81,6 +81,8 @@
 
   "signInSubtitle": "Sign in to report and help animals in need",
   "signInSideMessage": "Join our community of animal lovers",
+  "signInWithGoogle": "Sign in with Google",
+  "googleSignInFailed": "Google sign-in failed. Please try again.",
 
   "signInRequired": "Sign in required",
   "signInToCreateSignals": "You need to sign in to create signals",

@@ -17,7 +17,11 @@ dependencies:
   firebase_app_check: ^0.4.0
   firebase_auth: ^6.0.0
   firebase_ui_auth: ^3.0.0
-  firebase_ui_oauth_google: ^2.0.0
+  # Google sign-in is integrated directly (not via firebase_ui_oauth_google,
+  # which pins google_sign_in <7.0.0). google_sign_in 7.x uses Android's
+  # Credential Manager and removes the legacy SignInHubActivity that crashed
+  # with a NullPointerException on process recreation (Crashlytics add2187e).
+  google_sign_in: ^7.2.0
   firebase_core: ^4.0.0
   firebase_crashlytics: ^5.0.0
   firebase_messaging: ^16.0.0
@@ -30,6 +34,7 @@ dependencies:
   intl: ^0.20.2
   photo_view: ^0.15.0
   map_launcher: ^3.5.0
+  sign_in_button: ^5.0.0
   url_launcher: ^6.2.1
   webview_flutter: ^4.10.0
   geoflutterfire_plus: ^0.0.31

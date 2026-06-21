@@ -214,6 +214,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get signInSideMessage => 'Join our community of animal lovers';
 
   @override
+  String get signInWithGoogle => 'Sign in with Google';
+
+  @override
+  String get googleSignInFailed => 'Google sign-in failed. Please try again.';
+
+  @override
   String get signInRequired => 'Sign in required';
 
   @override

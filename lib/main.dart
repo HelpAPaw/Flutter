@@ -8,10 +8,10 @@ import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_ui_auth/firebase_ui_auth.dart';
-import 'package:firebase_ui_oauth_google/firebase_ui_oauth_google.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:go_router/go_router.dart';
@@ -37,17 +37,21 @@ import 'package:help_a_paw/src/services/auth_service.dart';
 import 'package:help_a_paw/src/services/notification_service.dart';
 import 'package:help_a_paw/src/services/app_preferences_service.dart';
 
-// Google Sign-In client IDs for different platforms
-const iOSClientId = '757136327951-ov7ddq4eu2psocbs5dk7r1l80ol0917l.apps.googleusercontent.com';
-// TODO: Get web client ID from Firebase Console for web/desktop support
-const webClientId = 'TODO-get-web-client-id.apps.googleusercontent.com';
+// Google Sign-In client IDs (from google-services.json / GoogleService-Info.plist).
+// iOS OAuth client (client_type 1, iOS).
+const iOSGoogleClientId =
+    '757136327951-ov7ddq4eu2psocbs5dk7r1l80ol0917l.apps.googleusercontent.com';
+// Web/server OAuth client (client_type 3). Passed as serverClientId so the
+// Google ID token's audience matches what Firebase Auth expects on Android.
+const googleServerClientId =
+    '757136327951-fqauq707jhajcjujtglkru63oamssjr6.apps.googleusercontent.com';
 
-String get googleClientId {
-  if (kIsWeb) return webClientId;
-  if (Platform.isIOS || Platform.isMacOS) return iOSClientId;
-  // Android ignores clientId and uses google-services.json automatically
-  // Linux/Windows/Web require web client ID per Firebase UI documentation
-  return webClientId;
+/// Per-platform OAuth client id for [GoogleSignIn.initialize]. Android derives
+/// it from google-services.json (cert-based), so it stays null there.
+String? get _googleClientId {
+  if (kIsWeb) return null;
+  if (Platform.isIOS || Platform.isMacOS) return iOSGoogleClientId;
+  return null;
 }
 
 Future<void> main() async {
@@ -84,11 +88,24 @@ Future<void> main() async {
     debugPrint('App Check activation failed: $e');
   }
 
-  // Configure Firebase UI Auth providers
+  // Configure Firebase UI Auth providers. Google is integrated directly (see
+  // sign_in_page.dart) rather than via a firebase_ui OAuth provider.
   FirebaseUIAuth.configureProviders([
     EmailAuthProvider(),
-    GoogleProvider(clientId: googleClientId),
   ]);
+
+  // Initialize Google Sign-In (v7 requires a one-time initialize before use).
+  // Not supported on the web build, which isn't a target.
+  if (!kIsWeb) {
+    try {
+      await GoogleSignIn.instance.initialize(
+        clientId: _googleClientId,
+        serverClientId: googleServerClientId,
+      );
+    } catch (e) {
+      debugPrint('Google Sign-In initialization failed: $e');
+    }
+  }
 
   // Configure email action code settings for verification links
   await FirebaseAuth.instance.setSettings(

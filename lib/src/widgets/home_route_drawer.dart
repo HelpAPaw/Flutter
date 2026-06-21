@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/src/config/routes.dart';
@@ -33,6 +34,13 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             .timeout(const Duration(seconds: 5));
       } catch (e) {
         debugPrint('FCM token removal on sign-out failed/timed out: $e');
+      }
+      // Clear the cached Google session so the next sign-in shows the account
+      // chooser instead of silently reusing the last account.
+      try {
+        await GoogleSignIn.instance.signOut();
+      } catch (e) {
+        debugPrint('Google sign-out failed: $e');
       }
       await FirebaseAuth.instance.signOut();
       if (mounted) {
