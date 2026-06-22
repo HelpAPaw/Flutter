@@ -54,6 +54,20 @@ String? get _googleClientId {
   return null;
 }
 
+/// One-time google_sign_in v7 init, memoized. Kept OFF the startup critical
+/// path: a slow/hanging initialize must never block the first frame (the
+/// native launch screen stays up until runApp renders). It only needs to be
+/// done before the user taps the Google button, so callers await this future
+/// then; it's also kicked off in the background bootstrap to warm it up.
+Future<void>? _googleSignInReady;
+Future<void> ensureGoogleSignInInitialized() {
+  if (kIsWeb) return Future<void>.value();
+  return _googleSignInReady ??= GoogleSignIn.instance.initialize(
+    clientId: _googleClientId,
+    serverClientId: googleServerClientId,
+  );
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -94,19 +108,6 @@ Future<void> main() async {
     EmailAuthProvider(),
   ]);
 
-  // Initialize Google Sign-In (v7 requires a one-time initialize before use).
-  // Not supported on the web build, which isn't a target.
-  if (!kIsWeb) {
-    try {
-      await GoogleSignIn.instance.initialize(
-        clientId: _googleClientId,
-        serverClientId: googleServerClientId,
-      );
-    } catch (e) {
-      debugPrint('Google Sign-In initialization failed: $e');
-    }
-  }
-
   // Configure email action code settings for verification links
   await FirebaseAuth.instance.setSettings(
     appVerificationDisabledForTesting: false,
@@ -136,6 +137,11 @@ Future<void> main() async {
 /// preferences) followed by notification setup. Kept off the startup critical
 /// path; the anonymous sign-in is time-boxed so it can't hang forever offline.
 Future<void> _bootstrapServices() async {
+  // Warm up google_sign_in so the button is responsive on first tap. Not
+  // awaited here — a hang must not stall notification setup or anything else.
+  unawaited(ensureGoogleSignInInitialized()
+      .catchError((e) => debugPrint('Google Sign-In initialization failed: $e')));
+
   if (FirebaseAuth.instance.currentUser == null) {
     try {
       FirebaseCrashlytics.instance.log('Auth: Anonymous sign-in started');

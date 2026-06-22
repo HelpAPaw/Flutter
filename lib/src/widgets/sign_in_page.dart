@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
+import 'package:help_a_paw/main.dart' show ensureGoogleSignInInitialized;
 import 'package:sign_in_button/sign_in_button.dart';
 
 import '../config/routes.dart';
@@ -283,6 +284,9 @@ class _SignInPageState extends State<SignInPage> {
     final messenger = ScaffoldMessenger.of(context);
     final l10n = AppLocalizations.of(context);
     try {
+      // Ensure the v7 one-time initialize has completed (it's started in the
+      // background at startup rather than blocking the launch screen).
+      await ensureGoogleSignInInitialized();
       final GoogleSignInAccount account =
           await GoogleSignIn.instance.authenticate();
       final idToken = account.authentication.idToken;
