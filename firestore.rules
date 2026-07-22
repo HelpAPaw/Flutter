@@ -2,6 +2,26 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    // The signal's reporter (owner), compared by DocumentReference path.
+    // Used by both the prod and test signal update/delete rules so the
+    // security-critical ownership check lives in exactly one place.
+    function isSignalReporter() {
+      return resource.data.reporter
+             == /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    // Non-reporters may ONLY advance a signal's status (the volunteer flow),
+    // and must self-stamp lastUpdatedBy so it can't be spoofed to another user.
+    function isStatusOnlyUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status', 'lastUpdatedBy'])
+             && request.resource.data.lastUpdatedBy
+                == /databases/$(database)/documents/users/$(request.auth.uid)
+             && request.resource.data.status is int
+             && request.resource.data.status >= 0
+             && request.resource.data.status <= 2;
+    }
+
     // Users collection - private profile (tokens, location, prefs, phone).
     // Owner-only: never expose to other users.
     match /users/{userId} {
@@ -28,10 +48,13 @@ service cloud.firestore {
     match /signals/{signalId} {
       allow read: if true;  // Public read - signals are public data
       allow create: if request.auth != null;
-      allow update: if request.auth != null;
+      // Reporter may edit any field; anyone else signed in may only advance the
+      // status (self-stamping lastUpdatedBy). Prevents non-reporters from
+      // rewriting reporter/title/phone/photos or taking over a signal.
+      allow update: if request.auth != null
+                    && (isSignalReporter() || isStatusOnlyUpdate());
       // Only the signal's reporter may delete it
-      allow delete: if request.auth != null
-                    && resource.data.reporter == /databases/$(database)/documents/users/$(request.auth.uid);
+      allow delete: if request.auth != null && isSignalReporter();
 
       // Comments subcollection
       match /comments/{commentId} {
@@ -48,9 +71,10 @@ service cloud.firestore {
     match /signals_test/{signalId} {
       allow read: if true;
       allow create: if request.auth != null;
-      allow update: if request.auth != null;
-      allow delete: if request.auth != null
-                    && resource.data.reporter == /databases/$(database)/documents/users/$(request.auth.uid);
+      // Same rules as prod signals (see helpers above).
+      allow update: if request.auth != null
+                    && (isSignalReporter() || isStatusOnlyUpdate());
+      allow delete: if request.auth != null && isSignalReporter();
 
       match /comments/{commentId} {
         allow read: if true;
