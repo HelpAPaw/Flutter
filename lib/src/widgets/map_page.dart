@@ -351,6 +351,21 @@ class _MapScreenState extends ConsumerState<MapScreen>
     }
   }
 
+  /// Re-show the native InfoWindow for [signalId] after a marker-set rebuild
+  /// closed it. Android's ClusterManager reclusters asynchronously, so an
+  /// immediate re-show can be undone once the background clustering finishes;
+  /// a short follow-up re-show outlasts it. Both calls are no-ops when the
+  /// window is already open (programmatic show never auto-pans, so there is no
+  /// re-query loop).
+  void _reassertSelectedInfoWindow(String signalId) {
+    _showMarkerInfoWindow(signalId);
+    Future.delayed(const Duration(milliseconds: 350), () {
+      if (mounted && _selectedSignal?.id == signalId) {
+        _showMarkerInfoWindow(signalId);
+      }
+    });
+  }
+
   Future<void> _showSignalOverlay(SignalWithId signal) async {
     // Show the native InfoWindow (moves perfectly with the map).
     // Fire-and-forget — independent of screen coordinate calculation.
@@ -500,16 +515,30 @@ class _MapScreenState extends ConsumerState<MapScreen>
         clusterManagerId: _signalClusterManagerId,
       );
 
-      // If the open info window's signal is no longer rendered — deleted,
-      // filtered out, or moved outside the geo-query radius — its native
-      // InfoWindow has vanished. Dismiss the orphaned invisible tap target so
-      // it can't navigate to a signal that's gone. Guarded by whenData so a
-      // transient reload (empty markers during re-query) doesn't dismiss it.
+      // Reconcile the open info window against the rebuilt marker set.
+      // Guarded by whenData so a transient reload (empty markers during a
+      // re-query) doesn't act on stale data.
       final selected = _selectedSignal;
-      if (selected != null &&
-          !signalMarkers.any((m) => m.markerId.value == selected.id)) {
+      if (selected != null) {
+        final stillRendered =
+            signalMarkers.any((m) => m.markerId.value == selected.id);
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _selectedSignal?.id == selected.id) {
+          if (!mounted || _selectedSignal?.id != selected.id) return;
+          if (stillRendered) {
+            // The marker set was rebuilt while its window was open. Rebuilding
+            // makes the native ClusterManager recluster (remove + re-add the
+            // markers), which tears down the open native InfoWindow. This is
+            // what makes the window vanish after tapping a *distant* pin: the
+            // SDK auto-pans to center it, and that pan re-centers the geo-query
+            // past updateMapCenter's re-query threshold. Re-assert the window
+            // so it survives the rebuild. (Near pins pan too little to trigger
+            // a re-query, so they never hit this.)
+            _reassertSelectedInfoWindow(selected.id);
+          } else {
+            // Signal is no longer rendered — deleted, filtered out, or moved
+            // outside the geo-query radius — so its native InfoWindow has
+            // vanished for good. Dismiss the orphaned invisible tap target so
+            // it can't navigate to a signal that's gone.
             _dismissOverlay();
           }
         });
