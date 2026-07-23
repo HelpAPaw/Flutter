@@ -72,6 +72,13 @@ class _EmailVerificationPageState extends State<EmailVerificationPage>
         final refreshedUser = FirebaseAuth.instance.currentUser;
 
         if (refreshedUser?.emailVerified ?? false) {
+          // reload() updates the User object's emailVerified flag but NOT the
+          // cached ID token that Firestore Security Rules read. Force-refresh
+          // the token so its email_verified claim flips to true immediately;
+          // otherwise rules gating writes on email_verified deny this
+          // freshly-verified user until the token organically refreshes (~1h)
+          // or they re-login.
+          await refreshedUser!.getIdToken(true);
           _timer?.cancel();
           if (mounted) {
             // go (not push): /verify_email must not remain in the stack, or the

@@ -208,11 +208,17 @@ class _SignInPageState extends State<SignInPage> {
     // authStateChanges) won't fire here, so navigate explicitly.
     if (AuthService.hasPasswordProvider(user)) {
       // Newly linked email/password: send verification, then show the screen.
+      // The token is refreshed after verification (email_verification_page).
       await _sendVerificationEmail(user);
       if (context.mounted) context.go(Routes.verifyEmail);
-    } else if (context.mounted) {
-      // Linked Google (already verified): go to profile completion.
-      context.push(Routes.completeProfile);
+    } else {
+      // Linked Google (already verified) — user goes straight into the app. The
+      // in-place link keeps the anonymous-minted ID token, whose email_verified
+      // claim is still false; force-refresh it so Firestore rules that gate
+      // writes on email_verified don't deny this real user until the token
+      // organically refreshes (~1h) or they re-login.
+      await user.getIdToken(true);
+      if (context.mounted) context.push(Routes.completeProfile);
     }
   }
 
