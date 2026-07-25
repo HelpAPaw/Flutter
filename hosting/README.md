@@ -21,10 +21,16 @@ Implemented with **Android App Links + iOS Universal Links** plus the
   and serves the AASA file as `application/json`.
 - `../functions/src/index.ts` — the `signalLink` HTTPS function.
 
-## One-time setup
+## One-time setup — DONE (2026-07-25), kept for reference
 
 1. **Custom domain**: in Firebase Console → Hosting (project `help-a-paw-dev`),
    add `link.helpapaw.org` and create the requested DNS record. Wait for SSL.
+   - **Cloudflare gotcha**: the record must be **DNS only** (grey cloud). While
+     proxied, Cloudflare answers public DNS with its own anycast IPs, so Firebase
+     reports A/AAAA records "to delete" that don't exist in the zone, and
+     Flexible SSL creates an http↔https redirect loop that makes the ACME
+     challenge (and therefore certificate issuance) fail. If it is ever proxied
+     again, provision the cert DNS-only first and use SSL mode **Full (strict)**.
 2. **Android SHA-256**: paste the Play App Signing fingerprint into
    `assetlinks.json`.
 3. **iOS capability**: ensure the App ID / provisioning profiles have

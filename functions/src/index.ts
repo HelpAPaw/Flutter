@@ -1354,6 +1354,7 @@ function escapeHtml(value: string): string {
 interface SignalPreview {
   title: string;
   description: string;
+  typeIndex: number;
   typeName: string;
   photoUrl: string | null;
 }
@@ -1367,14 +1368,19 @@ async function loadSignalPreview(
     const doc = await db.collection(collection).doc(signalId).get();
     if (!doc.exists) continue;
     const data = doc.data() as Record<string, any>;
-    const typeIndex =
+    const rawType =
       typeof data.signalType === "number" ? data.signalType : 6;
     const names = SIGNAL_TYPE_NAMES[lang];
+    // Clamp unknown types onto "Other" so the index is safe to hand to the
+    // client-side language switcher too.
+    const typeIndex =
+      rawType >= 0 && rawType < names.length ? rawType : names.length - 1;
     const photos = Array.isArray(data.photoUrls) ? data.photoUrls : [];
     return {
       title: (data.title as string) || PAGE_TEXT[lang].needsHelp,
       description: (data.description as string) || "",
-      typeName: names[typeIndex] ?? names[names.length - 1],
+      typeIndex,
+      typeName: names[typeIndex],
       photoUrl: photos.length > 0 ? (photos[0] as string) : null,
     };
   }
@@ -1383,6 +1389,8 @@ async function loadSignalPreview(
 
 function renderHtml(opts: {
   lang: "en" | "bg";
+  /** True when `?lang=` pinned the language, so the client must not override. */
+  langPinned: boolean;
   signalId: string;
   url: string;
   preview: SignalPreview | null;
@@ -1406,14 +1414,14 @@ function renderHtml(opts: {
             ? `<img class="photo" src="${escapeHtml(opts.preview!.photoUrl)}" alt="">`
             : ""
         }
-        <span class="badge">${escapeHtml(opts.preview!.typeName)}</span>
+        <span class="badge" data-i18n-type="${opts.preview!.typeIndex}">${escapeHtml(opts.preview!.typeName)}</span>
         <h1>${escapeHtml(opts.preview!.title)}</h1>
         <p>${escapeHtml(opts.preview!.description)}</p>
       </div>`
     : `
       <div class="card">
-        <h1>${escapeHtml(t.notFoundTitle)}</h1>
-        <p>${escapeHtml(t.notFoundBody)}</p>
+        <h1 data-i18n="notFoundTitle">${escapeHtml(t.notFoundTitle)}</h1>
+        <p data-i18n="notFoundBody">${escapeHtml(t.notFoundBody)}</p>
       </div>`;
 
   return `<!DOCTYPE html>
@@ -1458,19 +1466,45 @@ ${ogImage ? `  <meta property="og:image" content="${escapeHtml(ogImage)}">\n` : 
   <div class="wrap">
     <div class="logo">🐾 Help a Paw</div>
     ${previewCard}
-    <a class="btn" id="openApp" href="helpapaw:///signal/${escapeHtml(opts.signalId)}">${escapeHtml(t.openInApp)}</a>
+    <a class="btn" id="openApp" data-i18n="openInApp" href="helpapaw:///signal/${escapeHtml(opts.signalId)}">${escapeHtml(t.openInApp)}</a>
     <div class="qr" id="qr" hidden>
       <img src="${opts.qrDataUri}" alt="QR code">
-      <div class="hint">${escapeHtml(t.scanHint)}</div>
+      <div class="hint" data-i18n="scanHint">${escapeHtml(t.scanHint)}</div>
     </div>
     <div class="stores">
-      <p class="hint">${escapeHtml(t.getTheApp)}</p>
-      <a href="${APP_STORE_URL}">${escapeHtml(t.appStore)}</a> ·
-      <a href="${PLAY_STORE_URL}">${escapeHtml(t.playStore)}</a>
+      <p class="hint" data-i18n="getTheApp">${escapeHtml(t.getTheApp)}</p>
+      <a href="${APP_STORE_URL}" data-i18n="appStore">${escapeHtml(t.appStore)}</a> ·
+      <a href="${PLAY_STORE_URL}" data-i18n="playStore">${escapeHtml(t.playStore)}</a>
     </div>
   </div>
   <script>
     (function () {
+      // Language is applied client-side on purpose: this page is cached by the
+      // Hosting CDN, which does not vary on Accept-Language, so negotiating the
+      // language on the server would let whichever visitor arrives first pin
+      // the cached copy's language for everyone else. An explicit ?lang= query
+      // stays server-side because it is part of the cache key.
+      var STRINGS = ${JSON.stringify(PAGE_TEXT)};
+      var TYPES = ${JSON.stringify(SIGNAL_TYPE_NAMES)};
+      var rendered = ${JSON.stringify(opts.lang)};
+      var pinned = ${opts.langPinned ? JSON.stringify(opts.lang) : "null"};
+      var lang = pinned ||
+        ((navigator.language || "").toLowerCase().slice(0, 2) === "bg" ? "bg" : "en");
+
+      if (lang !== rendered && STRINGS[lang]) {
+        document.documentElement.lang = lang;
+        var nodes = document.querySelectorAll("[data-i18n]");
+        for (var i = 0; i < nodes.length; i++) {
+          var key = nodes[i].getAttribute("data-i18n");
+          if (STRINGS[lang][key]) nodes[i].textContent = STRINGS[lang][key];
+        }
+        var badge = document.querySelector("[data-i18n-type]");
+        if (badge) {
+          var idx = parseInt(badge.getAttribute("data-i18n-type"), 10);
+          if (TYPES[lang][idx]) badge.textContent = TYPES[lang][idx];
+        }
+      }
+
       var ua = navigator.userAgent || "";
       var isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
       var isAndroid = /Android/.test(ua);
@@ -1524,12 +1558,13 @@ export const signalLink = onRequest(
       // Firestore auto-ids are alphanumeric; `-`/`_` keep custom ids working.
       const signalId = /^[A-Za-z0-9_-]{1,128}$/.test(rawId) ? rawId : "";
 
-      const acceptLang = (req.headers["accept-language"] as string) || "";
+      // Only an explicit `?lang=` selects the language server-side: it is part
+      // of the CDN cache key, so it cannot leak across visitors. Accept-Language
+      // is deliberately ignored here (the CDN does not vary on it) — the page
+      // switches to the visitor's language client-side instead.
       const queryLang = (req.query.lang as string) || "";
-      const lang: "en" | "bg" =
-        queryLang.startsWith("bg") || acceptLang.toLowerCase().startsWith("bg")
-          ? "bg"
-          : "en";
+      const langPinned = queryLang.length > 0;
+      const lang: "en" | "bg" = queryLang.startsWith("bg") ? "bg" : "en";
 
       const url = `${LINK_HOST}/signal/${signalId}`;
       const preview = signalId
@@ -1537,7 +1572,14 @@ export const signalLink = onRequest(
         : null;
       const qrDataUri = await QRCode.toDataURL(url, { margin: 1, width: 200 });
 
-      const html = renderHtml({ lang, signalId, url, preview, qrDataUri });
+      const html = renderHtml({
+        lang,
+        langPinned,
+        signalId,
+        url,
+        preview,
+        qrDataUri,
+      });
       res.set("Cache-Control", "public, max-age=300, s-maxage=300");
       res.status(200).send(html);
     } catch (err) {
