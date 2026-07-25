@@ -36,6 +36,13 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
+            <!-- Hands incoming VIEW intents to Flutter's router (go_router) instead
+                 of just launching the app at its default route. Required for the
+                 App Link / custom-scheme filters below to actually open a signal. -->
+            <meta-data
+              android:name="flutter_deeplinking_enabled"
+              android:value="true"
+              />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>

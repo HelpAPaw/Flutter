@@ -8,5 +8,16 @@
         "91:82:E5:7B:C4:98:46:89:38:52:FC:22:D3:85:91:23:88:6A:2D:96:56:63:55:AD:C8:15:CA:6D:FA:7B:C1:C2"
       ]
     }
+  },
+  {
+    "comment": "Debug builds, so App Links can be verified on-device without a release-signed build. Mirrors the .debug bundle id already listed in apple-app-site-association. The fingerprint is a machine-local debug keystore; safe to remove once testing is done.",
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "org.helpapaw.helpapaw.debug",
+      "sha256_cert_fingerprints": [
+        "C4:C8:0C:CF:BD:C0:55:0D:75:2E:AC:3B:17:52:8D:5D:37:2E:0C:1E:A6:01:EB:63:9A:46:2E:0C:C0:AA:53:D3"
+      ]
+    }
   }
 ]

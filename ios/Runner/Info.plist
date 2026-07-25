@@ -94,6 +94,10 @@
 		<string>moovit</string>
 		<string>osmandmaps</string>
 	</array>
+	<!-- Hands incoming universal links / custom-scheme URLs to Flutter's router
+	     (go_router) instead of just foregrounding the app at its default route. -->
+	<key>FlutterDeepLinkingEnabled</key>
+	<true/>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
