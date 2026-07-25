@@ -35,6 +35,7 @@ import 'package:help_a_paw/src/widgets/notification_settings_page.dart';
 import 'package:help_a_paw/src/widgets/region_selection_page.dart';
 import 'package:help_a_paw/src/services/auth_service.dart';
 import 'package:help_a_paw/src/services/notification_service.dart';
+import 'package:help_a_paw/src/services/deep_link_service.dart';
 import 'package:help_a_paw/src/services/app_preferences_service.dart';
 
 // Google Sign-In client IDs (from google-services.json / GoogleService-Info.plist).
@@ -137,6 +138,16 @@ Future<void> main() async {
 /// preferences) followed by notification setup. Kept off the startup critical
 /// path; the anonymous sign-in is time-boxed so it can't hang forever offline.
 Future<void> _bootstrapServices() async {
+  // Listen for shared signal links first: this only subscribes to a stream, and
+  // it must not sit behind the time-boxed anonymous sign-in below or a tapped
+  // link would be ignored for up to 15s. Handles the warm-start case that
+  // Flutter's built-in deep linking misses.
+  try {
+    DeepLinkService.instance.initialize(router: _router);
+  } catch (e) {
+    debugPrint('Deep link service init failed: $e');
+  }
+
   // Warm up google_sign_in so the button is responsive on first tap. Not
   // awaited here — a hang must not stall notification setup or anything else.
   unawaited(ensureGoogleSignInInitialized()

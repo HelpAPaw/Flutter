@@ -45,6 +45,7 @@ dependencies:
   package_info_plus: ^9.0.0
   shared_preferences: ^2.3.5
   flutter_svg: ^2.2.4
+  app_links: ^6.4.1
 
 dev_dependencies:
   flutter_test:
