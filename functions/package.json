@@ -19,10 +19,12 @@
     "firebase-admin": "^12.0.0",
     "firebase-functions": "^5.0.0",
     "geofire-common": "^6.0.0",
-    "nodemailer": "^7.0.12"
+    "nodemailer": "^7.0.12",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "@types/nodemailer": "^7.0.4",
+    "@types/qrcode": "^1.5.6",
     "typescript": "^5.3.0"
   },
   "private": true

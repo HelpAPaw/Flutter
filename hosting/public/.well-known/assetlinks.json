@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "org.helpapaw.helpapaw",
+      "sha256_cert_fingerprints": [
+        "91:82:E5:7B:C4:98:46:89:38:52:FC:22:D3:85:91:23:88:6A:2D:96:56:63:55:AD:C8:15:CA:6D:FA:7B:C1:C2"
+      ]
+    }
+  }
+]

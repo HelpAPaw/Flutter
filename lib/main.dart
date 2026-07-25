@@ -203,6 +203,13 @@ final GoRouter _router = GoRouter(
       path: Routes.signalDetailsPath,
       builder: (BuildContext context, GoRouterState state) => SignalDetailsScreen(signalId: state.pathParameters['signalId']!),
     ),
+    // Public shareable deep link (App Links / Universal Links). Reuses the
+    // signal details screen by redirecting to its canonical route.
+    GoRoute(
+      name: 'signal_link',
+      path: Routes.signalLinkPath,
+      redirect: (BuildContext context, GoRouterState state) => Routes.signalDetails(state.pathParameters['signalId']!),
+    ),
     GoRoute(
       name: 'edit_signal',
       path: Routes.editSignalPath,

@@ -19,6 +19,11 @@ class Routes {
   static const editSignalPath = '/edit_signal/:signalId';
   static const clinicDetailsPath = '/clinic_details/:clinicId';
 
+  /// Public, shareable deep-link path (App Links / Universal Links).
+  /// Matches the URLs produced by [ShareService.shareSignal] and the
+  /// hosted fallback page; redirects to [signalDetailsPath].
+  static const signalLinkPath = '/signal/:signalId';
+
   static String signalDetails(String signalId) => '/signal_details/$signalId';
   static String editSignal(String signalId) => '/edit_signal/$signalId';
   static String clinicDetails(String clinicId) => '/clinic_details/$clinicId';

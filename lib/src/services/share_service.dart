@@ -29,7 +29,9 @@ Or visit: $_websiteUrl''';
     double? longitude,
     Rect? sharePositionOrigin,
   }) async {
-    final deepLink = 'https://www.helpapaw.org/signal/$signalId';
+    // Smart link: opens the signal directly in the app when installed,
+    // otherwise the hosted page routes to the right store / shows a QR.
+    final deepLink = 'https://link.helpapaw.org/signal/$signalId';
 
     var message = '''🐾 Animal needs help!
 
@@ -44,10 +46,7 @@ $description''';
 
     message += '''
 
-View on Help a Paw: $deepLink
-
-Don't have the app? Download it:
-$_websiteUrl''';
+View on Help a Paw: $deepLink''';
 
     await SharePlus.instance.share(ShareParams(text: message, subject: 'Help a Paw - Animal needs help', sharePositionOrigin: sharePositionOrigin));
   }

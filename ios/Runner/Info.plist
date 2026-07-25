@@ -104,6 +104,16 @@
 				<string>com.googleusercontent.apps.757136327951-ov7ddq4eu2psocbs5dk7r1l80ol0917l</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>org.helpapaw.helpapaw</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>helpapaw</string>
+			</array>
+		</dict>
 	</array>
 </dict>
 </plist>

@@ -4,11 +4,12 @@ import {
   onDocumentUpdated,
   onDocumentWritten,
 } from "firebase-functions/v2/firestore";
-import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onCall, HttpsError, onRequest } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
 import { geohashQueryBounds, geohashForLocation } from "geofire-common";
 import * as nodemailer from "nodemailer";
+import * as QRCode from "qrcode";
 
 admin.initializeApp();
 
@@ -1252,5 +1253,299 @@ export const cleanupAnonymousUsers = onSchedule(
     console.log(
       `cleanupAnonymousUsers: scanned ${scanned} users, found ${staleFound} stale anonymous (> ${ANON_RETENTION_DAYS}d inactive), deleted ${deleted}${ANON_CLEANUP_DRY_RUN ? " [DRY RUN — nothing deleted]" : ""}.`
     );
+  }
+);
+
+// ===========================================================================
+// Shareable signal links (App Links / Universal Links fallback page)
+// ===========================================================================
+//
+// Hosting rewrites `/signal/**` to this function. It is only ever reached when
+// the link is opened OUTSIDE the app (app not installed, or a desktop browser).
+// When the Help a Paw app IS installed, the OS intercepts the verified link
+// before this function runs and opens the signal natively.
+//
+// Behaviour:
+//   - Always emits Open Graph / Twitter tags so the link previews nicely in
+//     messaging apps and social media.
+//   - On a phone: tries the `helpapaw://` scheme, then falls back to the
+//     correct app store after a short delay.
+//   - On desktop: shows a signal preview and a QR code that, scanned with a
+//     phone, opens the same link (and thus the app / store) on that device.
+
+const APP_STORE_URL =
+  "https://apps.apple.com/app/help-a-paw/id1234893764";
+const PLAY_STORE_URL =
+  "https://play.google.com/store/apps/details?id=org.helpapaw.helpapaw";
+const WEBSITE_URL = "https://www.helpapaw.org";
+const LINK_HOST = "https://link.helpapaw.org";
+const APPLE_APP_ID = "1234893764";
+
+// Localized signal type names (mirrors lib/src/models/signal.dart ordering).
+const SIGNAL_TYPE_NAMES: Record<"en" | "bg", string[]> = {
+  en: [
+    "Emergency",
+    "Lost or Found",
+    "Blood donation",
+    "Homeless",
+    "Unneutered animals",
+    "Wild animals",
+    "Other",
+  ],
+  bg: [
+    "Спешен случай",
+    "Изгубено или намерено",
+    "Кръводаряване",
+    "Бездомно",
+    "Некастрирани животни",
+    "Диви животни",
+    "Друго",
+  ],
+};
+
+const PAGE_TEXT = {
+  en: {
+    needsHelp: "An animal needs help",
+    openInApp: "Open in the Help a Paw app",
+    getTheApp: "Get the Help a Paw app",
+    scanHint: "Scan this code with your phone to open it in the app",
+    notFoundTitle: "Signal not found",
+    notFoundBody:
+      "This signal may have been resolved or removed. Get the app to report and follow animals in need.",
+    appStore: "Download on the App Store",
+    playStore: "Get it on Google Play",
+  },
+  bg: {
+    needsHelp: "Животно се нуждае от помощ",
+    openInApp: "Отвори в приложението Help a Paw",
+    getTheApp: "Изтегли приложението Help a Paw",
+    scanHint: "Сканирай кода с телефона си, за да го отвориш в приложението",
+    notFoundTitle: "Сигналът не е намерен",
+    notFoundBody:
+      "Този сигнал може да е разрешен или премахнат. Изтегли приложението, за да докладваш и следиш животни в нужда.",
+    appStore: "Изтегли от App Store",
+    playStore: "Изтегли от Google Play",
+  },
+};
+
+/**
+ * Android intent:// URL that opens the app via its verified https App Link and
+ * falls back to the Play Store when the app isn't installed. Using the https
+ * link (rather than the custom scheme) keeps the path shape `/signal/<id>` that
+ * the app's router expects.
+ */
+function androidIntentUrl(signalId: string): string {
+  return (
+    `intent://link.helpapaw.org/signal/${signalId}#Intent;scheme=https;` +
+    "package=org.helpapaw.helpapaw;" +
+    `S.browser_fallback_url=${encodeURIComponent(PLAY_STORE_URL)};end`
+  );
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+interface SignalPreview {
+  title: string;
+  description: string;
+  typeName: string;
+  photoUrl: string | null;
+}
+
+async function loadSignalPreview(
+  signalId: string,
+  lang: "en" | "bg"
+): Promise<SignalPreview | null> {
+  // Production signals live in `signals`; debug/test builds use `signals_test`.
+  for (const collection of ["signals", "signals_test"]) {
+    const doc = await db.collection(collection).doc(signalId).get();
+    if (!doc.exists) continue;
+    const data = doc.data() as Record<string, any>;
+    const typeIndex =
+      typeof data.signalType === "number" ? data.signalType : 6;
+    const names = SIGNAL_TYPE_NAMES[lang];
+    const photos = Array.isArray(data.photoUrls) ? data.photoUrls : [];
+    return {
+      title: (data.title as string) || PAGE_TEXT[lang].needsHelp,
+      description: (data.description as string) || "",
+      typeName: names[typeIndex] ?? names[names.length - 1],
+      photoUrl: photos.length > 0 ? (photos[0] as string) : null,
+    };
+  }
+  return null;
+}
+
+function renderHtml(opts: {
+  lang: "en" | "bg";
+  signalId: string;
+  url: string;
+  preview: SignalPreview | null;
+  qrDataUri: string;
+}): string {
+  const t = PAGE_TEXT[opts.lang];
+  const found = opts.preview !== null;
+  const ogTitle = found
+    ? `🐾 ${opts.preview!.typeName}: ${opts.preview!.title}`
+    : t.notFoundTitle;
+  const ogDescription = found ? opts.preview!.description : t.notFoundBody;
+  // Only advertise an image when the signal actually has a photo — pointing at
+  // a placeholder that may not exist would just yield a broken preview.
+  const ogImage = opts.preview?.photoUrl ?? null;
+
+  const previewCard = found
+    ? `
+      <div class="card">
+        ${
+          opts.preview!.photoUrl
+            ? `<img class="photo" src="${escapeHtml(opts.preview!.photoUrl)}" alt="">`
+            : ""
+        }
+        <span class="badge">${escapeHtml(opts.preview!.typeName)}</span>
+        <h1>${escapeHtml(opts.preview!.title)}</h1>
+        <p>${escapeHtml(opts.preview!.description)}</p>
+      </div>`
+    : `
+      <div class="card">
+        <h1>${escapeHtml(t.notFoundTitle)}</h1>
+        <p>${escapeHtml(t.notFoundBody)}</p>
+      </div>`;
+
+  return `<!DOCTYPE html>
+<html lang="${opts.lang}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(ogTitle)}</title>
+  <meta property="og:title" content="${escapeHtml(ogTitle)}">
+  <meta property="og:description" content="${escapeHtml(ogDescription)}">
+${ogImage ? `  <meta property="og:image" content="${escapeHtml(ogImage)}">\n` : ""}  <meta property="og:url" content="${escapeHtml(opts.url)}">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="${ogImage ? "summary_large_image" : "summary"}">
+  <meta name="apple-itunes-app" content="app-id=${APPLE_APP_ID}, app-argument=${escapeHtml(opts.url)}">
+  <style>
+    :root { color-scheme: light dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: -apple-system, Roboto, Segoe UI, sans-serif;
+      background: #f5f5f5; color: #1d1d1d; display: flex; min-height: 100vh;
+      align-items: center; justify-content: center; padding: 24px; }
+    .wrap { max-width: 420px; width: 100%; text-align: center; }
+    .card { background: #fff; border-radius: 16px; overflow: hidden;
+      box-shadow: 0 6px 24px rgba(0,0,0,.08); text-align: left; }
+    .photo { width: 100%; height: 200px; object-fit: cover; display: block; }
+    .badge { display: inline-block; margin: 16px 16px 0; padding: 4px 10px;
+      background: #ffe1d6; color: #c0392b; border-radius: 999px; font-size: 13px;
+      font-weight: 600; }
+    h1 { font-size: 20px; margin: 12px 16px 0; }
+    .card p { margin: 8px 16px 16px; color: #555; }
+    .btn { display: block; margin: 12px auto 0; padding: 14px 20px; max-width: 320px;
+      background: #2e7d32; color: #fff; text-decoration: none; border-radius: 12px;
+      font-weight: 600; }
+    .stores { margin-top: 16px; }
+    .stores a { color: #2e7d32; }
+    .qr { margin-top: 24px; }
+    .qr img { width: 200px; height: 200px; }
+    .hint { color: #777; font-size: 14px; margin-top: 12px; }
+    .logo { font-size: 28px; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="logo">🐾 Help a Paw</div>
+    ${previewCard}
+    <a class="btn" id="openApp" href="helpapaw:///signal/${escapeHtml(opts.signalId)}">${escapeHtml(t.openInApp)}</a>
+    <div class="qr" id="qr" hidden>
+      <img src="${opts.qrDataUri}" alt="QR code">
+      <div class="hint">${escapeHtml(t.scanHint)}</div>
+    </div>
+    <div class="stores">
+      <p class="hint">${escapeHtml(t.getTheApp)}</p>
+      <a href="${APP_STORE_URL}">${escapeHtml(t.appStore)}</a> ·
+      <a href="${PLAY_STORE_URL}">${escapeHtml(t.playStore)}</a>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var ua = navigator.userAgent || "";
+      var isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+      var isAndroid = /Android/.test(ua);
+      var appUrl = ${JSON.stringify(`helpapaw:///signal/${opts.signalId}`)};
+      var intentUrl = ${JSON.stringify(androidIntentUrl(opts.signalId))};
+      var btn = document.getElementById("openApp");
+
+      if (isAndroid) {
+        // An intent:// URL lets Android open the app when installed and fall
+        // back to Play natively via browser_fallback_url — avoids the
+        // ERR_UNKNOWN_URL_SCHEME page that a bare custom scheme would show
+        // (which would also kill any JS timer-based fallback).
+        btn.href = intentUrl;
+        window.location.href = intentUrl;
+      } else if (isIOS) {
+        // iOS has no intent:// equivalent: try the scheme, then fall back to
+        // the App Store if we're still here (i.e. the app isn't installed).
+        var timer = setTimeout(function () {
+          window.location.href = ${JSON.stringify(APP_STORE_URL)};
+        }, 1500);
+        // If the app opened, the page is backgrounded — cancel the store jump.
+        document.addEventListener("visibilitychange", function () {
+          if (document.hidden) clearTimeout(timer);
+        });
+        window.addEventListener("pagehide", function () { clearTimeout(timer); });
+        window.location.href = appUrl;
+      } else {
+        // Desktop: show the QR so the link can be opened on a phone.
+        document.getElementById("qr").hidden = false;
+        btn.hidden = true;
+      }
+    })();
+  </script>
+</body>
+</html>`;
+}
+
+/**
+ * Renders the public fallback page for a shared signal link.
+ * Wired via Hosting rewrite: link.helpapaw.org/signal/** -> this function.
+ */
+export const signalLink = onRequest(
+  { region: "us-central1" },
+  async (req, res) => {
+    try {
+      // Path looks like "/signal/{id}" (or "/{id}" depending on rewrite).
+      const parts = req.path.split("/").filter((p) => p.length > 0);
+      const rawId = parts[parts.length - 1] || "";
+      // The id is attacker-controlled (it comes straight from the URL) and is
+      // interpolated into the HTML/JS below, so accept only id-shaped values.
+      // Firestore auto-ids are alphanumeric; `-`/`_` keep custom ids working.
+      const signalId = /^[A-Za-z0-9_-]{1,128}$/.test(rawId) ? rawId : "";
+
+      const acceptLang = (req.headers["accept-language"] as string) || "";
+      const queryLang = (req.query.lang as string) || "";
+      const lang: "en" | "bg" =
+        queryLang.startsWith("bg") || acceptLang.toLowerCase().startsWith("bg")
+          ? "bg"
+          : "en";
+
+      const url = `${LINK_HOST}/signal/${signalId}`;
+      const preview = signalId
+        ? await loadSignalPreview(signalId, lang)
+        : null;
+      const qrDataUri = await QRCode.toDataURL(url, { margin: 1, width: 200 });
+
+      const html = renderHtml({ lang, signalId, url, preview, qrDataUri });
+      res.set("Cache-Control", "public, max-age=300, s-maxage=300");
+      res.status(200).send(html);
+    } catch (err) {
+      console.error("signalLink error:", err);
+      res
+        .status(302)
+        .set("Location", WEBSITE_URL)
+        .send("");
+    }
   }
 );
