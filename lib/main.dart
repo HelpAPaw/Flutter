@@ -463,7 +463,39 @@ class HelpAPaw extends StatefulWidget {
   State<HelpAPaw> createState() => _HelpAPawState();
 }
 
-class _HelpAPawState extends State<HelpAPaw> {
+class _HelpAPawState extends State<HelpAPaw> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Refresh location and run the catch-up check when the app comes forward.
+  ///
+  /// Without this, the check only runs on a location *change*, so a user who
+  /// travelled while the app was closed would see nothing until they happened
+  /// to move another 500m. Opening the app somewhere new is exactly when they
+  /// expect to be told what is nearby.
+  ///
+  /// Both the displacement/interval gate and the dedupe store still apply, so
+  /// a resume can't cause repeat notifications or extra Firestore reads.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state != AppLifecycleState.resumed) return;
+
+    unawaited(
+      LocationService().updateLocationNow().catchError(
+            (e) => debugPrint('Resume location update failed: $e'),
+          ),
+    );
+  }
 
   // Help a Paw Widgets
   @override

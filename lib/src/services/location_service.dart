@@ -83,8 +83,15 @@ class LocationService {
       return false;
     }
 
-    // Cancel existing subscription if any
-    await stopLocationTracking();
+    // Drop any existing foreground stream, but deliberately *not* via
+    // stopLocationTracking(): that also tears down the native monitor, which
+    // clears the persisted enabled flag and cancels the reconcile job. Doing
+    // that on every launch opens a window where a process death would leave
+    // BootReceiver with nothing to re-arm — silently disabling background
+    // tracking, which is the exact failure this feature exists to fix.
+    // Re-registering the native monitor below is idempotent, so there is
+    // nothing to stop first.
+    await _cancelPositionStream();
 
     // Configure location settings for battery efficiency
     const locationSettings = LocationSettings(
@@ -131,10 +138,19 @@ class LocationService {
     return true;
   }
 
-  /// Stop listening to location changes
-  Future<void> stopLocationTracking() async {
+  /// Cancels only the foreground position stream.
+  Future<void> _cancelPositionStream() async {
     await _positionSubscription?.cancel();
     _positionSubscription = null;
+  }
+
+  /// Stop tracking entirely, foreground and background.
+  ///
+  /// This represents the user turning the feature off, so it also clears the
+  /// native enabled flag — meaning nothing will re-arm on the next launch or
+  /// reboot. Don't call it to merely restart the foreground stream.
+  Future<void> stopLocationTracking() async {
+    await _cancelPositionStream();
     await BackgroundLocationChannel().stop();
     debugPrint('Location tracking stopped');
   }
@@ -193,7 +209,11 @@ class LocationService {
     }
   }
 
-  /// Update location when user opens the map (foreground update)
+  /// Refresh the stored location and run a catch-up check.
+  ///
+  /// Called when the app is resumed. The geolocator stream only fires on
+  /// movement, so without this a user who travelled with the app closed would
+  /// not be checked until they moved another 500m after opening it.
   Future<void> updateLocationNow() async {
     try {
       final permission = await Geolocator.checkPermission();
@@ -206,6 +226,12 @@ class LocationService {
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium),
       );
       await _updateLocationInFirestore(position);
+
+      // Gated and deduped internally, so resuming repeatedly is cheap.
+      await NearbySignalChecker().check(
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
     } catch (e) {
       debugPrint('Error updating location: $e');
     }

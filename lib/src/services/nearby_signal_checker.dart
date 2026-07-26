@@ -228,8 +228,16 @@ class NearbySignalChecker {
     required double radiusKm,
     required DateTime cutoff,
   }) async {
-    final collection = FirebaseFirestore.instance
-        .collection(AppPreferencesService().signalsCollectionName);
+    final collectionName = AppPreferencesService().signalsCollectionName;
+    final collection = FirebaseFirestore.instance.collection(collectionName);
+
+    // Logged because it is the only way to confirm test-mode isolation held in
+    // a background isolate — there is no UI to look at, and an uninitialized
+    // AppPreferencesService would silently resolve this to the live collection.
+    debugPrint(
+      'NearbySignalChecker: querying $collectionName '
+      'within ${radiusKm}km of ($latitude, $longitude)',
+    );
 
     try {
       return await GeoCollectionReference(collection).fetchWithin(
@@ -246,7 +254,9 @@ class NearbySignalChecker {
             .where('status', whereIn: SignalStatus.openCodes),
       );
     } catch (e) {
-      debugPrint('NearbySignalChecker: geo query failed: $e');
+      // A missing composite index surfaces here, and only here — the query is
+      // otherwise silent about it, so name it explicitly.
+      debugPrint('NearbySignalChecker: geo query on $collectionName failed: $e');
       return const [];
     }
   }

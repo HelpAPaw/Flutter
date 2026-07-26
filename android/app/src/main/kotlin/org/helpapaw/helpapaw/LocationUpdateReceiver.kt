@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.location.Location
 import android.util.Log
+import com.google.android.gms.location.LocationAvailability
 import com.google.android.gms.location.LocationResult
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
@@ -33,9 +34,20 @@ class LocationUpdateReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != ACTION_LOCATION_UPDATE) return
 
+        // FusedLocationProviderClient delivers two kinds of broadcast to the
+        // same PendingIntent: location results, and location *availability*
+        // changes. Availability broadcasts legitimately carry no location, and
+        // on a real device they are frequent — treating them as failures buries
+        // the genuine ones in noise.
         val location = LocationResult.extractResult(intent)?.lastLocation
         if (location == null) {
-            Log.w(TAG, "broadcast carried no location")
+            if (LocationAvailability.hasLocationAvailability(intent)) {
+                val available =
+                    LocationAvailability.extractLocationAvailability(intent)?.isLocationAvailable
+                Log.d(TAG, "location availability changed: available=$available")
+            } else {
+                Log.w(TAG, "broadcast carried neither a location nor availability")
+            }
             return
         }
 
