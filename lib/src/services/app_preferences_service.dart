@@ -11,10 +11,24 @@ class AppPreferencesService {
   static const String _onboardingCompletedKey = 'notification_onboarding_completed';
   static const String _onboardingDismissedKey = 'notification_onboarding_dismissed';
   static const String _testModeKey = 'test_mode_enabled';
+  static const String _deferredLinkCheckedKey = 'deferred_link_checked';
 
   /// Initialize SharedPreferences - must be called before using any other methods
   Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();
+  }
+
+  /// Whether the one-shot deferred deep-link check has already run.
+  ///
+  /// The install-referrer / clipboard hand-off is only meaningful on the first
+  /// launch after an install. Re-running it would re-open a stale signal, and on
+  /// iOS every clipboard read shows the system paste banner.
+  bool isDeferredLinkChecked() {
+    return _prefs?.getBool(_deferredLinkCheckedKey) ?? false;
+  }
+
+  Future<void> setDeferredLinkChecked() async {
+    await _prefs?.setBool(_deferredLinkCheckedKey, true);
   }
 
   /// Check if notification onboarding has been completed

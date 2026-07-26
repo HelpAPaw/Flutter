@@ -62,17 +62,22 @@ class DeepLinkService {
   /// the custom-scheme fallback used by the hosted page
   /// (`helpapaw:///signal/<id>`), and the app's own canonical path so links
   /// captured from either shape keep working.
-  @visibleForTesting
   static String? locationForUri(Uri uri) {
     final segments = uri.pathSegments;
     if (segments.length < 2) return null;
     if (segments[0] != 'signal' && segments[0] != 'signal_details') return null;
 
-    final id = segments[1];
-    // Mirrors the server-side guard on the hosted page: ids are Firestore
-    // document ids, so anything else is not a link we should act on.
-    if (!RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(id)) return null;
+    return locationForSignalId(segments[1]);
+  }
 
+  /// Maps a bare signal id onto an in-app location, rejecting anything that
+  /// isn't id-shaped.
+  ///
+  /// Mirrors the server-side guard on the hosted page: ids are Firestore
+  /// document ids, so anything else is not a link we should act on. Shared with
+  /// [DeferredDeepLinkService], which receives a bare id rather than a URL.
+  static String? locationForSignalId(String id) {
+    if (!RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(id)) return null;
     return Routes.signalDetails(id);
   }
 }

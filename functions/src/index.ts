@@ -1329,6 +1329,19 @@ const PAGE_TEXT = {
 };
 
 /**
+ * Play Store URL carrying the signal id through the install.
+ *
+ * Play hands `referrer` back to the app on first launch via the Install
+ * Referrer API, which is how a user who had to install the app still lands on
+ * the signal they tapped (see DeferredDeepLinkService). PLAY_STORE_URL already
+ * carries `?id=`, so this appends.
+ */
+function playStoreUrl(signalId: string): string {
+  if (!signalId) return PLAY_STORE_URL;
+  return `${PLAY_STORE_URL}&referrer=${encodeURIComponent(`signal=${signalId}`)}`;
+}
+
+/**
  * Android intent:// URL that opens the app via its verified https App Link and
  * falls back to the Play Store when the app isn't installed. Using the https
  * link (rather than the custom scheme) keeps the path shape `/signal/<id>` that
@@ -1338,7 +1351,7 @@ function androidIntentUrl(signalId: string): string {
   return (
     `intent://link.helpapaw.org/signal/${signalId}#Intent;scheme=https;` +
     "package=org.helpapaw.helpapaw;" +
-    `S.browser_fallback_url=${encodeURIComponent(PLAY_STORE_URL)};end`
+    `S.browser_fallback_url=${encodeURIComponent(playStoreUrl(signalId))};end`
   );
 }
 
@@ -1474,7 +1487,7 @@ ${ogImage ? `  <meta property="og:image" content="${escapeHtml(ogImage)}">\n` : 
     <div class="stores">
       <p class="hint" data-i18n="getTheApp">${escapeHtml(t.getTheApp)}</p>
       <a href="${APP_STORE_URL}" data-i18n="appStore">${escapeHtml(t.appStore)}</a> ·
-      <a href="${PLAY_STORE_URL}" data-i18n="playStore">${escapeHtml(t.playStore)}</a>
+      <a href="${escapeHtml(playStoreUrl(opts.signalId))}" data-i18n="playStore">${escapeHtml(t.playStore)}</a>
     </div>
   </div>
   <script>
@@ -1522,6 +1535,13 @@ ${ogImage ? `  <meta property="og:image" content="${escapeHtml(ogImage)}">\n` : 
       } else if (isIOS) {
         // iOS has no intent:// equivalent: try the scheme, then fall back to
         // the App Store if we're still here (i.e. the app isn't installed).
+        //
+        // iOS gets no deferred hand-off of the signal id. The only way to carry
+        // it across an install would be the clipboard, and reading that raises
+        // the "Allow Paste" system alert as a new user's first interaction with
+        // the app — a certain, universal cost for a probabilistic gain. Instead
+        // the apple-itunes-app banner above turns into "OPEN" once installed and
+        // deep-links via its app-argument, and re-tapping the shared link works.
         var timer = setTimeout(function () {
           window.location.href = ${JSON.stringify(APP_STORE_URL)};
         }, 1500);

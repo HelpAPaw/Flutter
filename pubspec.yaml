@@ -46,6 +46,7 @@ dependencies:
   shared_preferences: ^2.3.5
   flutter_svg: ^2.2.4
   app_links: ^6.4.1
+  play_install_referrer: ^0.5.0
 
 dev_dependencies:
   flutter_test:
