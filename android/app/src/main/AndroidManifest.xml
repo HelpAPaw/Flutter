@@ -20,10 +20,17 @@
         android:icon="@mipmap/ic_launcher">
         <meta-data android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyDFn3Cexv_aWaSIQ6w4i53YQJf-j5_EsNk"/>
+        <!-- launchMode=singleTask keeps the app to a single instance in its own
+             task. An implicit VIEW intent from another app (e.g. a link saved in
+             Keep) would otherwise launch a second MainActivity inside *that*
+             app's task, giving two Flutter engines and a split state. Incoming
+             links now bring the existing task forward and arrive via
+             onNewIntent, which DeepLinkService handles — matching how
+             notification taps already behave. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTop"
+            android:launchMode="singleTask"
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
