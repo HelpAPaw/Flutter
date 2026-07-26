@@ -90,4 +90,7 @@ dependencies {
     implementation platform("com.google.firebase:firebase-bom:33.7.0")
     implementation "com.google.firebase:firebase-firestore"
     implementation "com.google.firebase:firebase-auth"
+
+    // Guards Geohash against silently drifting from geoflutterfire_plus.
+    testImplementation "junit:junit:4.13.2"
 }
