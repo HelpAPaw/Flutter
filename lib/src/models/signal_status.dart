@@ -56,6 +56,17 @@ enum SignalStatus {
   static SignalStatus fromCode(int code) =>
       values.firstWhere((s) => s.code == code, orElse: () => needsHelp);
 
+  /// Whether this status means the animal still needs attention.
+  bool get isOpen => this != SignalStatus.resolved;
+
+  /// Codes for every status that still needs attention.
+  ///
+  /// Derived from [values] rather than written out, so appending a status
+  /// automatically includes it. Used as a Firestore `whereIn` filter, which
+  /// caps out at 30 values — not a concern at this cardinality.
+  static List<int> get openCodes =>
+      values.where((s) => s.isOpen).map((s) => s.code).toList();
+
   /// Localized display label. Exhaustive switch so adding a status is a
   /// compile error until its label is provided here.
   String label(AppLocalizations l10n) {

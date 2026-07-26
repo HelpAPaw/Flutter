@@ -13,6 +13,15 @@ class AppPreferencesService {
   static const String _testModeKey = 'test_mode_enabled';
   static const String _deferredLinkCheckedKey = 'deferred_link_checked';
 
+  /// Mirrors `locationTrackingEnabled` so the native background monitors can
+  /// read it without a Dart engine (e.g. Android's BOOT_COMPLETED receiver).
+  ///
+  /// shared_preferences stores this as `flutter.background_location_enabled`
+  /// in Android's `FlutterSharedPreferences` file and in iOS `UserDefaults`;
+  /// the native side reads that prefixed key directly.
+  static const String _backgroundLocationEnabledKey =
+      'background_location_enabled';
+
   /// Initialize SharedPreferences - must be called before using any other methods
   Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();
@@ -29,6 +38,27 @@ class AppPreferencesService {
 
   Future<void> setDeferredLinkChecked() async {
     await _prefs?.setBool(_deferredLinkCheckedKey, true);
+  }
+
+  /// Whether [initialize] has run in *this isolate*.
+  ///
+  /// Each isolate gets its own singleton, so a headless background isolate
+  /// starts uninitialized even though the main isolate is ready.
+  bool get isInitialized => _prefs != null;
+
+  /// Guards reads that would otherwise fail silently.
+  ///
+  /// Every getter here degrades to a default when `_prefs` is null, which is
+  /// harmless in the UI but dangerous in the background: an uninitialized
+  /// [isTestMode] reports `false`, so a background check would query the live
+  /// `signals` collection while the user believes they are in test mode.
+  void _assertInitialized(String caller) {
+    assert(
+      _prefs != null,
+      'AppPreferencesService.$caller called before initialize(). '
+      'Headless entrypoints must await AppPreferencesService().initialize() '
+      'before touching preferences.',
+    );
   }
 
   /// Check if notification onboarding has been completed
@@ -69,6 +99,7 @@ class AppPreferencesService {
 
   /// Check if test mode is enabled
   bool isTestMode() {
+    _assertInitialized('isTestMode');
     return _prefs?.getBool(_testModeKey) ?? false;
   }
 
@@ -80,4 +111,15 @@ class AppPreferencesService {
   /// Returns the Firestore collection name based on test mode state
   String get signalsCollectionName =>
       isTestMode() ? 'signals_test' : 'signals';
+
+  /// Whether background location monitoring should be running.
+  bool isBackgroundLocationEnabled() {
+    _assertInitialized('isBackgroundLocationEnabled');
+    return _prefs?.getBool(_backgroundLocationEnabledKey) ?? false;
+  }
+
+  /// Mirror the tracking preference for the native monitors to read.
+  Future<void> setBackgroundLocationEnabled(bool enabled) async {
+    await _prefs?.setBool(_backgroundLocationEnabledKey, enabled);
+  }
 }

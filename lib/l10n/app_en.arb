@@ -484,5 +484,14 @@
   "deleteAccountConfirmTitle": "Delete account?",
   "deleteAccountConfirmBody": "This permanently deletes your account and personal data and cannot be undone. Your past reports will remain but will no longer be linked to you.",
   "deleteAccountSuccess": "Your account has been deleted.",
-  "deleteAccountError": "Failed to delete account. Please try again."
+  "deleteAccountError": "Failed to delete account. Please try again.",
+
+  "signalNearbyNotificationTitle": "An animal needs help nearby",
+  "@signalNearbyNotificationTitle": {
+    "description": "Title of the local notification shown when the user travels into range of an open signal they were not near when it was reported"
+  },
+  "locationAlwaysPermissionRequired": "To be notified while the app is closed, allow location access \"Always\" in Settings. With \"While Using the App\" we can only check when the app is open.",
+  "@locationAlwaysPermissionRequired": {
+    "description": "Shown when the user grants only while-in-use location permission but background monitoring needs always-on access"
+  }
 }
