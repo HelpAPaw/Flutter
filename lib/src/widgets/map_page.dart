@@ -14,6 +14,7 @@ import '../config/routes.dart';
 import '../repositories/repository_provider.dart';
 import '../repositories/signal_repository.dart';
 import '../services/app_preferences_service.dart';
+import '../services/nearby_signal_checker.dart';
 import '../services/signal_navigator.dart';
 import '../state/map_state.dart';
 import '../utils/map_marker_builder.dart';
@@ -129,6 +130,12 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
       // Reset the signal repository so it picks up the new collection
       RepositoryProvider.instance.resetSignalRepository();
+
+      // Clear the nearby-check gate. Its last-checked position is still
+      // accurate, but it was recorded against the *other* collection, so
+      // honouring it would suppress checks for up to 30 minutes and make test
+      // signals look like they produce no notification.
+      await NearbySignalChecker().resetGate();
 
       // Sync testMode flag to Firestore user document
       final user = FirebaseAuth.instance.currentUser;

@@ -13,15 +13,6 @@ class AppPreferencesService {
   static const String _testModeKey = 'test_mode_enabled';
   static const String _deferredLinkCheckedKey = 'deferred_link_checked';
 
-  /// Mirrors `locationTrackingEnabled` so the native background monitors can
-  /// read it without a Dart engine (e.g. Android's BOOT_COMPLETED receiver).
-  ///
-  /// shared_preferences stores this as `flutter.background_location_enabled`
-  /// in Android's `FlutterSharedPreferences` file and in iOS `UserDefaults`;
-  /// the native side reads that prefixed key directly.
-  static const String _backgroundLocationEnabledKey =
-      'background_location_enabled';
-
   /// Initialize SharedPreferences - must be called before using any other methods
   Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();
@@ -111,15 +102,4 @@ class AppPreferencesService {
   /// Returns the Firestore collection name based on test mode state
   String get signalsCollectionName =>
       isTestMode() ? 'signals_test' : 'signals';
-
-  /// Whether background location monitoring should be running.
-  bool isBackgroundLocationEnabled() {
-    _assertInitialized('isBackgroundLocationEnabled');
-    return _prefs?.getBool(_backgroundLocationEnabledKey) ?? false;
-  }
-
-  /// Mirror the tracking preference for the native monitors to read.
-  Future<void> setBackgroundLocationEnabled(bool enabled) async {
-    await _prefs?.setBool(_backgroundLocationEnabledKey, enabled);
-  }
 }

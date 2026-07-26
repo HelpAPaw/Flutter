@@ -154,6 +154,23 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
         return;
       }
 
+      // "While using the app" is not enough for background monitoring on
+      // either platform: iOS significant-change delivers nothing once the app
+      // is backgrounded, and Android needs ACCESS_BACKGROUND_LOCATION. Tracking
+      // still works while the app is open, so this enables it but explains the
+      // limitation rather than appearing to work and silently going quiet.
+      if (permission == LocationPermission.whileInUse) {
+        if (mounted) {
+          final l10n = AppLocalizations.of(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(l10n.locationAlwaysPermissionRequired),
+              duration: const Duration(seconds: 6),
+            ),
+          );
+        }
+      }
+
       await LocationService().startLocationTracking();
     } else {
       await LocationService().stopLocationTracking();

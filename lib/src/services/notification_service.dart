@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,6 +8,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'app_preferences_service.dart';
+import 'notified_signals_store.dart';
 import 'signal_navigator.dart';
 
 /// Background message handler - must be a top-level function
@@ -80,6 +82,8 @@ class NotificationService {
       _handleNotificationTap(initialMessage);
     }
 
+    await _handleLaunchFromLocalNotification();
+
     // Listen for token refresh
     _messaging.onTokenRefresh.listen((token) {
       _saveFcmTokenToFirestore(token);
@@ -119,6 +123,8 @@ class NotificationService {
     FirebaseCrashlytics.instance.log('Notification: Foreground message received - signalId: ${message.data['signalId']}');
     debugPrint('Received foreground message: ${message.messageId}');
 
+    _recordDeliveredSignal(message);
+
     final notification = message.notification;
     if (notification == null) return;
 
@@ -151,7 +157,60 @@ class NotificationService {
     FirebaseCrashlytics.instance.log('Notification: Tapped - signalId: $signalId');
     debugPrint('Notification tapped: ${message.data}');
 
+    _recordDeliveredSignal(message);
+
     if (signalId != null) SignalNavigator.instance.open(signalId);
+  }
+
+  /// Marks a pushed signal as already announced.
+  ///
+  /// Shares the dedupe store with [NearbySignalChecker], so the arrival
+  /// catch-up won't announce a signal the server already pushed. Without this,
+  /// a user who got the normal push, travelled away and came back would be
+  /// notified a second time about a signal they already knew about.
+  ///
+  /// `createdAt` is only used as the prune horizon; if the payload doesn't
+  /// carry it we fall back to now, which keeps the entry for the full
+  /// eligibility window — erring towards suppressing a duplicate rather than
+  /// risking one.
+  void _recordDeliveredSignal(RemoteMessage message) {
+    final signalId = message.data['signalId'];
+    if (signalId == null || signalId.isEmpty) return;
+
+    final rawCreatedAt = message.data['createdAt'];
+    final createdAt = rawCreatedAt is String
+        ? DateTime.tryParse(rawCreatedAt) ?? DateTime.now()
+        : DateTime.now();
+
+    unawaited(
+      NotifiedSignalsStore().markNotified(signalId, createdAt).catchError(
+            (e) => debugPrint('Failed to record delivered signal: $e'),
+          ),
+    );
+  }
+
+  /// Routes a tap on a local notification that launched the app.
+  ///
+  /// [_onNotificationResponse] only fires for taps while a Dart isolate is
+  /// alive. The arrival catch-up notifications are posted from a headless
+  /// isolate that is torn down immediately afterwards, so tapping one from a
+  /// terminated app arrives here instead — without this the app would open on
+  /// the map rather than the signal the user tapped.
+  Future<void> _handleLaunchFromLocalNotification() async {
+    try {
+      final details =
+          await _localNotifications.getNotificationAppLaunchDetails();
+      if (details == null || !details.didNotificationLaunchApp) return;
+
+      final payload = details.notificationResponse?.payload;
+      if (payload == null || payload.isEmpty) return;
+
+      FirebaseCrashlytics.instance
+          .log('Notification: Launched app from local notification - $payload');
+      SignalNavigator.instance.open(payload);
+    } catch (e) {
+      debugPrint('Failed to read notification launch details: $e');
+    }
   }
 
   void _onNotificationResponse(NotificationResponse response) {

@@ -6,7 +6,8 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 import 'package:geolocator/geolocator.dart';
-import 'app_preferences_service.dart';
+import 'background_location_channel.dart';
+import 'nearby_signal_checker.dart';
 
 
 class LocationService {
@@ -15,10 +16,6 @@ class LocationService {
   LocationService._internal();
 
   StreamSubscription<Position>? _positionSubscription;
-  final Map<String, DateTime> _notifiedSignals = {};
-
-  /// Cached notification preferences to avoid Firestore reads on every location update
-  Map<String, dynamic>? _cachedPrefs;
 
   /// Default radius in km for checking nearby signals
   static const double defaultRadiusKm = 10.0;
@@ -26,7 +23,11 @@ class LocationService {
   /// Distance filter in meters - only trigger on meaningful movement
   static const int distanceFilterMeters = 500;
 
-  /// Initialize location tracking if enabled by user
+  /// Restore location tracking on launch if the user has it enabled.
+  ///
+  /// Called from `_bootstrapServices` in main.dart. Before that wiring existed
+  /// this method was dead code, which is why tracking silently stopped after
+  /// every app restart.
   Future<void> initialize() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -100,6 +101,20 @@ class LocationService {
       },
     );
 
+    // The geolocator stream above only survives while the app process does.
+    // Start the native monitor too — iOS significant-change and Android
+    // PendingIntent updates — which is what keeps reporting once the app is
+    // backgrounded or terminated.
+    final backgroundStarted = await BackgroundLocationChannel().start();
+    if (!backgroundStarted) {
+      debugPrint(
+        'Background location monitor did not start; foreground-only tracking. '
+        'Most often this means "Always" location permission was not granted.',
+      );
+      FirebaseCrashlytics.instance
+          .log('Location: Background monitor unavailable');
+    }
+
     FirebaseCrashlytics.instance.log('Location: Tracking started');
     debugPrint('Location tracking started');
 
@@ -120,6 +135,7 @@ class LocationService {
   Future<void> stopLocationTracking() async {
     await _positionSubscription?.cancel();
     _positionSubscription = null;
+    await BackgroundLocationChannel().stop();
     debugPrint('Location tracking stopped');
   }
 
@@ -133,7 +149,17 @@ class LocationService {
       debugPrint('Error updating location in Firestore: $e');
     }
 
-    await _checkForNearbySignals(position);
+    // Catch up on signals the server fan-out couldn't have reached us about,
+    // because we were out of range when they were created. Rate-limited
+    // internally, so calling it on every location change is cheap.
+    try {
+      await NearbySignalChecker().check(
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
+    } catch (e) {
+      debugPrint('Nearby signal check failed: $e');
+    }
   }
 
   /// Update user's current location in Firestore.
@@ -167,80 +193,6 @@ class LocationService {
     }
   }
 
-  /// Check for signals created in the last 24 hours near this location
-  Future<void> _checkForNearbySignals(Position position) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    // Use cached preferences to avoid a Firestore read on every location update.
-    // Cache is invalidated when preferences change via setLocationTrackingEnabled.
-    if (_cachedPrefs == null) {
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get()
-          .timeout(const Duration(seconds: 10));
-      _cachedPrefs = userDoc.data()?['notificationPreferences'];
-    }
-
-    final prefs = _cachedPrefs;
-    if (prefs == null || prefs['enabled'] != true) return;
-
-    final radiusKm = (prefs['locationRadiusKm'] as num?)?.toDouble() ?? defaultRadiusKm;
-    final signalTypes = (prefs['signalTypes'] as List<dynamic>?)?.cast<int>() ?? [];
-
-    // Calculate time 24 hours ago
-    final twentyFourHoursAgo = DateTime.now().subtract(const Duration(hours: 24));
-
-    // Query for nearby signals
-    final geoPoint = GeoPoint(position.latitude, position.longitude);
-    final geoFirePoint = GeoFirePoint(geoPoint);
-
-    final signalsCollection = FirebaseFirestore.instance.collection(AppPreferencesService().signalsCollectionName);
-
-    // Use GeoFlutterFire to query nearby signals
-    final stream = GeoCollectionReference(signalsCollection).subscribeWithin(
-      center: geoFirePoint,
-      radiusInKm: radiusKm,
-      field: 'location',
-      geopointFrom: (data) => (data['location'] as Map<String, dynamic>)['geopoint'] as GeoPoint,
-    );
-
-    // Prune notified signals older than 24 hours
-    _notifiedSignals.removeWhere((_, createdAt) => createdAt.isBefore(twentyFourHoursAgo));
-
-    // Get first emission and process
-    final signals = await stream.first;
-
-    for (final doc in signals) {
-      final signalId = doc.id;
-      final data = doc.data() as Map<String, dynamic>;
-
-      // Skip if already notified
-      if (_notifiedSignals.containsKey(signalId)) continue;
-
-      // Check if signal is within last 24 hours
-      final createdAt = data['createdAt'] as Timestamp?;
-      if (createdAt == null) continue;
-      final createdAtDate = createdAt.toDate();
-      if (createdAtDate.isBefore(twentyFourHoursAgo)) continue;
-
-      // Check if signal type is in user's preferences
-      final signalType = data['signalType'] as int?;
-      if (signalTypes.isNotEmpty && signalType != null && !signalTypes.contains(signalType)) {
-        continue;
-      }
-
-      // Check if this is user's own signal
-      final reporter = data['reporter'] as DocumentReference?;
-      if (reporter != null && reporter.id == user.uid) continue;
-
-      // Mark as notified (local notification not yet implemented)
-      _notifiedSignals[signalId] = createdAtDate;
-      debugPrint('New signal nearby: $signalId');
-    }
-  }
-
   /// Update location when user opens the map (foreground update)
   Future<void> updateLocationNow() async {
     try {
@@ -264,9 +216,6 @@ class LocationService {
     FirebaseCrashlytics.instance.log('Location: Tracking ${enabled ? "enabled" : "disabled"} by user');
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-
-    // Invalidate cached preferences so next location update re-fetches
-    _cachedPrefs = null;
 
     try {
       if (enabled) {

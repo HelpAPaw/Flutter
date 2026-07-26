@@ -75,6 +75,35 @@
                 <data android:scheme="helpapaw" />
             </intent-filter>
         </activity>
+        <!-- Background location, delivered via PendingIntent rather than a
+             foreground service, so there is no permanent notification in the
+             shade. Android throttles background delivery to a few times an hour
+             and batches it around Doze windows, which is what makes this the
+             platform's equivalent of iOS significant-change monitoring. -->
+        <receiver
+            android:name=".LocationUpdateReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="org.helpapaw.helpapaw.LOCATION_UPDATE" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Location update registrations do not survive a reboot or an app
+             update, and nothing else would re-create them until the user next
+             opened the app. Uses the RECEIVE_BOOT_COMPLETED permission declared
+             above, which was previously unused. -->
+        <receiver
+            android:name=".BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
