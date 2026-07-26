@@ -83,6 +83,10 @@ dependencies {
     // PendingIntent, which needs no foreground service.
     implementation "com.google.android.gms:play-services-location:21.3.0"
 
+    // Periodic re-arm safety net for location registrations dropped by OEM
+    // battery managers. Not the delivery mechanism — see LocationReconcileWorker.
+    implementation "androidx.work:work-runtime-ktx:2.9.1"
+
     // The background receiver writes userLocations/{uid} in Kotlin so a
     // location update never depends on a Dart engine being alive. Declared
     // explicitly via the BoM rather than relying on the versions the Flutter

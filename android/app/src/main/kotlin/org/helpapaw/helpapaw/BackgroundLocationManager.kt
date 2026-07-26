@@ -149,6 +149,7 @@ object BackgroundLocationManager {
             LocationServices.getFusedLocationProviderClient(context.applicationContext)
                 .requestLocationUpdates(request, pendingIntent(context))
             setEnabledInPreferences(context, true)
+            LocationReconcileWorker.schedule(context.applicationContext)
             Log.i(TAG, "location updates registered")
             true
         } catch (e: SecurityException) {
@@ -165,6 +166,7 @@ object BackgroundLocationManager {
         // flag set and have BootReceiver silently resurrect tracking the user
         // just turned off.
         setEnabledInPreferences(context, false)
+        LocationReconcileWorker.cancel(context.applicationContext)
         try {
             LocationServices.getFusedLocationProviderClient(context.applicationContext)
                 .removeLocationUpdates(pendingIntent(context))
