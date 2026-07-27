@@ -4,7 +4,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.location.Location
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import java.util.concurrent.atomic.AtomicBoolean
 import com.google.android.gms.location.LocationAvailability
 import com.google.android.gms.location.LocationResult
 import com.google.firebase.auth.FirebaseAuth
@@ -51,21 +54,40 @@ class LocationUpdateReceiver : BroadcastReceiver() {
             return
         }
 
-        // The Firestore write and any engine work are asynchronous, so hold the
-        // broadcast open — otherwise the process can be killed mid-write.
+        // The Firestore write is asynchronous, so hold the broadcast open —
+        // otherwise the process can be killed mid-write.
         val pendingResult = goAsync()
-
-        writeLocation(context, location) {
-            try {
-                if (shouldRunNearbyCheck(context, location)) {
-                    HeadlessNearbyCheck.run(context, location.latitude, location.longitude)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "nearby check failed to start", e)
-            } finally {
+        val handler = Handler(Looper.getMainLooper())
+        val finished = AtomicBoolean(false)
+        val release = {
+            if (finished.compareAndSet(false, true)) {
+                handler.removeCallbacksAndMessages(null)
                 pendingResult.finish()
             }
         }
+
+        // Firestore's set() Task only resolves once the *server* acknowledges
+        // the write. Offline the write is already durable in the local cache,
+        // but the Task can stay pending indefinitely — and for a background
+        // location feature poor connectivity is normal, not an edge case.
+        // Holding a broadcast open that long risks an ANR, so cap the wait.
+        handler.postDelayed({
+            Log.w(TAG, "location write has not been acknowledged; releasing broadcast")
+            release()
+        }, WRITE_ACK_TIMEOUT_MILLIS)
+
+        // Started independently of the write: offline the write may never be
+        // acknowledged, but the catch-up check can still run against Firestore's
+        // local cache, so it must not be chained to that completion.
+        try {
+            if (shouldRunNearbyCheck(context, location)) {
+                HeadlessNearbyCheck.run(context, location.latitude, location.longitude)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "nearby check failed to start", e)
+        }
+
+        writeLocation(context, location) { release() }
     }
 
     /**
@@ -183,5 +205,11 @@ class LocationUpdateReceiver : BroadcastReceiver() {
 
         private const val MIN_DISPLACEMENT_KM = 3.0
         private const val MIN_INTERVAL_MINUTES = 30.0
+
+        /**
+         * Cap on holding the broadcast open. Comfortably under the ~10s the
+         * system allows a foreground broadcast before it counts as an ANR.
+         */
+        private const val WRITE_ACK_TIMEOUT_MILLIS = 8_000L
     }
 }

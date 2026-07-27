@@ -102,13 +102,13 @@ class NearbySignalChecker {
 
   /// Runs a catch-up check for [latitude]/[longitude].
   ///
-  /// Set [force] to bypass the displacement/interval gate — used when test mode
-  /// is toggled, where the stale gate would otherwise suppress checks for up to
-  /// [minInterval] against the newly selected collection.
+  /// Callers don't need to reason about the gate — it is applied here. To make
+  /// the next call check immediately (e.g. after a test-mode switch), clear the
+  /// gate with [resetGate] rather than bypassing it, so the "record the
+  /// attempt" bookkeeping stays in one place.
   Future<void> check({
     required double latitude,
     required double longitude,
-    bool force = false,
   }) async {
     assert(
       AppPreferencesService().isInitialized,
@@ -121,7 +121,7 @@ class NearbySignalChecker {
     if (user == null) return;
 
     final prefs = await SharedPreferences.getInstance();
-    if (!force && !_shouldCheck(prefs, latitude, longitude)) return;
+    if (!_shouldCheck(prefs, latitude, longitude)) return;
 
     final notificationPrefs = await _loadNotificationPrefs(user.uid);
     if (notificationPrefs == null || notificationPrefs['enabled'] != true) {
