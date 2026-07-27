@@ -22,11 +22,6 @@ class MainActivity : FlutterActivity() {
                     result.success(null)
                 }
 
-                "isActive" ->
-                    result.success(
-                        BackgroundLocationManager.isEnabledInPreferences(applicationContext),
-                    )
-
                 // Registers the Dart entrypoint the headless check runs. Stored
                 // natively so a background receiver can find it with no engine.
                 "registerHeadlessCallback" -> {

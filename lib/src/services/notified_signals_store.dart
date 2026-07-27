@@ -20,10 +20,16 @@ import 'app_preferences_service.dart';
 ///   isolates that are torn down immediately afterwards, so anything held only
 ///   in memory is gone by the next check.
 /// * **Entries outlive the notification.** Pruning is keyed to the eligibility
-///   window, not to how long ago we notified — see [pruneOlderThan].
+///   window, not to how long ago we notified — see [markAllNotified].
 ///
 /// FCM-delivered signals are recorded here too (see `NotificationService`), so
 /// a push and a local catch-up notification can't both fire for one signal.
+///
+/// Note on isolates: `shared_preferences` keeps an in-process cache, so a write
+/// from the headless isolate is not visible to the main isolate (or vice versa)
+/// without an explicit `reload()`. Re-reading here would not change that, so
+/// each operation reads once and the worst case stays what it always was — one
+/// duplicate notification, never a corrupt store.
 class NotifiedSignalsStore {
   static final NotifiedSignalsStore _instance =
       NotifiedSignalsStore._internal();
@@ -36,12 +42,8 @@ class NotifiedSignalsStore {
       ? 'notified_signals_test'
       : 'notified_signals';
 
-  /// Reads the store fresh on every call rather than caching it.
-  ///
-  /// The main isolate and a background isolate can both be running, and each
-  /// would hold its own copy of any cache. Interleaved writes would then drop
-  /// an entry, which surfaces as a duplicate notification. Read-modify-write at
-  /// call time keeps the window as small as we can make it without a lock.
+  /// Decodes the store. Cheap — `shared_preferences` serves this from its
+  /// in-process cache, so the cost is the `jsonDecode`, not disk I/O.
   Future<Map<String, int>> _read(SharedPreferences prefs) async {
     final raw = prefs.getString(_key);
     if (raw == null || raw.isEmpty) return <String, int>{};
@@ -60,43 +62,25 @@ class NotifiedSignalsStore {
   Future<void> _write(SharedPreferences prefs, Map<String, int> entries) =>
       prefs.setString(_key, jsonEncode(entries));
 
-  /// Whether [signalId] has already been announced.
-  Future<bool> contains(String signalId) async {
-    final prefs = await SharedPreferences.getInstance();
-    return (await _read(prefs)).containsKey(signalId);
-  }
-
   /// Returns the subset of [signalIds] not yet announced.
-  Future<Set<String>> filterUnnotified(Iterable<String> signalIds) async {
+  ///
+  /// Entries for signals created before [cutoff] are ignored: once a signal
+  /// ages out of the eligibility window it can never be announced again, so a
+  /// stale entry must not keep suppressing a re-used id.
+  Future<Set<String>> filterUnnotified(
+    Iterable<String> signalIds, {
+    required DateTime cutoff,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     final seen = await _read(prefs);
-    return signalIds.where((id) => !seen.containsKey(id)).toSet();
+    final cutoffMillis = cutoff.millisecondsSinceEpoch;
+
+    return signalIds
+        .where((id) => (seen[id] ?? 0) < cutoffMillis)
+        .toSet();
   }
 
-  /// Records [signalId] as announced.
-  ///
-  /// [createdAt] is the signal's creation time, *not* the time we notified —
-  /// [pruneOlderThan] depends on that distinction.
-  Future<void> markNotified(String signalId, DateTime createdAt) async {
-    final prefs = await SharedPreferences.getInstance();
-    final entries = await _read(prefs);
-    entries[signalId] = createdAt.millisecondsSinceEpoch;
-    await _write(prefs, entries);
-  }
-
-  /// Records several signals in one read-modify-write.
-  Future<void> markAllNotified(Map<String, DateTime> signals) async {
-    if (signals.isEmpty) return;
-
-    final prefs = await SharedPreferences.getInstance();
-    final entries = await _read(prefs);
-    signals.forEach((id, createdAt) {
-      entries[id] = createdAt.millisecondsSinceEpoch;
-    });
-    await _write(prefs, entries);
-  }
-
-  /// Drops entries for signals created before [cutoff].
+  /// Records several signals, pruning expired entries in the same write.
   ///
   /// Pruning is keyed to the signal's creation time and [cutoff] is the
   /// eligibility window, so an entry is only discarded once the signal itself
@@ -104,20 +88,26 @@ class NotifiedSignalsStore {
   /// while guaranteeing we never re-notify for as long as re-notifying is
   /// possible at all — a signal a user passes daily stays suppressed for its
   /// whole eligible life, not just 24 hours.
-  Future<void> pruneOlderThan(DateTime cutoff) async {
+  ///
+  /// This is the only path that adds entries, so folding the prune in here is
+  /// enough to bound the store — and it avoids a separate disk write on every
+  /// check, including the checks that notify nothing.
+  Future<void> markAllNotified(
+    Map<String, DateTime> signals, {
+    required DateTime cutoff,
+  }) async {
+    if (signals.isEmpty) return;
+
     final prefs = await SharedPreferences.getInstance();
     final entries = await _read(prefs);
 
     final cutoffMillis = cutoff.millisecondsSinceEpoch;
-    final before = entries.length;
     entries.removeWhere((_, createdAt) => createdAt < cutoffMillis);
 
-    if (entries.length != before) {
-      await _write(prefs, entries);
-      debugPrint(
-        'NotifiedSignalsStore: pruned ${before - entries.length} expired entries',
-      );
-    }
+    signals.forEach((id, createdAt) {
+      entries[id] = createdAt.millisecondsSinceEpoch;
+    });
+    await _write(prefs, entries);
   }
 
   /// Clears the store for the current mode. Intended for tests and QA.

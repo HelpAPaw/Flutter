@@ -2,7 +2,7 @@ package org.helpapaw.helpapaw
 
 import android.content.Context
 import android.util.Log
-import androidx.work.Constraints
+
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
@@ -52,19 +52,13 @@ class LocationReconcileWorker(
         private const val WORK_NAME = "helpapaw_location_reconcile"
 
         fun schedule(context: Context) {
+            // Deliberately unconstrained (the WorkManager default): re-arming is
+            // local and cheap, and waiting for ideal conditions would defeat the
+            // point of a safety net.
             val request = PeriodicWorkRequestBuilder<LocationReconcileWorker>(
                 6,
                 TimeUnit.HOURS,
-            )
-                .setConstraints(
-                    Constraints.Builder()
-                        // No network or power requirements: re-arming is local
-                        // and cheap, and waiting for ideal conditions would
-                        // defeat the point of a safety net.
-                        .setRequiresBatteryNotLow(false)
-                        .build(),
-                )
-                .build()
+            ).build()
 
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 WORK_NAME,

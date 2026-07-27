@@ -31,13 +31,16 @@ final class BackgroundLocationManager: NSObject {
   private let locationManager = CLLocationManager()
   private var isMonitoring = false
 
-  /// Locations that arrived before Dart was ready to receive them.
+  /// The most recent location that arrived before Dart was ready to receive it.
   ///
   /// On a background relaunch iOS delivers the update almost immediately, well
   /// before the Flutter engine has finished booting and installed its method
-  /// call handler. Dropping those would mean the catch-up check never runs for
-  /// exactly the case it exists to handle, so they're held until Dart asks.
-  private var pendingUpdates: [(latitude: Double, longitude: Double)] = []
+  /// call handler. Dropping it would mean the catch-up check never runs for
+  /// exactly the case it exists to handle, so it's held until Dart asks.
+  ///
+  /// Last-write-wins rather than a queue: only the newest position can matter,
+  /// and replaying a backlog would start one independent check per entry.
+  private var pendingUpdate: (latitude: Double, longitude: Double)?
 
   /// Set by AppDelegate once the method channel exists.
   var onLocationUpdate: ((Double, Double) -> Void)?
@@ -102,8 +105,6 @@ final class BackgroundLocationManager: NSObject {
     NSLog("BackgroundLocation: monitoring stopped")
   }
 
-  var isActive: Bool { isMonitoring }
-
   /// Re-arms monitoring if the user has the feature enabled.
   ///
   /// Called on every launch, including background relaunches, because
@@ -114,14 +115,11 @@ final class BackgroundLocationManager: NSObject {
     start()
   }
 
-  /// Hands Dart anything buffered while the engine was starting.
+  /// Hands Dart whatever was buffered while the engine was starting.
   func drainPendingUpdates() {
-    guard let handler = onLocationUpdate else { return }
-    let buffered = pendingUpdates
-    pendingUpdates.removeAll()
-    for update in buffered {
-      handler(update.latitude, update.longitude)
-    }
+    guard let handler = onLocationUpdate, let update = pendingUpdate else { return }
+    pendingUpdate = nil
+    handler(update.latitude, update.longitude)
   }
 
   private var authorizationStatus: CLAuthorizationStatus {
@@ -184,7 +182,7 @@ extension BackgroundLocationManager: CLLocationManagerDelegate {
     if let handler = onLocationUpdate {
       handler(latitude, longitude)
     } else {
-      pendingUpdates.append((latitude: latitude, longitude: longitude))
+      pendingUpdate = (latitude: latitude, longitude: longitude)
     }
   }
 

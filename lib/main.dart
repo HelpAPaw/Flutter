@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:io' show Platform;
-import 'dart:ui' show PlatformDispatcher, PluginUtilities;
+import 'dart:ui' show PlatformDispatcher;
 
 import 'package:firebase_auth/firebase_auth.dart'
     hide PhoneAuthProvider, EmailAuthProvider;
@@ -40,7 +40,6 @@ import 'package:help_a_paw/src/services/deep_link_service.dart';
 import 'package:help_a_paw/src/services/signal_navigator.dart';
 import 'package:help_a_paw/src/services/deferred_deep_link_service.dart';
 import 'package:help_a_paw/src/services/app_preferences_service.dart';
-import 'package:help_a_paw/src/services/background_location_channel.dart';
 import 'package:help_a_paw/src/services/location_service.dart';
 import 'package:help_a_paw/src/services/nearby_signal_checker.dart';
 
@@ -251,57 +250,11 @@ Future<void> _bootstrapServices() async {
   // Placed after the anonymous sign-in above because it needs a uid to read the
   // preference, and not awaited by anything on the startup critical path.
   try {
-    await _initializeBackgroundLocation();
+    await LocationService().initialize(
+      headlessEntrypoint: backgroundLocationCallbackDispatcher,
+    );
   } catch (e) {
     debugPrint('Background location init failed: $e');
-  }
-}
-
-/// Wires up background location and its arrival catch-up check.
-Future<void> _initializeBackgroundLocation() async {
-  final channel = BackgroundLocationChannel();
-
-  // iOS runs the check in this isolate: a significant-change relaunch boots the
-  // app, so Dart is available. Android has no engine at that point and boots a
-  // headless one instead (see backgroundLocationCallbackDispatcher).
-  channel.onLocationUpdate = (latitude, longitude) async {
-    try {
-      await NearbySignalChecker().check(latitude: latitude, longitude: longitude);
-    } catch (e) {
-      debugPrint('Nearby signal check failed: $e');
-    }
-  };
-  channel.ensureHandlerInstalled();
-
-  if (Platform.isAndroid) {
-    await _registerHeadlessCallback();
-  }
-
-  await LocationService().initialize();
-}
-
-/// Tells the native side which Dart entrypoint to boot for headless checks.
-///
-/// Re-registered on every launch because the handle is only valid for the
-/// current binary — an app update invalidates it, and a stale handle fails to
-/// resolve at exactly the moment it is needed.
-Future<void> _registerHeadlessCallback() async {
-  try {
-    final handle = PluginUtilities.getCallbackHandle(
-      backgroundLocationCallbackDispatcher,
-    );
-    if (handle == null) {
-      debugPrint('Could not resolve headless callback handle');
-      return;
-    }
-
-    await const MethodChannel('org.helpapaw.helpapaw/background_location')
-        .invokeMethod<void>(
-      'registerHeadlessCallback',
-      {'handle': handle.toRawHandle()},
-    );
-  } catch (e) {
-    debugPrint('Headless callback registration failed: $e');
   }
 }
 
@@ -463,40 +416,7 @@ class HelpAPaw extends StatefulWidget {
   State<HelpAPaw> createState() => _HelpAPawState();
 }
 
-class _HelpAPawState extends State<HelpAPaw> with WidgetsBindingObserver {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  /// Refresh location and run the catch-up check when the app comes forward.
-  ///
-  /// Without this, the check only runs on a location *change*, so a user who
-  /// travelled while the app was closed would see nothing until they happened
-  /// to move another 500m. Opening the app somewhere new is exactly when they
-  /// expect to be told what is nearby.
-  ///
-  /// Both the displacement/interval gate and the dedupe store still apply, so
-  /// a resume can't cause repeat notifications or extra Firestore reads.
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    if (state != AppLifecycleState.resumed) return;
-
-    unawaited(
-      LocationService().updateLocationNow().catchError(
-            (e) => debugPrint('Resume location update failed: $e'),
-          ),
-    );
-  }
-
+class _HelpAPawState extends State<HelpAPaw> {
   // Help a Paw Widgets
   @override
   Widget build(BuildContext context) {

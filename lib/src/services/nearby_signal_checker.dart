@@ -3,13 +3,14 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/widgets.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../models/signal.dart';
 import '../models/signal_status.dart';
 import 'app_preferences_service.dart';
+import 'notification_service.dart';
 import 'notified_signals_store.dart';
 
 /// Notifies the user about open signals they have travelled into range of.
@@ -58,47 +59,9 @@ class NearbySignalChecker {
   static const String _lastCheckLonKey = 'nearby_check_last_lon';
   static const String _lastCheckAtKey = 'nearby_check_last_at';
 
-  final FlutterLocalNotificationsPlugin _localNotifications =
-      FlutterLocalNotificationsPlugin();
-
-  static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
-    'help_a_paw_signals',
-    'Signal Notifications',
-    description: 'Notifications about animals in need near you',
-    importance: Importance.high,
-  );
-
-  bool _notificationsReady = false;
-
-  /// Prepares local notifications for the current isolate.
-  ///
-  /// A headless isolate does not inherit `NotificationService`'s setup, so this
-  /// has to run there before anything can be shown. Tap handling is
-  /// deliberately not wired up here — there is no router in a headless isolate,
-  /// and a tap relaunches the app, at which point `NotificationService` handles
-  /// the payload through its own `onDidReceiveNotificationResponse`.
-  Future<void> _ensureNotificationsReady() async {
-    if (_notificationsReady) return;
-
-    const initSettings = InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-      iOS: DarwinInitializationSettings(
-        requestAlertPermission: false,
-        requestBadgePermission: false,
-        requestSoundPermission: false,
-      ),
-    );
-    await _localNotifications.initialize(settings: initSettings);
-
-    if (Platform.isAndroid) {
-      await _localNotifications
-          .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
-          ?.createNotificationChannel(_channel);
-    }
-
-    _notificationsReady = true;
-  }
+  /// Groups a burst in the shade while keeping each entry individually
+  /// tappable.
+  static const String _notificationGroupKey = 'help_a_paw_nearby_signals';
 
   /// Runs a catch-up check for [latitude]/[longitude].
   ///
@@ -123,17 +86,18 @@ class NearbySignalChecker {
     final prefs = await SharedPreferences.getInstance();
     if (!_shouldCheck(prefs, latitude, longitude)) return;
 
+    // Record the attempt before doing any I/O. Anything below this line that
+    // returns early or throws must still burn the interval, otherwise a user
+    // who can never be notified (tracking on, notifications off) would re-read
+    // their user document on every single location delivery.
+    await _recordCheck(prefs, latitude, longitude);
+
     final notificationPrefs = await _loadNotificationPrefs(user.uid);
     if (notificationPrefs == null || notificationPrefs['enabled'] != true) {
       return;
     }
 
-    // Record the attempt before querying: a failure partway through shouldn't
-    // let the next location update retry immediately and hammer Firestore.
-    await _recordCheck(prefs, latitude, longitude);
-
     final cutoff = DateTime.now().subtract(eligibilityWindow);
-    await NotifiedSignalsStore().pruneOlderThan(cutoff);
 
     final candidates = await _queryNearbySignals(
       latitude: latitude,
@@ -151,10 +115,11 @@ class NearbySignalChecker {
       signalTypes:
           (notificationPrefs['signalTypes'] as List<dynamic>?)?.cast<int>() ??
               const <int>[],
+      cutoff: cutoff,
     );
     if (wanted.isEmpty) return;
 
-    await _notify(wanted);
+    await _notify(wanted, cutoff: cutoff);
   }
 
   /// Whether enough distance and time have passed since the last check.
@@ -268,12 +233,13 @@ class NearbySignalChecker {
   /// that varies with the user's selection. `reporter` is a
   /// `DocumentReference`, so excluding it server-side would mean a genuine
   /// third inequality. By this point the result set is small anyway.
-  Future<Map<String, _NotifiableSignal>> _selectNotifiable({
+  Future<List<_NotifiableSignal>> _selectNotifiable({
     required List<DocumentSnapshot<Map<String, dynamic>>> candidates,
     required String uid,
     required List<int> signalTypes,
+    required DateTime cutoff,
   }) async {
-    final eligible = <String, _NotifiableSignal>{};
+    final eligible = <_NotifiableSignal>[];
 
     for (final doc in candidates) {
       final data = doc.data();
@@ -293,69 +259,58 @@ class NearbySignalChecker {
       final reporter = data['reporter'] as DocumentReference?;
       if (reporter != null && reporter.id == uid) continue;
 
-      eligible[doc.id] = _NotifiableSignal(
+      eligible.add(_NotifiableSignal(
         id: doc.id,
         title: (data['title'] as String?)?.trim() ?? '',
         signalType: signalType ?? 0,
         createdAt: createdAt,
-      );
+      ));
     }
 
-    if (eligible.isEmpty) return const {};
+    if (eligible.isEmpty) return const [];
 
     // Single store read for the whole batch.
-    final unnotified =
-        await NotifiedSignalsStore().filterUnnotified(eligible.keys);
-    eligible.removeWhere((id, _) => !unnotified.contains(id));
-    return eligible;
+    final unnotified = await NotifiedSignalsStore().filterUnnotified(
+      eligible.map((s) => s.id),
+      cutoff: cutoff,
+    );
+    return eligible.where((s) => unnotified.contains(s.id)).toList();
   }
 
   /// Posts one notification per signal, then records them as announced.
   ///
   /// Deliberately not collapsed into a summary: each notification carries its
   /// own signal id as payload so tapping it opens that specific signal.
-  Future<void> _notify(Map<String, _NotifiableSignal> signals) async {
-    await _ensureNotificationsReady();
+  Future<void> _notify(
+    List<_NotifiableSignal> signals, {
+    required DateTime cutoff,
+  }) async {
+    // Routed through NotificationService so both notification sources share one
+    // channel definition and one tap handler.
+    await NotificationService().ensureLocalNotificationsReady();
 
     final l10n = _localizations();
 
-    for (final signal in signals.values) {
-      final typeName = _signalTypeName(l10n, signal.signalType);
+    for (final signal in signals) {
+      final typeName = Signal.signalTypeName(l10n, signal.signalType);
       final body = signal.title.isNotEmpty
           ? '$typeName · ${signal.title}'
           : typeName;
 
-      await _localNotifications.show(
+      await NotificationService().showSignalNotification(
         // Stable per signal, so a repeat post updates rather than stacks.
         id: signal.id.hashCode & 0x7FFFFFFF,
         title: l10n.signalNearbyNotificationTitle,
         body: body,
-        notificationDetails: NotificationDetails(
-          android: AndroidNotificationDetails(
-            _channel.id,
-            _channel.name,
-            channelDescription: _channel.description,
-            importance: Importance.high,
-            priority: Priority.high,
-            icon: '@mipmap/ic_launcher',
-            // Keeps a burst tidy in the shade while each entry stays
-            // individually tappable.
-            groupKey: 'help_a_paw_nearby_signals',
-          ),
-          iOS: const DarwinNotificationDetails(
-            presentAlert: true,
-            presentBadge: true,
-            presentSound: true,
-            threadIdentifier: 'help_a_paw_nearby_signals',
-          ),
-        ),
-        payload: signal.id,
+        signalId: signal.id,
+        groupKey: _notificationGroupKey,
       );
     }
 
-    await NotifiedSignalsStore().markAllNotified({
-      for (final signal in signals.values) signal.id: signal.createdAt,
-    });
+    await NotifiedSignalsStore().markAllNotified(
+      {for (final signal in signals) signal.id: signal.createdAt},
+      cutoff: cutoff,
+    );
 
     debugPrint('NearbySignalChecker: notified ${signals.length} signal(s)');
   }
@@ -369,21 +324,6 @@ class NearbySignalChecker {
         .any((l) => l.languageCode == locale.languageCode);
 
     return lookupAppLocalizations(supported ? locale : const Locale('en'));
-  }
-
-  String _signalTypeName(AppLocalizations l10n, int type) {
-    final names = [
-      l10n.signalTypeEmergency,
-      l10n.signalTypeLostOrFound,
-      l10n.signalTypeBloodDonation,
-      l10n.signalTypeHomeless,
-      l10n.signalTypeUnneuteredAnimals,
-      l10n.signalTypeWildAnimals,
-      l10n.signalTypeOther,
-    ];
-    return (type >= 0 && type < names.length)
-        ? names[type]
-        : l10n.signalTypeOther;
   }
 }
 

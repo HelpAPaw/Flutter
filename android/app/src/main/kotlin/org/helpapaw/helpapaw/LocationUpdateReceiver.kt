@@ -15,10 +15,6 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.GeoPoint
 import com.google.firebase.firestore.SetOptions
-import kotlin.math.atan2
-import kotlin.math.cos
-import kotlin.math.sin
-import kotlin.math.sqrt
 
 /**
  * Receives background location updates from [BackgroundLocationManager].
@@ -146,24 +142,21 @@ class LocationUpdateReceiver : BroadcastReceiver() {
             Context.MODE_PRIVATE,
         )
 
-        if (!prefs.contains(LAST_CHECK_AT_KEY)) {
-            recordCheck(prefs, location)
-            return true
-        }
-
         val lastAt = prefs.getLong(LAST_CHECK_AT_KEY, 0L)
-        val elapsedMinutes = (System.currentTimeMillis() - lastAt) / 60_000.0
-        if (elapsedMinutes < MIN_INTERVAL_MINUTES) return false
-
         val lastLat = prefs.getFloat(LAST_CHECK_LAT_KEY, Float.NaN).toDouble()
         val lastLon = prefs.getFloat(LAST_CHECK_LON_KEY, Float.NaN).toDouble()
-        if (lastLat.isNaN() || lastLon.isNaN()) {
-            recordCheck(prefs, location)
-            return true
-        }
 
-        val movedKm = distanceKm(lastLat, lastLon, location.latitude, location.longitude)
-        if (movedKm < MIN_DISPLACEMENT_KM) return false
+        // No usable previous check (first run, or a partially written record):
+        // fall through and let it run.
+        if (lastAt != 0L && !lastLat.isNaN() && !lastLon.isNaN()) {
+            val elapsedMinutes = (System.currentTimeMillis() - lastAt) / 60_000.0
+            if (elapsedMinutes < MIN_INTERVAL_MINUTES) return false
+            if (distanceKm(lastLat, lastLon, location.latitude, location.longitude)
+                < MIN_DISPLACEMENT_KM
+            ) {
+                return false
+            }
+        }
 
         recordCheck(prefs, location)
         return true
@@ -183,14 +176,15 @@ class LocationUpdateReceiver : BroadcastReceiver() {
             .apply()
     }
 
+    /**
+     * Uses the platform's WGS84 implementation rather than a hand-rolled
+     * spherical haversine, so this agrees with the Dart gate near the threshold
+     * and there is no trigonometry here to keep correct.
+     */
     private fun distanceKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-        val earthRadiusKm = 6371.0
-        val dLat = Math.toRadians(lat2 - lat1)
-        val dLon = Math.toRadians(lon2 - lon1)
-        val a = sin(dLat / 2) * sin(dLat / 2) +
-            cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
-            sin(dLon / 2) * sin(dLon / 2)
-        return earthRadiusKm * 2 * atan2(sqrt(a), sqrt(1 - a))
+        val results = FloatArray(1)
+        Location.distanceBetween(lat1, lon1, lat2, lon2, results)
+        return results[0] / 1000.0
     }
 
     companion object {

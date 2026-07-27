@@ -91,10 +91,13 @@ import UIKit
       case "stop":
         BackgroundLocationManager.shared.stop()
         result(nil)
-      case "isActive":
-        result(BackgroundLocationManager.shared.isActive)
       case "drainPendingUpdates":
         BackgroundLocationManager.shared.drainPendingUpdates()
+        result(nil)
+      case "registerHeadlessCallback":
+        // Android boots a headless engine per delivery; iOS relaunches the whole
+        // app, so Dart is already running and there is no entrypoint to record.
+        // Answered rather than left unimplemented so Dart needn't branch here.
         result(nil)
       default:
         result(FlutterMethodNotImplemented)

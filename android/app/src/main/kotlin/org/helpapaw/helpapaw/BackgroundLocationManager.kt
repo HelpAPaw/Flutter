@@ -78,7 +78,7 @@ object BackgroundLocationManager {
      * From Android 10 onwards, foreground location alone yields nothing once
      * the app is backgrounded, so this must be checked before claiming success.
      */
-    fun hasBackgroundPermission(context: Context): Boolean {
+    private fun hasBackgroundPermission(context: Context): Boolean {
         val fine = ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.ACCESS_FINE_LOCATION,

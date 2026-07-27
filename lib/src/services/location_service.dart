@@ -3,19 +3,37 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import 'background_location_channel.dart';
 import 'nearby_signal_checker.dart';
 
 
-class LocationService {
+class LocationService with WidgetsBindingObserver {
   static final LocationService _instance = LocationService._internal();
   factory LocationService() => _instance;
   LocationService._internal();
 
   StreamSubscription<Position>? _positionSubscription;
+  bool _observingLifecycle = false;
+
+  /// Refresh location and run the catch-up check when the app comes forward.
+  ///
+  /// The geolocator stream only fires on movement, so without this a user who
+  /// travelled with the app closed would see nothing until they happened to
+  /// move another 500m after opening it.
+  ///
+  /// Registered only while tracking is on. Observing unconditionally from the
+  /// app root would take a GPS fix and write `userLocations/{uid}` on every
+  /// resume for users who merely granted location for map centring and never
+  /// enabled tracking — storing their position server-side without asking.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    unawaited(updateLocationNow()
+        .catchError((e) => debugPrint('Resume location update failed: $e')));
+  }
 
   /// Default radius in km for checking nearby signals
   static const double defaultRadiusKm = 10.0;
@@ -28,7 +46,17 @@ class LocationService {
   /// Called from `_bootstrapServices` in main.dart. Before that wiring existed
   /// this method was dead code, which is why tracking silently stopped after
   /// every app restart.
-  Future<void> initialize() async {
+  Future<void> initialize({Function? headlessEntrypoint}) async {
+    final channel = BackgroundLocationChannel();
+
+    // iOS delivers significant-change updates into this isolate (the relaunch
+    // boots the app). Android has no engine at that point and boots a headless
+    // one instead, which is what the entrypoint is for.
+    channel.ensureHandlerInstalled(onUpdate: _runNearbyCheck);
+    if (headlessEntrypoint != null) {
+      await channel.registerHeadlessEntrypoint(headlessEntrypoint);
+    }
+
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
@@ -122,6 +150,11 @@ class LocationService {
           .log('Location: Background monitor unavailable');
     }
 
+    if (!_observingLifecycle) {
+      WidgetsBinding.instance.addObserver(this);
+      _observingLifecycle = true;
+    }
+
     FirebaseCrashlytics.instance.log('Location: Tracking started');
     debugPrint('Location tracking started');
 
@@ -151,6 +184,10 @@ class LocationService {
   /// reboot. Don't call it to merely restart the foreground stream.
   Future<void> stopLocationTracking() async {
     await _cancelPositionStream();
+    if (_observingLifecycle) {
+      WidgetsBinding.instance.removeObserver(this);
+      _observingLifecycle = false;
+    }
     await BackgroundLocationChannel().stop();
     debugPrint('Location tracking stopped');
   }
@@ -159,19 +196,22 @@ class LocationService {
   Future<void> _onLocationChanged(Position position) async {
     debugPrint('Location changed: ${position.latitude}, ${position.longitude}');
 
-    try {
-      await _updateLocationInFirestore(position);
-    } catch (e) {
-      debugPrint('Error updating location in Firestore: $e');
-    }
+    // _updateLocationInFirestore handles its own errors.
+    await _updateLocationInFirestore(position);
+    await _runNearbyCheck(position.latitude, position.longitude);
+  }
 
-    // Catch up on signals the server fan-out couldn't have reached us about,
-    // because we were out of range when they were created. Rate-limited
-    // internally, so calling it on every location change is cheap.
+  /// Catch up on signals the server fan-out couldn't have reached us about,
+  /// because we were out of range when they were created.
+  ///
+  /// Rate-limited inside the checker, so calling it on every location delivery
+  /// is cheap. Shared by the geolocator stream, the resume hook and the native
+  /// background channel.
+  Future<void> _runNearbyCheck(double latitude, double longitude) async {
     try {
       await NearbySignalChecker().check(
-        latitude: position.latitude,
-        longitude: position.longitude,
+        latitude: latitude,
+        longitude: longitude,
       );
     } catch (e) {
       debugPrint('Nearby signal check failed: $e');
@@ -214,7 +254,14 @@ class LocationService {
   /// Called when the app is resumed. The geolocator stream only fires on
   /// movement, so without this a user who travelled with the app closed would
   /// not be checked until they moved another 500m after opening it.
+  ///
+  /// Does nothing unless tracking is running: resume fires many times a day
+  /// (unlock, task switch, dismissing a system dialog), and taking a GPS fix
+  /// plus a Firestore write each time would be wasteful — and would store the
+  /// location of users who never enabled tracking.
   Future<void> updateLocationNow() async {
+    if (_positionSubscription == null) return;
+
     try {
       final permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied ||

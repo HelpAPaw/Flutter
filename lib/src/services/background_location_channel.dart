@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show PluginUtilities;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -40,9 +41,29 @@ class BackgroundLocationChannel {
 
   bool _handlerInstalled = false;
 
+  /// Single funnel for outbound calls.
+  ///
+  /// Every method wants the same handling: a platform without the native
+  /// monitor is not an error, anything else is worth a log but never worth
+  /// throwing into a background path.
+  Future<T?> _invoke<T>(String method, [Map<String, dynamic>? arguments]) async {
+    try {
+      return await _channel.invokeMethod<T>(method, arguments);
+    } on MissingPluginException {
+      // Platform without the native monitor (e.g. web/desktop).
+      return null;
+    } catch (e) {
+      debugPrint('BackgroundLocationChannel: $method failed: $e');
+      return null;
+    }
+  }
+
   /// Installs the inbound handler and drains anything the native side buffered
   /// while the engine was still starting.
-  void ensureHandlerInstalled() {
+  void ensureHandlerInstalled({
+    required Future<void> Function(double latitude, double longitude) onUpdate,
+  }) {
+    onLocationUpdate = onUpdate;
     if (_handlerInstalled) return;
     _handlerInstalled = true;
 
@@ -59,17 +80,7 @@ class BackgroundLocationChannel {
 
     // A background relaunch can deliver a location before Dart finishes
     // booting; the native side holds those and replays them on request.
-    unawaited(_drainPendingUpdates());
-  }
-
-  Future<void> _drainPendingUpdates() async {
-    try {
-      await _channel.invokeMethod<void>('drainPendingUpdates');
-    } on MissingPluginException {
-      // Platform without the native monitor (e.g. web/desktop) — nothing to do.
-    } catch (e) {
-      debugPrint('BackgroundLocationChannel: drain failed: $e');
-    }
+    unawaited(_invoke<void>('drainPendingUpdates'));
   }
 
   /// Starts native background monitoring.
@@ -77,37 +88,29 @@ class BackgroundLocationChannel {
   /// Returns false when the platform refuses — most often because only
   /// "while in use" location permission was granted, which is not enough for
   /// background delivery on either platform.
-  Future<bool> start() async {
-    try {
-      return await _channel.invokeMethod<bool>('start') ?? false;
-    } on MissingPluginException {
-      return false;
-    } catch (e) {
-      debugPrint('BackgroundLocationChannel: start failed: $e');
-      return false;
-    }
-  }
+  Future<bool> start() async => await _invoke<bool>('start') ?? false;
 
   /// Stops native background monitoring.
-  Future<void> stop() async {
-    try {
-      await _channel.invokeMethod<void>('stop');
-    } on MissingPluginException {
-      // Nothing running to stop.
-    } catch (e) {
-      debugPrint('BackgroundLocationChannel: stop failed: $e');
-    }
-  }
+  Future<void> stop() => _invoke<void>('stop');
 
-  /// Whether the native monitor is currently registered.
-  Future<bool> isActive() async {
-    try {
-      return await _channel.invokeMethod<bool>('isActive') ?? false;
-    } on MissingPluginException {
-      return false;
-    } catch (e) {
-      debugPrint('BackgroundLocationChannel: isActive failed: $e');
-      return false;
+  /// Tells the native side which Dart entrypoint to boot for headless checks.
+  ///
+  /// Only Android needs this — iOS relaunches the whole app, so Dart is already
+  /// running — but iOS implements it as a no-op so callers don't have to branch
+  /// on platform.
+  ///
+  /// Re-registered on every launch because the handle is only valid for the
+  /// current binary: an app update invalidates it, and a stale handle fails to
+  /// resolve at exactly the moment it is needed.
+  Future<void> registerHeadlessEntrypoint(Function entrypoint) async {
+    final handle = PluginUtilities.getCallbackHandle(entrypoint);
+    if (handle == null) {
+      debugPrint('BackgroundLocationChannel: could not resolve callback handle');
+      return;
     }
+    await _invoke<void>(
+      'registerHeadlessCallback',
+      {'handle': handle.toRawHandle()},
+    );
   }
 }
