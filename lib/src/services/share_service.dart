@@ -33,20 +33,22 @@ Or visit: $_websiteUrl''';
     // otherwise the hosted page routes to the right store / shows a QR.
     final deepLink = 'https://link.helpapaw.org/signal/$signalId';
 
+    // The signal link must come before any other URL: link-preview scrapers
+    // (Facebook's among them) unfurl the *first* URL in the text, so putting the
+    // maps link first made shares preview as a Google Maps pin instead of the
+    // animal's photo and title.
     var message = '''🐾 Animal needs help!
 
 Type: $signalType
-$description''';
+$description
+
+View on Help a Paw: $deepLink''';
 
     if (latitude != null && longitude != null) {
       message += '''
 
 📍 Location: https://maps.google.com/?q=$latitude,$longitude''';
     }
-
-    message += '''
-
-View on Help a Paw: $deepLink''';
 
     await SharePlus.instance.share(ShareParams(text: message, subject: 'Help a Paw - Animal needs help', sharePositionOrigin: sharePositionOrigin));
   }
