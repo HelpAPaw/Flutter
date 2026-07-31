@@ -14,7 +14,7 @@ class NotificationPreferences {
     this.enabled = false,
     this.locationTrackingEnabled = false,
     this.locationRadiusKm = defaultRadiusKm,
-    this.signalTypes = const <int>[],
+    this.signalTypes,
     this.regionOfInterest,
   });
 
@@ -33,11 +33,19 @@ class NotificationPreferences {
   /// How far away a signal can be and still be worth notifying about.
   final double locationRadiusKm;
 
-  /// Signal types the user wants. **Empty means no filter — all types** — not
-  /// "none". That is how the existing data reads: users created before the
-  /// filter shipped have no stored list, and treating that as "notify about
-  /// nothing" would silence them.
-  final List<int> signalTypes;
+  /// Signal types the user wants, or null if they have never chosen.
+  ///
+  /// **Null and empty mean opposite things, and the distinction is
+  /// load-bearing.** Null is "no preference expressed" and must be read as
+  /// *all types*: the onboarding sheet builds `notificationPreferences` with
+  /// merged partial writes and never sets this field, so every user who
+  /// onboarded without opening the notification settings screen has no stored
+  /// list. Empty is a deliberate "Deselect all" and must be read as *no types*
+  /// — it can only be produced by that button.
+  ///
+  /// These were previously collapsed (both here and in the fan-out's
+  /// `length > 0` check), which made "Deselect all" behave as "select all".
+  final List<int>? signalTypes;
 
   /// Optional fixed area of interest, independent of the user's own position.
   /// Left as a raw map: only the fan-out interprets it, and it does so in
@@ -46,7 +54,7 @@ class NotificationPreferences {
 
   /// Whether [signalType] passes the user's type filter.
   bool wantsSignalType(int signalType) =>
-      signalTypes.isEmpty || signalTypes.contains(signalType);
+      signalTypes?.contains(signalType) ?? true;
 
   factory NotificationPreferences.fromMap(Map<String, dynamic>? map) {
     if (map == null) return const NotificationPreferences();
@@ -58,8 +66,9 @@ class NotificationPreferences {
       // so a radius saved as 10 would fail a straight `as double?` cast.
       locationRadiusKm:
           (map['locationRadiusKm'] as num?)?.toDouble() ?? defaultRadiusKm,
-      signalTypes:
-          (map['signalTypes'] as List<dynamic>?)?.cast<int>() ?? const <int>[],
+      // Left null when the key is absent — see [signalTypes]. Do not add a
+      // `?? const []` here; that is the bug this distinction exists to fix.
+      signalTypes: (map['signalTypes'] as List<dynamic>?)?.cast<int>(),
       regionOfInterest: map['regionOfInterest'] as Map<String, dynamic>?,
     );
   }
