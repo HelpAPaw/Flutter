@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -92,6 +93,12 @@ class _NewSignalFormState extends ConsumerState<NewSignalForm> {
                               labelText: l10n.title,
                             ),
                             textCapitalization: TextCapitalization.sentences,
+                            // Mirrors the Firestore rules' create bounds, so an
+                            // over-long title is capped as it's typed instead of
+                            // failing the write with an opaque PERMISSION_DENIED.
+                            inputFormatters: [
+                              LengthLimitingTextInputFormatter(300),
+                            ],
                             onChanged: (value) {
                               ref
                                   .read(mapViewModelProvider.notifier)
@@ -104,6 +111,9 @@ class _NewSignalFormState extends ConsumerState<NewSignalForm> {
                               labelText: l10n.description,
                             ),
                             textCapitalization: TextCapitalization.sentences,
+                            inputFormatters: [
+                              LengthLimitingTextInputFormatter(10000),
+                            ],
                             onChanged: (value) {
                               ref
                                   .read(mapViewModelProvider.notifier)

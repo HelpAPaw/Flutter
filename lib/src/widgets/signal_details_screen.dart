@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/src/repositories/repository_provider.dart';
@@ -609,6 +610,13 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                 child: TextField(
                                   controller: _newCommentController,
                                   textCapitalization: TextCapitalization.sentences,
+                                  // Matches the rules' 2000-char cap, so over-long
+                                  // input is stopped at the keyboard rather than
+                                  // failing the write. No counter — this is a
+                                  // chat-style field, not a form.
+                                  inputFormatters: [
+                                    LengthLimitingTextInputFormatter(2000),
+                                  ],
                                   decoration: InputDecoration(
                                     hintText: l10n.enterYourComment,
                                   ),
@@ -656,9 +664,15 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   Future<void> _addComment() async {
     final userId = FirebaseAuth.instance.currentUser!.uid;
 
+    // The rules reject an empty `text`, so a whitespace-only comment would come
+    // back as an opaque PERMISSION_DENIED. Drop it here instead — sending blank
+    // comments was never meaningful anyway.
+    final text = _newCommentController.text.trim();
+    if (text.isEmpty) return;
+
     try {
       await FirebaseFirestore.instance.collection(AppPreferencesService().signalsCollectionName).doc(widget.signalId).collection('comments').add({
-        'text': _newCommentController.text,
+        'text': text,
         'createdAt': DateTime.now(),
         'author': FirebaseFirestore.instance.collection('users').doc(userId),
       });

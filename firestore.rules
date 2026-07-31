@@ -2,12 +2,60 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    // The caller's own /users doc, as a DocumentReference. Signals and comments
+    // store their owner as a reference to this doc, so every ownership check
+    // below compares against it.
+    function userDoc() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
     // The signal's reporter (owner), compared by DocumentReference path.
     // Used by both the prod and test signal update/delete rules so the
     // security-critical ownership check lives in exactly one place.
     function isSignalReporter() {
-      return resource.data.reporter
-             == /databases/$(database)/documents/users/$(request.auth.uid);
+      return resource.data.reporter == userDoc();
+    }
+
+    // The caller is the reporter of the parent signal at {coll}/{signalId}.
+    // Backs the comment-delete cascade for both the prod and test collections,
+    // so that ownership check lives in one place instead of being inlined twice.
+    function isParentSignalReporter(coll, signalId) {
+      return get(/databases/$(database)/documents/$(coll)/$(signalId)).data.reporter
+             == userDoc();
+    }
+
+    // Validates a signal create (M-1): reporter pinned to the caller (no
+    // impersonation) plus basic type/size bounds on the content fields, to curb
+    // content abuse and read/storage-cost inflation.
+    //
+    // NOTE: this deliberately does NOT block anonymous callers yet — see the
+    // comment on the signals `create` rule below (HelpAPaw/Flutter#67).
+    function isSignalCreate() {
+      return request.auth != null
+             && request.resource.data.reporter == userDoc()
+             && request.resource.data.title is string
+             && request.resource.data.title.size() > 0
+             && request.resource.data.title.size() <= 300
+             && request.resource.data.description is string
+             && request.resource.data.description.size() <= 10000
+             && request.resource.data.signalType is int
+             && request.resource.data.signalType >= 0
+             && request.resource.data.signalType <= 6;
+    }
+
+    // Validates a comment create (M-1): author pinned to the caller. Covers both
+    // comment shapes — user text comments and the `status_change` system
+    // comments (which carry no `text`), so the text bounds only apply when a
+    // `text` field is present.
+    function isCommentCreate() {
+      return request.auth != null
+             && request.resource.data.author == userDoc()
+             && (
+               !('text' in request.resource.data)
+               || (request.resource.data.text is string
+                   && request.resource.data.text.size() > 0
+                   && request.resource.data.text.size() <= 2000)
+             );
     }
 
     // Non-reporters may ONLY advance a signal's status (the volunteer flow),
@@ -15,8 +63,7 @@ service cloud.firestore {
     function isStatusOnlyUpdate() {
       return request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly(['status', 'lastUpdatedBy'])
-             && request.resource.data.lastUpdatedBy
-                == /databases/$(database)/documents/users/$(request.auth.uid)
+             && request.resource.data.lastUpdatedBy == userDoc()
              && request.resource.data.status is int
              && request.resource.data.status >= 0
              && request.resource.data.status <= 2;
@@ -47,7 +94,16 @@ service cloud.firestore {
     // Signals collection - public read, authenticated write
     match /signals/{signalId} {
       allow read: if true;  // Public read - signals are public data
-      allow create: if request.auth != null;
+      // M-1, partial: binds `reporter` to the caller and bounds the content
+      // fields. The remaining half of M-1 — blocking anonymous callers
+      // server-side — is NOT here yet: it has to gate on
+      // `request.auth.token.email_verified`, which is baked into the ID token at
+      // mint time, so a user who verifies (or upgrades an anonymous account in
+      // place) mid-session keeps a stale `false` claim and gets denied. The
+      // client fix that force-refreshes the token (633da3b) is on dev but not in
+      // any released build, so that clause stays out until it ships.
+      // Tracking: HelpAPaw/Flutter#67.
+      allow create: if isSignalCreate();
       // Reporter may edit any field; anyone else signed in may only advance the
       // status (self-stamping lastUpdatedBy). Prevents non-reporters from
       // rewriting reporter/title/phone/photos or taking over a signal.
@@ -59,18 +115,17 @@ service cloud.firestore {
       // Comments subcollection
       match /comments/{commentId} {
         allow read: if true;  // Public read
-        allow create: if request.auth != null;
+        allow create: if isCommentCreate();
         // The signal's reporter may delete comments (enables delete-signal cascade)
         allow delete: if request.auth != null
-                      && get(/databases/$(database)/documents/signals/$(signalId)).data.reporter
-                         == /databases/$(database)/documents/users/$(request.auth.uid);
+                      && isParentSignalReporter('signals', signalId);
       }
     }
 
     // Test signals collection - same rules as signals
     match /signals_test/{signalId} {
       allow read: if true;
-      allow create: if request.auth != null;
+      allow create: if isSignalCreate();
       // Same rules as prod signals (see helpers above).
       allow update: if request.auth != null
                     && (isSignalReporter() || isStatusOnlyUpdate());
@@ -78,10 +133,9 @@ service cloud.firestore {
 
       match /comments/{commentId} {
         allow read: if true;
-        allow create: if request.auth != null;
+        allow create: if isCommentCreate();
         allow delete: if request.auth != null
-                      && get(/databases/$(database)/documents/signals_test/$(signalId)).data.reporter
-                         == /databases/$(database)/documents/users/$(request.auth.uid);
+                      && isParentSignalReporter('signals_test', signalId);
       }
     }
 
