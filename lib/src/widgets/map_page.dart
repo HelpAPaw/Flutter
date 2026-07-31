@@ -14,7 +14,7 @@ import '../config/routes.dart';
 import '../repositories/repository_provider.dart';
 import '../repositories/signal_repository.dart';
 import '../services/app_preferences_service.dart';
-import '../services/notification_service.dart';
+import '../services/signal_navigator.dart';
 import '../state/map_state.dart';
 import '../utils/map_marker_builder.dart';
 import '../viewmodels/map_view_model.dart';
@@ -486,10 +486,11 @@ class _MapScreenState extends ConsumerState<MapScreen>
     final mapState = ref.watch(mapViewModelProvider);
     final signalsAsync = ref.watch(signalsStreamProvider);
 
-    // After returning from notification-opened signal details, focus the map
-    final pendingId = NotificationService().pendingFocusSignalId;
+    // After returning from a signal opened from outside the map (notification
+    // tap, shared link, or deferred install hand-off), focus that pin.
+    final pendingId = SignalNavigator.instance.pendingFocusSignalId;
     if (pendingId != null) {
-      NotificationService().pendingFocusSignalId = null;
+      SignalNavigator.instance.pendingFocusSignalId = null;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _focusSignalOnMap(pendingId);
       });

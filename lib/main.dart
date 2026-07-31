@@ -35,6 +35,9 @@ import 'package:help_a_paw/src/widgets/notification_settings_page.dart';
 import 'package:help_a_paw/src/widgets/region_selection_page.dart';
 import 'package:help_a_paw/src/services/auth_service.dart';
 import 'package:help_a_paw/src/services/notification_service.dart';
+import 'package:help_a_paw/src/services/deep_link_service.dart';
+import 'package:help_a_paw/src/services/signal_navigator.dart';
+import 'package:help_a_paw/src/services/deferred_deep_link_service.dart';
 import 'package:help_a_paw/src/services/app_preferences_service.dart';
 
 // Google Sign-In client IDs (from google-services.json / GoogleService-Info.plist).
@@ -137,6 +140,27 @@ Future<void> main() async {
 /// preferences) followed by notification setup. Kept off the startup critical
 /// path; the anonymous sign-in is time-boxed so it can't hang forever offline.
 Future<void> _bootstrapServices() async {
+  // Every entry point that opens a signal from outside the map goes through
+  // SignalNavigator, so it needs the router before any of them can fire.
+  SignalNavigator.instance.attach(_router);
+
+  // Listen for shared signal links first: this only subscribes to a stream, and
+  // it must not sit behind the time-boxed anonymous sign-in below or a tapped
+  // link would be ignored for up to 15s. Handles the warm-start case that
+  // Flutter's built-in deep linking misses.
+  DeepLinkService.instance.initialize();
+
+  // One-shot: if this launch is the first after an install that a shared link
+  // sent the user to the store for, open that signal. Deferred to after the
+  // first frame because it needs to know whether a link already took the user
+  // somewhere, and the router has no location to report until the Router widget
+  // has built.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(DeferredDeepLinkService.instance
+        .resolve(launchedFromLink: SignalNavigator.instance.isShowingSignal)
+        .catchError((e) => debugPrint('Deferred deep link failed: $e')));
+  });
+
   // Warm up google_sign_in so the button is responsive on first tap. Not
   // awaited here — a hang must not stall notification setup or anything else.
   unawaited(ensureGoogleSignInInitialized()
@@ -153,9 +177,9 @@ Future<void> _bootstrapServices() async {
     }
   }
 
-  // Initialize notification service (router enables deep-linking from taps).
+  // Initialize notification service (taps navigate via SignalNavigator).
   try {
-    await NotificationService().initialize(router: _router);
+    await NotificationService().initialize();
   } catch (e) {
     debugPrint('Notification service init failed: $e');
   }
@@ -201,7 +225,30 @@ final GoRouter _router = GoRouter(
     GoRoute(
       name: 'signal_details',
       path: Routes.signalDetailsPath,
-      builder: (BuildContext context, GoRouterState state) => SignalDetailsScreen(signalId: state.pathParameters['signalId']!),
+      // A cold launch hands the OS's URL straight to the router, so the id
+      // arrives unvalidated — DeepLinkService only guards links that arrive
+      // while the app is already running. The App Link filter matches *any*
+      // path on the link host, so this route is reachable directly from
+      // outside; guarding here rather than on /signal/:id covers every way in,
+      // and keeps a junk id from becoming a Firestore lookup.
+      redirect: (BuildContext context, GoRouterState state) =>
+          DeepLinkService.validSignalId(state.pathParameters['signalId'] ?? '') == null
+              ? Routes.home
+              : null,
+      // Keyed by id: go_router derives a page's key from the route *pattern*, so
+      // navigating signal->signal (which deep links now do) would otherwise reuse
+      // the same State and keep showing the previous signal's data.
+      builder: (BuildContext context, GoRouterState state) => SignalDetailsScreen(
+        key: ValueKey(state.pathParameters['signalId']),
+        signalId: state.pathParameters['signalId']!,
+      ),
+    ),
+    // Public shareable deep link (App Links / Universal Links). Reuses the
+    // signal details screen by redirecting to its canonical route.
+    GoRoute(
+      name: 'signal_link',
+      path: Routes.signalLinkPath,
+      redirect: (BuildContext context, GoRouterState state) => Routes.signalDetails(state.pathParameters['signalId']!),
     ),
     GoRoute(
       name: 'edit_signal',

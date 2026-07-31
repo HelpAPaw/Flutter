@@ -2,6 +2,8 @@ import 'dart:ui';
 
 import 'package:share_plus/share_plus.dart';
 
+import '../config/routes.dart';
+
 class ShareService {
   static const String _appStoreUrl = 'https://apps.apple.com/app/help-a-paw/id1234893764';
   static const String _playStoreUrl = 'https://play.google.com/store/apps/details?id=org.helpapaw.helpapaw';
@@ -29,25 +31,26 @@ Or visit: $_websiteUrl''';
     double? longitude,
     Rect? sharePositionOrigin,
   }) async {
-    final deepLink = 'https://www.helpapaw.org/signal/$signalId';
+    // Smart link: opens the signal directly in the app when installed,
+    // otherwise the hosted page routes to the right store / shows a QR.
+    final deepLink = Routes.signalShareUrl(signalId);
 
+    // The signal link must come before any other URL: link-preview scrapers
+    // (Facebook's among them) unfurl the *first* URL in the text, so putting the
+    // maps link first made shares preview as a Google Maps pin instead of the
+    // animal's photo and title.
     var message = '''🐾 Animal needs help!
 
 Type: $signalType
-$description''';
+$description
+
+View on Help a Paw: $deepLink''';
 
     if (latitude != null && longitude != null) {
       message += '''
 
 📍 Location: https://maps.google.com/?q=$latitude,$longitude''';
     }
-
-    message += '''
-
-View on Help a Paw: $deepLink
-
-Don't have the app? Download it:
-$_websiteUrl''';
 
     await SharePlus.instance.share(ShareParams(text: message, subject: 'Help a Paw - Animal needs help', sharePositionOrigin: sharePositionOrigin));
   }

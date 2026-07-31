@@ -4,7 +4,7 @@ import {
   onDocumentUpdated,
   onDocumentWritten,
 } from "firebase-functions/v2/firestore";
-import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onCall, HttpsError, onRequest } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
 import { geohashQueryBounds, geohashForLocation } from "geofire-common";
@@ -1252,5 +1252,424 @@ export const cleanupAnonymousUsers = onSchedule(
     console.log(
       `cleanupAnonymousUsers: scanned ${scanned} users, found ${staleFound} stale anonymous (> ${ANON_RETENTION_DAYS}d inactive), deleted ${deleted}${ANON_CLEANUP_DRY_RUN ? " [DRY RUN — nothing deleted]" : ""}.`
     );
+  }
+);
+
+// ===========================================================================
+// Shareable signal links (App Links / Universal Links fallback page)
+// ===========================================================================
+//
+// Hosting rewrites `/signal/**` to this function. It is only ever reached when
+// the link is opened OUTSIDE the app (app not installed, or a desktop browser).
+// When the Help a Paw app IS installed, the OS intercepts the verified link
+// before this function runs and opens the signal natively.
+//
+// Behaviour:
+//   - Always emits Open Graph / Twitter tags so the link previews nicely in
+//     messaging apps and social media.
+//   - On a phone: tries the `helpapaw://` scheme, then falls back to the
+//     correct app store after a short delay.
+//   - On desktop: shows a signal preview and a QR code that, scanned with a
+//     phone, opens the same link (and thus the app / store) on that device.
+
+const APP_STORE_URL =
+  "https://apps.apple.com/app/help-a-paw/id1234893764";
+const PLAY_STORE_URL =
+  "https://play.google.com/store/apps/details?id=org.helpapaw.helpapaw";
+const WEBSITE_URL = "https://www.helpapaw.org";
+const LINK_HOST = "https://link.helpapaw.org";
+const APPLE_APP_ID = "1234893764";
+
+// Localized signal type names (mirrors lib/src/models/signal.dart ordering).
+// `en` reuses SIGNAL_TYPES above rather than restating it: the list already
+// exists twice (here and in the Dart model) and a third copy drifting silently
+// would mislabel every signal of a newly added type on the public share page.
+const SIGNAL_TYPE_NAMES: Record<"en" | "bg", string[]> = {
+  en: SIGNAL_TYPES,
+  bg: [
+    "Спешен случай",
+    "Изгубено или намерено",
+    "Кръводаряване",
+    "Бездомно",
+    "Некастрирани животни",
+    "Диви животни",
+    "Друго",
+  ],
+};
+
+const PAGE_TEXT = {
+  en: {
+    needsHelp: "An animal needs help",
+    openInApp: "Open in the Help a Paw app",
+    getTheApp: "Get the Help a Paw app",
+    scanHint: "Scan this code with your phone to open it in the app",
+    notFoundTitle: "Signal not found",
+    notFoundBody:
+      "This signal may have been resolved or removed. Get the app to report and follow animals in need.",
+    appStore: "Download on the App Store",
+    playStore: "Get it on Google Play",
+  },
+  bg: {
+    needsHelp: "Животно се нуждае от помощ",
+    openInApp: "Отвори в приложението Help a Paw",
+    getTheApp: "Изтегли приложението Help a Paw",
+    scanHint: "Сканирай кода с телефона си, за да го отвориш в приложението",
+    notFoundTitle: "Сигналът не е намерен",
+    notFoundBody:
+      "Този сигнал може да е разрешен или премахнат. Изтегли приложението, за да докладваш и следиш животни в нужда.",
+    appStore: "Изтегли от App Store",
+    playStore: "Изтегли от Google Play",
+  },
+};
+
+// Serialized once at module load: these tables are constants embedded in every
+// rendered page, so re-stringifying them per request is pure waste.
+const PAGE_TEXT_JSON = JSON.stringify(PAGE_TEXT);
+const SIGNAL_TYPE_NAMES_JSON = JSON.stringify(SIGNAL_TYPE_NAMES);
+
+/**
+ * Play Store URL carrying the signal id through the install.
+ *
+ * Play hands `referrer` back to the app on first launch via the Install
+ * Referrer API, which is how a user who had to install the app still lands on
+ * the signal they tapped (see DeferredDeepLinkService). PLAY_STORE_URL already
+ * carries `?id=`, so this appends.
+ */
+function playStoreUrl(signalId: string): string {
+  if (!signalId) return PLAY_STORE_URL;
+  return `${PLAY_STORE_URL}&referrer=${encodeURIComponent(`signal=${signalId}`)}`;
+}
+
+/**
+ * Custom-scheme URL for the app. The empty authority (triple slash) is load
+ * bearing: `helpapaw://signal/<id>` would parse `signal` as the host, leaving
+ * the path as `/<id>`, which the app's router does not match.
+ */
+function customSchemeUrl(signalId: string): string {
+  return `helpapaw:///signal/${signalId}`;
+}
+
+/**
+ * Android intent:// URL that opens the app via its verified https App Link and
+ * falls back to the Play Store when the app isn't installed. Using the https
+ * link (rather than the custom scheme) keeps the path shape `/signal/<id>` that
+ * the app's router expects.
+ */
+function androidIntentUrl(signalId: string): string {
+  return (
+    `intent://${LINK_HOST.replace(/^https:\/\//, "")}/signal/${signalId}#Intent;scheme=https;` +
+    "package=org.helpapaw.helpapaw;" +
+    `S.browser_fallback_url=${encodeURIComponent(playStoreUrl(signalId))};end`
+  );
+}
+
+/**
+ * QR for the shared link, as inline SVG.
+ *
+ * SVG rather than a PNG data URI: it is a fraction of the CPU and of the bytes,
+ * and it scales crisply. `qrcode` is imported lazily because this single-file
+ * codebase deploys 13 functions and gen-2 evaluates the whole module in every
+ * container — a top-level import would tax the cold start of the other twelve.
+ */
+async function renderQrSvg(url: string): Promise<string> {
+  const QRCode = await import("qrcode");
+  return QRCode.toString(url, { type: "svg", margin: 1, width: 200 });
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+interface SignalPreview {
+  title: string;
+  description: string;
+  typeIndex: number;
+  typeName: string;
+  photoUrl: string | null;
+}
+
+async function loadSignalPreview(
+  signalId: string,
+  lang: "en" | "bg"
+): Promise<SignalPreview | null> {
+  // Production signals live in `signals`; debug/test builds use `signals_test`.
+  for (const collection of ["signals", "signals_test"]) {
+    const doc = await db.collection(collection).doc(signalId).get();
+    if (!doc.exists) continue;
+    const data = doc.data() as Record<string, any>;
+    const rawType =
+      typeof data.signalType === "number" ? data.signalType : 6;
+    const names = SIGNAL_TYPE_NAMES[lang];
+    // Clamp unknown types onto "Other" so the index is safe to hand to the
+    // client-side language switcher too.
+    const typeIndex =
+      rawType >= 0 && rawType < names.length ? rawType : names.length - 1;
+    const photos = Array.isArray(data.photoUrls) ? data.photoUrls : [];
+    return {
+      title: (data.title as string) || PAGE_TEXT[lang].needsHelp,
+      description: (data.description as string) || "",
+      typeIndex,
+      typeName: names[typeIndex],
+      photoUrl: photos.length > 0 ? (photos[0] as string) : null,
+    };
+  }
+  return null;
+}
+
+function renderHtml(opts: {
+  lang: "en" | "bg";
+  /** Set when `?lang=` pinned the language, so the client must not override. */
+  pinnedLang: "en" | "bg" | null;
+  signalId: string;
+  url: string;
+  preview: SignalPreview | null;
+  qrSvg: string;
+}): string {
+  const t = PAGE_TEXT[opts.lang];
+  const preview = opts.preview;
+  const ogTitle = preview
+    ? `🐾 ${preview.typeName}: ${preview.title}`
+    : t.notFoundTitle;
+  const ogDescription = preview ? preview.description : t.notFoundBody;
+  // Only advertise an image when the signal actually has a photo — pointing at
+  // a placeholder that may not exist would just yield a broken preview.
+  const ogImage = preview?.photoUrl ?? null;
+
+  const previewCard = preview
+    ? `
+      <div class="card">
+        ${
+          preview.photoUrl
+            ? `<img class="photo" src="${escapeHtml(preview.photoUrl)}" alt="">`
+            : ""
+        }
+        <span class="badge" data-i18n-type="${preview.typeIndex}">${escapeHtml(preview.typeName)}</span>
+        <h1>${escapeHtml(preview.title)}</h1>
+        <p>${escapeHtml(preview.description)}</p>
+      </div>`
+    : `
+      <div class="card">
+        <h1 data-i18n="notFoundTitle">${escapeHtml(t.notFoundTitle)}</h1>
+        <p data-i18n="notFoundBody">${escapeHtml(t.notFoundBody)}</p>
+      </div>`;
+
+  return `<!DOCTYPE html>
+<html lang="${opts.lang}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(ogTitle)}</title>
+  <meta property="og:title" content="${escapeHtml(ogTitle)}">
+  <meta property="og:description" content="${escapeHtml(ogDescription)}">
+${ogImage ? `  <meta property="og:image" content="${escapeHtml(ogImage)}">\n` : ""}  <meta property="og:url" content="${escapeHtml(opts.url)}">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="${ogImage ? "summary_large_image" : "summary"}">
+  <meta name="apple-itunes-app" content="app-id=${APPLE_APP_ID}, app-argument=${escapeHtml(opts.url)}">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: -apple-system, Roboto, Segoe UI, sans-serif;
+      background: #f5f5f5; color: #1d1d1d; display: flex; min-height: 100vh;
+      align-items: center; justify-content: center; padding: 24px; }
+    .wrap { max-width: 420px; width: 100%; text-align: center; }
+    .card { background: #fff; border-radius: 16px; overflow: hidden;
+      box-shadow: 0 6px 24px rgba(0,0,0,.08); text-align: left; }
+    .photo { width: 100%; height: 200px; object-fit: cover; display: block; }
+    .badge { display: inline-block; margin: 16px 16px 0; padding: 4px 10px;
+      background: #ffe1d6; color: #c0392b; border-radius: 999px; font-size: 13px;
+      font-weight: 600; }
+    h1 { font-size: 20px; margin: 12px 16px 0; }
+    .card p { margin: 8px 16px 16px; color: #555; }
+    .btn { display: block; margin: 12px auto 0; padding: 14px 20px; max-width: 320px;
+      background: #2e7d32; color: #fff; text-decoration: none; border-radius: 12px;
+      font-weight: 600; }
+    .stores { margin-top: 16px; }
+    .stores a { color: #2e7d32; }
+    .qr { margin-top: 24px; }
+    .qr img { width: 200px; height: 200px; }
+    .hint { color: #777; font-size: 14px; margin-top: 12px; }
+    .logo { font-size: 28px; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="logo">🐾 Help a Paw</div>
+    ${previewCard}
+    <a class="btn" id="openApp" data-i18n="openInApp" href="${escapeHtml(customSchemeUrl(opts.signalId))}">${escapeHtml(t.openInApp)}</a>
+    <div class="qr" id="qr" hidden>
+      ${opts.qrSvg}
+      <div class="hint" data-i18n="scanHint">${escapeHtml(t.scanHint)}</div>
+    </div>
+    <div class="stores">
+      <p class="hint" data-i18n="getTheApp">${escapeHtml(t.getTheApp)}</p>
+      <a href="${APP_STORE_URL}" data-i18n="appStore">${escapeHtml(t.appStore)}</a> ·
+      <a href="${escapeHtml(playStoreUrl(opts.signalId))}" data-i18n="playStore">${escapeHtml(t.playStore)}</a>
+    </div>
+  </div>
+  <script>
+    (function () {
+      // Language is applied client-side on purpose: this page is cached by the
+      // Hosting CDN, which does not vary on Accept-Language, so negotiating the
+      // language on the server would let whichever visitor arrives first pin
+      // the cached copy's language for everyone else. An explicit ?lang= query
+      // stays server-side because it is part of the cache key.
+      var STRINGS = ${PAGE_TEXT_JSON};
+      var TYPES = ${SIGNAL_TYPE_NAMES_JSON};
+      var rendered = ${JSON.stringify(opts.lang)};
+      var pinned = ${JSON.stringify(opts.pinnedLang)};
+      var lang = pinned ||
+        ((navigator.language || "").toLowerCase().slice(0, 2) === "bg" ? "bg" : "en");
+
+      if (lang !== rendered && STRINGS[lang]) {
+        document.documentElement.lang = lang;
+        var nodes = document.querySelectorAll("[data-i18n]");
+        for (var i = 0; i < nodes.length; i++) {
+          var key = nodes[i].getAttribute("data-i18n");
+          if (STRINGS[lang][key]) nodes[i].textContent = STRINGS[lang][key];
+        }
+        var badge = document.querySelector("[data-i18n-type]");
+        if (badge) {
+          var idx = parseInt(badge.getAttribute("data-i18n-type"), 10);
+          if (TYPES[lang][idx]) badge.textContent = TYPES[lang][idx];
+        }
+      }
+
+      var ua = navigator.userAgent || "";
+      var isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+      var isAndroid = /Android/.test(ua);
+      var appUrl = ${JSON.stringify(customSchemeUrl(opts.signalId))};
+      var intentUrl = ${JSON.stringify(androidIntentUrl(opts.signalId))};
+      var btn = document.getElementById("openApp");
+
+      if (isAndroid) {
+        // An intent:// URL lets Android open the app when installed and fall
+        // back to Play natively via browser_fallback_url — avoids the
+        // ERR_UNKNOWN_URL_SCHEME page that a bare custom scheme would show
+        // (which would also kill any JS timer-based fallback).
+        btn.href = intentUrl;
+        window.location.href = intentUrl;
+      } else if (isIOS) {
+        // iOS has no intent:// equivalent: try the scheme, then fall back to
+        // the App Store if we're still here (i.e. the app isn't installed).
+        //
+        // iOS gets no deferred hand-off of the signal id. The only way to carry
+        // it across an install would be the clipboard, and reading that raises
+        // the "Allow Paste" system alert as a new user's first interaction with
+        // the app — a certain, universal cost for a probabilistic gain. Instead
+        // the apple-itunes-app banner above turns into "OPEN" once installed and
+        // deep-links via its app-argument, and re-tapping the shared link works.
+        var timer = setTimeout(function () {
+          window.location.href = ${JSON.stringify(APP_STORE_URL)};
+        }, 1500);
+        // If the app opened, the page is backgrounded — cancel the store jump.
+        document.addEventListener("visibilitychange", function () {
+          if (document.hidden) clearTimeout(timer);
+        });
+        window.addEventListener("pagehide", function () { clearTimeout(timer); });
+        window.location.href = appUrl;
+      } else {
+        // Desktop: show the QR so the link can be opened on a phone.
+        document.getElementById("qr").hidden = false;
+        btn.hidden = true;
+      }
+    })();
+  </script>
+</body>
+</html>`;
+}
+
+/**
+ * Renders the public fallback page for a shared signal link.
+ * Wired via Hosting rewrite: link.helpapaw.org/signal/** -> this function.
+ */
+export const signalLink = onRequest(
+  { region: "us-central1" },
+  async (req, res) => {
+    try {
+      // Path looks like "/signal/{id}" (or "/{id}" depending on rewrite).
+      const parts = req.path.split("/").filter((p) => p.length > 0);
+      const rawId = parts[parts.length - 1] || "";
+      // The id is attacker-controlled (it comes straight from the URL) and is
+      // interpolated into the HTML/JS below, so accept only id-shaped values.
+      // Firestore auto-ids are alphanumeric; `-`/`_` keep custom ids working.
+      const signalId = /^[A-Za-z0-9_-]{1,128}$/.test(rawId) ? rawId : "";
+
+      // Canonical URL for this page. A rejected id keeps the raw path rather
+      // than collapsing to `/signal/`, which would be advertised as og:url and
+      // baked into the QR — sending scanners to a URL that resolves to nothing.
+      const url = signalId
+        ? `${LINK_HOST}/signal/${signalId}`
+        : `${LINK_HOST}/signal`;
+
+      // Express gives back an array for `?lang=a&lang=b` and an object for
+      // `?lang[x]=y`; both are truthy and neither has .startsWith.
+      const rawLang = req.query.lang;
+      const queryLang = typeof rawLang === "string" ? rawLang : "";
+
+      // Collapse tracking-parameter variants onto the canonical URL before doing
+      // any work. The CDN keys on the full query string, and the social networks
+      // this page exists to be shared on append a per-click `fbclid`/`utm_*`, so
+      // without this every single viewer would miss the cache and cost a fresh
+      // invocation, Firestore read and QR render.
+      const extraneousQuery = Object.keys(req.query).some((k) => k !== "lang");
+      if (extraneousQuery || rawLang !== undefined && typeof rawLang !== "string") {
+        res.set("Cache-Control", "public, max-age=3600");
+        res.redirect(
+          301,
+          queryLang ? `${url}?lang=${encodeURIComponent(queryLang)}` : url
+        );
+        return;
+      }
+
+      // Only an explicit `?lang=` selects the language server-side: it is part
+      // of the CDN cache key, so it cannot leak across visitors. Accept-Language
+      // is deliberately ignored here (the CDN does not vary on it) — the page
+      // switches to the visitor's language client-side instead.
+      const pinnedLang: "en" | "bg" | null = queryLang
+        ? queryLang.startsWith("bg")
+          ? "bg"
+          : "en"
+        : null;
+      const lang = pinnedLang ?? "en";
+
+      // Kick off the document read first so the QR render overlaps its latency.
+      // The handler is attached immediately: renderQrSvg awaits a module import,
+      // and a rejection landing in that window with nothing attached would be an
+      // unhandled rejection, which this runtime turns into a dead instance.
+      const previewPromise = signalId
+        ? loadSignalPreview(signalId, lang).catch((e) => {
+            console.error("signalLink: preview load failed:", e);
+            return null;
+          })
+        : Promise.resolve(null);
+      const qrSvg = await renderQrSvg(url);
+      const preview = await previewPromise;
+
+      const html = renderHtml({
+        lang,
+        pinnedLang,
+        signalId,
+        url,
+        preview,
+        qrSvg,
+      });
+      // stale-while-revalidate keeps every request after the first off the
+      // origin: expiry refreshes in the background instead of blocking a viewer
+      // on a possible cold start. Kept to an hour rather than a day so a deleted
+      // or anonymized signal stops being served soon after, matching the intent
+      // of the account-deletion handling elsewhere.
+      res.set(
+        "Cache-Control",
+        "public, max-age=300, s-maxage=300, stale-while-revalidate=3600"
+      );
+      res.status(200).send(html);
+    } catch (err) {
+      console.error("signalLink error:", err);
+      res.redirect(WEBSITE_URL);
+    }
   }
 );

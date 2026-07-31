@@ -20,10 +20,17 @@
         android:icon="@mipmap/ic_launcher">
         <meta-data android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyDFn3Cexv_aWaSIQ6w4i53YQJf-j5_EsNk"/>
+        <!-- launchMode=singleTask keeps the app to a single instance in its own
+             task. An implicit VIEW intent from another app (e.g. a link saved in
+             Keep) would otherwise launch a second MainActivity inside *that*
+             app's task, giving two Flutter engines and a split state. Incoming
+             links now bring the existing task forward and arrive via
+             onNewIntent, which DeepLinkService handles — matching how
+             notification taps already behave. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTop"
+            android:launchMode="singleTask"
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
@@ -36,9 +43,36 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
+            <!-- Hands incoming VIEW intents to Flutter's router (go_router) instead
+                 of just launching the app at its default route. Required for the
+                 App Link / custom-scheme filters below to actually open a signal. -->
+            <meta-data
+              android:name="flutter_deeplinking_enabled"
+              android:value="true"
+              />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <!-- App Links: verified https links open signals directly in the app.
+                 Verification file: https://link.helpapaw.org/.well-known/assetlinks.json -->
+            <!-- pathPrefix matters: without it this claims every URL on the host,
+                 so the bare domain or a .well-known file would open the app onto
+                 go_router's "page not found" screen. Mirrors the /signal/* scope
+                 the iOS apple-app-site-association already declares. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="link.helpapaw.org"
+                      android:pathPrefix="/signal/" />
+            </intent-filter>
+            <!-- Custom-scheme fallback used by the hosted page's "Open in app" button. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="helpapaw" />
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.

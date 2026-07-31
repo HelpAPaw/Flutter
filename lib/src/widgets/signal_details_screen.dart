@@ -48,6 +48,11 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   int _currentPhotoPage = 0;
   bool _hasNavigatedAway = false;
 
+  // Note: every field above is memoized per signal. Navigating signal->signal
+  // must therefore build a fresh State rather than reuse this one — the route
+  // gives this screen a ValueKey on the signal id (see main.dart) so the
+  // framework disposes and rebuilds instead of swapping `widget` underneath us.
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);

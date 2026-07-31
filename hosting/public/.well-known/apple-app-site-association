@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": [
+          "NJRZ88GCVL.com.helpapaw.helpapaw",
+          "NJRZ88GCVL.com.helpapaw.helpapaw.debug"
+        ],
+        "components": [
+          { "/": "/signal/*", "comment": "Opens a shared signal in the app" }
+        ]
+      }
+    ]
+  }
+}
