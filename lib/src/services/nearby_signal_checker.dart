@@ -76,12 +76,40 @@ class NearbySignalChecker {
   /// tappable.
   static const String _notificationGroupKey = 'help_a_paw_nearby_signals';
 
+  /// A check already running in this isolate, if any. See [check].
+  Future<void>? _inFlight;
+
   /// Runs a catch-up check for [latitude]/[longitude].
   ///
   /// Callers don't need to reason about the gate — it is applied here, and its
   /// state is namespaced per mode (see [_gateKey]), so a test-mode switch also
   /// needs nothing from the caller.
+  ///
+  /// Concurrent calls are coalesced onto the running check rather than starting
+  /// a second one. There are two independent callers in the main isolate —
+  /// `LocationService`'s resume hook and its geolocator stream — and a resume
+  /// very often coincides with a position delivery. Both would read the gate
+  /// before either reached [_recordCheck], both would pass it, and both would
+  /// query and notify: the same signal announced twice, with the loser's
+  /// `markAllNotified` overwriting the winner's entry. Returning the in-flight
+  /// future is the right answer rather than merely a safe one — a check that
+  /// started microseconds ago already covers this position.
   Future<void> check({
+    required double latitude,
+    required double longitude,
+  }) {
+    final existing = _inFlight;
+    if (existing != null) return existing;
+
+    // Assigned before any await can run, so the completion callback below
+    // cannot clear a field that was never set.
+    final run = _check(latitude: latitude, longitude: longitude)
+        .whenComplete(() => _inFlight = null);
+    _inFlight = run;
+    return run;
+  }
+
+  Future<void> _check({
     required double latitude,
     required double longitude,
   }) async {
@@ -96,6 +124,14 @@ class NearbySignalChecker {
     if (user == null) return;
 
     final prefs = await SharedPreferences.getInstance();
+
+    // Refresh the cache before reading the gate: on Android the headless
+    // isolate records its checks here, and the main isolate would otherwise
+    // keep whatever it cached at launch and re-run a check the background
+    // already did. One local round trip is much cheaper than the redundant
+    // multi-range Firestore query it prevents.
+    await prefs.reload();
+
     if (!_shouldCheck(prefs, latitude, longitude)) return;
 
     // Record the attempt before doing any I/O. Anything below this line that

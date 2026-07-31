@@ -25,11 +25,15 @@ import 'app_preferences_service.dart';
 /// FCM-delivered signals are recorded here too (see `NotificationService`), so
 /// a push and a local catch-up notification can't both fire for one signal.
 ///
-/// Note on isolates: `shared_preferences` keeps an in-process cache, so a write
-/// from the headless isolate is not visible to the main isolate (or vice versa)
-/// without an explicit `reload()`. Re-reading here would not change that, so
-/// each operation reads once and the worst case stays what it always was — one
-/// duplicate notification, never a corrupt store.
+/// Note on isolates: `shared_preferences` keeps an in-process cache that is
+/// never refreshed on its own, so a write from the headless isolate is invisible
+/// to the long-lived main isolate. Every mutation here is a read-modify-write of
+/// the *whole* map, which makes a stale cache far worse than a missed entry: the
+/// main isolate would write its stale map back and erase every signal the
+/// background checks had recorded since launch, making all of them eligible to
+/// be announced again. So [_read] reloads first — the cost is one platform round
+/// trip on a path that is already about to post a notification or run a geo
+/// query.
 class NotifiedSignalsStore {
   static final NotifiedSignalsStore _instance =
       NotifiedSignalsStore._internal();
@@ -42,9 +46,15 @@ class NotifiedSignalsStore {
       ? 'notified_signals_test'
       : 'notified_signals';
 
-  /// Decodes the store. Cheap — `shared_preferences` serves this from its
-  /// in-process cache, so the cost is the `jsonDecode`, not disk I/O.
+  /// Decodes the store, refreshing the in-process cache first.
+  ///
+  /// The reload is what makes this safe across isolates — see the note on the
+  /// class. Without it the main isolate reads whatever it cached at launch, and
+  /// since every mutation writes the whole map back, that silently discards the
+  /// background isolate's entries.
   Future<Map<String, int>> _read(SharedPreferences prefs) async {
+    await prefs.reload();
+
     final raw = prefs.getString(_key);
     if (raw == null || raw.isEmpty) return <String, int>{};
 
