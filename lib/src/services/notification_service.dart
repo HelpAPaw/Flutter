@@ -13,11 +13,66 @@ import 'nearby_signal_checker.dart';
 import 'notified_signals_store.dart';
 import 'signal_navigator.dart';
 
-/// Background message handler - must be a top-level function
+/// Background message handler - must be a top-level function.
+///
+/// This is where FCM delivers while the app is backgrounded or terminated,
+/// which is the *usual* case rather than an edge one. It exists to keep the
+/// dedupe store honest: without it a pushed signal was only ever recorded when
+/// the app happened to be in the foreground or the user tapped the
+/// notification, so the arrival catch-up would announce it a second time to
+/// anyone who read it in the shade and swiped it away.
+///
+/// Runs in its own isolate with no app state, so [_recordDeliveredSignal]
+/// initializes what it needs. It must be awaited — the isolate is torn down as
+/// soon as this returns.
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // Handle background messages
   debugPrint('Handling background message: ${message.messageId}');
+  await _recordDeliveredSignal(message);
+}
+
+/// Marks a pushed signal as already announced.
+///
+/// Shares the dedupe store with [NearbySignalChecker], so the arrival catch-up
+/// won't announce a signal the server already pushed. Without this, a user who
+/// got the normal push, travelled away and came back would be notified a second
+/// time about a signal they already knew about.
+///
+/// `createdAt` is only used as the prune horizon; if the payload doesn't carry
+/// it we fall back to now, which keeps the entry for the full eligibility
+/// window — erring towards suppressing a duplicate rather than risking one.
+///
+/// Top-level rather than a method because [firebaseMessagingBackgroundHandler]
+/// has to reach it from a background isolate.
+Future<void> _recordDeliveredSignal(RemoteMessage message) async {
+  // Only a message that actually displays something counts as announced. A
+  // data-only push shows nothing, so recording it would permanently suppress
+  // the arrival catch-up for a signal the user was never told about — silence
+  // instead of the duplicate this is meant to prevent.
+  if (message.notification == null) return;
+
+  final signalId = message.data['signalId'];
+  if (signalId == null || signalId.isEmpty) return;
+
+  final rawCreatedAt = message.data['createdAt'];
+  final createdAt = rawCreatedAt is String
+      ? DateTime.tryParse(rawCreatedAt) ?? DateTime.now()
+      : DateTime.now();
+
+  try {
+    // The background isolate gets its own uninitialized singleton, and an
+    // uninitialized isTestMode() reports false — which would write this entry
+    // against the live key while the user is in test mode. Idempotent, so the
+    // foreground callers pay nothing for it.
+    await AppPreferencesService().initialize();
+
+    await NotifiedSignalsStore().markAllNotified(
+      {signalId: createdAt},
+      cutoff: DateTime.now().subtract(NearbySignalChecker.eligibilityWindow),
+    );
+  } catch (e) {
+    debugPrint('Failed to record delivered signal: $e');
+  }
 }
 
 class NotificationService {
@@ -181,7 +236,7 @@ class NotificationService {
     FirebaseCrashlytics.instance.log('Notification: Foreground message received - signalId: ${message.data['signalId']}');
     debugPrint('Received foreground message: ${message.messageId}');
 
-    _recordDeliveredSignal(message);
+    unawaited(_recordDeliveredSignal(message));
 
     final notification = message.notification;
     if (notification == null) return;
@@ -200,42 +255,9 @@ class NotificationService {
     FirebaseCrashlytics.instance.log('Notification: Tapped - signalId: $signalId');
     debugPrint('Notification tapped: ${message.data}');
 
-    _recordDeliveredSignal(message);
+    unawaited(_recordDeliveredSignal(message));
 
     if (signalId != null) SignalNavigator.instance.open(signalId);
-  }
-
-  /// Marks a pushed signal as already announced.
-  ///
-  /// Shares the dedupe store with [NearbySignalChecker], so the arrival
-  /// catch-up won't announce a signal the server already pushed. Without this,
-  /// a user who got the normal push, travelled away and came back would be
-  /// notified a second time about a signal they already knew about.
-  ///
-  /// `createdAt` is only used as the prune horizon; if the payload doesn't
-  /// carry it we fall back to now, which keeps the entry for the full
-  /// eligibility window — erring towards suppressing a duplicate rather than
-  /// risking one.
-  void _recordDeliveredSignal(RemoteMessage message) {
-    final signalId = message.data['signalId'];
-    if (signalId == null || signalId.isEmpty) return;
-
-    final rawCreatedAt = message.data['createdAt'];
-    final createdAt = rawCreatedAt is String
-        ? DateTime.tryParse(rawCreatedAt) ?? DateTime.now()
-        : DateTime.now();
-
-    unawaited(
-      NotifiedSignalsStore()
-          .markAllNotified(
-            {signalId: createdAt},
-            cutoff:
-                DateTime.now().subtract(NearbySignalChecker.eligibilityWindow),
-          )
-          .catchError(
-            (e) => debugPrint('Failed to record delivered signal: $e'),
-          ),
-    );
   }
 
   /// Routes a tap on a local notification that launched the app.
