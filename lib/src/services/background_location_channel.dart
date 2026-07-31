@@ -93,6 +93,15 @@ class BackgroundLocationChannel {
   /// Stops native background monitoring.
   Future<void> stop() => _invoke<void>('stop');
 
+  /// Mirrors the test-mode flag into native-owned preferences.
+  ///
+  /// Android keys its background pre-filter gate by mode, the same way the Dart
+  /// gate and [NotifiedSignalsStore] do, and it cannot read Dart's own
+  /// `shared_preferences` to find out — so it has to be told. iOS implements
+  /// this as a no-op (it has no native gate) so callers don't branch.
+  Future<void> setTestMode(bool enabled) =>
+      _invoke<void>('setTestMode', {'enabled': enabled});
+
   /// Tells the native side which Dart entrypoint to boot for headless checks.
   ///
   /// Only Android needs this — iOS relaunches the whole app, so Dart is already

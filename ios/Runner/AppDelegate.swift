@@ -94,6 +94,13 @@ import UIKit
       case "drainPendingUpdates":
         BackgroundLocationManager.shared.drainPendingUpdates()
         result(nil)
+      case "setTestMode":
+        // Android keys its native pre-filter gate by mode and needs the mirror.
+        // iOS has no native gate — a significant-change relaunch runs the check
+        // in the normal isolate, where the Dart gate is already namespaced — so
+        // there is nothing to store. Answered rather than left unimplemented so
+        // Dart needn't branch on platform.
+        result(nil)
       case "registerHeadlessCallback":
         // Android boots a headless engine per delivery; iOS relaunches the whole
         // app, so Dart is already running and there is no entrypoint to record.

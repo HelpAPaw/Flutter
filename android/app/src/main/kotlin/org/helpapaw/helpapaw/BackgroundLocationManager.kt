@@ -45,6 +45,7 @@ object BackgroundLocationManager {
      */
     internal const val PREFS_FILE = "helpapaw_background_location"
     private const val ENABLED_KEY = "enabled"
+    private const val TEST_MODE_KEY = "test_mode"
 
     private const val REQUEST_CODE = 4021
 
@@ -69,6 +70,28 @@ object BackgroundLocationManager {
         context.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE)
             .edit()
             .putBoolean(ENABLED_KEY, enabled)
+            .apply()
+    }
+
+    /**
+     * Whether the app is in test mode, mirrored here by Dart.
+     *
+     * A mirror rather than a read of Dart's own preference, for the same reason
+     * everything else in this file is native-owned: `shared_preferences` stores
+     * doubles as prefixed strings and newer versions may not use the XML file
+     * at all, so reading it from Kotlin breaks silently. Dart pushes this on
+     * every launch and on every flip, so a missed push heals on the next start.
+     *
+     * Defaults to false, matching an uninitialized `AppPreferencesService`.
+     */
+    fun isTestMode(context: Context): Boolean =
+        context.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE)
+            .getBoolean(TEST_MODE_KEY, false)
+
+    fun setTestMode(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(TEST_MODE_KEY, enabled)
             .apply()
     }
 

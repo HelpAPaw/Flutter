@@ -138,10 +138,18 @@ class LocationUpdateReceiver : BroadcastReceiver() {
             Context.MODE_PRIVATE,
         )
 
-        if (!gateAllows(prefs, location)) return
+        // Namespaced per mode, matching the Dart gate and NotifiedSignalsStore.
+        // Without this a flip into test mode kept the pre-flip timestamp here,
+        // so no engine was booted for up to 30 minutes and test signals looked
+        // like they produced no catch-up notification at all — while the Dart
+        // gate, being namespaced, had already reset. Flipping back now restores
+        // the real gate instead of destroying it.
+        val suffix = if (BackgroundLocationManager.isTestMode(context)) "_test" else ""
+
+        if (!gateAllows(prefs, location, suffix)) return
 
         if (HeadlessNearbyCheck.run(context, location.latitude, location.longitude)) {
-            recordCheck(prefs, location)
+            recordCheck(prefs, location, suffix)
         }
     }
 
@@ -159,10 +167,11 @@ class LocationUpdateReceiver : BroadcastReceiver() {
     private fun gateAllows(
         prefs: android.content.SharedPreferences,
         location: Location,
+        suffix: String,
     ): Boolean {
-        val lastAt = prefs.getLong(LAST_CHECK_AT_KEY, 0L)
-        val lastLat = prefs.getFloat(LAST_CHECK_LAT_KEY, Float.NaN).toDouble()
-        val lastLon = prefs.getFloat(LAST_CHECK_LON_KEY, Float.NaN).toDouble()
+        val lastAt = prefs.getLong(LAST_CHECK_AT_KEY + suffix, 0L)
+        val lastLat = prefs.getFloat(LAST_CHECK_LAT_KEY + suffix, Float.NaN).toDouble()
+        val lastLon = prefs.getFloat(LAST_CHECK_LON_KEY + suffix, Float.NaN).toDouble()
 
         // No usable previous check (first run, or a partially written record):
         // fall through and let it run.
@@ -181,11 +190,15 @@ class LocationUpdateReceiver : BroadcastReceiver() {
      *
      * Float is plenty here: this only feeds a 3km threshold comparison.
      */
-    private fun recordCheck(prefs: android.content.SharedPreferences, location: Location) {
+    private fun recordCheck(
+        prefs: android.content.SharedPreferences,
+        location: Location,
+        suffix: String,
+    ) {
         prefs.edit()
-            .putFloat(LAST_CHECK_LAT_KEY, location.latitude.toFloat())
-            .putFloat(LAST_CHECK_LON_KEY, location.longitude.toFloat())
-            .putLong(LAST_CHECK_AT_KEY, System.currentTimeMillis())
+            .putFloat(LAST_CHECK_LAT_KEY + suffix, location.latitude.toFloat())
+            .putFloat(LAST_CHECK_LON_KEY + suffix, location.longitude.toFloat())
+            .putLong(LAST_CHECK_AT_KEY + suffix, System.currentTimeMillis())
             .apply()
     }
 

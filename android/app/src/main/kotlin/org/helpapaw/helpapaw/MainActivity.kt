@@ -48,6 +48,17 @@ class MainActivity : FlutterActivity() {
                     }
                 }
 
+                // Mirrors Dart's test-mode flag so LocationUpdateReceiver can
+                // key its pre-filter gate by mode. Pushed on every launch and on
+                // every flip; native must never read Dart's own preferences.
+                "setTestMode" -> {
+                    BackgroundLocationManager.setTestMode(
+                        appContext,
+                        call.argument<Boolean>("enabled") == true,
+                    )
+                    result.success(null)
+                }
+
                 // iOS buffers updates that arrive before Dart is ready; Android
                 // starts a fresh engine per delivery, so there is nothing held.
                 "drainPendingUpdates" -> result.success(null)

@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import '../repositories/repository_provider.dart';
+import 'app_preferences_service.dart';
 import 'background_location_channel.dart';
 import 'nearby_signal_checker.dart';
 
@@ -64,11 +65,6 @@ class LocationService with WidgetsBindingObserver {
   /// Distance filter in meters - only trigger on meaningful movement
   static const int distanceFilterMeters = 500;
 
-  /// Restore location tracking on launch if the user has it enabled.
-  ///
-  /// Called from `_bootstrapServices` in main.dart. Before that wiring existed
-  /// this method was dead code, which is why tracking silently stopped after
-  /// every app restart.
   /// Installs the native background-location channel handler.
   ///
   /// Split out of [initialize] and called from `main()` before `runApp`, for
@@ -85,8 +81,31 @@ class LocationService with WidgetsBindingObserver {
     // boots the app). Android has no engine at that point and boots a headless
     // one instead, which is what the entrypoint is for.
     BackgroundLocationChannel().ensureHandlerInstalled(onUpdate: _runNearbyCheck);
+
+    // Not awaited: this is called ahead of runApp, and the mode only affects a
+    // background delivery, which cannot arrive this early.
+    unawaited(syncTestMode());
   }
 
+  /// Mirrors the current test-mode flag into native-owned preferences.
+  ///
+  /// Android's background receiver keys its pre-filter gate by mode — exactly
+  /// as [NearbySignalChecker] and [NotifiedSignalsStore] do — and it cannot
+  /// read Dart's `shared_preferences` to discover the mode, so it has to be
+  /// pushed.
+  ///
+  /// Called on every launch as well as on every flip. The launch call is what
+  /// makes it self-healing: a push that failed while the app was being killed
+  /// corrects itself on the next start rather than leaving the two sides
+  /// disagreeing indefinitely.
+  Future<void> syncTestMode() =>
+      BackgroundLocationChannel().setTestMode(AppPreferencesService().isTestMode());
+
+  /// Restore location tracking on launch if the user has it enabled.
+  ///
+  /// Called from `_bootstrapServices` in main.dart. Before that wiring existed
+  /// this method was dead code, which is why tracking silently stopped after
+  /// every app restart.
   Future<void> initialize({Function? headlessEntrypoint}) async {
     // Registering the headless entrypoint stays here rather than moving up with
     // the handler: it only persists a callback handle natively for *future*

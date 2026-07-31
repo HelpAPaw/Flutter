@@ -14,6 +14,7 @@ import '../config/routes.dart';
 import '../repositories/repository_provider.dart';
 import '../repositories/signal_repository.dart';
 import '../services/app_preferences_service.dart';
+import '../services/location_service.dart';
 import '../services/signal_navigator.dart';
 import '../state/map_state.dart';
 import '../utils/map_marker_builder.dart';
@@ -129,6 +130,11 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
       // Reset the signal repository so it picks up the new collection
       RepositoryProvider.instance.resetSignalRepository();
+
+      // Android's background receiver keys its pre-filter gate by mode and
+      // can't read this preference itself, so push it now rather than leaving
+      // background checks on the old mode's gate until the next launch.
+      await LocationService().syncTestMode();
 
       // Sync testMode flag to Firestore user document
       final user = FirebaseAuth.instance.currentUser;
