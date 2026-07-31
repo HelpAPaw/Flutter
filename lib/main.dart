@@ -235,27 +235,29 @@ Future<void> _bootstrapServices() async {
     }
   }
 
-  // Initialize notification service (taps navigate via SignalNavigator).
-  try {
-    await NotificationService().initialize();
-  } catch (e) {
-    debugPrint('Notification service init failed: $e');
-  }
-
-  // Restore background location tracking. This has to run on every launch:
-  // LocationService.initialize() existed but was never called from anywhere, so
-  // a user who enabled tracking silently stopped reporting their location after
-  // the next app restart until they toggled the setting off and on again.
+  // Both need the uid from the sign-in above, but not each other — run them
+  // together rather than making the restore of background tracking queue behind
+  // a full FCM token fetch. They only touch through
+  // `ensureLocalNotificationsReady`, which is idempotent by contract.
   //
-  // Placed after the anonymous sign-in above because it needs a uid to read the
-  // preference, and not awaited by anything on the startup critical path.
-  try {
-    await LocationService().initialize(
-      headlessEntrypoint: backgroundLocationCallbackDispatcher,
-    );
-  } catch (e) {
-    debugPrint('Background location init failed: $e');
-  }
+  // Each keeps its own catch: `Future.wait` surfaces the first error and
+  // abandons the other result, so a failure in one must not be able to hide a
+  // failure in the other.
+  await Future.wait([
+    // Taps navigate via SignalNavigator, attached above.
+    NotificationService()
+        .initialize()
+        .catchError((e) => debugPrint('Notification service init failed: $e')),
+
+    // Restoring background location tracking has to run on every launch:
+    // LocationService.initialize() existed but was never called from anywhere,
+    // so a user who enabled tracking silently stopped reporting their location
+    // after the next app restart until they toggled the setting off and on
+    // again.
+    LocationService()
+        .initialize(headlessEntrypoint: backgroundLocationCallbackDispatcher)
+        .catchError((e) => debugPrint('Background location init failed: $e')),
+  ]);
 }
 
 final GoRouter _router = GoRouter(

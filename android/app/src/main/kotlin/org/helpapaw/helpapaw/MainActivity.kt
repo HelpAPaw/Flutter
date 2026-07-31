@@ -9,16 +9,23 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
+        // Resolved once, outside the handler. Referencing `applicationContext`
+        // from inside the lambda would capture `this` — the Activity — for the
+        // lifetime of the engine. Harmless with the default per-activity
+        // engine, but it would leak the Activity the moment a cached engine is
+        // introduced, which is exactly the kind of change that looks safe.
+        val appContext = applicationContext
+
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             BACKGROUND_LOCATION_CHANNEL,
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "start" ->
-                    result.success(BackgroundLocationManager.start(applicationContext))
+                    result.success(BackgroundLocationManager.start(appContext))
 
                 "stop" -> {
-                    BackgroundLocationManager.stop(applicationContext)
+                    BackgroundLocationManager.stop(appContext)
                     result.success(null)
                 }
 
@@ -28,7 +35,7 @@ class MainActivity : FlutterActivity() {
                     val handle = call.argument<Any>("handle")
                     if (handle is Number) {
                         HeadlessNearbyCheck.saveCallbackHandle(
-                            applicationContext,
+                            appContext,
                             handle.toLong(),
                         )
                         result.success(null)
