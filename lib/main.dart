@@ -151,14 +151,15 @@ Future<void> _bootstrapServices() async {
   DeepLinkService.instance.initialize();
 
   // One-shot: if this launch is the first after an install that a shared link
-  // sent the user to the store for, open that signal. Checked after
-  // DeepLinkService so a link that launched the app directly wins.
-  unawaited(DeferredDeepLinkService.instance
-      .resolve(
-        launchedFromLink: _router.state.uri.path
-            .startsWith(Routes.signalDetailsPrefix),
-      )
-      .catchError((e) => debugPrint('Deferred deep link failed: $e')));
+  // sent the user to the store for, open that signal. Deferred to after the
+  // first frame because it needs to know whether a link already took the user
+  // somewhere, and the router has no location to report until the Router widget
+  // has built.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(DeferredDeepLinkService.instance
+        .resolve(launchedFromLink: SignalNavigator.instance.isShowingSignal)
+        .catchError((e) => debugPrint('Deferred deep link failed: $e')));
+  });
 
   // Warm up google_sign_in so the button is responsive on first tap. Not
   // awaited here — a hang must not stall notification setup or anything else.

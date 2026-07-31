@@ -28,6 +28,23 @@ class SignalNavigator {
   /// handled.
   void attach(GoRouter router) => _router = router;
 
+  /// Current in-app location, or null before the Router has built.
+  ///
+  /// `GoRouter.state` reaches for `matches.last` and **throws** while the
+  /// configuration is still empty, which it is until the first frame — `runApp`
+  /// defers attaching the root widget. Everything here runs during startup or
+  /// from a platform callback, so the location must always be read this way.
+  String? get _currentPath {
+    final config = _router?.routerDelegate.currentConfiguration;
+    if (config == null || config.isEmpty) return null;
+    return config.uri.path;
+  }
+
+  /// Whether a signal is already on screen — true when a deep link cold-launched
+  /// the app straight into one.
+  bool get isShowingSignal =>
+      _currentPath?.startsWith(Routes.signalDetailsPrefix) ?? false;
+
   /// Shows [signalId], unless it is already on screen.
   ///
   /// Uses `push` so backing out returns wherever the user came from (normally
@@ -44,7 +61,7 @@ class SignalNavigator {
     // should do nothing rather than stack a duplicate page. This also absorbs
     // the launch link that app_links replays on a cold start, which the
     // platform's built-in handling has already applied as the initial route.
-    if (router.state.uri.path == location) return;
+    if (_currentPath == location) return;
 
     pendingFocusSignalId = signalId;
     router.push(location);

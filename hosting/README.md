@@ -13,10 +13,14 @@ Implemented with **Android App Links + iOS Universal Links** plus the
 
 - `public/.well-known/apple-app-site-association` — iOS Universal Link claim
   (Team ID `NJRZ88GCVL`, bundles `com.helpapaw.helpapaw[.debug]`).
-- `public/.well-known/assetlinks.json` — Android App Link claim. **Replace
-  `REPLACE_WITH_PLAY_APP_SIGNING_SHA256`** with the SHA-256 of the *App signing
-  key* from Play Console → Test and release → App integrity. (Optionally add a
-  second entry for `org.helpapaw.helpapaw.debug` to test on debug builds.)
+- `public/.well-known/assetlinks.json` — Android App Link claim. Holds the
+  SHA-256 of the *App signing key* from Play Console → Test and release → App
+  integrity, plus a second entry for `org.helpapaw.helpapaw.debug` so App Links
+  can be verified on a debug build.
+  **Before shipping, drop the `.debug` entries** from this file and from
+  `apple-app-site-association`: they let a build signed with a local debug
+  keystore (well-known password) claim `link.helpapaw.org` URLs, and they serve
+  no purpose in production.
 - `../firebase.json` — `hosting` block: rewrites `/signal/**` → `signalLink`,
   and serves the AASA file as `application/json`.
 - `../functions/src/index.ts` — the `signalLink` HTTPS function.

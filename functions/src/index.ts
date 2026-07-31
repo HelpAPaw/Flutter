@@ -1598,11 +1598,17 @@ export const signalLink = onRequest(
       // Firestore auto-ids are alphanumeric; `-`/`_` keep custom ids working.
       const signalId = /^[A-Za-z0-9_-]{1,128}$/.test(rawId) ? rawId : "";
 
-      // Only an explicit `?lang=` selects the language server-side: it is part
-      // of the CDN cache key, so it cannot leak across visitors. Accept-Language
-      // is deliberately ignored here (the CDN does not vary on it) — the page
-      // switches to the visitor's language client-side instead.
-      const url = `${LINK_HOST}/signal/${signalId}`;
+      // Canonical URL for this page. A rejected id keeps the raw path rather
+      // than collapsing to `/signal/`, which would be advertised as og:url and
+      // baked into the QR — sending scanners to a URL that resolves to nothing.
+      const url = signalId
+        ? `${LINK_HOST}/signal/${signalId}`
+        : `${LINK_HOST}/signal`;
+
+      // Express gives back an array for `?lang=a&lang=b` and an object for
+      // `?lang[x]=y`; both are truthy and neither has .startsWith.
+      const rawLang = req.query.lang;
+      const queryLang = typeof rawLang === "string" ? rawLang : "";
 
       // Collapse tracking-parameter variants onto the canonical URL before doing
       // any work. The CDN keys on the full query string, and the social networks
@@ -1610,10 +1616,12 @@ export const signalLink = onRequest(
       // without this every single viewer would miss the cache and cost a fresh
       // invocation, Firestore read and QR render.
       const extraneousQuery = Object.keys(req.query).some((k) => k !== "lang");
-      if (extraneousQuery) {
-        const lang = req.query.lang as string | undefined;
+      if (extraneousQuery || rawLang !== undefined && typeof rawLang !== "string") {
         res.set("Cache-Control", "public, max-age=3600");
-        res.redirect(301, lang ? `${url}?lang=${encodeURIComponent(lang)}` : url);
+        res.redirect(
+          301,
+          queryLang ? `${url}?lang=${encodeURIComponent(queryLang)}` : url
+        );
         return;
       }
 
@@ -1621,7 +1629,6 @@ export const signalLink = onRequest(
       // of the CDN cache key, so it cannot leak across visitors. Accept-Language
       // is deliberately ignored here (the CDN does not vary on it) — the page
       // switches to the visitor's language client-side instead.
-      const queryLang = (req.query.lang as string) || "";
       const pinnedLang: "en" | "bg" | null = queryLang
         ? queryLang.startsWith("bg")
           ? "bg"
@@ -1630,8 +1637,14 @@ export const signalLink = onRequest(
       const lang = pinnedLang ?? "en";
 
       // Kick off the document read first so the QR render overlaps its latency.
+      // The handler is attached immediately: renderQrSvg awaits a module import,
+      // and a rejection landing in that window with nothing attached would be an
+      // unhandled rejection, which this runtime turns into a dead instance.
       const previewPromise = signalId
-        ? loadSignalPreview(signalId, lang)
+        ? loadSignalPreview(signalId, lang).catch((e) => {
+            console.error("signalLink: preview load failed:", e);
+            return null;
+          })
         : Promise.resolve(null);
       const qrSvg = await renderQrSvg(url);
       const preview = await previewPromise;
@@ -1646,10 +1659,12 @@ export const signalLink = onRequest(
       });
       // stale-while-revalidate keeps every request after the first off the
       // origin: expiry refreshes in the background instead of blocking a viewer
-      // on a possible cold start.
+      // on a possible cold start. Kept to an hour rather than a day so a deleted
+      // or anonymized signal stops being served soon after, matching the intent
+      // of the account-deletion handling elsewhere.
       res.set(
         "Cache-Control",
-        "public, max-age=300, s-maxage=300, stale-while-revalidate=86400"
+        "public, max-age=300, s-maxage=300, stale-while-revalidate=3600"
       );
       res.status(200).send(html);
     } catch (err) {

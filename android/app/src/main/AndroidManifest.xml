@@ -56,11 +56,16 @@
             </intent-filter>
             <!-- App Links: verified https links open signals directly in the app.
                  Verification file: https://link.helpapaw.org/.well-known/assetlinks.json -->
+            <!-- pathPrefix matters: without it this claims every URL on the host,
+                 so the bare domain or a .well-known file would open the app onto
+                 go_router's "page not found" screen. Mirrors the /signal/* scope
+                 the iOS apple-app-site-association already declares. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="link.helpapaw.org" />
+                <data android:scheme="https" android:host="link.helpapaw.org"
+                      android:pathPrefix="/signal/" />
             </intent-filter>
             <!-- Custom-scheme fallback used by the hosted page's "Open in app" button. -->
             <intent-filter>
