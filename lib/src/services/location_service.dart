@@ -88,9 +88,26 @@ class LocationService with WidgetsBindingObserver {
     // position. The next launch retries.
     final prefs = await RepositoryProvider.instance.userRepository
         .getNotificationPreferences(user.uid);
-    if (prefs?.locationTrackingEnabled == true) {
-      await startLocationTracking();
+    if (prefs?.locationTrackingEnabled != true) return;
+
+    // Check, never request. [startLocationTracking] calls requestPermission(),
+    // which prompts whenever the current state is `denied` — and this runs from
+    // the launch bootstrap with no user action behind it. Someone who enabled
+    // tracking and later revoked location in system Settings would be met by an
+    // OS permission dialog on startup, which is both jarring and the pattern
+    // iOS review rejects. Leave tracking off instead; the settings toggle asks
+    // properly, in response to a tap.
+    final permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      debugPrint(
+        'Location tracking is enabled but permission is $permission; '
+        'not restoring, and not prompting during startup.',
+      );
+      return;
     }
+
+    await startLocationTracking();
   }
 
   /// Request location permission
