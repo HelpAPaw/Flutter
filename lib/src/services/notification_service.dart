@@ -6,9 +6,8 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:go_router/go_router.dart';
-import '../config/routes.dart';
 import 'app_preferences_service.dart';
+import 'signal_navigator.dart';
 
 /// Background message handler - must be a top-level function
 @pragma('vm:entry-point')
@@ -26,7 +25,6 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
 
-  GoRouter? _router;
 
   /// Android notification channel for high importance notifications
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
@@ -38,13 +36,8 @@ class NotificationService {
 
   bool _isFullyInitialized = false;
 
-  /// Set by notification tap handlers so the map can focus on the signal
-  /// after the user dismisses signal details.
-  String? pendingFocusSignalId;
-
   /// Phase 1: Basic initialization (no permission triggers)
-  Future<void> initialize({GoRouter? router}) async {
-    _router = router;
+  Future<void> initialize() async {
     FirebaseCrashlytics.instance.log('Notification: Phase 1 init started');
 
     // Initialize local notifications (minimal setup)
@@ -158,19 +151,15 @@ class NotificationService {
     FirebaseCrashlytics.instance.log('Notification: Tapped - signalId: $signalId');
     debugPrint('Notification tapped: ${message.data}');
 
-    if (signalId != null && _router != null) {
-      pendingFocusSignalId = signalId;
-      _router!.push(Routes.signalDetails(signalId));
-    }
+    if (signalId != null) SignalNavigator.instance.open(signalId);
   }
 
   void _onNotificationResponse(NotificationResponse response) {
     debugPrint('Local notification tapped: ${response.payload}');
 
     final signalId = response.payload;
-    if (signalId != null && signalId.isNotEmpty && _router != null) {
-      pendingFocusSignalId = signalId;
-      _router!.push(Routes.signalDetails(signalId));
+    if (signalId != null && signalId.isNotEmpty) {
+      SignalNavigator.instance.open(signalId);
     }
   }
 

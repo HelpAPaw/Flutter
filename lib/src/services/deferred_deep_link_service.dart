@@ -1,11 +1,11 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
-import 'package:go_router/go_router.dart';
 import 'package:play_install_referrer/play_install_referrer.dart';
 
 import 'app_preferences_service.dart';
 import 'deep_link_service.dart';
+import 'signal_navigator.dart';
 
 /// Opens the shared signal that caused a new user to install the app (Android).
 ///
@@ -35,10 +35,7 @@ class DeferredDeepLinkService {
   /// [launchedFromLink] should be true when the app was started by an actual
   /// deep link — that link has already taken the user where they wanted to go,
   /// so the hand-off is only marked as spent.
-  Future<void> resolve({
-    required GoRouter router,
-    required bool launchedFromLink,
-  }) async {
+  Future<void> resolve({required bool launchedFromLink}) async {
     if (!Platform.isAndroid) return;
 
     final prefs = AppPreferencesService();
@@ -52,24 +49,24 @@ class DeferredDeepLinkService {
 
     try {
       final ReferrerDetails details = await PlayInstallReferrer.installReferrer;
-      final location = locationFromReferrer(details.installReferrer);
-      if (location == null) return;
+      final signalId = signalIdFromReferrer(details.installReferrer);
+      if (signalId == null) return;
 
-      debugPrint('Deferred deep link -> $location');
-      router.go(location);
+      debugPrint('Deferred deep link -> signal $signalId');
+      SignalNavigator.instance.open(signalId);
     } catch (e) {
       // A missing or unavailable referrer is normal; never let it affect startup.
       debugPrint('Deferred deep link check failed: $e');
     }
   }
 
-  /// Parses a Play install referrer string. Kept separate from the plugin call
-  /// so it can be unit tested without Play services.
+  /// Extracts the signal id from a Play install referrer string. Kept separate
+  /// from the plugin call so it can be unit tested without Play services.
   ///
   /// Organic installs also produce a referrer (typically
   /// `utm_source=google-play&utm_medium=organic`), so the absence of our key is
   /// the normal case, not an error.
-  static String? locationFromReferrer(String? referrer) {
+  static String? signalIdFromReferrer(String? referrer) {
     if (referrer == null || referrer.isEmpty) return null;
 
     String? id;
@@ -80,6 +77,6 @@ class DeferredDeepLinkService {
     }
     if (id == null || id.isEmpty) return null;
 
-    return DeepLinkService.locationForSignalId(id);
+    return DeepLinkService.validSignalId(id);
   }
 }
