@@ -60,11 +60,14 @@ class LocationService with WidgetsBindingObserver {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // Check if user has enabled location tracking
+    // Check if user has enabled location tracking. Time-boxed like every other
+    // Firestore call on this path: this runs on the launch bootstrap, and
+    // offline the read can stay pending indefinitely.
     final userDoc = await FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
-        .get();
+        .get()
+        .timeout(const Duration(seconds: 10));
 
     final prefs = userDoc.data()?['notificationPreferences'];
     if (prefs != null && prefs['locationTrackingEnabled'] == true) {
@@ -183,13 +186,45 @@ class LocationService with WidgetsBindingObserver {
   /// native enabled flag — meaning nothing will re-arm on the next launch or
   /// reboot. Don't call it to merely restart the foreground stream.
   Future<void> stopLocationTracking() async {
+    FirebaseCrashlytics.instance.log('Location: Tracking disabled by user');
     await _cancelPositionStream();
     if (_observingLifecycle) {
       WidgetsBinding.instance.removeObserver(this);
       _observingLifecycle = false;
     }
     await BackgroundLocationChannel().stop();
+
+    // Only once nothing can write it any more, so an in-flight delivery can't
+    // recreate the document we are about to remove.
+    await _deleteStoredLocation();
+
     debugPrint('Location tracking stopped');
+  }
+
+  /// Removes `userLocations/{uid}` when the user opts out.
+  ///
+  /// Not optional bookkeeping: the notification fan-out selects candidates by
+  /// running a geohash range query straight over `userLocations`, and only then
+  /// loads the user document for preferences. It never consults
+  /// `locationTrackingEnabled`. So a document left behind here keeps matching
+  /// the user forever, against a position that stops being updated the moment
+  /// they turn tracking off — they keep being notified about "nearby" signals
+  /// from wherever they happened to be, and their location stays stored after
+  /// they asked us not to store it.
+  Future<void> _deleteStoredLocation() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('userLocations')
+          .doc(user.uid)
+          .delete()
+          .timeout(const Duration(seconds: 10));
+      debugPrint('Deleted stored location');
+    } catch (e) {
+      debugPrint('Error deleting stored location: $e');
+    }
   }
 
   /// Handle location change
@@ -281,41 +316,6 @@ class LocationService with WidgetsBindingObserver {
       );
     } catch (e) {
       debugPrint('Error updating location: $e');
-    }
-  }
-
-  /// Save location tracking preference
-  Future<void> setLocationTrackingEnabled(bool enabled) async {
-    FirebaseCrashlytics.instance.log('Location: Tracking ${enabled ? "enabled" : "disabled"} by user');
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    try {
-      if (enabled) {
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
-          {
-            'notificationPreferences': {
-              'locationTrackingEnabled': true,
-            },
-          },
-          SetOptions(merge: true),
-        ).timeout(const Duration(seconds: 10));
-        await startLocationTracking();
-      } else {
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-          'notificationPreferences.locationTrackingEnabled': false,
-        }).timeout(const Duration(seconds: 10));
-        // Clear the stored location so the fan-out stops matching this user.
-        await FirebaseFirestore.instance
-            .collection('userLocations')
-            .doc(user.uid)
-            .delete()
-            .timeout(const Duration(seconds: 10));
-        await stopLocationTracking();
-      }
-    } catch (e) {
-      debugPrint('Error setting location tracking preference: $e');
-      rethrow;
     }
   }
 }
