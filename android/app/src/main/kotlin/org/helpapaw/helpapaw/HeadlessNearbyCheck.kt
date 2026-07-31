@@ -57,26 +57,34 @@ object HeadlessNearbyCheck {
             Context.MODE_PRIVATE,
         ).getLong(CALLBACK_HANDLE_KEY, 0L)
 
-    fun run(context: Context, latitude: Double, longitude: Double) {
+    /**
+     * Returns whether a check was actually started.
+     *
+     * The caller uses this to decide whether to record the attempt against its
+     * displacement/interval gate. Every `false` below is a bailout where no
+     * check ran at all, and recording those would burn the 30-minute window on
+     * nothing — suppressing the next genuine opportunity.
+     */
+    fun run(context: Context, latitude: Double, longitude: Double): Boolean {
         val handle = callbackHandle(context)
         if (handle == 0L) {
             // The app has not run since install/upgrade, so no entrypoint is
             // registered yet. The location write still happened; the check will
             // catch up next time the app is opened.
             Log.w(TAG, "no Dart callback registered, skipping nearby check")
-            return
+            return false
         }
 
         // Engines are not cheap and updates can arrive in bursts after Doze.
         if (running) {
             Log.i(TAG, "nearby check already running, skipping")
-            return
+            return false
         }
 
         val callbackInfo = FlutterCallbackInformation.lookupCallbackInformation(handle)
         if (callbackInfo == null) {
             Log.e(TAG, "callback handle $handle no longer resolves")
-            return
+            return false
         }
 
         running = true
@@ -85,6 +93,7 @@ object HeadlessNearbyCheck {
         Handler(Looper.getMainLooper()).post {
             startEngine(context, callbackInfo, latitude, longitude)
         }
+        return true
     }
 
     private fun startEngine(

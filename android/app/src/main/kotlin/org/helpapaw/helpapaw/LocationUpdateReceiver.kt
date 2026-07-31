@@ -76,9 +76,7 @@ class LocationUpdateReceiver : BroadcastReceiver() {
         // acknowledged, but the catch-up check can still run against Firestore's
         // local cache, so it must not be chained to that completion.
         try {
-            if (shouldRunNearbyCheck(context, location)) {
-                HeadlessNearbyCheck.run(context, location.latitude, location.longitude)
-            }
+            maybeRunNearbyCheck(context, location)
         } catch (e: Exception) {
             Log.e(TAG, "nearby check failed to start", e)
         }
@@ -126,6 +124,28 @@ class LocationUpdateReceiver : BroadcastReceiver() {
     }
 
     /**
+     * Applies the pre-filter and, if it passes, starts the check.
+     *
+     * The attempt is recorded only once [HeadlessNearbyCheck.run] confirms it
+     * actually started one. Recording unconditionally would mean a bailout —
+     * no Dart entrypoint registered yet, or a check already in flight — spent
+     * the 30-minute window on a check that never happened, so the next real
+     * opportunity would be rejected by a gate advanced on nothing.
+     */
+    private fun maybeRunNearbyCheck(context: Context, location: Location) {
+        val prefs = context.getSharedPreferences(
+            BackgroundLocationManager.PREFS_FILE,
+            Context.MODE_PRIVATE,
+        )
+
+        if (!gateAllows(prefs, location)) return
+
+        if (HeadlessNearbyCheck.run(context, location.latitude, location.longitude)) {
+            recordCheck(prefs, location)
+        }
+    }
+
+    /**
      * Cheap pre-filter mirroring the Dart gate, so we don't boot a Flutter
      * engine for movement that would be rejected anyway.
      *
@@ -136,34 +156,27 @@ class LocationUpdateReceiver : BroadcastReceiver() {
      * the real gate again on the other side and stays authoritative; this only
      * decides whether the expensive path is worth entering.
      */
-    private fun shouldRunNearbyCheck(context: Context, location: Location): Boolean {
-        val prefs = context.getSharedPreferences(
-            BackgroundLocationManager.PREFS_FILE,
-            Context.MODE_PRIVATE,
-        )
-
+    private fun gateAllows(
+        prefs: android.content.SharedPreferences,
+        location: Location,
+    ): Boolean {
         val lastAt = prefs.getLong(LAST_CHECK_AT_KEY, 0L)
         val lastLat = prefs.getFloat(LAST_CHECK_LAT_KEY, Float.NaN).toDouble()
         val lastLon = prefs.getFloat(LAST_CHECK_LON_KEY, Float.NaN).toDouble()
 
         // No usable previous check (first run, or a partially written record):
         // fall through and let it run.
-        if (lastAt != 0L && !lastLat.isNaN() && !lastLon.isNaN()) {
-            val elapsedMinutes = (System.currentTimeMillis() - lastAt) / 60_000.0
-            if (elapsedMinutes < MIN_INTERVAL_MINUTES) return false
-            if (distanceKm(lastLat, lastLon, location.latitude, location.longitude)
-                < MIN_DISPLACEMENT_KM
-            ) {
-                return false
-            }
-        }
+        if (lastAt == 0L || lastLat.isNaN() || lastLon.isNaN()) return true
 
-        recordCheck(prefs, location)
-        return true
+        val elapsedMinutes = (System.currentTimeMillis() - lastAt) / 60_000.0
+        if (elapsedMinutes < MIN_INTERVAL_MINUTES) return false
+
+        return distanceKm(lastLat, lastLon, location.latitude, location.longitude) >=
+            MIN_DISPLACEMENT_KM
     }
 
     /**
-     * Records the attempt before the check runs, so a failure partway through
+     * Records the attempt as the check starts, so a failure partway through
      * can't let the next update immediately retry and boot another engine.
      *
      * Float is plenty here: this only feeds a 3km threshold comparison.
