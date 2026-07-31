@@ -55,9 +55,22 @@ class NearbySignalChecker {
   /// Minimum time between checks, independent of distance.
   static const Duration minInterval = Duration(minutes: 30);
 
-  static const String _lastCheckLatKey = 'nearby_check_last_lat';
-  static const String _lastCheckLonKey = 'nearby_check_last_lon';
-  static const String _lastCheckAtKey = 'nearby_check_last_at';
+  /// Gate state, as one `"lat,lon,millis"` string.
+  ///
+  /// Namespaced per mode exactly like [NotifiedSignalsStore], and for the same
+  /// reason. A gate entry recorded in test mode was recorded against the
+  /// *other* collection: honouring it after a flip would suppress checks for up
+  /// to 30 minutes and make test signals look like they produce no
+  /// notification. Separate keys mean a flip lands on a clean gate on its own,
+  /// flipping back restores the real one rather than destroying it, and no
+  /// caller has to know the gate exists.
+  ///
+  /// One key rather than three because [_recordCheck] runs on the hot path
+  /// ahead of the geo query — three `shared_preferences` round trips to store
+  /// what is conceptually a single value.
+  String get _gateKey => AppPreferencesService().isTestMode()
+      ? 'nearby_check_last_test'
+      : 'nearby_check_last';
 
   /// Groups a burst in the shade while keeping each entry individually
   /// tappable.
@@ -65,10 +78,9 @@ class NearbySignalChecker {
 
   /// Runs a catch-up check for [latitude]/[longitude].
   ///
-  /// Callers don't need to reason about the gate — it is applied here. To make
-  /// the next call check immediately (e.g. after a test-mode switch), clear the
-  /// gate with [resetGate] rather than bypassing it, so the "record the
-  /// attempt" bookkeeping stays in one place.
+  /// Callers don't need to reason about the gate — it is applied here, and its
+  /// state is namespaced per mode (see [_gateKey]), so a test-mode switch also
+  /// needs nothing from the caller.
   Future<void> check({
     required double latitude,
     required double longitude,
@@ -118,13 +130,18 @@ class NearbySignalChecker {
   }
 
   /// Whether enough distance and time have passed since the last check.
+  ///
+  /// Any unreadable record is treated as "never checked" and lets the check
+  /// run. The gate is only an optimization, so the safe direction to fail is
+  /// towards doing the work.
   bool _shouldCheck(SharedPreferences prefs, double latitude, double longitude) {
-    final lastAtMillis = prefs.getInt(_lastCheckAtKey);
-    final lastLat = prefs.getDouble(_lastCheckLatKey);
-    final lastLon = prefs.getDouble(_lastCheckLonKey);
+    final parts = prefs.getString(_gateKey)?.split(',');
+    if (parts == null || parts.length != 3) return true;
 
-    // Never checked on this device — always run.
-    if (lastAtMillis == null || lastLat == null || lastLon == null) return true;
+    final lastLat = double.tryParse(parts[0]);
+    final lastLon = double.tryParse(parts[1]);
+    final lastAtMillis = int.tryParse(parts[2]);
+    if (lastLat == null || lastLon == null || lastAtMillis == null) return true;
 
     final elapsed = DateTime.now()
         .difference(DateTime.fromMillisecondsSinceEpoch(lastAtMillis));
@@ -140,25 +157,10 @@ class NearbySignalChecker {
     double latitude,
     double longitude,
   ) async {
-    await prefs.setDouble(_lastCheckLatKey, latitude);
-    await prefs.setDouble(_lastCheckLonKey, longitude);
-    await prefs.setInt(
-      _lastCheckAtKey,
-      DateTime.now().millisecondsSinceEpoch,
+    await prefs.setString(
+      _gateKey,
+      '$latitude,$longitude,${DateTime.now().millisecondsSinceEpoch}',
     );
-  }
-
-  /// Clears the gate so the next location event checks immediately.
-  ///
-  /// Called when test mode flips: the persisted position is still valid, but it
-  /// was recorded against the *other* collection, so continuing to honour it
-  /// would hide signals in the newly selected one.
-  Future<void> resetGate() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_lastCheckLatKey);
-    await prefs.remove(_lastCheckLonKey);
-    await prefs.remove(_lastCheckAtKey);
-    debugPrint('NearbySignalChecker: gate reset');
   }
 
   /// Geo query for open, recent signals around the given point.
