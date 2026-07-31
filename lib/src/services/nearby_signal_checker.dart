@@ -85,12 +85,12 @@ class NearbySignalChecker {
     required double latitude,
     required double longitude,
   }) async {
-    assert(
-      AppPreferencesService().isInitialized,
-      'NearbySignalChecker.check() requires AppPreferencesService.initialize(). '
-      'Without it, isTestMode() reports false and this would query the live '
-      'signals collection.',
-    );
+    // Idempotent, and the headless isolate has its own uninitialized singleton.
+    // Awaiting it here rather than asserting on it is deliberate: an assert is
+    // stripped in release, which is precisely the build where an uninitialized
+    // isTestMode() would silently report false and point this at the live
+    // `signals` collection.
+    await AppPreferencesService().initialize();
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;

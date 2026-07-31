@@ -13,7 +13,17 @@ class AppPreferencesService {
   static const String _testModeKey = 'test_mode_enabled';
   static const String _deferredLinkCheckedKey = 'deferred_link_checked';
 
-  /// Initialize SharedPreferences - must be called before using any other methods
+  /// Initialize SharedPreferences - must be called before using any other
+  /// methods.
+  ///
+  /// Idempotent and cheap: `SharedPreferences.getInstance()` caches its own
+  /// instance per isolate, so any entrypoint that isn't certain it has run may
+  /// simply await this rather than assert about it. That matters because each
+  /// isolate gets its own singleton — a headless background isolate starts
+  /// uninitialized even while the main isolate is ready — and every getter here
+  /// degrades to a *default* rather than throwing. An uninitialized
+  /// [isTestMode] silently reports `false`, pointing a background check at the
+  /// live `signals` collection while the user believes they are in test mode.
   Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();
   }
@@ -29,27 +39,6 @@ class AppPreferencesService {
 
   Future<void> setDeferredLinkChecked() async {
     await _prefs?.setBool(_deferredLinkCheckedKey, true);
-  }
-
-  /// Whether [initialize] has run in *this isolate*.
-  ///
-  /// Each isolate gets its own singleton, so a headless background isolate
-  /// starts uninitialized even though the main isolate is ready.
-  bool get isInitialized => _prefs != null;
-
-  /// Guards reads that would otherwise fail silently.
-  ///
-  /// Every getter here degrades to a default when `_prefs` is null, which is
-  /// harmless in the UI but dangerous in the background: an uninitialized
-  /// [isTestMode] reports `false`, so a background check would query the live
-  /// `signals` collection while the user believes they are in test mode.
-  void _assertInitialized(String caller) {
-    assert(
-      _prefs != null,
-      'AppPreferencesService.$caller called before initialize(). '
-      'Headless entrypoints must await AppPreferencesService().initialize() '
-      'before touching preferences.',
-    );
   }
 
   /// Check if notification onboarding has been completed
@@ -90,7 +79,6 @@ class AppPreferencesService {
 
   /// Check if test mode is enabled
   bool isTestMode() {
-    _assertInitialized('isTestMode');
     return _prefs?.getBool(_testModeKey) ?? false;
   }
 
