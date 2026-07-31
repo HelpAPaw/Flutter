@@ -185,6 +185,12 @@ Future<void> main() async {
     FirebaseCrashlytics.instance.log('Auth: State changed - ${user != null ? (user.isAnonymous ? "anonymous" : "authenticated") : "signed out"}');
   });
 
+  // Before runApp, and synchronous: on iOS a significant-change relaunch can
+  // deliver a location while the app is still starting, and the native side
+  // buffers only until this handler exists. Needs no uid, so it does not belong
+  // behind the sign-in in _bootstrapServices.
+  LocationService().attachBackgroundChannel();
+
   runApp(const ProviderScope(child: HelpAPaw()));
   usePathUrlStrategy();
 

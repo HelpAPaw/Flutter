@@ -69,15 +69,31 @@ class LocationService with WidgetsBindingObserver {
   /// Called from `_bootstrapServices` in main.dart. Before that wiring existed
   /// this method was dead code, which is why tracking silently stopped after
   /// every app restart.
-  Future<void> initialize({Function? headlessEntrypoint}) async {
-    final channel = BackgroundLocationChannel();
-
+  /// Installs the native background-location channel handler.
+  ///
+  /// Split out of [initialize] and called from `main()` before `runApp`, for
+  /// the same reason `DeepLinkService.initialize()` is: it needs no uid, no
+  /// Firestore and no preferences, so it must not sit behind the time-boxed
+  /// anonymous sign-in. On iOS a significant-change relaunch can deliver a
+  /// location while the app is still starting, and until this handler exists
+  /// the native side has to buffer.
+  ///
+  /// Deliberately synchronous, so it can be called ahead of `runApp` without
+  /// risking the launch screen hanging on an await.
+  void attachBackgroundChannel() {
     // iOS delivers significant-change updates into this isolate (the relaunch
     // boots the app). Android has no engine at that point and boots a headless
     // one instead, which is what the entrypoint is for.
-    channel.ensureHandlerInstalled(onUpdate: _runNearbyCheck);
+    BackgroundLocationChannel().ensureHandlerInstalled(onUpdate: _runNearbyCheck);
+  }
+
+  Future<void> initialize({Function? headlessEntrypoint}) async {
+    // Registering the headless entrypoint stays here rather than moving up with
+    // the handler: it only persists a callback handle natively for *future*
+    // background deliveries, so it is not racing this launch.
     if (headlessEntrypoint != null) {
-      await channel.registerHeadlessEntrypoint(headlessEntrypoint);
+      await BackgroundLocationChannel()
+          .registerHeadlessEntrypoint(headlessEntrypoint);
     }
 
     final user = FirebaseAuth.instance.currentUser;

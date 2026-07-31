@@ -42,6 +42,10 @@ final class BackgroundLocationManager: NSObject {
   /// and replaying a backlog would start one independent check per entry.
   private var pendingUpdate: (latitude: Double, longitude: Double)?
 
+  /// Whether Dart has registered its channel handler, set by
+  /// [drainPendingUpdates]. Until then updates are buffered rather than sent.
+  private var isDartReady = false
+
   /// Set by AppDelegate once the method channel exists.
   var onLocationUpdate: ((Double, Double) -> Void)?
 
@@ -115,10 +119,20 @@ final class BackgroundLocationManager: NSObject {
     start()
   }
 
-  /// Hands Dart whatever was buffered while the engine was starting.
+  /// Hands Dart whatever was buffered while the engine was starting, and marks
+  /// Dart as ready so later updates go straight through.
+  ///
+  /// Dart calling this *is* the readiness signal — it happens immediately after
+  /// `BackgroundLocationChannel.ensureHandlerInstalled` registers the receiving
+  /// handler. Before this point an `invokeMethod` would land on a channel with
+  /// no listener, where Flutter's implicit buffer holds a single message and
+  /// silently discards anything beyond it.
   func drainPendingUpdates() {
+    isDartReady = true
+
     guard let handler = onLocationUpdate, let update = pendingUpdate else { return }
     pendingUpdate = nil
+    NSLog("BackgroundLocation: replaying update buffered before Dart was ready")
     handler(update.latitude, update.longitude)
   }
 
@@ -179,9 +193,18 @@ extension BackgroundLocationManager: CLLocationManagerDelegate {
     let latitude = location.coordinate.latitude
     let longitude = location.coordinate.longitude
 
-    if let handler = onLocationUpdate {
+    // Gate on Dart's readiness, not on this closure. AppDelegate assigns
+    // onLocationUpdate unconditionally in didFinishLaunchingWithOptions, so it
+    // is never nil by the time a location arrives — testing it made the buffer
+    // below dead code and drainPendingUpdates() a permanent no-op, leaving the
+    // "delivered before the engine was ready" case to Flutter's implicit
+    // one-message channel buffer.
+    if isDartReady, let handler = onLocationUpdate {
       handler(latitude, longitude)
     } else {
+      // A single slot on purpose: only the newest fix is worth acting on, and
+      // replaying superseded positions would just burn the check's gate.
+      NSLog("BackgroundLocation: buffering update until Dart is ready")
       pendingUpdate = (latitude: latitude, longitude: longitude)
     }
   }
