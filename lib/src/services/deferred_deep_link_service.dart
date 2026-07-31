@@ -51,7 +51,8 @@ class DeferredDeepLinkService {
     if (launchedFromLink) return;
 
     try {
-      final location = await _fromInstallReferrer();
+      final ReferrerDetails details = await PlayInstallReferrer.installReferrer;
+      final location = locationFromReferrer(details.installReferrer);
       if (location == null) return;
 
       debugPrint('Deferred deep link -> $location');
@@ -60,11 +61,6 @@ class DeferredDeepLinkService {
       // A missing or unavailable referrer is normal; never let it affect startup.
       debugPrint('Deferred deep link check failed: $e');
     }
-  }
-
-  Future<String?> _fromInstallReferrer() async {
-    final ReferrerDetails details = await PlayInstallReferrer.installReferrer;
-    return locationFromReferrer(details.installReferrer);
   }
 
   /// Parses a Play install referrer string. Kept separate from the plugin call
@@ -76,7 +72,7 @@ class DeferredDeepLinkService {
   static String? locationFromReferrer(String? referrer) {
     if (referrer == null || referrer.isEmpty) return null;
 
-    final String? id;
+    String? id;
     try {
       id = Uri.splitQueryString(referrer)['signal'];
     } catch (_) {

@@ -2,6 +2,8 @@ import 'dart:ui';
 
 import 'package:share_plus/share_plus.dart';
 
+import '../config/routes.dart';
+
 class ShareService {
   static const String _appStoreUrl = 'https://apps.apple.com/app/help-a-paw/id1234893764';
   static const String _playStoreUrl = 'https://play.google.com/store/apps/details?id=org.helpapaw.helpapaw';
@@ -31,7 +33,7 @@ Or visit: $_websiteUrl''';
   }) async {
     // Smart link: opens the signal directly in the app when installed,
     // otherwise the hosted page routes to the right store / shows a QR.
-    final deepLink = 'https://link.helpapaw.org/signal/$signalId';
+    final deepLink = Routes.signalShareUrl(signalId);
 
     // The signal link must come before any other URL: link-preview scrapers
     // (Facebook's among them) unfurl the *first* URL in the text, so putting the

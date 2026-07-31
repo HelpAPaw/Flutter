@@ -25,6 +25,9 @@ class DeepLinkService {
 
   static final DeepLinkService instance = DeepLinkService._();
 
+  /// Firestore document ids. Mirrors the server-side guard on the hosted page.
+  static final RegExp _signalIdPattern = RegExp(r'^[A-Za-z0-9_-]{1,128}$');
+
   final AppLinks _appLinks = AppLinks();
   StreamSubscription<Uri>? _subscription;
 
@@ -35,11 +38,6 @@ class DeepLinkService {
       (uri) => _handle(uri, router),
       onError: (Object e) => debugPrint('Deep link stream error: $e'),
     );
-  }
-
-  Future<void> dispose() async {
-    await _subscription?.cancel();
-    _subscription = null;
   }
 
   void _handle(Uri uri, GoRouter router) {
@@ -73,11 +71,11 @@ class DeepLinkService {
   /// Maps a bare signal id onto an in-app location, rejecting anything that
   /// isn't id-shaped.
   ///
-  /// Mirrors the server-side guard on the hosted page: ids are Firestore
-  /// document ids, so anything else is not a link we should act on. Shared with
+  /// Incoming links are attacker-controlled, so anything that is not a Firestore
+  /// document id is not a link we should act on. Shared with
   /// [DeferredDeepLinkService], which receives a bare id rather than a URL.
   static String? locationForSignalId(String id) {
-    if (!RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(id)) return null;
+    if (!_signalIdPattern.hasMatch(id)) return null;
     return Routes.signalDetails(id);
   }
 }

@@ -20,11 +20,24 @@ class Routes {
   static const clinicDetailsPath = '/clinic_details/:clinicId';
 
   /// Public, shareable deep-link path (App Links / Universal Links).
-  /// Matches the URLs produced by [ShareService.shareSignal] and the
-  /// hosted fallback page; redirects to [signalDetailsPath].
+  /// Matches the URLs produced by [signalShareUrl] and the hosted fallback
+  /// page; redirects to [signalDetailsPath].
   static const signalLinkPath = '/signal/:signalId';
 
-  static String signalDetails(String signalId) => '/signal_details/$signalId';
+  /// Host serving the shareable links. Must stay in step with the App Link /
+  /// Universal Link host declared in AndroidManifest.xml and the iOS
+  /// entitlements, and with LINK_HOST in functions/src/index.ts.
+  static const linkHost = 'https://link.helpapaw.org';
+
+  /// Public URL for a signal — what gets shared, and what the OS matches
+  /// against [signalLinkPath] to open the app.
+  static String signalShareUrl(String signalId) => '$linkHost/signal/$signalId';
+
+  /// Prefix of [signalDetailsPath], for testing whether a location is already
+  /// on a signal.
+  static const signalDetailsPrefix = '/signal_details/';
+
+  static String signalDetails(String signalId) => '$signalDetailsPrefix$signalId';
   static String editSignal(String signalId) => '/edit_signal/$signalId';
   static String clinicDetails(String clinicId) => '/clinic_details/$clinicId';
 

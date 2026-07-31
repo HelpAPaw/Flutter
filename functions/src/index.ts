@@ -9,7 +9,6 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
 import { geohashQueryBounds, geohashForLocation } from "geofire-common";
 import * as nodemailer from "nodemailer";
-import * as QRCode from "qrcode";
 
 admin.initializeApp();
 
@@ -1282,16 +1281,11 @@ const LINK_HOST = "https://link.helpapaw.org";
 const APPLE_APP_ID = "1234893764";
 
 // Localized signal type names (mirrors lib/src/models/signal.dart ordering).
+// `en` reuses SIGNAL_TYPES above rather than restating it: the list already
+// exists twice (here and in the Dart model) and a third copy drifting silently
+// would mislabel every signal of a newly added type on the public share page.
 const SIGNAL_TYPE_NAMES: Record<"en" | "bg", string[]> = {
-  en: [
-    "Emergency",
-    "Lost or Found",
-    "Blood donation",
-    "Homeless",
-    "Unneutered animals",
-    "Wild animals",
-    "Other",
-  ],
+  en: SIGNAL_TYPES,
   bg: [
     "Спешен случай",
     "Изгубено или намерено",
@@ -1328,6 +1322,11 @@ const PAGE_TEXT = {
   },
 };
 
+// Serialized once at module load: these tables are constants embedded in every
+// rendered page, so re-stringifying them per request is pure waste.
+const PAGE_TEXT_JSON = JSON.stringify(PAGE_TEXT);
+const SIGNAL_TYPE_NAMES_JSON = JSON.stringify(SIGNAL_TYPE_NAMES);
+
 /**
  * Play Store URL carrying the signal id through the install.
  *
@@ -1342,6 +1341,15 @@ function playStoreUrl(signalId: string): string {
 }
 
 /**
+ * Custom-scheme URL for the app. The empty authority (triple slash) is load
+ * bearing: `helpapaw://signal/<id>` would parse `signal` as the host, leaving
+ * the path as `/<id>`, which the app's router does not match.
+ */
+function customSchemeUrl(signalId: string): string {
+  return `helpapaw:///signal/${signalId}`;
+}
+
+/**
  * Android intent:// URL that opens the app via its verified https App Link and
  * falls back to the Play Store when the app isn't installed. Using the https
  * link (rather than the custom scheme) keeps the path shape `/signal/<id>` that
@@ -1349,10 +1357,23 @@ function playStoreUrl(signalId: string): string {
  */
 function androidIntentUrl(signalId: string): string {
   return (
-    `intent://link.helpapaw.org/signal/${signalId}#Intent;scheme=https;` +
+    `intent://${LINK_HOST.replace(/^https:\/\//, "")}/signal/${signalId}#Intent;scheme=https;` +
     "package=org.helpapaw.helpapaw;" +
     `S.browser_fallback_url=${encodeURIComponent(playStoreUrl(signalId))};end`
   );
+}
+
+/**
+ * QR for the shared link, as inline SVG.
+ *
+ * SVG rather than a PNG data URI: it is a fraction of the CPU and of the bytes,
+ * and it scales crisply. `qrcode` is imported lazily because this single-file
+ * codebase deploys 13 functions and gen-2 evaluates the whole module in every
+ * container — a top-level import would tax the cold start of the other twelve.
+ */
+async function renderQrSvg(url: string): Promise<string> {
+  const QRCode = await import("qrcode");
+  return QRCode.toString(url, { type: "svg", margin: 1, width: 200 });
 }
 
 function escapeHtml(value: string): string {
@@ -1402,34 +1423,34 @@ async function loadSignalPreview(
 
 function renderHtml(opts: {
   lang: "en" | "bg";
-  /** True when `?lang=` pinned the language, so the client must not override. */
-  langPinned: boolean;
+  /** Set when `?lang=` pinned the language, so the client must not override. */
+  pinnedLang: "en" | "bg" | null;
   signalId: string;
   url: string;
   preview: SignalPreview | null;
-  qrDataUri: string;
+  qrSvg: string;
 }): string {
   const t = PAGE_TEXT[opts.lang];
-  const found = opts.preview !== null;
-  const ogTitle = found
-    ? `🐾 ${opts.preview!.typeName}: ${opts.preview!.title}`
+  const preview = opts.preview;
+  const ogTitle = preview
+    ? `🐾 ${preview.typeName}: ${preview.title}`
     : t.notFoundTitle;
-  const ogDescription = found ? opts.preview!.description : t.notFoundBody;
+  const ogDescription = preview ? preview.description : t.notFoundBody;
   // Only advertise an image when the signal actually has a photo — pointing at
   // a placeholder that may not exist would just yield a broken preview.
-  const ogImage = opts.preview?.photoUrl ?? null;
+  const ogImage = preview?.photoUrl ?? null;
 
-  const previewCard = found
+  const previewCard = preview
     ? `
       <div class="card">
         ${
-          opts.preview!.photoUrl
-            ? `<img class="photo" src="${escapeHtml(opts.preview!.photoUrl)}" alt="">`
+          preview.photoUrl
+            ? `<img class="photo" src="${escapeHtml(preview.photoUrl)}" alt="">`
             : ""
         }
-        <span class="badge" data-i18n-type="${opts.preview!.typeIndex}">${escapeHtml(opts.preview!.typeName)}</span>
-        <h1>${escapeHtml(opts.preview!.title)}</h1>
-        <p>${escapeHtml(opts.preview!.description)}</p>
+        <span class="badge" data-i18n-type="${preview.typeIndex}">${escapeHtml(preview.typeName)}</span>
+        <h1>${escapeHtml(preview.title)}</h1>
+        <p>${escapeHtml(preview.description)}</p>
       </div>`
     : `
       <div class="card">
@@ -1450,7 +1471,6 @@ ${ogImage ? `  <meta property="og:image" content="${escapeHtml(ogImage)}">\n` : 
   <meta name="twitter:card" content="${ogImage ? "summary_large_image" : "summary"}">
   <meta name="apple-itunes-app" content="app-id=${APPLE_APP_ID}, app-argument=${escapeHtml(opts.url)}">
   <style>
-    :root { color-scheme: light dark; }
     * { box-sizing: border-box; }
     body { margin: 0; font-family: -apple-system, Roboto, Segoe UI, sans-serif;
       background: #f5f5f5; color: #1d1d1d; display: flex; min-height: 100vh;
@@ -1479,9 +1499,9 @@ ${ogImage ? `  <meta property="og:image" content="${escapeHtml(ogImage)}">\n` : 
   <div class="wrap">
     <div class="logo">🐾 Help a Paw</div>
     ${previewCard}
-    <a class="btn" id="openApp" data-i18n="openInApp" href="helpapaw:///signal/${escapeHtml(opts.signalId)}">${escapeHtml(t.openInApp)}</a>
+    <a class="btn" id="openApp" data-i18n="openInApp" href="${escapeHtml(customSchemeUrl(opts.signalId))}">${escapeHtml(t.openInApp)}</a>
     <div class="qr" id="qr" hidden>
-      <img src="${opts.qrDataUri}" alt="QR code">
+      ${opts.qrSvg}
       <div class="hint" data-i18n="scanHint">${escapeHtml(t.scanHint)}</div>
     </div>
     <div class="stores">
@@ -1497,10 +1517,10 @@ ${ogImage ? `  <meta property="og:image" content="${escapeHtml(ogImage)}">\n` : 
       // language on the server would let whichever visitor arrives first pin
       // the cached copy's language for everyone else. An explicit ?lang= query
       // stays server-side because it is part of the cache key.
-      var STRINGS = ${JSON.stringify(PAGE_TEXT)};
-      var TYPES = ${JSON.stringify(SIGNAL_TYPE_NAMES)};
+      var STRINGS = ${PAGE_TEXT_JSON};
+      var TYPES = ${SIGNAL_TYPE_NAMES_JSON};
       var rendered = ${JSON.stringify(opts.lang)};
-      var pinned = ${opts.langPinned ? JSON.stringify(opts.lang) : "null"};
+      var pinned = ${JSON.stringify(opts.pinnedLang)};
       var lang = pinned ||
         ((navigator.language || "").toLowerCase().slice(0, 2) === "bg" ? "bg" : "en");
 
@@ -1521,7 +1541,7 @@ ${ogImage ? `  <meta property="og:image" content="${escapeHtml(ogImage)}">\n` : 
       var ua = navigator.userAgent || "";
       var isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
       var isAndroid = /Android/.test(ua);
-      var appUrl = ${JSON.stringify(`helpapaw:///signal/${opts.signalId}`)};
+      var appUrl = ${JSON.stringify(customSchemeUrl(opts.signalId))};
       var intentUrl = ${JSON.stringify(androidIntentUrl(opts.signalId))};
       var btn = document.getElementById("openApp");
 
@@ -1582,32 +1602,59 @@ export const signalLink = onRequest(
       // of the CDN cache key, so it cannot leak across visitors. Accept-Language
       // is deliberately ignored here (the CDN does not vary on it) — the page
       // switches to the visitor's language client-side instead.
-      const queryLang = (req.query.lang as string) || "";
-      const langPinned = queryLang.length > 0;
-      const lang: "en" | "bg" = queryLang.startsWith("bg") ? "bg" : "en";
-
       const url = `${LINK_HOST}/signal/${signalId}`;
-      const preview = signalId
-        ? await loadSignalPreview(signalId, lang)
+
+      // Collapse tracking-parameter variants onto the canonical URL before doing
+      // any work. The CDN keys on the full query string, and the social networks
+      // this page exists to be shared on append a per-click `fbclid`/`utm_*`, so
+      // without this every single viewer would miss the cache and cost a fresh
+      // invocation, Firestore read and QR render.
+      const extraneousQuery = Object.keys(req.query).some((k) => k !== "lang");
+      if (extraneousQuery) {
+        const lang = req.query.lang as string | undefined;
+        res.set("Cache-Control", "public, max-age=3600");
+        res.redirect(301, lang ? `${url}?lang=${encodeURIComponent(lang)}` : url);
+        return;
+      }
+
+      // Only an explicit `?lang=` selects the language server-side: it is part
+      // of the CDN cache key, so it cannot leak across visitors. Accept-Language
+      // is deliberately ignored here (the CDN does not vary on it) — the page
+      // switches to the visitor's language client-side instead.
+      const queryLang = (req.query.lang as string) || "";
+      const pinnedLang: "en" | "bg" | null = queryLang
+        ? queryLang.startsWith("bg")
+          ? "bg"
+          : "en"
         : null;
-      const qrDataUri = await QRCode.toDataURL(url, { margin: 1, width: 200 });
+      const lang = pinnedLang ?? "en";
+
+      // Kick off the document read first so the QR render overlaps its latency.
+      const previewPromise = signalId
+        ? loadSignalPreview(signalId, lang)
+        : Promise.resolve(null);
+      const qrSvg = await renderQrSvg(url);
+      const preview = await previewPromise;
 
       const html = renderHtml({
         lang,
-        langPinned,
+        pinnedLang,
         signalId,
         url,
         preview,
-        qrDataUri,
+        qrSvg,
       });
-      res.set("Cache-Control", "public, max-age=300, s-maxage=300");
+      // stale-while-revalidate keeps every request after the first off the
+      // origin: expiry refreshes in the background instead of blocking a viewer
+      // on a possible cold start.
+      res.set(
+        "Cache-Control",
+        "public, max-age=300, s-maxage=300, stale-while-revalidate=86400"
+      );
       res.status(200).send(html);
     } catch (err) {
       console.error("signalLink error:", err);
-      res
-        .status(302)
-        .set("Location", WEBSITE_URL)
-        .send("");
+      res.redirect(WEBSITE_URL);
     }
   }
 );

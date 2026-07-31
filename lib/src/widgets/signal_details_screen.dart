@@ -48,28 +48,10 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   int _currentPhotoPage = 0;
   bool _hasNavigatedAway = false;
 
-  @override
-  void didUpdateWidget(SignalDetailsScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // Navigating straight from one signal to another (a deep link arriving while
-    // this screen is already open) reuses this State with only `widget` swapped.
-    // Every field below is memoized per signal, so without this reset the screen
-    // would keep showing the previous signal's data.
-    if (oldWidget.signalId != widget.signalId) {
-      setState(() {
-        _signalStream = null; // rebuilt for the new id in build() below
-        _reporterId = null;
-        _reporterNameFuture = null;
-        _currentPhotoPage = 0;
-        _isUploadingPhoto = false;
-        _hasNavigatedAway = false;
-        _newCommentController.clear();
-      });
-      if (_photoPageController.hasClients) {
-        _photoPageController.jumpToPage(0);
-      }
-    }
-  }
+  // Note: every field above is memoized per signal. Navigating signal->signal
+  // must therefore build a fresh State rather than reuse this one — the route
+  // gives this screen a ValueKey on the signal id (see main.dart) so the
+  // framework disposes and rebuilds instead of swapping `widget` underneath us.
 
   @override
   Widget build(BuildContext context) {

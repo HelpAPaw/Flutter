@@ -155,8 +155,8 @@ Future<void> _bootstrapServices() async {
   unawaited(DeferredDeepLinkService.instance
       .resolve(
         router: _router,
-        launchedFromLink:
-            _router.state.uri.path.startsWith('/signal_details/'),
+        launchedFromLink: _router.state.uri.path
+            .startsWith(Routes.signalDetailsPrefix),
       )
       .catchError((e) => debugPrint('Deferred deep link failed: $e')));
 
@@ -224,7 +224,13 @@ final GoRouter _router = GoRouter(
     GoRoute(
       name: 'signal_details',
       path: Routes.signalDetailsPath,
-      builder: (BuildContext context, GoRouterState state) => SignalDetailsScreen(signalId: state.pathParameters['signalId']!),
+      // Keyed by id: go_router derives a page's key from the route *pattern*, so
+      // navigating signal->signal (which deep links now do) would otherwise reuse
+      // the same State and keep showing the previous signal's data.
+      builder: (BuildContext context, GoRouterState state) => SignalDetailsScreen(
+        key: ValueKey(state.pathParameters['signalId']),
+        signalId: state.pathParameters['signalId']!,
+      ),
     ),
     // Public shareable deep link (App Links / Universal Links). Reuses the
     // signal details screen by redirecting to its canonical route.
