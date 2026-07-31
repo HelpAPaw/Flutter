@@ -248,6 +248,17 @@ WDA dies whenever the app is reinstalled, so expect to re-run step 4 after each
   seconds"* — the real error is visible only in Xcode or the device console. Fix
   with a full `flutter clean`; deleting just `build/native_assets/` fails because
   `NativeAssetsManifest.json` still references the asset.
+- **Any simulator build poisons the same cache**, including
+  `xcodebuild test -destination 'platform=iOS Simulator,...'` for the
+  `RunnerTests` unit tests. `build/native_assets/ios/objective_c.framework` is a
+  single shared slot with no per-platform separation, so a simulator run
+  replaces the device binary with an ad-hoc signed `IOSSIMULATOR` one and the
+  next device `flutter run` hits `0xe8008014`. `lipo -info` won't show it —
+  both read `arm64`. Check with
+  `vtool -show-build-version build/native_assets/ios/objective_c.framework/objective_c`
+  (`platform IOS` = device, `platform IOSSIMULATOR` = poisoned). So: copy that
+  framework aside before running the Swift tests and copy it back after, or
+  budget for a `flutter clean` before the next device run.
 - **Profile and Release use bundle id `com.helpapaw.helpapaw`** — the *production*
   app. Only Debug uses `.debug`. Installing a profile/release build to a test
   device overwrites the real app. `ios/scripts/firebase-config.sh` likewise gives
