@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 
 import '../config/routes.dart';
@@ -138,40 +137,41 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
 
   Future<void> _toggleLocationTracking(bool value) async {
     if (value) {
-      // Request location permission
-      final permission = await LocationService().requestAlwaysPermission();
+      // Prompt for the "Always" upgrade here rather than inside
+      // startLocationTracking, which also runs on launch — a permission dialog
+      // must stay attached to a user action.
+      await LocationService().requestAlwaysPermission();
 
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        if (mounted) {
-          final l10n = AppLocalizations.of(context);
+      final result = await LocationService().startLocationTracking();
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context);
+
+      switch (result) {
+        case LocationTrackingResult.denied:
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(l10n.locationPermissionRequired),
-            ),
+            SnackBar(content: Text(l10n.locationPermissionRequired)),
           );
-        }
-        return;
-      }
+          return;
 
-      // "While using the app" is not enough for background monitoring on
-      // either platform: iOS significant-change delivers nothing once the app
-      // is backgrounded, and Android needs ACCESS_BACKGROUND_LOCATION. Tracking
-      // still works while the app is open, so this enables it but explains the
-      // limitation rather than appearing to work and silently going quiet.
-      if (permission == LocationPermission.whileInUse) {
-        if (mounted) {
-          final l10n = AppLocalizations.of(context);
+        // "While using the app" is not enough for background monitoring on
+        // either platform: iOS significant-change delivers nothing once the app
+        // is backgrounded, and Android needs ACCESS_BACKGROUND_LOCATION.
+        // Tracking still works while the app is open, so enable it but explain
+        // the limitation rather than appearing to work and silently going
+        // quiet. Taken from what the native monitors actually started, so this
+        // can't disagree with reality the way reading the permission enum
+        // could.
+        case LocationTrackingResult.foregroundOnly:
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(l10n.locationAlwaysPermissionRequired),
               duration: const Duration(seconds: 6),
             ),
           );
-        }
-      }
 
-      await LocationService().startLocationTracking();
+        case LocationTrackingResult.full:
+          break;
+      }
     } else {
       await LocationService().stopLocationTracking();
     }

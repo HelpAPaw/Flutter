@@ -11,6 +11,28 @@ import 'background_location_channel.dart';
 import 'nearby_signal_checker.dart';
 
 
+/// What [LocationService.startLocationTracking] actually managed to start.
+///
+/// Sourced from the native monitors rather than re-derived from geolocator's
+/// [LocationPermission], because the native side decides this authoritatively
+/// and knows more: Kotlin also checks `ACCESS_BACKGROUND_LOCATION` and
+/// short-circuits below SDK Q, and Swift additionally requires
+/// `significantLocationChangeMonitoringAvailable()`. A caller inferring the
+/// outcome from the permission enum alone can therefore contradict what is
+/// really running — on Android 9, or when "Always" was granted out-of-band
+/// through Settings.
+enum LocationTrackingResult {
+  /// Foreground stream *and* native background monitoring are running.
+  full,
+
+  /// Foreground only. Location is reported while the app is open and stops
+  /// when it is not — most often because only "While Using" was granted.
+  foregroundOnly,
+
+  /// Nothing started; location permission was refused.
+  denied,
+}
+
 class LocationService with WidgetsBindingObserver {
   static final LocationService _instance = LocationService._internal();
   factory LocationService() => _instance;
@@ -100,14 +122,21 @@ class LocationService with WidgetsBindingObserver {
     return permission;
   }
 
-  /// Start listening to location changes
-  Future<bool> startLocationTracking() async {
+  /// Start listening to location changes.
+  ///
+  /// Deliberately requests only foreground permission: this also runs on launch
+  /// to restore tracking, and escalating to "Always" there would put a system
+  /// prompt in front of the user during startup. Callers that want the upgrade
+  /// prompt should call [requestAlwaysPermission] first, from a user-initiated
+  /// action, and then read the returned [LocationTrackingResult] to find out
+  /// what actually started.
+  Future<LocationTrackingResult> startLocationTracking() async {
     final permission = await requestPermission();
 
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
       debugPrint('Location permission denied');
-      return false;
+      return LocationTrackingResult.denied;
     }
 
     // Drop any existing foreground stream, but deliberately *not* via
@@ -167,7 +196,9 @@ class LocationService with WidgetsBindingObserver {
       debugPrint('Error getting initial position: $e');
     }
 
-    return true;
+    return backgroundStarted
+        ? LocationTrackingResult.full
+        : LocationTrackingResult.foregroundOnly;
   }
 
   /// Cancels only the foreground position stream.
