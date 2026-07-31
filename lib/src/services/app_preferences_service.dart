@@ -13,7 +13,17 @@ class AppPreferencesService {
   static const String _testModeKey = 'test_mode_enabled';
   static const String _deferredLinkCheckedKey = 'deferred_link_checked';
 
-  /// Initialize SharedPreferences - must be called before using any other methods
+  /// Initialize SharedPreferences - must be called before using any other
+  /// methods.
+  ///
+  /// Idempotent and cheap: `SharedPreferences.getInstance()` caches its own
+  /// instance per isolate, so any entrypoint that isn't certain it has run may
+  /// simply await this rather than assert about it. That matters because each
+  /// isolate gets its own singleton — a headless background isolate starts
+  /// uninitialized even while the main isolate is ready — and every getter here
+  /// degrades to a *default* rather than throwing. An uninitialized
+  /// [isTestMode] silently reports `false`, pointing a background check at the
+  /// live `signals` collection while the user believes they are in test mode.
   Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();
   }

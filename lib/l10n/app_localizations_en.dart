@@ -1015,4 +1015,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get deleteAccountError =>
       'Failed to delete account. Please try again.';
+
+  @override
+  String get signalNearbyNotificationTitle => 'An animal needs help nearby';
+
+  @override
+  String get locationAlwaysPermissionRequired =>
+      'To be notified while the app is closed, allow location access \"Always\" in Settings. With \"While Using the App\" we can only check when the app is open.';
 }

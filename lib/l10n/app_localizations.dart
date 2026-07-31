@@ -1897,6 +1897,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Failed to delete account. Please try again.'**
   String get deleteAccountError;
+
+  /// Title of the local notification shown when the user travels into range of an open signal they were not near when it was reported
+  ///
+  /// In en, this message translates to:
+  /// **'An animal needs help nearby'**
+  String get signalNearbyNotificationTitle;
+
+  /// Shown when the user grants only while-in-use location permission but background monitoring needs always-on access
+  ///
+  /// In en, this message translates to:
+  /// **'To be notified while the app is closed, allow location access \"Always\" in Settings. With \"While Using the App\" we can only check when the app is open.'**
+  String get locationAlwaysPermissionRequired;
 }
 
 class _AppLocalizationsDelegate

@@ -10,6 +10,7 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_ui_auth/firebase_ui_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show MethodChannel;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
@@ -39,6 +40,8 @@ import 'package:help_a_paw/src/services/deep_link_service.dart';
 import 'package:help_a_paw/src/services/signal_navigator.dart';
 import 'package:help_a_paw/src/services/deferred_deep_link_service.dart';
 import 'package:help_a_paw/src/services/app_preferences_service.dart';
+import 'package:help_a_paw/src/services/location_service.dart';
+import 'package:help_a_paw/src/services/nearby_signal_checker.dart';
 
 // Google Sign-In client IDs (from google-services.json / GoogleService-Info.plist).
 // iOS OAuth client (client_type 1, iOS).
@@ -69,6 +72,61 @@ Future<void> ensureGoogleSignInInitialized() {
     clientId: _googleClientId,
     serverClientId: googleServerClientId,
   );
+}
+
+/// Channel the Android headless engine uses to exchange arguments with Kotlin.
+const _headlessChannel =
+    MethodChannel('org.helpapaw.helpapaw/background_location_headless');
+
+/// Entrypoint for the arrival catch-up check when no app UI is running.
+///
+/// Android delivers background location to a receiver in a process with no
+/// Flutter engine, so [HeadlessNearbyCheck] boots one and calls straight into
+/// here. It runs in a *fresh isolate*: nothing from the main isolate exists, so
+/// every service this touches has to be initialized again — most importantly
+/// [AppPreferencesService], because an uninitialized instance reports
+/// `isTestMode() == false` and the check would silently query the live
+/// `signals` collection.
+///
+/// Must stay a top-level function with the vm:entry-point pragma or tree
+/// shaking will drop it from release builds and the callback handle will fail
+/// to resolve at runtime.
+@pragma('vm:entry-point')
+Future<void> backgroundLocationCallbackDispatcher() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    // Ask Kotlin for the position that triggered this run. Doing it as a
+    // request rather than an argument avoids racing the engine's startup.
+    final args = await _headlessChannel.invokeMethod<Map<dynamic, dynamic>>('ready');
+    if (args == null) return;
+
+    final latitude = (args['latitude'] as num).toDouble();
+    final longitude = (args['longitude'] as num).toDouble();
+
+    await AppPreferencesService().initialize();
+
+    try {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    } catch (_) {
+      // Already initialized in this isolate.
+    }
+
+    await NearbySignalChecker().check(
+      latitude: latitude,
+      longitude: longitude,
+    );
+  } catch (e) {
+    debugPrint('Headless nearby check failed: $e');
+  } finally {
+    // Always report back: Kotlin holds the engine open until this arrives (or
+    // its timeout fires), and a leaked engine is far worse than a missed check.
+    try {
+      await _headlessChannel.invokeMethod<void>('done');
+    } catch (_) {}
+  }
 }
 
 Future<void> main() async {
@@ -177,12 +235,29 @@ Future<void> _bootstrapServices() async {
     }
   }
 
-  // Initialize notification service (taps navigate via SignalNavigator).
-  try {
-    await NotificationService().initialize();
-  } catch (e) {
-    debugPrint('Notification service init failed: $e');
-  }
+  // Both need the uid from the sign-in above, but not each other — run them
+  // together rather than making the restore of background tracking queue behind
+  // a full FCM token fetch. They only touch through
+  // `ensureLocalNotificationsReady`, which is idempotent by contract.
+  //
+  // Each keeps its own catch: `Future.wait` surfaces the first error and
+  // abandons the other result, so a failure in one must not be able to hide a
+  // failure in the other.
+  await Future.wait([
+    // Taps navigate via SignalNavigator, attached above.
+    NotificationService()
+        .initialize()
+        .catchError((e) => debugPrint('Notification service init failed: $e')),
+
+    // Restoring background location tracking has to run on every launch:
+    // LocationService.initialize() existed but was never called from anywhere,
+    // so a user who enabled tracking silently stopped reporting their location
+    // after the next app restart until they toggled the setting off and on
+    // again.
+    LocationService()
+        .initialize(headlessEntrypoint: backgroundLocationCallbackDispatcher)
+        .catchError((e) => debugPrint('Background location init failed: $e')),
+  ]);
 }
 
 final GoRouter _router = GoRouter(
@@ -344,7 +419,6 @@ class HelpAPaw extends StatefulWidget {
 }
 
 class _HelpAPawState extends State<HelpAPaw> {
-
   // Help a Paw Widgets
   @override
   Widget build(BuildContext context) {

@@ -1,5 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../models/notification_preferences.dart';
+
 /// Represents the current authentication state
 class AuthState {
   final User? user;
@@ -62,6 +64,17 @@ abstract class UserRepository {
 
   /// Sign out the current user
   Future<void> signOut();
+
+  /// Read the user's notification preferences.
+  ///
+  /// Returns null when the document can't be read at all — offline, timed out,
+  /// permission denied. That is deliberately distinct from a user with no
+  /// preferences saved, who gets a defaulted [NotificationPreferences]:
+  /// callers that act on the user's behalf (posting a notification, storing a
+  /// location) must not treat "we don't know" as consent.
+  ///
+  /// Safe to call from a headless background isolate.
+  Future<NotificationPreferences?> getNotificationPreferences(String userId);
 
   /// Get user notification subscriptions
   Future<List<String>> getSignalSubscriptions(String userId);

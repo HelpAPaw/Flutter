@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -6,7 +7,10 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import '../repositories/repository_provider.dart';
 import 'app_preferences_service.dart';
+import 'nearby_signal_checker.dart';
+import 'notified_signals_store.dart';
 import 'signal_navigator.dart';
 
 /// Background message handler - must be a top-level function
@@ -26,8 +30,13 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
 
 
-  /// Android notification channel for high importance notifications
-  static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
+  /// Android notification channel for high importance notifications.
+  ///
+  /// Shared with [NearbySignalChecker]: Android ignores a channel definition
+  /// after the first creation, so a second copy of these values would silently
+  /// lose to whichever ran first.
+  static const AndroidNotificationChannel signalsChannel =
+      AndroidNotificationChannel(
     'help_a_paw_signals',
     'Signal Notifications',
     description: 'Notifications about animals in need near you',
@@ -35,6 +44,7 @@ class NotificationService {
   );
 
   bool _isFullyInitialized = false;
+  bool _localNotificationsReady = false;
 
   /// Phase 1: Basic initialization (no permission triggers)
   Future<void> initialize() async {
@@ -57,12 +67,7 @@ class NotificationService {
     if (_isFullyInitialized) return;
 
     // Create notification channel on Android (required for local notifications)
-    if (Platform.isAndroid) {
-      await _localNotifications
-          .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
-          ?.createNotificationChannel(_channel);
-    }
+    await ensureLocalNotificationsReady();
 
     // Set up background message handler
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
@@ -80,6 +85,8 @@ class NotificationService {
       _handleNotificationTap(initialMessage);
     }
 
+    await _handleLaunchFromLocalNotification();
+
     // Listen for token refresh
     _messaging.onTokenRefresh.listen((token) {
       _saveFcmTokenToFirestore(token);
@@ -94,55 +101,97 @@ class NotificationService {
   }
 
   Future<void> _initializeLocalNotifications() async {
-    const androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
-    const iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: false,
-      requestBadgePermission: false,
-      requestSoundPermission: false,
-    );
+    await ensureLocalNotificationsReady(createChannel: false);
+  }
 
-    const initSettings = InitializationSettings(
-      android: androidSettings,
-      iOS: iosSettings,
-    );
+  /// Prepares the local-notification plugin for the current isolate.
+  ///
+  /// Must be the only place that calls `initialize`. `FlutterLocalNotifications
+  /// Plugin` is a singleton and every `initialize` re-registers the tap
+  /// callback, so a second caller passing no callback silently disables
+  /// notification tap handling for the whole app.
+  ///
+  /// Idempotent, and safe to call from a headless isolate — that isolate gets
+  /// a fresh singleton with no setup of its own.
+  Future<void> ensureLocalNotificationsReady({bool createChannel = true}) async {
+    if (!_localNotificationsReady) {
+      const initSettings = InitializationSettings(
+        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        iOS: DarwinInitializationSettings(
+          requestAlertPermission: false,
+          requestBadgePermission: false,
+          requestSoundPermission: false,
+        ),
+      );
 
-    await _localNotifications.initialize(
-      settings: initSettings,
-      onDidReceiveNotificationResponse: _onNotificationResponse,
-    );
+      await _localNotifications.initialize(
+        settings: initSettings,
+        onDidReceiveNotificationResponse: _onNotificationResponse,
+      );
+      _localNotificationsReady = true;
+    }
 
-    // Don't create notification channel yet - wait for user permission
+    // During phase 1 the channel is deliberately deferred until the user has
+    // granted permission; callers that are about to post must create it.
+    if (createChannel && Platform.isAndroid) {
+      await _localNotifications
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(signalsChannel);
+    }
+  }
+
+  /// Posts a signal notification on the shared channel.
+  ///
+  /// Shared by the FCM foreground path and the arrival catch-up check so both
+  /// render identically and route through the same tap handler.
+  Future<void> showSignalNotification({
+    required int id,
+    required String? title,
+    required String? body,
+    required String? signalId,
+    String? groupKey,
+  }) {
+    return _localNotifications.show(
+      id: id,
+      title: title,
+      body: body,
+      notificationDetails: NotificationDetails(
+        android: AndroidNotificationDetails(
+          signalsChannel.id,
+          signalsChannel.name,
+          channelDescription: signalsChannel.description,
+          importance: Importance.high,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+          groupKey: groupKey,
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+          threadIdentifier: groupKey,
+        ),
+      ),
+      payload: signalId,
+    );
   }
 
   void _handleForegroundMessage(RemoteMessage message) {
     FirebaseCrashlytics.instance.log('Notification: Foreground message received - signalId: ${message.data['signalId']}');
     debugPrint('Received foreground message: ${message.messageId}');
 
+    _recordDeliveredSignal(message);
+
     final notification = message.notification;
     if (notification == null) return;
 
     // Show local notification when app is in foreground
-    _localNotifications.show(
+    showSignalNotification(
       id: notification.hashCode,
       title: notification.title,
       body: notification.body,
-      notificationDetails: NotificationDetails(
-        android: AndroidNotificationDetails(
-          _channel.id,
-          _channel.name,
-          channelDescription: _channel.description,
-          importance: Importance.high,
-          priority: Priority.high,
-          icon: '@mipmap/ic_launcher',
-        ),
-        iOS: const DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-        ),
-      ),
-      payload: message.data['signalId'],
+      signalId: message.data['signalId'],
     );
   }
 
@@ -151,7 +200,66 @@ class NotificationService {
     FirebaseCrashlytics.instance.log('Notification: Tapped - signalId: $signalId');
     debugPrint('Notification tapped: ${message.data}');
 
+    _recordDeliveredSignal(message);
+
     if (signalId != null) SignalNavigator.instance.open(signalId);
+  }
+
+  /// Marks a pushed signal as already announced.
+  ///
+  /// Shares the dedupe store with [NearbySignalChecker], so the arrival
+  /// catch-up won't announce a signal the server already pushed. Without this,
+  /// a user who got the normal push, travelled away and came back would be
+  /// notified a second time about a signal they already knew about.
+  ///
+  /// `createdAt` is only used as the prune horizon; if the payload doesn't
+  /// carry it we fall back to now, which keeps the entry for the full
+  /// eligibility window — erring towards suppressing a duplicate rather than
+  /// risking one.
+  void _recordDeliveredSignal(RemoteMessage message) {
+    final signalId = message.data['signalId'];
+    if (signalId == null || signalId.isEmpty) return;
+
+    final rawCreatedAt = message.data['createdAt'];
+    final createdAt = rawCreatedAt is String
+        ? DateTime.tryParse(rawCreatedAt) ?? DateTime.now()
+        : DateTime.now();
+
+    unawaited(
+      NotifiedSignalsStore()
+          .markAllNotified(
+            {signalId: createdAt},
+            cutoff:
+                DateTime.now().subtract(NearbySignalChecker.eligibilityWindow),
+          )
+          .catchError(
+            (e) => debugPrint('Failed to record delivered signal: $e'),
+          ),
+    );
+  }
+
+  /// Routes a tap on a local notification that launched the app.
+  ///
+  /// [_onNotificationResponse] only fires for taps while a Dart isolate is
+  /// alive. The arrival catch-up notifications are posted from a headless
+  /// isolate that is torn down immediately afterwards, so tapping one from a
+  /// terminated app arrives here instead — without this the app would open on
+  /// the map rather than the signal the user tapped.
+  Future<void> _handleLaunchFromLocalNotification() async {
+    try {
+      final details =
+          await _localNotifications.getNotificationAppLaunchDetails();
+      if (details == null || !details.didNotificationLaunchApp) return;
+
+      final payload = details.notificationResponse?.payload;
+      if (payload == null || payload.isEmpty) return;
+
+      FirebaseCrashlytics.instance
+          .log('Notification: Launched app from local notification - $payload');
+      SignalNavigator.instance.open(payload);
+    } catch (e) {
+      debugPrint('Failed to read notification launch details: $e');
+    }
   }
 
   void _onNotificationResponse(NotificationResponse response) {
@@ -253,16 +361,13 @@ class NotificationService {
   }
 
   /// Whether the account's stored preferences have notifications enabled.
+  ///
+  /// An unreadable document counts as "not enabled" — we would rather register
+  /// a token late than register one for someone who never asked.
   Future<bool> _accountNotificationsEnabled(String uid) async {
-    try {
-      final doc =
-          await FirebaseFirestore.instance.collection('users').doc(uid).get();
-      final prefs =
-          doc.data()?['notificationPreferences'] as Map<String, dynamic>?;
-      return prefs?['enabled'] == true;
-    } catch (_) {
-      return false;
-    }
+    final prefs = await RepositoryProvider.instance.userRepository
+        .getNotificationPreferences(uid);
+    return prefs?.enabled ?? false;
   }
 
   /// Request notification permission and return whether it was granted
@@ -291,10 +396,7 @@ class NotificationService {
             ?.requestNotificationsPermission();
 
         // Create notification channel after permission granted
-        await _localNotifications
-            .resolvePlatformSpecificImplementation<
-                AndroidFlutterLocalNotificationsPlugin>()
-            ?.createNotificationChannel(_channel);
+        await ensureLocalNotificationsReady();
       }
 
       // Complete notification service initialization (also fetches FCM token)

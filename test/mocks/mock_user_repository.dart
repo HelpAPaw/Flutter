@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:help_a_paw/src/models/notification_preferences.dart';
 import 'package:help_a_paw/src/repositories/user_repository.dart';
 
 /// Mock implementation of UserRepository for testing
@@ -75,6 +76,17 @@ class MockUserRepository implements UserRepository {
   @override
   Future<void> signOut() async {
     setUnauthenticated();
+  }
+
+  /// Preferences per user. A user with no entry reads back as null, i.e. the
+  /// "couldn't read it" case rather than "has none saved".
+  final Map<String, NotificationPreferences> notificationPreferences = {};
+
+  @override
+  Future<NotificationPreferences?> getNotificationPreferences(
+    String userId,
+  ) async {
+    return notificationPreferences[userId];
   }
 
   @override

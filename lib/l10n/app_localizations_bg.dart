@@ -1030,4 +1030,12 @@ class AppLocalizationsBg extends AppLocalizations {
   @override
   String get deleteAccountError =>
       'Неуспешно изтриване на профила. Моля, опитайте отново.';
+
+  @override
+  String get signalNearbyNotificationTitle =>
+      'Животно наблизо се нуждае от помощ';
+
+  @override
+  String get locationAlwaysPermissionRequired =>
+      'За да получавате известия, докато приложението е затворено, разрешете достъп до местоположението „Винаги“ в Настройки. При „Докато използвам приложението“ можем да проверяваме само когато приложението е отворено.';
 }

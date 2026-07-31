@@ -78,4 +78,23 @@ dependencies {
     implementation "androidx.core:core-ktx:1.12.0"
     implementation "org.jetbrains.kotlin:kotlin-stdlib:2.3.10"
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'
+
+    // Background location: FusedLocationProviderClient delivering to a
+    // PendingIntent, which needs no foreground service.
+    implementation "com.google.android.gms:play-services-location:21.3.0"
+
+    // Periodic re-arm safety net for location registrations dropped by OEM
+    // battery managers. Not the delivery mechanism — see LocationReconcileWorker.
+    implementation "androidx.work:work-runtime-ktx:2.9.1"
+
+    // The background receiver writes userLocations/{uid} in Kotlin so a
+    // location update never depends on a Dart engine being alive. Declared
+    // explicitly via the BoM rather than relying on the versions the Flutter
+    // plugin AARs happen to pull in transitively.
+    implementation platform("com.google.firebase:firebase-bom:33.7.0")
+    implementation "com.google.firebase:firebase-firestore"
+    implementation "com.google.firebase:firebase-auth"
+
+    // Guards Geohash against silently drifting from geoflutterfire_plus.
+    testImplementation "junit:junit:4.13.2"
 }

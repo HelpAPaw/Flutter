@@ -59,37 +59,40 @@ class Signal {
     );
   }
 
-  /// Returns localized signal type name for the given type index
-  static String getLocalizedSignalTypeName(BuildContext context, int type) {
-    final l10n = AppLocalizations.of(context);
-    final types = [
-      l10n.signalTypeEmergency,
-      l10n.signalTypeLostOrFound,
-      l10n.signalTypeBloodDonation,
-      l10n.signalTypeHomeless,
-      l10n.signalTypeUnneuteredAnimals,
-      l10n.signalTypeWildAnimals,
-      l10n.signalTypeOther,
-    ];
+  /// The localized type names, in [signalTypes] order.
+  ///
+  /// The single place this list exists. Everything else derives from it, so
+  /// adding a type means editing one place rather than hunting for copies —
+  /// a missed copy silently renders every new-type signal as "Other".
+  static List<String> localizedSignalTypes(AppLocalizations l10n) => [
+        l10n.signalTypeEmergency,
+        l10n.signalTypeLostOrFound,
+        l10n.signalTypeBloodDonation,
+        l10n.signalTypeHomeless,
+        l10n.signalTypeUnneuteredAnimals,
+        l10n.signalTypeWildAnimals,
+        l10n.signalTypeOther,
+      ];
+
+  /// Localized name for [type], without needing a [BuildContext].
+  ///
+  /// Used by background code (e.g. the arrival catch-up check), which runs in
+  /// isolates that have no widget tree.
+  static String signalTypeName(AppLocalizations l10n, int type) {
+    final types = localizedSignalTypes(l10n);
     if (type >= 0 && type < types.length) {
       return types[type];
     }
     return l10n.signalTypeOther;
   }
 
+  /// Returns localized signal type name for the given type index
+  static String getLocalizedSignalTypeName(BuildContext context, int type) =>
+      signalTypeName(AppLocalizations.of(context), type);
+
   /// Returns list of localized signal type names
-  static List<String> getLocalizedSignalTypes(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return [
-      l10n.signalTypeEmergency,
-      l10n.signalTypeLostOrFound,
-      l10n.signalTypeBloodDonation,
-      l10n.signalTypeHomeless,
-      l10n.signalTypeUnneuteredAnimals,
-      l10n.signalTypeWildAnimals,
-      l10n.signalTypeOther,
-    ];
-  }
+  static List<String> getLocalizedSignalTypes(BuildContext context) =>
+      localizedSignalTypes(AppLocalizations.of(context));
 
   /// Signal type identifiers (for indexing/length only - use getLocalizedSignalTypeName for display)
   static const List<String> signalTypes = [

@@ -67,7 +67,8 @@ interface GeoPoint {
 
 interface UserNotificationPrefs {
   enabled: boolean;
-  signalTypes: number[];
+  /** Absent means "never chose" — all types. Empty means none. */
+  signalTypes?: number[];
   locationTrackingEnabled: boolean;
   locationRadiusKm: number;
   regionOfInterest?: {
@@ -388,12 +389,17 @@ async function handleSignalCreated(
       continue;
     }
 
-    // Check signal type preference
-    if (
-      prefs.signalTypes &&
-      prefs.signalTypes.length > 0 &&
-      !prefs.signalTypes.includes(signalType)
-    ) {
+    // Check signal type preference.
+    //
+    // Absent and empty mean opposite things. Absent is "never chose" and means
+    // all types: the onboarding sheet writes notificationPreferences as merged
+    // partial updates and never sets signalTypes, so every user who onboarded
+    // without opening the notification settings screen has no stored list.
+    // Empty is a deliberate "Deselect all" and means no types.
+    //
+    // The previous `length > 0` guard collapsed the two, so deselecting every
+    // type notified the user about everything.
+    if (prefs.signalTypes && !prefs.signalTypes.includes(signalType)) {
       continue;
     }
 

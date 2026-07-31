@@ -95,11 +95,43 @@ lib/
 
 **Geolocation**: Uses `geoflutterfire_plus` for geoqueries. Signals are stored with GeoPoints and queried by radius from user location. Map initially centers on user's location if permissions are granted; otherwise falls back to Sofia, Bulgaria (42.6977, 23.3219).
 
+**Background Location** (`feature/background-location`): `geolocator` handles all
+*foreground* location, but it cannot do background significant-change on either
+platform — `geolocator_apple` has no such API, and `geolocator_android`'s own docs
+say its foreground service dies with the activity. So the background path is
+native and runs alongside it:
+
+- **iOS** — `CLLocationManager.startMonitoringSignificantLocationChanges`
+  (`ios/Runner/BackgroundLocationManager.swift`). Requires **Always**
+  authorization; with "While Using" it silently delivers nothing, so `start()`
+  returns false and the UI explains why.
+- **Android** — `FusedLocationProviderClient` updates delivered to a
+  `PendingIntent` → `LocationUpdateReceiver`. Deliberately **no foreground
+  service**, so there is no permanent notification in the shade.
+
+Both write `userLocations/{uid}` in native code so a location update never
+depends on a Dart engine. That means the geohash is implemented three times
+(Dart, Swift, Kotlin) and **all three must stay byte-identical** — base32,
+precision 9. The notification fan-out finds users with a geohash *range* query,
+so a drifted encoder silently stops matching them with no error. Guarded by
+`android/app/src/test/kotlin/.../GeohashTest.kt`.
+
+Native state (enabled flag, gate) is stored in native-owned prefs, **not** read
+out of `shared_preferences` — Dart doubles are stored there as prefixed *strings*
+and newer versions may use Jetpack DataStore, so reading them natively breaks
+silently.
+
 **Notification Flow**:
 1. Two-phase initialization: basic setup on app start, full setup after permission grant
 2. NotificationService uses both FCM (remote) and flutter_local_notifications (local display)
 3. Background message handler must be top-level function
 4. Notification tap navigates via GoRouter to signal details
+5. **Arrival catch-up**: the server fan-out only reaches users who are near a
+   signal *when it is created*. `NearbySignalChecker` covers people who travel
+   into range afterwards. Gated to **>3km moved AND >30min** since the last
+   check, and deduped permanently per signal so a daily commuter isn't
+   re-notified. Runs headless on Android (`HeadlessNearbyCheck` boots a Flutter
+   engine) and in the normal isolate on iOS.
 
 **Email Verification**: Users who sign up with email/password are redirected to `/verify_email` until they verify. Google OAuth users skip this.
 
@@ -182,7 +214,59 @@ The testing infrastructure is documented in detail in:
    ```
 5. Start tunneling: `ios tunnel start --userspace`
 6. Port forward: `ios forward 8100 8100 --udid 6c602c36e83e447ac48c4477f18fac43d1e00175`
-7. Verify: MCP tools should detect device via `mobile_list_available_devices`
+7. **Approve UI Automation on the iPad.** The first `xcodebuild ... test` puts a
+   *"Touch ID for 'XCTest' — Enable UI Automation"* prompt on the device. Until
+   someone physically touches the Home button, the runner fails with
+   `The test runner failed to initialize for UI testing. (Underlying Error:
+   Timed out while enabling automation mode.)` The prompt is modal and also
+   blocks `flutter run` from launching the app, so this can look like an
+   unrelated problem. Pre-empt it via Settings → Privacy & Security → Developer
+   → Enable UI Automation.
+8. Verify: MCP tools should detect device via `mobile_list_available_devices`
+
+WDA dies whenever the app is reinstalled, so expect to re-run step 4 after each
+`flutter run`.
+
+#### iOS gotchas (learned the hard way, 2026-07-27)
+
+- **A debug build cannot launch standalone.** iOS 14+ blocks JIT without a
+  debugger, so `ios launch` / tapping the icon gives
+  `ptrace(PT_TRACE_ME): Operation not permitted` →
+  *"Cannot create a FlutterEngine instance in debug mode without Flutter tooling
+  or Xcode."* Only `flutter run` or Xcode can start it. (Once running, it does
+  survive the debugger disconnecting — it is the *launch* that fails.)
+  Consequence: **anything that depends on iOS relaunching the app itself — e.g.
+  a background significant-location-change wake-up — cannot be tested on a debug
+  build.** That needs a profile/release build.
+- **Never run `flutter build ios --no-codesign` before a device run.** With no
+  identity, Flutter ad-hoc signs the native-asset frameworks (`objective_c`,
+  via `path_provider_foundation`) and caches them in `build/native_assets/`. The
+  next `flutter run` copies them in and the device rejects the install:
+  `Failed to verify code signature … 0xe8008014 (The executable contains an
+  invalid signature.)` Confusingly `codesign --verify` says "valid on disk", and
+  `flutter run` only reports *"The Dart VM Service was not discovered after 60
+  seconds"* — the real error is visible only in Xcode or the device console. Fix
+  with a full `flutter clean`; deleting just `build/native_assets/` fails because
+  `NativeAssetsManifest.json` still references the asset.
+- **Any simulator build poisons the same cache**, including
+  `xcodebuild test -destination 'platform=iOS Simulator,...'` for the
+  `RunnerTests` unit tests. `build/native_assets/ios/objective_c.framework` is a
+  single shared slot with no per-platform separation, so a simulator run
+  replaces the device binary with an ad-hoc signed `IOSSIMULATOR` one and the
+  next device `flutter run` hits `0xe8008014`. `lipo -info` won't show it —
+  both read `arm64`. Check with
+  `vtool -show-build-version build/native_assets/ios/objective_c.framework/objective_c`
+  (`platform IOS` = device, `platform IOSSIMULATOR` = poisoned). So: copy that
+  framework aside before running the Swift tests and copy it back after, or
+  budget for a `flutter clean` before the next device run.
+- **Profile and Release use bundle id `com.helpapaw.helpapaw`** — the *production*
+  app. Only Debug uses `.debug`. Installing a profile/release build to a test
+  device overwrites the real app. `ios/scripts/firebase-config.sh` likewise gives
+  Debug the `-Debug` plist and everything else the `-Release` one.
+- **The `flutter run` attach is genuinely flaky** (`CoreDeviceError error 3`,
+  "connection was invalidated"). Retrying usually works. Closing Xcode helps.
+- Reading logs: `ios syslog` captures app `NSLog`/`debugPrint` output only once
+  the app is properly running; before that it shows system noise only.
 
 **Android:**
 MCP tools connect directly to Android devices via ADB - no special setup required beyond normal ADB connectivity.
