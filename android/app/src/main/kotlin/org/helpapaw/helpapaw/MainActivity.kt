@@ -59,6 +59,19 @@ class MainActivity : FlutterActivity() {
                     result.success(null)
                 }
 
+                // Dart mirroring its own nearby-check gate down, so the
+                // background pre-filter stops booting an engine for movement
+                // Dart has already covered. Best-effort: a dropped call just
+                // leaves the native gate more permissive.
+                "recordNearbyCheck" -> {
+                    val latitude = call.argument<Double>("latitude")
+                    val longitude = call.argument<Double>("longitude")
+                    if (latitude != null && longitude != null) {
+                        LocationUpdateReceiver.recordCheck(appContext, latitude, longitude)
+                    }
+                    result.success(null)
+                }
+
                 // iOS buffers updates that arrive before Dart is ready; Android
                 // starts a fresh engine per delivery, so there is nothing held.
                 "drainPendingUpdates" -> result.success(null)

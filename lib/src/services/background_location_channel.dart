@@ -93,6 +93,27 @@ class BackgroundLocationChannel {
   /// Stops native background monitoring.
   Future<void> stop() => _invoke<void>('stop');
 
+  /// Mirrors an advance of the Dart nearby-check gate into the native
+  /// pre-filter.
+  ///
+  /// Android decides whether to boot a headless `FlutterEngine` from its own
+  /// copy of the gate, which otherwise only ever sees *background* deliveries.
+  /// Without this it knows nothing about foreground activity, so the ordinary
+  /// "app was open at home, now driving to work" case boots a full engine plus
+  /// Firebase and is then rejected by Dart on the first line of real work.
+  ///
+  /// Best-effort by design. Dart stays authoritative and applies its own gate
+  /// regardless; a call that never lands leaves the native gate *older*, hence
+  /// more permissive, which is the safe direction — a wasted boot rather than a
+  /// missed notification.
+  ///
+  /// No-ops on iOS, which has no native gate.
+  Future<void> recordNearbyCheck(double latitude, double longitude) =>
+      _invoke<void>('recordNearbyCheck', {
+        'latitude': latitude,
+        'longitude': longitude,
+      });
+
   /// Mirrors the test-mode flag into native-owned preferences.
   ///
   /// Android keys its background pre-filter gate by mode, the same way the Dart

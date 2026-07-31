@@ -94,6 +94,12 @@ import UIKit
       case "drainPendingUpdates":
         BackgroundLocationManager.shared.drainPendingUpdates()
         result(nil)
+      case "recordNearbyCheck":
+        // Android keeps a native pre-filter gate to decide whether booting a
+        // headless engine is worthwhile; iOS has no such gate, because a
+        // significant-change relaunch runs the check in the normal isolate
+        // where Dart's own gate already applies. Nothing to mirror.
+        result(nil)
       case "setTestMode":
         // Android keys its native pre-filter gate by mode and needs the mirror.
         // iOS has no native gate — a significant-change relaunch runs the check

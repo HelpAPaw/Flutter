@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -12,6 +13,7 @@ import '../models/signal.dart';
 import '../models/signal_status.dart';
 import '../repositories/repository_provider.dart';
 import 'app_preferences_service.dart';
+import 'background_location_channel.dart';
 import 'notification_service.dart';
 import 'notified_signals_store.dart';
 
@@ -188,6 +190,20 @@ class NearbySignalChecker {
     return movedKm >= minDisplacementKm;
   }
 
+  /// Advances the gate, here and in Android's native pre-filter.
+  ///
+  /// The native mirror lives inside this method rather than at the call site so
+  /// the two cannot drift: the native copy is written at the same instant as
+  /// the Dart one, from the same values, and so can never be *newer* than the
+  /// gate Dart itself enforces. That is what makes it safe for Android to
+  /// suppress an engine boot on the strength of it — it can only ever skip work
+  /// Dart was going to reject anyway.
+  ///
+  /// The mirror is deliberately not awaited. It is best-effort: losing it costs
+  /// a wasted engine boot, whereas blocking the geo query on a platform round
+  /// trip costs every check. In the headless isolate there is no Activity and
+  /// so no handler for it — the call no-ops, which is correct, because the
+  /// native side already recorded the check before booting this isolate.
   Future<void> _recordCheck(
     SharedPreferences prefs,
     double latitude,
@@ -196,6 +212,10 @@ class NearbySignalChecker {
     await prefs.setString(
       _gateKey,
       '$latitude,$longitude,${DateTime.now().millisecondsSinceEpoch}',
+    );
+
+    unawaited(
+      BackgroundLocationChannel().recordNearbyCheck(latitude, longitude),
     );
   }
 

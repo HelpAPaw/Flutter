@@ -149,7 +149,7 @@ class LocationUpdateReceiver : BroadcastReceiver() {
         if (!gateAllows(prefs, location, suffix)) return
 
         if (HeadlessNearbyCheck.run(context, location.latitude, location.longitude)) {
-            recordCheck(prefs, location, suffix)
+            recordCheck(context, location.latitude, location.longitude)
         }
     }
 
@@ -185,24 +185,6 @@ class LocationUpdateReceiver : BroadcastReceiver() {
     }
 
     /**
-     * Records the attempt as the check starts, so a failure partway through
-     * can't let the next update immediately retry and boot another engine.
-     *
-     * Float is plenty here: this only feeds a 3km threshold comparison.
-     */
-    private fun recordCheck(
-        prefs: android.content.SharedPreferences,
-        location: Location,
-        suffix: String,
-    ) {
-        prefs.edit()
-            .putFloat(LAST_CHECK_LAT_KEY + suffix, location.latitude.toFloat())
-            .putFloat(LAST_CHECK_LON_KEY + suffix, location.longitude.toFloat())
-            .putLong(LAST_CHECK_AT_KEY + suffix, System.currentTimeMillis())
-            .apply()
-    }
-
-    /**
      * Uses the platform's WGS84 implementation rather than a hand-rolled
      * spherical haversine, so this agrees with the Dart gate near the threshold
      * and there is no trigonometry here to keep correct.
@@ -225,6 +207,38 @@ class LocationUpdateReceiver : BroadcastReceiver() {
 
         private const val MIN_DISPLACEMENT_KM = 3.0
         private const val MIN_INTERVAL_MINUTES = 30.0
+
+        /**
+         * Advances the pre-filter gate to a position that has just been checked.
+         *
+         * Two callers. This receiver calls it as a background check starts, so a
+         * failure partway through can't let the next update immediately boot
+         * another engine. Dart calls it (via MainActivity) whenever *its* gate
+         * advances, which is what stops the common "app was open at home, now
+         * driving to work" case from booting a full FlutterEngine + Firebase for
+         * a check Dart then rejects on its first line of real work.
+         *
+         * Because Dart mirrors its own gate here at the moment it advances it,
+         * this timestamp can never be newer than Dart's — so it can only ever
+         * suppress engine boots that Dart would have rejected anyway. A push
+         * that never arrives leaves this older, i.e. more permissive, which
+         * degrades exactly to the behaviour before Dart pushed anything.
+         *
+         * Float is plenty here: this only feeds a 3km threshold comparison.
+         */
+        fun recordCheck(context: Context, latitude: Double, longitude: Double) {
+            val prefs = context.getSharedPreferences(
+                BackgroundLocationManager.PREFS_FILE,
+                Context.MODE_PRIVATE,
+            )
+            val suffix = if (BackgroundLocationManager.isTestMode(context)) "_test" else ""
+
+            prefs.edit()
+                .putFloat(LAST_CHECK_LAT_KEY + suffix, latitude.toFloat())
+                .putFloat(LAST_CHECK_LON_KEY + suffix, longitude.toFloat())
+                .putLong(LAST_CHECK_AT_KEY + suffix, System.currentTimeMillis())
+                .apply()
+        }
 
         /**
          * Cap on holding the broadcast open. Comfortably under the ~10s the
