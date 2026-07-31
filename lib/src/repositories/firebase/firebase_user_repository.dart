@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../models/notification_preferences.dart';
 import '../user_repository.dart';
 
 /// Firebase implementation of UserRepository
@@ -39,6 +40,31 @@ class FirebaseUserRepository implements UserRepository {
   @override
   Future<void> signOut() async {
     await _auth.signOut();
+  }
+
+  @override
+  Future<NotificationPreferences?> getNotificationPreferences(
+    String userId,
+  ) async {
+    try {
+      // Time-boxed because two of the three callers run in the background,
+      // where an indefinitely pending read would hold a broadcast or a headless
+      // engine open.
+      final doc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .get()
+          .timeout(const Duration(seconds: 10));
+
+      return NotificationPreferences.fromMap(
+        doc.data()?['notificationPreferences'] as Map<String, dynamic>?,
+      );
+    } catch (e) {
+      // Null, not a default instance: see the interface doc. A failed read must
+      // not read as "notifications enabled" or as "tracking consented to".
+      debugPrint('Error reading notification preferences: $e');
+      return null;
+    }
   }
 
   @override

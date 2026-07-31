@@ -7,6 +7,7 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import '../repositories/repository_provider.dart';
 import 'app_preferences_service.dart';
 import 'nearby_signal_checker.dart';
 import 'notified_signals_store.dart';
@@ -360,16 +361,13 @@ class NotificationService {
   }
 
   /// Whether the account's stored preferences have notifications enabled.
+  ///
+  /// An unreadable document counts as "not enabled" — we would rather register
+  /// a token late than register one for someone who never asked.
   Future<bool> _accountNotificationsEnabled(String uid) async {
-    try {
-      final doc =
-          await FirebaseFirestore.instance.collection('users').doc(uid).get();
-      final prefs =
-          doc.data()?['notificationPreferences'] as Map<String, dynamic>?;
-      return prefs?['enabled'] == true;
-    } catch (_) {
-      return false;
-    }
+    final prefs = await RepositoryProvider.instance.userRepository
+        .getNotificationPreferences(uid);
+    return prefs?.enabled ?? false;
   }
 
   /// Request notification permission and return whether it was granted

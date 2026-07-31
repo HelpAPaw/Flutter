@@ -7,8 +7,10 @@ import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../models/notification_preferences.dart';
 import '../models/signal.dart';
 import '../models/signal_status.dart';
+import '../repositories/repository_provider.dart';
 import 'app_preferences_service.dart';
 import 'notification_service.dart';
 import 'notified_signals_store.dart';
@@ -53,8 +55,6 @@ class NearbySignalChecker {
   /// Minimum time between checks, independent of distance.
   static const Duration minInterval = Duration(minutes: 30);
 
-  static const double _defaultRadiusKm = 10.0;
-
   static const String _lastCheckLatKey = 'nearby_check_last_lat';
   static const String _lastCheckLonKey = 'nearby_check_last_lon';
   static const String _lastCheckAtKey = 'nearby_check_last_at';
@@ -92,19 +92,16 @@ class NearbySignalChecker {
     // their user document on every single location delivery.
     await _recordCheck(prefs, latitude, longitude);
 
-    final notificationPrefs = await _loadNotificationPrefs(user.uid);
-    if (notificationPrefs == null || notificationPrefs['enabled'] != true) {
-      return;
-    }
+    final notificationPrefs = await RepositoryProvider.instance.userRepository
+        .getNotificationPreferences(user.uid);
+    if (notificationPrefs == null || !notificationPrefs.enabled) return;
 
     final cutoff = DateTime.now().subtract(eligibilityWindow);
 
     final candidates = await _queryNearbySignals(
       latitude: latitude,
       longitude: longitude,
-      radiusKm:
-          (notificationPrefs['locationRadiusKm'] as num?)?.toDouble() ??
-              _defaultRadiusKm,
+      radiusKm: notificationPrefs.locationRadiusKm,
       cutoff: cutoff,
     );
     if (candidates.isEmpty) return;
@@ -112,9 +109,7 @@ class NearbySignalChecker {
     final wanted = await _selectNotifiable(
       candidates: candidates,
       uid: user.uid,
-      signalTypes:
-          (notificationPrefs['signalTypes'] as List<dynamic>?)?.cast<int>() ??
-              const <int>[],
+      preferences: notificationPrefs,
       cutoff: cutoff,
     );
     if (wanted.isEmpty) return;
@@ -164,20 +159,6 @@ class NearbySignalChecker {
     await prefs.remove(_lastCheckLonKey);
     await prefs.remove(_lastCheckAtKey);
     debugPrint('NearbySignalChecker: gate reset');
-  }
-
-  Future<Map<String, dynamic>?> _loadNotificationPrefs(String uid) async {
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .get()
-          .timeout(const Duration(seconds: 10));
-      return doc.data()?['notificationPreferences'] as Map<String, dynamic>?;
-    } catch (e) {
-      debugPrint('NearbySignalChecker: failed to load preferences: $e');
-      return null;
-    }
   }
 
   /// Geo query for open, recent signals around the given point.
@@ -236,7 +217,7 @@ class NearbySignalChecker {
   Future<List<_NotifiableSignal>> _selectNotifiable({
     required List<DocumentSnapshot<Map<String, dynamic>>> candidates,
     required String uid,
-    required List<int> signalTypes,
+    required NotificationPreferences preferences,
     required DateTime cutoff,
   }) async {
     final eligible = <_NotifiableSignal>[];
@@ -248,10 +229,10 @@ class NearbySignalChecker {
       final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
       if (createdAt == null) continue;
 
+      // A signal with no stored type still gets through: the filter exists to
+      // honour types the user opted out of, not to reject malformed data.
       final signalType = data['signalType'] as int?;
-      if (signalTypes.isNotEmpty &&
-          signalType != null &&
-          !signalTypes.contains(signalType)) {
+      if (signalType != null && !preferences.wantsSignalType(signalType)) {
         continue;
       }
 

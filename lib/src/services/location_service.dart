@@ -6,6 +6,7 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/widgets.dart';
 import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 import 'package:geolocator/geolocator.dart';
+import '../repositories/repository_provider.dart';
 import 'background_location_channel.dart';
 import 'nearby_signal_checker.dart';
 
@@ -60,17 +61,12 @@ class LocationService with WidgetsBindingObserver {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // Check if user has enabled location tracking. Time-boxed like every other
-    // Firestore call on this path: this runs on the launch bootstrap, and
-    // offline the read can stay pending indefinitely.
-    final userDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .get()
-        .timeout(const Duration(seconds: 10));
-
-    final prefs = userDoc.data()?['notificationPreferences'];
-    if (prefs != null && prefs['locationTrackingEnabled'] == true) {
+    // A failed read leaves tracking off for this launch rather than starting it
+    // on an assumption — this is the consent flag for storing someone's
+    // position. The next launch retries.
+    final prefs = await RepositoryProvider.instance.userRepository
+        .getNotificationPreferences(user.uid);
+    if (prefs?.locationTrackingEnabled == true) {
       await startLocationTracking();
     }
   }
