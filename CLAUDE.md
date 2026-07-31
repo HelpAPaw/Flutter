@@ -155,6 +155,23 @@ Integration tests use `integration_test` framework. Note: There was a recent iss
 
 ## Firebase Configuration
 
+### Environments & Test Mode (IMPORTANT)
+- **`help-a-paw-dev` is the PRODUCTION Firebase project.** Despite the `-dev` name,
+  real end users run on it (both the release app and the debug app point at it). There
+  is a separate `help-a-paw-android` project, but `help-a-paw-dev` is prod. Treat any
+  `firebase deploy` to `help-a-paw-dev` (rules, functions, etc.) as a **production
+  deploy affecting live users** — confirm before deploying and validate first.
+- **Test mode** — to exercise the app without disturbing prod users, enable test mode
+  by **tapping the app title ("Help a Paw") 7 times on the map screen**. In test mode
+  signals are written to the separate **`signals_test`** collection (and comments to its
+  subcollection) instead of the live `signals` collection, so prod data/users are
+  unaffected. Always enable test mode before creating test signals/comments on-device.
+  Note: test mode only isolates the *data collections* — it does NOT sandbox rules,
+  functions, auth, or storage, which are shared with prod.
+- **Test account:** use `helpapaw.qa@gmail.com` with `+` aliases (e.g.
+  `helpapaw.qa+r5@gmail.com`) for creating fresh test accounts / testing the anonymous
+  account-upgrade (link) flow.
+
 ### Environment Files
 - iOS debug: `ios/Runner/GoogleService-Info-Debug.plist`
 - iOS release: `ios/Runner/GoogleService-Info-Release.plist`
