@@ -90,13 +90,31 @@ service cloud.firestore {
       allow read: if request.auth != null;
     }
 
-    // Feedback collection - anyone can submit, only admins can read
+    // Feedback collection - only admins can read (via Admin SDK/Console).
+    // Any signed-in caller (incl. the automatic anonymous app sessions) may
+    // submit, but (M-2):
+    //   - auth is required — no unauthenticated writes; combined with App Check
+    //     enforcement this closes the open email/cost-abuse vector.
+    //   - userId is pinned to the caller so it can't be spoofed to frame another
+    //     user (the email/rate-limit both key off it).
+    //   - email, when present, must be a syntactically valid address (also
+    //     re-validated in the function before it's used as replyTo).
+    // Each accepted write triggers onFeedbackCreated, which sends an email and
+    // enforces a per-user rate limit.
     match /feedback/{feedbackId} {
-      allow create: if request.resource.data.message is string
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.message is string
                     && request.resource.data.message.size() > 0
                     && request.resource.data.message.size() <= 1000
                     && request.resource.data.type in ['general', 'bug', 'feature', 'other']
-                    && (!('email' in request.resource.data) || request.resource.data.email == null || request.resource.data.email is string);
+                    && (
+                      !('email' in request.resource.data)
+                      || request.resource.data.email == null
+                      || (request.resource.data.email is string
+                          && request.resource.data.email.size() <= 254
+                          && request.resource.data.email.matches('^[^@ ]+@[^@ ]+[.][^@ ]+$'))
+                    );
       allow read, update, delete: if false;  // Only accessible via Admin SDK/Console
     }
   }

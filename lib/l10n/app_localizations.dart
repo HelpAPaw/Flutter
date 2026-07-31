@@ -812,6 +812,12 @@ abstract class AppLocalizations {
   /// **'Provide your email if you\'d like us to follow up'**
   String get provideEmailForFollowUp;
 
+  /// No description provided for @pleaseEnterValidEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter a valid email address'**
+  String get pleaseEnterValidEmail;
+
   /// No description provided for @yourFeedback.
   ///
   /// In en, this message translates to:

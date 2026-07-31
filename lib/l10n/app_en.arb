@@ -194,6 +194,7 @@
   "yourEmailOptional": "Your Email (optional)",
   "emailPlaceholder": "email@example.com",
   "provideEmailForFollowUp": "Provide your email if you'd like us to follow up",
+  "pleaseEnterValidEmail": "Please enter a valid email address",
   "yourFeedback": "Your Feedback",
   "bugReportHint": "Please describe the issue you encountered...",
   "featureRequestHint": "Tell us about the feature you'd like to see...",

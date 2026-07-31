@@ -402,6 +402,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Provide your email if you\'d like us to follow up';
 
   @override
+  String get pleaseEnterValidEmail => 'Please enter a valid email address';
+
+  @override
   String get yourFeedback => 'Your Feedback';
 
   @override

@@ -678,6 +678,49 @@ const FEEDBACK_TYPES: Record<string, string> = {
   other: "Other",
 };
 
+// Per-user rate limit for feedback emails (M-2). Even though the rules pin
+// userId to the caller and require auth, an attacker can still churn anonymous
+// accounts, so we cap how many feedback emails a single user can trigger within
+// a sliding window to blunt email-bomb / SMTP-cost abuse.
+const FEEDBACK_RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const FEEDBACK_RATE_MAX = 5; // emails per user per window
+
+// Minimal, conservative email syntax check (mirrors the rules-layer regex).
+// We only need "is this safe to hand to nodemailer as replyTo / render as a
+// mailto link", not full RFC 5322 compliance.
+function isValidEmail(email: string): boolean {
+  return email.length <= 254 && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
+}
+
+// Atomically reserves a feedback-email slot for `userId`. Returns false when the
+// user has exhausted their quota for the current window (caller should then skip
+// sending the email). Keyed by userId; falls back to a shared bucket when absent.
+async function reserveFeedbackEmailSlot(userId: string): Promise<boolean> {
+  const ref = db.collection("feedbackThrottle").doc(userId);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const now = Date.now();
+    const data = snap.data();
+    let windowStart = data?.windowStart?.toMillis?.() ?? 0;
+    let count = (data?.count as number | undefined) ?? 0;
+
+    if (now - windowStart > FEEDBACK_RATE_WINDOW_MS) {
+      windowStart = now;
+      count = 0;
+    }
+    if (count >= FEEDBACK_RATE_MAX) {
+      return false;
+    }
+
+    tx.set(ref, {
+      windowStart: admin.firestore.Timestamp.fromMillis(windowStart),
+      count: count + 1,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    return true;
+  });
+}
+
 /**
  * Cloud Function triggered when new feedback is submitted
  * Sends an email notification with the feedback details
@@ -698,10 +741,27 @@ export const onFeedbackCreated = onDocumentCreated(
 
     const feedbackType = feedbackData.type as string;
     const message = feedbackData.message as string;
-    const userEmail = feedbackData.email as string | undefined;
+    const rawEmail = feedbackData.email as string | undefined;
     const userId = feedbackData.userId as string | undefined;
     const deviceInfo = feedbackData.deviceInfo as Record<string, string> | undefined;
     const createdAt = feedbackData.createdAt?.toDate?.() || new Date();
+
+    // Only trust the email if it passes a syntax check — it's rendered in the
+    // email and handed to nodemailer as replyTo. Invalid/spoofed values are
+    // dropped rather than propagated.
+    const userEmail =
+      rawEmail && isValidEmail(rawEmail) ? rawEmail : undefined;
+
+    // Rate-limit per user before doing any work (M-2). The feedback doc is kept
+    // regardless; we only suppress the email + SMTP cost when over quota.
+    const throttleKey = userId || "unknown";
+    if (!(await reserveFeedbackEmailSlot(throttleKey))) {
+      console.warn(
+        `Feedback ${feedbackId} from user ${throttleKey} rate-limited; ` +
+          "email suppressed"
+      );
+      return;
+    }
 
     // Build email content
     const typeLabel = FEEDBACK_TYPES[feedbackType] || feedbackType;
@@ -733,33 +793,37 @@ Feedback ID: ${feedbackId}
 View in Firebase Console: https://console.firebase.google.com/project/help-a-paw-dev/firestore/data/~2Ffeedback~2F${feedbackId}
 `;
 
+    // Every interpolated value below originates from client-controlled feedback
+    // data, so escape it to prevent HTML/markup injection into the email body
+    // (M-2). typeLabel/feedbackId/createdAt are effectively trusted but escaped
+    // anyway for consistency.
     const htmlBody = `
 <h2>New feedback submitted to Help a Paw</h2>
 
 <table style="border-collapse: collapse; margin-bottom: 20px;">
-  <tr><td style="padding: 5px 10px; font-weight: bold;">Type:</td><td style="padding: 5px 10px;">${typeLabel}</td></tr>
-  <tr><td style="padding: 5px 10px; font-weight: bold;">Date:</td><td style="padding: 5px 10px;">${createdAt.toISOString()}</td></tr>
-  <tr><td style="padding: 5px 10px; font-weight: bold;">User ID:</td><td style="padding: 5px 10px;">${userId || "Anonymous"}</td></tr>
-  <tr><td style="padding: 5px 10px; font-weight: bold;">User Email:</td><td style="padding: 5px 10px;">${userEmail ? `<a href="mailto:${userEmail}">${userEmail}</a>` : "Not provided"}</td></tr>
+  <tr><td style="padding: 5px 10px; font-weight: bold;">Type:</td><td style="padding: 5px 10px;">${escapeHtml(typeLabel)}</td></tr>
+  <tr><td style="padding: 5px 10px; font-weight: bold;">Date:</td><td style="padding: 5px 10px;">${escapeHtml(createdAt.toISOString())}</td></tr>
+  <tr><td style="padding: 5px 10px; font-weight: bold;">User ID:</td><td style="padding: 5px 10px;">${escapeHtml(userId || "Anonymous")}</td></tr>
+  <tr><td style="padding: 5px 10px; font-weight: bold;">User Email:</td><td style="padding: 5px 10px;">${userEmail ? `<a href="mailto:${escapeHtml(userEmail)}">${escapeHtml(userEmail)}</a>` : "Not provided"}</td></tr>
 </table>
 
 <h3>Message:</h3>
-<p style="background: #f5f5f5; padding: 15px; border-radius: 5px; white-space: pre-wrap;">${message}</p>
+<p style="background: #f5f5f5; padding: 15px; border-radius: 5px; white-space: pre-wrap;">${escapeHtml(message)}</p>
 
 ${deviceInfo ? `
 <h3>Device Information:</h3>
 <table style="border-collapse: collapse;">
-  <tr><td style="padding: 5px 10px;">Platform:</td><td style="padding: 5px 10px;">${deviceInfo.platform || "N/A"}</td></tr>
-  <tr><td style="padding: 5px 10px;">OS Version:</td><td style="padding: 5px 10px;">${deviceInfo.osVersion || "N/A"}</td></tr>
-  <tr><td style="padding: 5px 10px;">App Version:</td><td style="padding: 5px 10px;">${deviceInfo.appVersion || "N/A"}</td></tr>
-  <tr><td style="padding: 5px 10px;">Build:</td><td style="padding: 5px 10px;">${deviceInfo.buildNumber || "N/A"}</td></tr>
+  <tr><td style="padding: 5px 10px;">Platform:</td><td style="padding: 5px 10px;">${escapeHtml(deviceInfo.platform || "N/A")}</td></tr>
+  <tr><td style="padding: 5px 10px;">OS Version:</td><td style="padding: 5px 10px;">${escapeHtml(deviceInfo.osVersion || "N/A")}</td></tr>
+  <tr><td style="padding: 5px 10px;">App Version:</td><td style="padding: 5px 10px;">${escapeHtml(deviceInfo.appVersion || "N/A")}</td></tr>
+  <tr><td style="padding: 5px 10px;">Build:</td><td style="padding: 5px 10px;">${escapeHtml(deviceInfo.buildNumber || "N/A")}</td></tr>
 </table>
 ` : ""}
 
 <hr>
 <p style="color: #666; font-size: 12px;">
-  Feedback ID: ${feedbackId}<br>
-  <a href="https://console.firebase.google.com/project/help-a-paw-dev/firestore/data/~2Ffeedback~2F${feedbackId}">View in Firebase Console</a>
+  Feedback ID: ${escapeHtml(feedbackId)}<br>
+  <a href="https://console.firebase.google.com/project/help-a-paw-dev/firestore/data/~2Ffeedback~2F${encodeURIComponent(feedbackId)}">View in Firebase Console</a>
 </p>
 `;
 

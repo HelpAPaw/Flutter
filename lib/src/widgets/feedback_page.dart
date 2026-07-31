@@ -39,11 +39,26 @@ class _FeedbackPageState extends State<FeedbackPage> {
     super.dispose();
   }
 
+  // Conservative syntax check mirroring the Firestore rule and Cloud Function.
+  static final _emailRegExp = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+  bool _isValidEmail(String email) =>
+      email.length <= 254 && _emailRegExp.hasMatch(email);
+
   Future<void> _submitFeedback() async {
     final l10n = AppLocalizations.of(context);
     if (_feedbackController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(l10n.pleaseEnterFeedback)),
+      );
+      return;
+    }
+
+    // Email is optional, but if provided it must be well-formed — the backend
+    // rules reject malformed addresses, so validate here for a clear message.
+    final emailInput = _emailController.text.trim();
+    if (emailInput.isNotEmpty && !_isValidEmail(emailInput)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.pleaseEnterValidEmail)),
       );
       return;
     }
@@ -54,12 +69,11 @@ class _FeedbackPageState extends State<FeedbackPage> {
       final user = FirebaseAuth.instance.currentUser;
       final packageInfo = await PackageInfo.fromPlatform();
 
-      final email = _emailController.text.trim();
       final feedbackData = {
         'type': _feedbackType,
         'message': _feedbackController.text.trim(),
         'userId': user?.uid,
-        'email': email.isNotEmpty ? email : null,
+        'email': emailInput.isNotEmpty ? emailInput : null,
         'createdAt': FieldValue.serverTimestamp(),
         'status': 'new',
       };

@@ -409,6 +409,9 @@ class AppLocalizationsBg extends AppLocalizations {
       'Предоставете имейл, ако желаете да се свържем с вас';
 
   @override
+  String get pleaseEnterValidEmail => 'Моля, въведете валиден имейл адрес';
+
+  @override
   String get yourFeedback => 'Вашият отзив';
 
   @override

@@ -131,6 +131,7 @@
   "yourEmailOptional": "Вашият имейл (по избор)",
   "emailPlaceholder": "email@example.com",
   "provideEmailForFollowUp": "Предоставете имейл, ако желаете да се свържем с вас",
+  "pleaseEnterValidEmail": "Моля, въведете валиден имейл адрес",
   "yourFeedback": "Вашият отзив",
   "bugReportHint": "Моля, опишете проблема, който срещнахте...",
   "featureRequestHint": "Разкажете ни за функционалността, която бихте искали да видите...",
