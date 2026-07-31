@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/src/services/app_preferences_service.dart';
@@ -318,6 +319,14 @@ class _ProfilePageState extends State<ProfilePage> {
                         border: const OutlineInputBorder(),
                         prefixIcon: const Icon(Icons.person),
                       ),
+                      // Mirrors the publicProfiles rules' bounds, so an
+                      // over-long or multi-line name is capped as it's typed
+                      // instead of failing with an opaque PERMISSION_DENIED.
+                      inputFormatters: [
+                        LengthLimitingTextInputFormatter(
+                            PublicProfileService.maxNameLength),
+                        FilteringTextInputFormatter.singleLineFormatter,
+                      ],
                     ),
                     const SizedBox(height: 16),
                     TextField(

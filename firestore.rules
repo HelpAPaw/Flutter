@@ -58,6 +58,21 @@ service cloud.firestore {
              );
     }
 
+    // Validates the display name on a publicProfiles write (L-2). Bounds the
+    // length and rejects control characters — a newline or a NUL in a name that
+    // is rendered next to every signal and comment is only ever abuse.
+    //
+    // `matches()` is a whole-string RE2 match. The pattern reads as "any run of
+    // non-control characters containing at least one that isn't a space", so it
+    // also rejects "" and whitespace-only names, which would render as a blank
+    // author and read as a deleted/unknown user.
+    function isValidProfileName() {
+      return request.resource.data.name is string
+             && request.resource.data.name.size() <= 100
+             && request.resource.data.name
+                  .matches('[^\\x00-\\x1f]*[^\\x00-\\x20][^\\x00-\\x1f]*');
+    }
+
     // Non-reporters may ONLY advance a signal's status (the volunteer flow),
     // and must self-stamp lastUpdatedBy so it can't be spoofed to another user.
     function isStatusOnlyUpdate() {
@@ -87,8 +102,28 @@ service cloud.firestore {
     // Writable only by the owner. On account deletion this is overwritten with
     // "Deleted user" so erasure propagates to all signals/comments dynamically.
     match /publicProfiles/{userId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      // Single-document reads only (L-2). The app resolves names one uid at a
+      // time (PublicProfileService.getName), so denying `list` costs it nothing
+      // and stops the entire user base being enumerated from one query. Do NOT
+      // widen this back to `read` — that grants `list` again.
+      allow get: if request.auth != null;
+      allow list: if false;
+      // The only field the app ever writes here is `name`. `deleted`/`deletedAt`
+      // are tombstone fields written by deleteAccount through the Admin SDK,
+      // which bypasses rules — so restricting the caller to `name` costs
+      // nothing and stops a user clearing their own "Deleted user" tombstone.
+      allow create: if request.auth != null
+                    && request.auth.uid == userId
+                    && request.resource.data.keys().hasOnly(['name'])
+                    && isValidProfileName();
+      // Diff-based (not `keys()`) so a name edit on a doc that already carries
+      // the tombstone fields isn't rejected for merely containing them.
+      allow update: if request.auth != null
+                    && request.auth.uid == userId
+                    && request.resource.data.diff(resource.data)
+                         .affectedKeys().hasOnly(['name'])
+                    && isValidProfileName();
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
     // Signals collection - public read, authenticated write

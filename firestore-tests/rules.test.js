@@ -18,7 +18,16 @@ import {
   assertSucceeds,
   initializeTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { addDoc, collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  updateDoc,
+} from 'firebase/firestore';
 
 const REPORTER = 'reporter-uid';
 const OTHER = 'other-uid';
@@ -266,3 +275,102 @@ for (const coll of ['signals', 'signals_test']) {
     });
   });
 }
+
+// L-2. The app only ever writes `{name}` (PublicProfileService.setName) and only
+// ever reads one uid at a time, so both the field allowlist and the list denial
+// below are invisible to it.
+describe('publicProfiles', () => {
+  const OWNER = REPORTER;
+
+  beforeEach(() => testEnv.clearFirestore());
+
+  /** Seed an existing profile so the `update` path is exercised, not `create`. */
+  async function seedProfile(data = { name: 'Existing name' }) {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'publicProfiles', OWNER), data);
+    });
+  }
+
+  it('lets any signed-in user read a single profile, but not list them all', async () => {
+    await seedProfile();
+    const db = testEnv.authenticatedContext(OTHER).firestore();
+    await assertSucceeds(getDoc(doc(db, 'publicProfiles', OWNER)));
+    await assertFails(getDocs(collection(db, 'publicProfiles')));
+  });
+
+  it('denies an unauthenticated read', async () => {
+    await seedProfile();
+    const db = testEnv.unauthenticatedContext().firestore();
+    await assertFails(getDoc(doc(db, 'publicProfiles', OWNER)));
+  });
+
+  it('lets the owner set their name, but not someone else', async () => {
+    const owner = testEnv.authenticatedContext(OWNER).firestore();
+    await assertSucceeds(setDoc(doc(owner, 'publicProfiles', OWNER), { name: 'Ivan' }));
+
+    const other = testEnv.authenticatedContext(OTHER).firestore();
+    await assertFails(setDoc(doc(other, 'publicProfiles', OWNER), { name: 'Ivan' }));
+  });
+
+  it('accepts a 100-char name and rejects 101', async () => {
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    await assertSucceeds(
+      setDoc(doc(db, 'publicProfiles', OWNER), { name: 'a'.repeat(100) })
+    );
+    await assertFails(
+      setDoc(doc(db, 'publicProfiles', OWNER), { name: 'a'.repeat(101) })
+    );
+  });
+
+  it('rejects an empty, blank, non-string or control-character name', async () => {
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const ref = doc(db, 'publicProfiles', OWNER);
+    await assertFails(setDoc(ref, { name: '' }));
+    await assertFails(setDoc(ref, { name: '   ' }));
+    await assertFails(setDoc(ref, { name: 42 }));
+    await assertFails(setDoc(ref, { name: 'Ivan\nFake Admin' }));
+    await assertFails(setDoc(ref, { name: 'Ivan\u0000' }));
+  });
+
+  it('accepts non-ASCII names (Cyrillic, emoji) — the app is bilingual', async () => {
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    await assertSucceeds(
+      setDoc(doc(db, 'publicProfiles', OWNER), { name: 'Иван Петров 🐾' })
+    );
+  });
+
+  // Pins down what `size()` counts, because PublicProfileService.setName clamps
+  // client-side and the two must agree. 100 Cyrillic letters are 200 UTF-8
+  // bytes but 100 code units and pass; 100 paw emoji are 100 code points but
+  // 200 code units and fail. So the unit is UTF-16 code units — which is also
+  // what Dart's String.length counts. Don't "fix" the client clamp to runes.
+  it('measures the 100 bound in UTF-16 code units', async () => {
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    await assertSucceeds(
+      setDoc(doc(db, 'publicProfiles', OWNER), { name: 'я'.repeat(100) })
+    );
+    await assertFails(
+      setDoc(doc(db, 'publicProfiles', OWNER), { name: '🐾'.repeat(100) })
+    );
+  });
+
+  it('rejects fields other than name, incl. clearing a deletion tombstone', async () => {
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const ref = doc(db, 'publicProfiles', OWNER);
+    await assertFails(setDoc(ref, { name: 'Ivan', role: 'admin' }));
+
+    await seedProfile({ name: 'Deleted user', deleted: true });
+    await assertFails(updateDoc(ref, { name: 'Ivan', deleted: false }));
+    // ...but the name alone may still be updated on a doc that carries them.
+    await assertSucceeds(updateDoc(ref, { name: 'Ivan' }));
+  });
+
+  it('lets only the owner delete their profile', async () => {
+    await seedProfile();
+    const other = testEnv.authenticatedContext(OTHER).firestore();
+    await assertFails(deleteDoc(doc(other, 'publicProfiles', OWNER)));
+
+    const owner = testEnv.authenticatedContext(OWNER).firestore();
+    await assertSucceeds(deleteDoc(doc(owner, 'publicProfiles', OWNER)));
+  });
+});

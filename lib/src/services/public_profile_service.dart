@@ -13,9 +13,36 @@ class PublicProfileService {
   static final CollectionReference<Map<String, dynamic>> _profiles =
       FirebaseFirestore.instance.collection('publicProfiles');
 
+  /// Longest name the `publicProfiles` rules accept. Kept in sync with
+  /// `isValidProfileName()` in `firestore.rules`.
+  static const int maxNameLength = 100;
+
   /// Create or update the caller's public display name.
+  ///
+  /// The name is normalised to what the rules accept — trimmed, single-line and
+  /// clamped — because not every caller comes from a bounded text field (the
+  /// "skip for now" path passes an email-derived suggestion). A blank name is a
+  /// no-op rather than a write the rules would reject.
   static Future<void> setName(String uid, String name) async {
-    await _profiles.doc(uid).set({'name': name}, SetOptions(merge: true));
+    final clean = name.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (clean.isEmpty) return;
+    await _profiles.doc(uid).set(
+      {'name': _clampToLimit(clean)},
+      SetOptions(merge: true),
+    );
+  }
+
+  /// Truncate to [maxNameLength] the way the rules measure it.
+  ///
+  /// Firestore's `size()` counts UTF-16 code units — the same unit as Dart's
+  /// `String.length` — so a plain substring is the right cut, except that it
+  /// could land between the halves of a surrogate pair and emit half an emoji.
+  static String _clampToLimit(String value) {
+    if (value.length <= maxNameLength) return value;
+    var end = maxNameLength;
+    final last = value.codeUnitAt(end - 1);
+    if (last >= 0xD800 && last <= 0xDBFF) end -= 1; // high surrogate
+    return value.substring(0, end);
   }
 
   /// Resolve a user's public display name, or null if unavailable.

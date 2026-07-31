@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 
@@ -197,6 +198,14 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
                       return null;
                     },
                     textCapitalization: TextCapitalization.words,
+                    // Mirrors the publicProfiles rules' bounds, so an over-long
+                    // or multi-line name is capped as it's typed instead of
+                    // failing the write with an opaque PERMISSION_DENIED.
+                    inputFormatters: [
+                      LengthLimitingTextInputFormatter(
+                          PublicProfileService.maxNameLength),
+                      FilteringTextInputFormatter.singleLineFormatter,
+                    ],
                   ),
                   const SizedBox(height: 20),
 
