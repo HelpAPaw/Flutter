@@ -94,4 +94,27 @@ void main() {
       );
     });
   });
+
+  group('DeepLinkService.validSignalId', () {
+    // The router's signal_details redirect guards cold launches with this, so
+    // the shapes it accepts are what an unvalidated OS-supplied id is checked
+    // against before it becomes a Firestore lookup.
+    test('accepts Firestore-shaped ids', () {
+      expect(DeepLinkService.validSignalId('jaKkWXBEwpvRh0mi9yUF'), isNotNull);
+      expect(DeepLinkService.validSignalId('a-b_c'), isNotNull);
+    });
+
+    test('rejects anything else', () {
+      for (final bad in [
+        '',
+        '../../etc/passwd',
+        'abc def',
+        'abc/def',
+        '<script>',
+        'a' * 129,
+      ]) {
+        expect(DeepLinkService.validSignalId(bad), isNull, reason: 'accepted "$bad"');
+      }
+    });
+  });
 }

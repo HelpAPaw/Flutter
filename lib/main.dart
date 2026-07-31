@@ -224,6 +224,16 @@ final GoRouter _router = GoRouter(
     GoRoute(
       name: 'signal_details',
       path: Routes.signalDetailsPath,
+      // A cold launch hands the OS's URL straight to the router, so the id
+      // arrives unvalidated — DeepLinkService only guards links that arrive
+      // while the app is already running. The App Link filter matches *any*
+      // path on the link host, so this route is reachable directly from
+      // outside; guarding here rather than on /signal/:id covers every way in,
+      // and keeps a junk id from becoming a Firestore lookup.
+      redirect: (BuildContext context, GoRouterState state) =>
+          DeepLinkService.validSignalId(state.pathParameters['signalId'] ?? '') == null
+              ? Routes.home
+              : null,
       // Keyed by id: go_router derives a page's key from the route *pattern*, so
       // navigating signal->signal (which deep links now do) would otherwise reuse
       // the same State and keep showing the previous signal's data.
