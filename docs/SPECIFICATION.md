@@ -283,6 +283,11 @@ attention" set used as a Firestore `whereIn` filter. Unknown codes resolve to
 Helper functions: `userDoc()`, `isSignalReporter()`, `isParentSignalReporter()`,
 `isSignalCreate()`, `isCommentCreate()`, `isValidProfileName()`, `isStatusOnlyUpdate()`.
 
+**Rules do not cascade into subcollections.** `match /users/{userId}` covers the user
+document only — not `users/{uid}/notifications/{id}`, which matches no rule and is
+therefore denied outright, including to its owner (§7.13). Any future subcollection under
+`users/` needs its own `match` block or a recursive `{document=**}` wildcard.
+
 **Known open item (M-1, tracked as HelpAPaw/Flutter#67):** signal/comment creation is
 *not yet* blocked server-side for anonymous callers. The intended clause gates on
 `request.auth.token.email_verified`, which is baked in at token-mint time; the client
@@ -800,12 +805,56 @@ and date. Signed-out users get a sign-in prompt.
 `/privacy_policy` renders in a `webview_flutter` view. The drawer also links out to
 `https://www.helpapaw.org` and offers "Share the app".
 
-### 7.13 My notifications (unwired)
+### 7.13 My notifications — deferred feature, not yet functional
 
-`/my_notifications` reads `users/{uid}/notifications`, supports mark-all-read and
-clear-all, and is fully implemented — but **nothing writes that subcollection** and the
-drawer has no entry for it. This is intentional dead code kept for a future in-app
-notification centre. Do not treat it as a bug.
+`/my_notifications` is a complete-looking in-app notification centre: newest 50 from
+`users/{uid}/notifications` ordered by `createdAt desc`, unread shown bold,
+swipe-to-delete, mark-all-read and clear-all.
+
+**It is deferred by decision, not broken by accident.** On 2026-05-30 the owner chose to
+postpone the feature to a later release and **keep the code rather than delete it**
+(`QA_CHECKLIST.md:8`, §6.6). The missing drawer entry is deliberate: the page is not
+user-reachable, so there is nothing to QA. Do not report the orphaned page/route as a
+bug, and do not delete it.
+
+What an investigation on 2026-08-01 established about the remaining work — the gap list
+was previously partly assumption, and is now verified:
+
+1. **Nothing has ever written the subcollection.** Verified across all git history: no
+   writer has existed in `functions/src/index.ts` or in Dart, at any commit. Pushes are
+   fire-and-forget FCM only. The two Admin-SDK *deletes* in `deleteAccount` and
+   `deleteAnonymousUserData` therefore operate on data that cannot exist — harmless, and
+   correct once the feature lands.
+2. **The rules deny every operation the page performs** — confirmed empirically, where it
+   was previously an untested belief. `match /users/{userId}` grants the owner
+   read+write, but **Firestore rules do not cascade into subcollections** without a
+   recursive wildcard, and nothing matches `users/{uid}/notifications/{id}`. Emulator-
+   verified with a passing control (the owner *can* write their own user doc): list, get,
+   query, update, delete and create are all denied. So the writer must be server-side
+   (Admin SDK bypasses rules), and the page still needs a rules block of its own.
+3. **The `type` vocabularies don't match.** The page renders icons/colours for
+   `signal_update`, `comment`, `status_change`, `nearby_signal`; the functions emit
+   `new_signal`, `status_change`, `new_comment`. Only `status_change` overlaps. Unknown
+   types degrade to a default icon rather than failing, but the two lists need
+   reconciling.
+
+Remaining work, then: a rules block, a server-side writer in `sendNotificationsToUsers`,
+a drawer entry, and that vocabulary reconciliation.
+
+Expected document shape:
+
+```
+users/{uid}/notifications/{id}
+  type      'signal_update' | 'comment' | 'status_change' | 'nearby_signal'
+  title     string        body      string
+  read      bool          signalId  string?
+  createdAt Timestamp
+```
+
+**Finishing it would also fix the iOS badge.** The fan-out currently hardcodes
+`badge: 1` (`index.ts:244`); an unread count in this collection is the server-side path
+F-008 wanted. The cost caveat is real though: it adds a Firestore write per recipient per
+notification, and the fan-out already dominates the projected bill (`COST_ANALYSIS.md`).
 
 ### 7.14 Callable-function transport quirk
 
@@ -999,7 +1048,7 @@ silently breaks Auth/Firestore/FCM in release builds only.
 | Anonymous callers not blocked server-side on signal/comment create | Open — M-1 second half, gated on an unreleased client fix (#67) |
 | Avatar upload denied; test-mode signal photos denied; failed upload reported as success | Fixed 2026-08-01 (BUG-1/2/3, §5.2); rules deployed, BUG-3 needs an app release |
 | 5-photos-per-signal cap is UI-only | `firestore.rules` does not bound the `photoUrls` array length |
-| `users/{uid}/notifications` never written | `/my_notifications` is intentionally unwired (§7.13) |
+| `/my_notifications` not functional | **Deferred by decision** — keep the code, don't delete. Verified gap list in §7.13 |
 | iOS deferred deep links | Deliberately not implemented (clipboard prompt cost) |
 | iOS unread badge count | Server sends a fixed `badge: 1`; an accurate count needs a Notification Service Extension or server-side counting |
 | Comment photos | Storage path reserved, no write rule, no UI |
@@ -1015,3 +1064,4 @@ silently breaks Auth/Firestore/FCM in release builds only.
 | 2026-08-01 | Initial specification, written from the codebase at `6.0.1+125` (branch `dev`). |
 | 2026-08-01 | Investigated the `storage.rules` note: confirmed BUG-1 (avatar upload always denied), BUG-2 (test-mode signal photos denied) and BUG-3 (failed upload reported as success). Recorded the emulator's project-prefixed reference representation as a testing caveat. §5.2, §14. |
 | 2026-08-01 | Fixed all three, added `firestore-tests/storage.rules.test.js` (27 cases) and size/content-type limits (5 MB signal photos, 2 MB avatars, `image/*`). Client now declares `contentType` on every upload; avatar reads are public. **`storage.rules` deployed to production.** §5.2, §13.2, §14. |
+| 2026-08-01 | Investigated `/my_notifications`. It is a deliberate deferral (owner decision 2026-05-30, keep the code); verified the previously-assumed gap list — no writer has ever existed, the subcollection is denied because rules don't cascade into subcollections, and the page's `type` vocabulary doesn't match the functions'. Documented the schema and the iOS-badge link. §5.1, §7.13, §14. |
