@@ -332,7 +332,11 @@ configured `storageBucket` on every platform, so `FirebaseStorage.instance` (use
 avatar code) and `FirebaseStorage.instanceFor(bucket: 'gs://help-a-paw-dev.appspot.com')`
 (used by the signal-photo code) resolve to one bucket governed by one ruleset.
 
-#### Three defects found and fixed (2026-08-01) — **fixed in the working tree, NOT yet deployed**
+#### Three defects found and fixed (2026-08-01)
+
+**Deployment state:** the `storage.rules` change is **live in production** (deployed
+2026-08-01), so BUG-1 and BUG-2 are fixed for existing installs. BUG-3 is a client change
+and reaches users only with the next app release.
 
 **BUG-1 — avatar upload was always denied.** `profile_page.dart::_pickAndUploadPhoto`
 writes `profile_photos/{uid}.jpg`, but `storage.rules` had **no match block for that
@@ -993,7 +997,8 @@ silently breaks Auth/Firestore/FCM in release builds only.
 | Item | Status |
 |---|---|
 | Anonymous callers not blocked server-side on signal/comment create | Open — M-1 second half, gated on an unreleased client fix (#67) |
-| Avatar upload denied; test-mode signal photos denied; failed upload reported as success | **Fixed 2026-08-01 (BUG-1/2/3, §5.2) — `storage.rules` change is NOT yet deployed** |
+| Avatar upload denied; test-mode signal photos denied; failed upload reported as success | Fixed 2026-08-01 (BUG-1/2/3, §5.2); rules deployed, BUG-3 needs an app release |
+| 5-photos-per-signal cap is UI-only | `firestore.rules` does not bound the `photoUrls` array length |
 | `users/{uid}/notifications` never written | `/my_notifications` is intentionally unwired (§7.13) |
 | iOS deferred deep links | Deliberately not implemented (clipboard prompt cost) |
 | iOS unread badge count | Server sends a fixed `badge: 1`; an accurate count needs a Notification Service Extension or server-side counting |
@@ -1009,4 +1014,4 @@ silently breaks Auth/Firestore/FCM in release builds only.
 |---|---|
 | 2026-08-01 | Initial specification, written from the codebase at `6.0.1+125` (branch `dev`). |
 | 2026-08-01 | Investigated the `storage.rules` note: confirmed BUG-1 (avatar upload always denied), BUG-2 (test-mode signal photos denied) and BUG-3 (failed upload reported as success). Recorded the emulator's project-prefixed reference representation as a testing caveat. §5.2, §14. |
-| 2026-08-01 | Fixed all three, added `firestore-tests/storage.rules.test.js` (26 cases) and size/content-type limits (5 MB signal photos, 2 MB avatars, `image/*`). Client now declares `contentType` on every upload. **`storage.rules` not yet deployed.** §5.2, §13.2, §14. |
+| 2026-08-01 | Fixed all three, added `firestore-tests/storage.rules.test.js` (27 cases) and size/content-type limits (5 MB signal photos, 2 MB avatars, `image/*`). Client now declares `contentType` on every upload; avatar reads are public. **`storage.rules` deployed to production.** §5.2, §13.2, §14. |
