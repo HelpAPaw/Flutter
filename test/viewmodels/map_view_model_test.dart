@@ -4,6 +4,7 @@ import 'package:firebase_core_platform_interface/test.dart';
 import 'package:firebase_crashlytics_platform_interface/firebase_crashlytics_platform_interface.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image_picker/image_picker.dart' show XFile;
 import 'package:help_a_paw/src/repositories/repository_provider.dart';
 import 'package:help_a_paw/src/state/map_state.dart';
 import 'package:help_a_paw/src/viewmodels/map_view_model.dart';
@@ -296,6 +297,55 @@ void main() {
       expect(mockSignalRepo.subscriptions.length, 1);
 
       // Verify form was reset
+      expect(viewModel.state.isAddingNewSignal, false);
+      expect(viewModel.state.formState.title, '');
+      expect(viewModel.state.newlyCreatedSignalId, isNotNull);
+    });
+
+    test('submitSignal attaches the photo when the upload succeeds', () async {
+      viewModel.updateFormTitle('Help needed');
+      viewModel.updateFormDescription('Dog stuck in fence');
+      viewModel.setFormImage(XFile('/tmp/mock-photo.jpg'));
+
+      final (success, errorMessage) = await viewModel.submitSignal(
+        latitude: 42.0,
+        longitude: 23.0,
+      );
+
+      expect(success, true);
+      expect(errorMessage, isNull);
+      expect(mockStorageRepo.uploadedImages.length, 1);
+      expect(
+        mockSignalRepo.addedPhotoUrls[viewModel.state.newlyCreatedSignalId],
+        hasLength(1),
+      );
+    });
+
+    test('submitSignal warns when the photo upload is rejected', () async {
+      // Regression guard. `uploadSignalImage` reports failure by *returning* an
+      // UploadResult rather than throwing, so this case never reached the
+      // catch block: a rejected upload fell through to full success and the
+      // photo was dropped with no warning at all. That is how a Storage rule
+      // which denied every test-mode upload stayed invisible for months.
+      mockStorageRepo.shouldUploadSucceed = false;
+
+      viewModel.updateFormTitle('Help needed');
+      viewModel.updateFormDescription('Dog stuck in fence');
+      viewModel.setFormImage(XFile('/tmp/mock-photo.jpg'));
+
+      final (success, errorMessage) = await viewModel.submitSignal(
+        latitude: 42.0,
+        longitude: 23.0,
+      );
+
+      // Partial success: the signal exists, so this is not a failure — but the
+      // caller must be told, and no photo URL may be attached.
+      expect(success, true);
+      expect(errorMessage, 'photo_upload_failed');
+      expect(mockSignalRepo.createdSignals.length, 1);
+      expect(mockSignalRepo.addedPhotoUrls, isEmpty);
+
+      // The form still resets, exactly as on the success path.
       expect(viewModel.state.isAddingNewSignal, false);
       expect(viewModel.state.formState.title, '');
       expect(viewModel.state.newlyCreatedSignalId, isNotNull);

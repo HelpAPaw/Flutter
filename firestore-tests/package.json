@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Emulator-backed unit tests for firestore.rules. Run these before deploying rules to help-a-paw-dev (which is production).",
+  "description": "Emulator-backed unit tests for firestore.rules and storage.rules. Run these before deploying rules to help-a-paw-dev (which is production).",
   "scripts": {
-    "test": "JAVA_HOME=\"$(./find-jdk21.sh)\" firebase emulators:exec --only firestore --project help-a-paw-test \"$(command -v node) --test\""
+    "test": "JAVA_HOME=\"$(./find-jdk21.sh)\" firebase emulators:exec --only firestore,storage --project help-a-paw-test \"$(command -v node) --test --test-concurrency=1\""
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.0",

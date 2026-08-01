@@ -28,7 +28,13 @@ class FirebaseStorageRepository implements StorageRepository {
           .child('photos')
           .child(fileName);
 
-      final UploadTask uploadTask = storageRef.putFile(imageFile);
+      // Declared rather than left to the platform's MIME inference: the
+      // Storage rules require an `image/*` content type, and the picker always
+      // re-encodes to JPEG (it is given an imageQuality).
+      final UploadTask uploadTask = storageRef.putFile(
+        imageFile,
+        SettableMetadata(contentType: 'image/jpeg'),
+      );
       final TaskSnapshot snapshot = await uploadTask;
       final String downloadUrl = await snapshot.ref.getDownloadURL();
 

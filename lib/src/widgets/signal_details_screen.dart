@@ -1031,7 +1031,12 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         .child(fileName);
 
     final File file = File(image.path);
-    final UploadTask uploadTask = storageRef.putFile(file);
+    // See FirebaseStorageRepository.uploadSignalImage: the rules require an
+    // `image/*` content type, so declare it instead of relying on inference.
+    final UploadTask uploadTask = storageRef.putFile(
+      file,
+      SettableMetadata(contentType: 'image/jpeg'),
+    );
     final TaskSnapshot snapshot = await uploadTask;
     final String downloadUrl = await snapshot.ref.getDownloadURL();
 

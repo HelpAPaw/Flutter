@@ -80,8 +80,13 @@ class MockSignalRepository implements SignalRepository {
 
   @override
   Future<void> addPhotoUrl(String signalId, String photoUrl) async {
-    // No-op for testing
+    addedPhotoUrls.putIfAbsent(signalId, () => []).add(photoUrl);
   }
+
+  /// Photo URLs attached per signal id. Recorded rather than ignored so a test
+  /// can tell "the photo was attached" from "the photo was silently dropped" —
+  /// the distinction a rejected upload used to blur.
+  final Map<String, List<String>> addedPhotoUrls = {};
 
   @override
   Future<SignalWithId?> getSignalById(String signalId) async {

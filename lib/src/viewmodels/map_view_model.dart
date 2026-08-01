@@ -301,16 +301,18 @@ class MapViewModel extends Notifier<MapScreenState> {
 
           if (uploadResult.success && uploadResult.downloadUrl != null) {
             await signalRepo.addPhotoUrl(result.signalId, uploadResult.downloadUrl!);
+          } else {
+            // `uploadSignalImage` reports failure by *returning* an
+            // UploadResult, not by throwing, so this can't be left to the catch
+            // below. Without it a rejected upload fell through to full success
+            // and the photo was dropped with no warning at all — which is how a
+            // Storage rule that denied every test-mode upload went unnoticed.
+            return _photoUploadFailed(result.signalId);
           }
         } catch (e) {
           // Photo upload failed but signal was created
           // Return partial success
-          state = state.copyWith(
-            isAddingNewSignal: false,
-            newlyCreatedSignalId: result.signalId,
-            formState: const NewSignalFormState(),
-          );
-          return (true, 'photo_upload_failed');
+          return _photoUploadFailed(result.signalId);
         }
       }
 
@@ -327,6 +329,20 @@ class MapViewModel extends Notifier<MapScreenState> {
       );
       return (false, e.toString());
     }
+  }
+
+  /// The signal was created but its photo did not attach. Clears the form the
+  /// same way the success path does, so the only difference the caller sees is
+  /// the warning it gets to show.
+  (bool, String?) _photoUploadFailed(String signalId) {
+    FirebaseCrashlytics.instance
+        .log('Signal: Created without photo (upload failed) - id: $signalId');
+    state = state.copyWith(
+      isAddingNewSignal: false,
+      newlyCreatedSignalId: signalId,
+      formState: const NewSignalFormState(),
+    );
+    return (true, 'photo_upload_failed');
   }
 
   // ============================================================

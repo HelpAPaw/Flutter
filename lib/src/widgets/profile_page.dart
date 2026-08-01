@@ -210,7 +210,12 @@ class _ProfilePageState extends State<ProfilePage> {
           .child('profile_photos')
           .child('${user.uid}.jpg');
 
-      await ref.putFile(File(pickedFile.path));
+      await ref.putFile(
+        File(pickedFile.path),
+        // The rules require an `image/*` content type; the picker re-encodes
+        // to JPEG (it is given an imageQuality).
+        SettableMetadata(contentType: 'image/jpeg'),
+      );
       final photoUrl = await ref.getDownloadURL();
 
       await user.updatePhotoURL(photoUrl);
