@@ -76,6 +76,26 @@ signal — **not** the total enabled base. `N_near` is bounded by *local* densit
 
 _Before the fix this row scaled with the entire enabled base `E` (e.g. 1,000,000 enabled → **$600 / 1,000 signals**)._
 
+**Added 2026-08-04 — in-app inbox writes.** Persisting each notification costs **2 writes
+per recipient per event** (the `users/{uid}/notifications` document plus the
+`userCounters/{uid}` increment), where recipients are everyone passing the preference
+filters — a superset of the users with an FCM token. At $0.18/100K writes:
+
+| Recipients / event | Write cost / event | Per 1,000 events |
+|---|---|---|
+| 50 | $0.00018 | **$0.18** |
+| 200 | $0.00072 | **$0.72** |
+| 1,000 | $0.0036 | **$3.60** |
+
+Events are signal creations *plus* status changes and comments on subscribed signals, so
+the event count is several times the signal count. Writes stay well below the fan-out's
+read cost at every scale, but this is the first per-recipient *write* the system has had —
+it scales the same way the reads do, with local density.
+
+Two things bound it: the 90-day TTL on `expiresAt` keeps storage flat rather than
+cumulative, and the deterministic document ids mean a trigger retry overwrites instead of
+adding a row. Deletions performed by the TTL policy are billed as ordinary deletes.
+
 ### MAU — per 10,000 MAU (unchanged)
 Moderate engagement (5 sessions/user, ~120 reads/session, 500 signals, 4K enabled, 15% location-tracking)
 ≈ ~10M reads, ~280K writes, <1 GB photos → **~$5–10/month**. Light ≈ free; heavy ≈ $15–30/month.

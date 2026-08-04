@@ -5,7 +5,7 @@
 > These were surfaced by code review and must be triaged before release:
 >
 > - [x] **Account deletion implemented.** In-app deletion (Profile → "Delete Account") via the `deleteAccount` Cloud Function: anonymizes authored signals (strips phone numbers), tombstones the user doc as "Deleted user", deletes the notifications subcollection + profile photo, then deletes the Auth user. Requires deploying `functions` + `firestore:rules`. See §1.8.
-> - [x] **"My Notifications" page — DEFERRED to next release (decision: keep code, don't ship the feature).** The page + `/my_notifications` route remain in the codebase intentionally but are **not wired up** (no drawer/AppBar entry point), so the feature is not user-reachable and nothing to QA this release. Do **not** treat the orphaned page/route as a bug. Implementation plan retained in §6.6 for next release.
+> - [x] **"My Notifications" page — BUILT 2026-08-04.** No longer deferred: the Cloud Functions persist a document per push, the Firestore rules grant the owner access, a drawer entry with an unread badge reaches the page, and rows render localized. Now testable — see §6.6. **The iOS badge intentionally still sends `1`**; that flip is held until this release is adopted (§6.6 watch-outs).
 > - [ ] **Edit Signal & Delete Signal** flows exist in code (author-only AppBar actions on Signal Details) but were previously untested. Now covered in §3.6 and §3.7.
 > - [ ] **Light theme only.** No dark theme is defined; verify rendering under OS dark mode. See §14.1.
 
@@ -257,7 +257,7 @@
 - [ ] Completing onboarding hides all prompts permanently
 
 ### 6.2 Push Notification Types
-> Cloud Functions emit FCM messages with `type` values: `new_signal`, `status_change`, `new_comment` (`functions/src/index.ts`). These are push-only and are **not** persisted to an in-app inbox (see §6.6).
+> Cloud Functions emit FCM messages with `type` values: `new_signal`, `status_change`, `new_comment` (`functions/src/index.ts`). Each is **also persisted** to the recipient's in-app inbox (see §6.6).
 - [ ] **New signal nearby** (`new_signal`): Received when a signal is created within the user's configured radius/region and matches their type preferences
 - [ ] **Status change** (`status_change`): Received when a subscribed signal's status changes
 - [ ] **New comment** (`new_comment`): Received when a comment is posted on a subscribed signal (body truncated to 50 chars)
@@ -287,34 +287,53 @@
 - [ ] Moving the device (location updates every 500m) writes to `userLocations/{uid}` and does **not** rewrite the user doc — confirm `onUserTokensWritten` is **not** invoked by location updates (check function logs/invocation count)
 - [ ] Token dedup (`onUserTokensWritten`) still fires on genuine token registration and removes the token from other user docs
 
-### 6.6 In-App Notifications Inbox (My Notifications) — ⏸ DEFERRED TO NEXT RELEASE
-> **Decision (this release): keep the code, do not ship the feature.** `MyNotificationsPage` + route `/my_notifications` stay in the codebase but remain **deliberately unreachable** (no drawer item, no AppBar bell). Nothing for QA to test this release — and the orphaned page/route should **not** be reported as a bug.
+### 6.6 In-App Notifications Inbox (My Notifications) — ✅ BUILT, ready to test
+> Built 2026-08-04. Canonical `type` vocabulary is now `new_signal` / `status_change` / `new_comment` / `nearby_signal` — **the page moved to match the wire**, since `data.type` is a contract with every installed build.
 >
-> **Not built yet (the gaps to close next release):**
-> - No UI entry point navigates to the page.
-> - No Cloud Function writes to the `users/{uid}/notifications` subcollection it reads → inbox would be empty.
-> - No Firestore rule grants client access to `users/{uid}/notifications` (the `users/{userId}` rule has no recursive wildcard) → client reads/writes would be **denied**.
-> - The page's `type` switches expect `signal_update` / `comment` / `nearby_signal`, which differ from the values the functions emit (`new_signal` / `status_change` / `new_comment`, §6.2).
+> **Deploy order matters** (see `docs/SPECIFICATION.md` §7.13):
+> 1. `firestore.rules` + `firestore.indexes.json` — the inbox query needs the `notifications` composite index (`testMode ASC, createdAt DESC`) and is dead without it.
+> 2. `functions` — starts persisting entries; push payload otherwise unchanged.
+> 3. TTL policy (`gcloud firestore fields ttls update expiresAt --collection-group=notifications`) — **not** carried by `firebase deploy`.
+> 4. App release.
 >
-> **Implementation plan for next release** (est. ~half a day MVP, English-only):
-> 1. **Server** (`functions/src/index.ts`): in `sendNotificationsToUsers()` (has recipient `userId` map + title/body/data), batch-write `{ type, title, body, signalId, read:false, createdAt }` into each recipient's `users/{uid}/notifications`.
-> 2. **Rules** (`firestore.rules`): add `match /users/{userId}/notifications/{id}` allowing read/write when `request.auth.uid == userId`.
-> 3. **Entry point** (`home_route_drawer.dart`): add a "Notifications" item → `Routes.myNotifications`; optional unread badge via a `read==false` count stream (no composite index needed).
-> 4. **Type alignment**: reconcile the page's icon/color switches with the functions' `type` strings.
-> 5. *(Optional, +½ day)* Localize stored content by persisting structured params and rendering l10n client-side (today's push title/body are hardcoded English).
->
-> **Watch-outs:** a notification doc is written per recipient on every signal/comment/status event (write cost + trigger latency — batch it); subcollection grows unbounded (page caps reads at 50; add a cap/cleanup later); reconciling the iOS app badge (`badge:1`) with the real unread count is extra scope.
->
-> **When the feature is built next release, verify:**
-- [ ] An entry point exists (drawer item or AppBar bell, ideally with unread badge)
-- [ ] Cloud Functions persist a notification document per push into `users/{uid}/notifications`
-- [ ] Firestore rules permit the owner to read/mark-read/delete their notifications
-- [ ] Type strings are consistent between writer (functions) and reader (page)
-- [ ] List shows newest-first, limited to 50, with icon/color per type
-- [ ] Unread items are bold with a dot; tapping marks read and deep-links to the signal
-- [ ] Swipe-to-delete removes a single notification
-- [ ] "Mark all as read" and "Clear all" overflow actions work
+> **iOS badge sends a real count** (`badge: N` from `userCounters`). ⚠️ Accepted consequence: iOS badges are sticky, so on builds predating this release the number climbs and never clears. Expect that when testing against an older build.
+
+**Entry point & list**
+- [ ] Drawer shows a "Notifications" item (bell icon, between "My Signals" and "Notification Settings") — visible to **anonymous users too**
+- [ ] The icon carries an unread count badge that clears as items are read
+- [ ] List shows newest-first, max 50, with icon/color per type
+- [ ] Unread items are bold with an orange dot; tapping marks read and deep-links to the signal
+- [ ] Swipe-to-delete removes a single notification; a failed delete now shows an error (previously silent)
+- [ ] "Mark all as read" and "Clear all" work, including with more than 50 notifications
 - [ ] Empty state and unauthenticated ("please sign in") states render correctly
+
+**Server persistence**
+- [ ] Creating a signal writes a `new_signal` entry to every nearby recipient's inbox
+- [ ] A status change writes `status_change` to subscribers; a comment writes `new_comment`
+- [ ] The actor (reporter / status-changer / comment author) gets **no** entry for their own action
+- [ ] **A user with notifications disabled or no FCM token still receives inbox entries** (the recipient split — this is the main reason the inbox exists)
+- [ ] Entries are not duplicated if a trigger retries (deterministic ids `sig_`/`st_`/`cmt_`/`nb_`)
+
+**Localization**
+- [ ] On a Bulgarian device, rows render in Bulgarian — signal type name, status label and all titles — even though the push text stored on the document is English
+- [ ] An unknown/legacy `type` falls back to the stored `title`/`body` rather than rendering blank
+
+**Arrival catch-up**
+- [ ] Travelling into range of an existing signal produces both the local notification **and** a `nearby_signal` inbox entry (Android: written from the headless isolate)
+- [ ] A signal the server already pushed does not also produce a `nearby_signal` entry (dedupe inherited from `NotifiedSignalsStore`)
+
+**Test-mode isolation**
+- [ ] Entries created in test mode do **not** appear in the production inbox, and vice versa
+- [ ] Turning test mode off and back on shows the right set each time
+
+**Account lifecycle**
+- [ ] `deleteAccount` removes the notifications subcollection **and** `userCounters/{uid}`
+- [ ] The scheduled anonymous cleanup does the same for reaped anonymous users
+
+**iOS badge**
+- [ ] Badge count matches the unread count (not stuck at 1)
+- [ ] Opening the app zeroes the badge and repairs the stored counter
+- [ ] Receiving several notifications while backgrounded increments the badge correctly
 
 ### 6.7 Notification Fan-out Scoping & Efficiency (geohash)
 > `handleSignalCreated` now selects recipients via geohash range queries (`geofire-common`) over the `userLocations` collection (live-location path) and `users` region-of-interest geohash (region path), instead of scanning every enabled user. Bounded by `MAX_LOCATION_RADIUS_KM=50` / `MAX_REGION_RADIUS_KM=100`. The precise per-user radius is still enforced by a Haversine check. See `COST_ANALYSIS.md`.
@@ -358,10 +377,11 @@
 ## 8. Navigation Drawer & Info Screens
 
 ### 8.1 Drawer Menu Items
-> Actual order in `home_route_drawer.dart`: header logo → Profile/Sign In → **Sign Out (immediately under Profile, authenticated only)** → My Signals → Notification Settings → FAQs → Feedback → Privacy Policy → Our Site → About → Share App. Note: **My Notifications is NOT in the drawer** (see §6.6).
+> Actual order in `home_route_drawer.dart`: header logo → Profile/Sign In → **Sign Out (immediately under Profile, authenticated only)** → My Signals → **Notifications** → Notification Settings → FAQs → Feedback → Privacy Policy → Our Site → About → Share App.
 - [ ] **Profile** (authenticated) / **Sign In** (anonymous)
 - [ ] **Sign Out** (authenticated only) — appears directly beneath the Profile tile at the top, not at the bottom
 - [ ] **My Signals** — user's created signals
+- [ ] **Notifications** — in-app inbox, with an unread count badge on the icon (§6.6)
 - [ ] **Notification Settings** — full notification configuration
 - [ ] **FAQs** — 5 sections, 17 questions with answers
 - [ ] **Feedback** — type dropdown, message, optional email, optional device info

@@ -1580,6 +1580,42 @@ abstract class AppLocalizations {
   /// **'{days}d ago'**
   String daysAgo(int days);
 
+  /// Inbox row title for a signal reported near the user. The stored push text is English-only, so the inbox row is rendered from these keys instead.
+  ///
+  /// In en, this message translates to:
+  /// **'New signal nearby'**
+  String get notificationNewSignalTitle;
+
+  /// No description provided for @notificationNewSignalBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{signalType}: {signalTitle}'**
+  String notificationNewSignalBody(String signalType, String signalTitle);
+
+  /// No description provided for @notificationStatusChangeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Signal status updated'**
+  String get notificationStatusChangeTitle;
+
+  /// No description provided for @notificationStatusChangeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{signalTitle}: {status}'**
+  String notificationStatusChangeBody(String signalTitle, String status);
+
+  /// No description provided for @notificationNewCommentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New comment on: {signalTitle}'**
+  String notificationNewCommentTitle(String signalTitle);
+
+  /// No description provided for @notificationNearbySignalBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{signalType} · {signalTitle}'**
+  String notificationNearbySignalBody(String signalType, String signalTitle);
+
   /// No description provided for @completeYourProfile.
   ///
   /// In en, this message translates to:

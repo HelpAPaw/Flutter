@@ -159,6 +159,159 @@ async function cleanupInvalidTokens(
 }
 
 /**
+ * Apply `apply` to every item, committing in batches that stay within
+ * Firestore's 500-write limit.
+ *
+ * `chunkSize` is the number of *items* per batch, so a caller whose `apply`
+ * performs more than one write per item must lower it accordingly.
+ */
+async function commitInChunks<T>(
+  items: T[],
+  apply: (batch: admin.firestore.WriteBatch, item: T) => void,
+  chunkSize = 450
+): Promise<void> {
+  for (let i = 0; i < items.length; i += chunkSize) {
+    const batch = db.batch();
+    for (const item of items.slice(i, i + chunkSize)) {
+      apply(batch, item);
+    }
+    await batch.commit();
+  }
+}
+
+// How long an in-app notification is kept. Enforced by a Firestore TTL policy on
+// the `expiresAt` field of the `notifications` collection group, NOT by any code
+// here — see docs/SPECIFICATION.md. A document written without `expiresAt` would
+// live forever.
+const INBOX_RETENTION_DAYS = 90;
+
+// Each inbox entry costs one document write plus one counter write, so keep the
+// item chunk well under half the 500-write batch limit.
+const INBOX_CHUNK_SIZE = 200;
+
+/**
+ * Bound a string before it goes into the FCM `data` map. The 4KB FCM limit
+ * covers `notification` and `data` together, and signal titles are only capped
+ * at 300 characters by the security rules.
+ */
+function truncateForPayload(value: string, max = 200): string {
+  return value.length > max ? value.substring(0, max) : value;
+}
+
+/**
+ * One in-app notification, before it is fanned out to its recipients.
+ *
+ * The English `title`/`body` are the same strings the push carries and exist
+ * only as a fallback: the app renders the inbox row from the structured fields
+ * (`signalType`, `statusCode`, …) through its own localizations, because this
+ * function has no i18n and the app is bilingual.
+ */
+interface InboxEntry {
+  /**
+   * Deterministic document id. Firestore triggers are at-least-once, so a retry
+   * must overwrite the entry rather than append a duplicate. Ids must encode
+   * everything that makes the event distinct — `st_{signalId}` alone would
+   * collapse two different status transitions into one.
+   */
+  docId: string;
+  type: "new_signal" | "status_change" | "new_comment";
+  title: string;
+  body: string;
+  signalId: string;
+  signalTitle: string;
+  signalType?: number;
+  statusCode?: number;
+  commentExcerpt?: string;
+}
+
+/**
+ * Persist one notification into each recipient's in-app inbox and bump their
+ * unread counter.
+ *
+ * Recipients are everyone who passed the preference filters — deliberately NOT
+ * only those with an FCM token. A user who turned push off still wants to find
+ * the comment on their signal when they open the app.
+ *
+ * The counter is advisory. The increment is not idempotent, so a trigger retry
+ * (or a TTL deletion, which no code observes) leaves it drifted; the app repairs
+ * it with a count() aggregation when it comes to the foreground. Do not "fix"
+ * this with another trigger — that is what the drift budget is for.
+ */
+async function writeInboxEntries(
+  uids: string[],
+  entry: InboxEntry,
+  isTestMode: boolean
+): Promise<Map<string, number>> {
+  const badgeByUid = new Map<string, number>();
+  if (uids.length === 0) {
+    return badgeByUid;
+  }
+
+  const { docId, ...content } = entry;
+  const now = admin.firestore.Timestamp.now();
+  const expiresAt = admin.firestore.Timestamp.fromMillis(
+    now.toMillis() + INBOX_RETENTION_DAYS * 24 * 60 * 60 * 1000
+  );
+
+  // Firestore rejects `undefined` values, and the per-type fields are optional.
+  const fields = Object.fromEntries(
+    Object.entries(content).filter(([, value]) => value !== undefined)
+  );
+
+  try {
+    // Read the counters *before* incrementing so the badge can be computed in
+    // one batched RPC rather than a round trip per recipient after the fact.
+    // `getAll` chunked at 300 mirrors the candidate load in handleSignalCreated.
+    for (let i = 0; i < uids.length; i += 300) {
+      const refs = uids
+        .slice(i, i + 300)
+        .map((uid) => db.collection("userCounters").doc(uid));
+      const counters = await db.getAll(...refs);
+      for (const doc of counters) {
+        const unread = (doc.data()?.unread as number | undefined) ?? 0;
+        // +1 for the notification being written right now.
+        badgeByUid.set(doc.id, unread + 1);
+      }
+    }
+
+    await commitInChunks(
+      uids,
+      (batch, uid) => {
+        const userRef = db.collection("users").doc(uid);
+        batch.set(userRef.collection("notifications").doc(docId), {
+          ...fields,
+          read: false,
+          // Test-mode entries point at `signals_test`, so they must not surface
+          // in the production inbox — tapping one would open a signal id that
+          // does not exist in `signals`. The app filters the list by this.
+          testMode: isTestMode,
+          createdAt: now,
+          expiresAt,
+        });
+        batch.set(
+          db.collection("userCounters").doc(uid),
+          {
+            unread: admin.firestore.FieldValue.increment(1),
+            updatedAt: now,
+          },
+          { merge: true }
+        );
+      },
+      INBOX_CHUNK_SIZE
+    );
+  } catch (error) {
+    // The inbox is secondary to the push. Never let it fail the notification —
+    // and drop the badge counts too, so a half-written batch cannot put a
+    // number on the icon that does not match what is actually in the inbox.
+    // The push then falls back to `badge: 1`.
+    console.error(`Failed to write inbox entries for ${entry.docId}:`, error);
+    badgeByUid.clear();
+  }
+
+  return badgeByUid;
+}
+
+/**
  * When a user document is written with FCM tokens, remove those tokens from
  * all other user documents.  This prevents orphaned anonymous accounts from
  * receiving notifications meant for the current device owner.
@@ -210,22 +363,50 @@ export const onUserTokensWritten = onDocumentWritten(
   }
 );
 
+// FCM rejects a send call carrying more than 500 messages.
+const FCM_BATCH_SIZE = 500;
+
 /**
- * Send notifications to multiple users
+ * Send one notification to every token of every user in `userTokens`.
+ *
+ * Sends per-message (`sendEach`) rather than as a multicast because the iOS
+ * badge is a per-recipient value. Chunked at 500: the previous single
+ * `sendEachForMulticast` call silently threw past that cap, losing *every*
+ * notification for a densely-populated signal.
+ *
+ * `badgeByUid` supplies each recipient's unread count for the APNs badge,
+ * falling back to 1 for a uid it has no count for. Note that iOS badges are
+ * sticky — only the app can clear one — so on app builds predating the
+ * client-side reset the number climbs and does not come back down. That was a
+ * deliberate, accepted trade-off (docs/SPECIFICATION.md §7.13).
  */
 async function sendNotificationsToUsers(
   userTokens: Map<string, string[]>,
   notification: { title: string; body: string },
-  data: Record<string, string>
+  data: Record<string, string>,
+  badgeByUid?: Map<string, number>
 ): Promise<void> {
-  const allTokens = Array.from(userTokens.values()).flat();
+  // Flattened to (token, uid) pairs: the uid selects the badge, and
+  // cleanupInvalidTokens needs the tokens in the same order as the responses.
+  const targets: { token: string; uid: string }[] = [];
+  for (const [uid, tokens] of userTokens.entries()) {
+    for (const token of tokens) {
+      targets.push({ token, uid });
+    }
+  }
 
-  if (allTokens.length === 0) {
+  if (targets.length === 0) {
     return;
   }
 
-  const message: admin.messaging.MulticastMessage = {
-    tokens: allTokens,
+  const buildMessage = ({
+    token,
+    uid,
+  }: {
+    token: string;
+    uid: string;
+  }): admin.messaging.Message => ({
+    token,
     notification,
     data: {
       ...data,
@@ -241,23 +422,41 @@ async function sendNotificationsToUsers(
       payload: {
         aps: {
           sound: "default",
-          badge: 1,
+          badge: badgeByUid?.get(uid) ?? 1,
         },
       },
     },
-  };
+  });
 
   try {
-    const response = await messaging.sendEachForMulticast(message);
-    console.log(`Send results: ${response.successCount} success, ${response.failureCount} failures`);
-    response.responses.forEach((resp, idx) => {
+    const sentTokens: string[] = [];
+    const responses: admin.messaging.SendResponse[] = [];
+    let successCount = 0;
+    let failureCount = 0;
+
+    for (let i = 0; i < targets.length; i += FCM_BATCH_SIZE) {
+      const chunk = targets.slice(i, i + FCM_BATCH_SIZE);
+      const response = await messaging.sendEach(chunk.map(buildMessage));
+
+      sentTokens.push(...chunk.map((target) => target.token));
+      responses.push(...response.responses);
+      successCount += response.successCount;
+      failureCount += response.failureCount;
+    }
+
+    console.log(`Send results: ${successCount} success, ${failureCount} failures`);
+    responses.forEach((resp, idx) => {
       if (!resp.success) {
         console.error(`Token ${idx} failed:`, resp.error?.code, resp.error?.message);
       }
     });
 
-    if (response.failureCount > 0) {
-      await cleanupInvalidTokens(response, allTokens, userTokens);
+    if (failureCount > 0) {
+      await cleanupInvalidTokens(
+        { responses, successCount, failureCount },
+        sentTokens,
+        userTokens
+      );
     }
   } catch (error) {
     console.error("Error sending notifications:", error);
@@ -368,6 +567,9 @@ async function handleSignalCreated(
   }
 
   const userTokens: Map<string, string[]> = new Map();
+  // Everyone who passes the filters below, whether or not they can be pushed to.
+  // A user with push disabled still gets the in-app inbox entry.
+  const inboxRecipients: string[] = [];
 
   for (const [userId, userData] of usersById.entries()) {
     // Skip users in the wrong mode
@@ -376,11 +578,6 @@ async function handleSignalCreated(
 
     // Skip the signal reporter
     if (reporterRef && reporterRef.id === userId) {
-      continue;
-    }
-
-    // Skip if no FCM tokens
-    if (!userData.fcmTokens || userData.fcmTokens.length === 0) {
       continue;
     }
 
@@ -438,27 +635,46 @@ async function handleSignalCreated(
     }
 
     if (shouldNotify) {
-      userTokens.set(userId, userData.fcmTokens);
+      inboxRecipients.push(userId);
+      if (userData.fcmTokens && userData.fcmTokens.length > 0) {
+        userTokens.set(userId, userData.fcmTokens);
+      }
     }
   }
 
-  if (userTokens.size === 0) {
+  if (inboxRecipients.length === 0) {
     return;
   }
 
   const signalTypeName =
     SIGNAL_TYPES[signalType] || SIGNAL_TYPES[SIGNAL_TYPES.length - 1];
+  const title = "New signal nearby!";
+  const body = `${signalTypeName}: ${signalTitle}`;
+
+  const badgeByUid = await writeInboxEntries(
+    inboxRecipients,
+    {
+      docId: `sig_${signalId}`,
+      type: "new_signal",
+      title,
+      body,
+      signalId,
+      signalTitle,
+      signalType,
+    },
+    isTestMode
+  );
 
   await sendNotificationsToUsers(
     userTokens,
-    {
-      title: "New signal nearby!",
-      body: `${signalTypeName}: ${signalTitle}`,
-    },
+    { title, body },
     {
       signalId,
       type: "new_signal",
-    }
+      signalTitle: truncateForPayload(signalTitle),
+      signalType: String(signalType),
+    },
+    badgeByUid
   );
 }
 
@@ -499,6 +715,7 @@ async function handleSignalUpdated(
 
   // Find users subscribed to this signal
   const userTokens: Map<string, string[]> = new Map();
+  const inboxRecipients: string[] = [];
 
   const subscribedUsersSnapshot = await db
     .collection("users")
@@ -518,30 +735,48 @@ async function handleSignalUpdated(
       continue;
     }
 
-    // Skip if no FCM tokens
-    if (!userData.fcmTokens || userData.fcmTokens.length === 0) {
-      continue;
-    }
+    inboxRecipients.push(userId);
 
-    userTokens.set(userId, userData.fcmTokens);
+    // A missing token only rules out the push, not the inbox entry.
+    if (userData.fcmTokens && userData.fcmTokens.length > 0) {
+      userTokens.set(userId, userData.fcmTokens);
+    }
   }
 
-  if (userTokens.size === 0) {
+  if (inboxRecipients.length === 0) {
     return;
   }
 
   const statusName = SIGNAL_STATUSES[newStatus] || "Updated";
+  const title = "Signal status updated";
+  const body = `${signalTitle}: ${statusName}`;
+
+  const badgeByUid = await writeInboxEntries(
+    inboxRecipients,
+    {
+      // The status belongs in the id: `st_{signalId}` alone would make a later
+      // transition overwrite the earlier one instead of adding a second entry.
+      docId: `st_${signalId}_${newStatus}`,
+      type: "status_change",
+      title,
+      body,
+      signalId,
+      signalTitle,
+      statusCode: newStatus,
+    },
+    isTestMode
+  );
 
   await sendNotificationsToUsers(
     userTokens,
-    {
-      title: "Signal status updated",
-      body: `${signalTitle}: ${statusName}`,
-    },
+    { title, body },
     {
       signalId,
       type: "status_change",
-    }
+      signalTitle: truncateForPayload(signalTitle),
+      statusCode: String(newStatus),
+    },
+    badgeByUid
   );
 }
 
@@ -596,6 +831,7 @@ async function handleCommentCreated(
 
   // Find users subscribed to this signal
   const userTokens: Map<string, string[]> = new Map();
+  const inboxRecipients: string[] = [];
 
   const subscribedUsersSnapshot = await db
     .collection("users")
@@ -615,32 +851,48 @@ async function handleCommentCreated(
       continue;
     }
 
-    // Skip if no FCM tokens
-    if (!userData.fcmTokens || userData.fcmTokens.length === 0) {
-      continue;
-    }
+    inboxRecipients.push(userId);
 
-    userTokens.set(userId, userData.fcmTokens);
+    // A missing token only rules out the push, not the inbox entry.
+    if (userData.fcmTokens && userData.fcmTokens.length > 0) {
+      userTokens.set(userId, userData.fcmTokens);
+    }
   }
 
-  if (userTokens.size === 0) {
+  if (inboxRecipients.length === 0) {
     return;
   }
 
   // Truncate comment text for notification
   const truncatedComment =
     commentText.length > 50 ? commentText.substring(0, 47) + "..." : commentText;
+  const title = `New comment on: ${signalTitle}`;
 
+  const badgeByUid = await writeInboxEntries(
+    inboxRecipients,
+    {
+      docId: `cmt_${event.params.commentId}`,
+      type: "new_comment",
+      title,
+      body: truncatedComment,
+      signalId,
+      signalTitle,
+      commentExcerpt: truncatedComment,
+    },
+    isTestMode
+  );
+
+  // `commentExcerpt` is deliberately not repeated in the FCM data map — it is
+  // already the notification body, and the 4KB limit covers both together.
   await sendNotificationsToUsers(
     userTokens,
-    {
-      title: `New comment on: ${signalTitle}`,
-      body: truncatedComment,
-    },
+    { title, body: truncatedComment },
     {
       signalId,
       type: "new_comment",
-    }
+      signalTitle: truncateForPayload(signalTitle),
+    },
+    badgeByUid
   );
 }
 
@@ -1099,23 +1351,6 @@ export const deleteAccount = onCall(
 
     const userRef = db.collection("users").doc(uid);
 
-    // Commit document operations in chunks within Firestore's 500-write limit.
-    const commitInChunks = async (
-      docs: admin.firestore.QueryDocumentSnapshot[],
-      apply: (
-        batch: admin.firestore.WriteBatch,
-        ref: admin.firestore.DocumentReference
-      ) => void
-    ) => {
-      for (let i = 0; i < docs.length; i += 450) {
-        const batch = db.batch();
-        for (const doc of docs.slice(i, i + 450)) {
-          apply(batch, doc.ref);
-        }
-        await batch.commit();
-      }
-    };
-
     try {
       // 1. Anonymize authored signals in production and test collections.
       for (const collectionName of ["signals", "signals_test"]) {
@@ -1123,25 +1358,33 @@ export const deleteAccount = onCall(
           .collection(collectionName)
           .where("reporter", "==", userRef)
           .get();
-        await commitInChunks(authored.docs, (batch, ref) =>
-          batch.update(ref, { contactPhone: "", phoneNumber: "" })
+        await commitInChunks(authored.docs, (batch, doc) =>
+          batch.update(doc.ref, { contactPhone: "", phoneNumber: "" })
         );
       }
 
       // 2. Delete the notifications subcollection.
       const notifications = await userRef.collection("notifications").get();
-      await commitInChunks(notifications.docs, (batch, ref) =>
-        batch.delete(ref)
+      await commitInChunks(notifications.docs, (batch, doc) =>
+        batch.delete(doc.ref)
       );
 
-      // 2b. Delete the user's stored live location (PII) - it lives in the
-      //     separate userLocations collection, not the user doc.
+      // 2b. Delete the user's stored live location (PII) and their unread
+      //     counter - both live in their own top-level collections, not on the
+      //     user doc.
       await db
         .collection("userLocations")
         .doc(uid)
         .delete()
         .catch((error) =>
           console.error(`Failed to delete userLocations for ${uid}:`, error)
+        );
+      await db
+        .collection("userCounters")
+        .doc(uid)
+        .delete()
+        .catch((error) =>
+          console.error(`Failed to delete userCounters for ${uid}:`, error)
         );
 
       // 3. Tombstone the user document - strip all PII, keep a neutral name
@@ -1205,23 +1448,26 @@ const ANON_CLEANUP_DRY_RUN = false;
 async function deleteAnonymousUserData(uid: string): Promise<void> {
   const userRef = db.collection("users").doc(uid);
 
-  // Delete the notifications subcollection (usually empty for anon users).
+  // Delete the notifications subcollection. Anonymous users can accumulate
+  // entries here too: the arrival catch-up writes `nearby_signal` for any
+  // signed-in user, anonymous included.
   const notifications = await userRef.collection("notifications").get();
-  for (let i = 0; i < notifications.docs.length; i += 450) {
-    const batch = db.batch();
-    for (const doc of notifications.docs.slice(i, i + 450)) {
-      batch.delete(doc.ref);
-    }
-    await batch.commit();
-  }
+  await commitInChunks(notifications.docs, (batch, doc) => batch.delete(doc.ref));
 
-  // Delete the stored live location and the user document itself.
+  // Delete the stored live location, the unread counter, and the user document.
   await db
     .collection("userLocations")
     .doc(uid)
     .delete()
     .catch((error) =>
       console.error(`Failed to delete userLocations for ${uid}:`, error)
+    );
+  await db
+    .collection("userCounters")
+    .doc(uid)
+    .delete()
+    .catch((error) =>
+      console.error(`Failed to delete userCounters for ${uid}:`, error)
     );
   await userRef.delete();
 }

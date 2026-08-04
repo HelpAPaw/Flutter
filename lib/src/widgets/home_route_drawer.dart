@@ -7,6 +7,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/src/config/routes.dart';
+import 'package:help_a_paw/src/services/notification_inbox_service.dart';
 import 'package:help_a_paw/src/services/notification_service.dart';
 import 'package:help_a_paw/src/services/share_service.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -22,6 +23,20 @@ class HomeRouteDrawer extends StatefulWidget {
 class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
   Future<void>? _browserLaunched;
   int _homeRouteTile = 0;
+
+  /// Cached so the drawer's frequent rebuilds — a tile selection is a setState,
+  /// and the auth StreamBuilder rebuilds the whole list — don't open a fresh
+  /// Firestore listener each time, re-reading every unread document.
+  Stream<int>? _unreadCount;
+  String? _unreadCountUid;
+
+  Stream<int> _unreadCountStream(String? uid) {
+    if (_unreadCount == null || _unreadCountUid != uid) {
+      _unreadCountUid = uid;
+      _unreadCount = NotificationInboxService().watchUnreadCount();
+    }
+    return _unreadCount!;
+  }
 
   Future<void> _signOut() async {
     try {
@@ -164,6 +179,34 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             selected: _homeRouteTile == 2,
             title: Text(
               l10n.mySignals,
+              softWrap: true,
+            ),
+          ),
+          // Outside the signed-in branch on purpose: the arrival catch-up writes
+          // inbox entries for any signed-in user, anonymous included.
+          //
+          // Index 10 was the only free slot; 11 is already sign-out. Reusing it
+          // avoids renumbering every tile below.
+          ListTile(
+            enableFeedback: true,
+            leading: StreamBuilder<int>(
+              stream: _unreadCountStream(user?.uid),
+              builder: (context, snapshot) {
+                final unread = snapshot.data ?? 0;
+                return Badge.count(
+                  count: unread,
+                  isLabelVisible: unread > 0,
+                  child: const Icon(Icons.notifications_active),
+                );
+              },
+            ),
+            onTap: () => {
+              context.push(Routes.myNotifications),
+              homeRouteTile(10),
+            },
+            selected: _homeRouteTile == 10,
+            title: Text(
+              l10n.myNotifications,
               softWrap: true,
             ),
           ),

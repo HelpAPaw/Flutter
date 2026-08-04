@@ -845,6 +845,32 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get notificationNewSignalTitle => 'New signal nearby';
+
+  @override
+  String notificationNewSignalBody(String signalType, String signalTitle) {
+    return '$signalType: $signalTitle';
+  }
+
+  @override
+  String get notificationStatusChangeTitle => 'Signal status updated';
+
+  @override
+  String notificationStatusChangeBody(String signalTitle, String status) {
+    return '$signalTitle: $status';
+  }
+
+  @override
+  String notificationNewCommentTitle(String signalTitle) {
+    return 'New comment on: $signalTitle';
+  }
+
+  @override
+  String notificationNearbySignalBody(String signalType, String signalTitle) {
+    return '$signalType · $signalTitle';
+  }
+
+  @override
   String get completeYourProfile => 'Complete Your Profile';
 
   @override

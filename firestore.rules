@@ -86,8 +86,58 @@ service cloud.firestore {
 
     // Users collection - private profile (tokens, location, prefs, phone).
     // Owner-only: never expose to other users.
+    //
+    // NOTE: rules do NOT cascade into subcollections. This block covers the user
+    // document only — `users/{uid}/notifications/{id}` needs its own match below,
+    // and so would any future subcollection.
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // In-app notification inbox, one document per notification per recipient.
+    // Written server-side by the fan-out (Admin SDK, bypasses rules) and
+    // client-side by the arrival catch-up (NearbySignalChecker), which runs in a
+    // headless isolate.
+    match /users/{userId}/notifications/{notificationId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+
+      // The only client-side writer is the catch-up, and it only ever produces
+      // `nearby_signal`. Pinning the type stops a client fabricating a
+      // `status_change` entry it was never sent. The size caps are the real
+      // security value: without them an owner-only collection is a free-storage
+      // vector. `expiresAt` is required or the document would outlive the TTL
+      // policy forever.
+      allow create: if request.auth != null
+                    && request.auth.uid == userId
+                    && request.resource.data.keys().hasOnly([
+                         'type', 'title', 'body', 'read', 'signalId',
+                         'signalTitle', 'signalType', 'testMode',
+                         'createdAt', 'expiresAt'
+                       ])
+                    && request.resource.data.type == 'nearby_signal'
+                    && request.resource.data.read == false
+                    && request.resource.data.signalId is string
+                    && request.resource.data.signalId.size() <= 200
+                    && request.resource.data.title is string
+                    && request.resource.data.title.size() <= 300
+                    && request.resource.data.body is string
+                    && request.resource.data.body.size() <= 1000
+                    && request.resource.data.signalTitle is string
+                    && request.resource.data.signalTitle.size() <= 300
+                    && request.resource.data.signalType is int
+                    && request.resource.data.testMode is bool
+                    && request.resource.data.createdAt is timestamp
+                    && request.resource.data.expiresAt is timestamp;
+
+      // Diff-based: the page only ever flips `read`, so a client can't rewrite
+      // the title/body/signalId of a notification after the fact.
+      allow update: if request.auth != null
+                    && request.auth.uid == userId
+                    && request.resource.data.diff(resource.data)
+                         .affectedKeys().hasOnly(['read'])
+                    && request.resource.data.read is bool;
+
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
     // User live location - kept separate from the user doc so high-frequency
@@ -95,6 +145,23 @@ service cloud.firestore {
     // the notification fan-out reads it via the Admin SDK (bypasses rules).
     match /userLocations/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Unread-notification counter, source of the iOS app badge. Top-level for
+    // the same reason as userLocations: `onUserTokensWritten` fires on every
+    // `users/{uid}` write, so a counter on the user doc would cost one function
+    // invocation per recipient per notification.
+    //
+    // The value is advisory — it drifts on Cloud Function retries and TTL
+    // deletions — and the client repairs it with a count() aggregation on
+    // resume. That is why the owner may write it directly.
+    match /userCounters/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.resource.data.keys().hasOnly(['unread', 'updatedAt'])
+                   && request.resource.data.unread is int
+                   && request.resource.data.unread >= 0;
     }
 
     // Public profiles - just the display name, readable by any signed-in user

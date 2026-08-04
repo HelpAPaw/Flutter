@@ -284,6 +284,13 @@
   "hoursAgo": "преди {hours}ч",
   "daysAgo": "преди {days}д",
 
+  "notificationNewSignalTitle": "Нов сигнал наблизо",
+  "notificationNewSignalBody": "{signalType}: {signalTitle}",
+  "notificationStatusChangeTitle": "Статусът на сигнал е променен",
+  "notificationStatusChangeBody": "{signalTitle}: {status}",
+  "notificationNewCommentTitle": "Нов коментар по: {signalTitle}",
+  "notificationNearbySignalBody": "{signalType} · {signalTitle}",
+
   "completeYourProfile": "Попълнете профила си",
   "helpUsPersonalize": "Помогнете ни да персонализираме изживяването ви",
   "fullNameRequired": "Пълно име *",

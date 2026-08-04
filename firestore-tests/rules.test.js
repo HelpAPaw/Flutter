@@ -374,3 +374,170 @@ describe('publicProfiles', () => {
     await assertSucceeds(deleteDoc(doc(owner, 'publicProfiles', OWNER)));
   });
 });
+
+// The in-app notification inbox. This subcollection needs its own match block:
+// `match /users/{userId}` does NOT cascade into it, which is why every operation
+// the page performs used to be denied.
+//
+// Most documents here are written by the fan-out through the Admin SDK, which
+// bypasses rules entirely — so the `create` cases below only pin down the one
+// client-side writer, the arrival catch-up (NearbySignalChecker).
+describe('users/{uid}/notifications', () => {
+  const OWNER = REPORTER;
+
+  beforeEach(() => testEnv.clearFirestore());
+
+  /** A `nearby_signal` document exactly as NearbySignalChecker writes it. */
+  function nearbyNotification(overrides = {}) {
+    return {
+      type: 'nearby_signal',
+      title: 'An animal needs help nearby',
+      body: 'Emergency · Injured dog near the park',
+      read: false,
+      signalId: 'signal-1',
+      signalTitle: 'Injured dog near the park',
+      signalType: 0,
+      testMode: false,
+      createdAt: new Date(),
+      expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+      ...overrides,
+    };
+  }
+
+  /** Seed a server-written notification, bypassing rules like the fan-out does. */
+  async function seedNotification(uid = OWNER, overrides = {}) {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(
+        doc(ctx.firestore(), 'users', uid, 'notifications', 'n1'),
+        nearbyNotification({ type: 'new_signal', ...overrides })
+      );
+    });
+  }
+
+  it('lets the owner get and list their own notifications', async () => {
+    await seedNotification();
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    await assertSucceeds(getDoc(doc(db, 'users', OWNER, 'notifications', 'n1')));
+    await assertSucceeds(getDocs(collection(db, 'users', OWNER, 'notifications')));
+  });
+
+  it("denies another user reading someone else's inbox", async () => {
+    await seedNotification();
+    const db = testEnv.authenticatedContext(OTHER).firestore();
+    await assertFails(getDoc(doc(db, 'users', OWNER, 'notifications', 'n1')));
+    await assertFails(getDocs(collection(db, 'users', OWNER, 'notifications')));
+  });
+
+  it('denies an unauthenticated read', async () => {
+    await seedNotification();
+    const db = testEnv.unauthenticatedContext().firestore();
+    await assertFails(getDoc(doc(db, 'users', OWNER, 'notifications', 'n1')));
+  });
+
+  it('lets the catch-up create a nearby_signal entry in its own inbox', async () => {
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    await assertSucceeds(
+      setDoc(doc(db, 'users', OWNER, 'notifications', 'nb_signal-1'), nearbyNotification())
+    );
+  });
+
+  // The point of pinning the type: a client must not be able to fabricate an
+  // entry claiming the server sent it something.
+  it('rejects a client creating any type other than nearby_signal', async () => {
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    for (const type of ['new_signal', 'status_change', 'new_comment']) {
+      await assertFails(
+        setDoc(doc(db, 'users', OWNER, 'notifications', type), nearbyNotification({ type }))
+      );
+    }
+  });
+
+  it("rejects a client creating in someone else's inbox", async () => {
+    const db = testEnv.authenticatedContext(OTHER).firestore();
+    await assertFails(
+      setDoc(doc(db, 'users', OWNER, 'notifications', 'nb_signal-1'), nearbyNotification())
+    );
+  });
+
+  it('rejects a create that arrives already read', async () => {
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    await assertFails(
+      setDoc(doc(db, 'users', OWNER, 'notifications', 'nb_1'), nearbyNotification({ read: true }))
+    );
+  });
+
+  // Size caps: an owner-only collection with no bounds is a free-storage vector.
+  it('rejects oversize content and unknown fields', async () => {
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const ref = (id) => doc(db, 'users', OWNER, 'notifications', id);
+
+    await assertFails(setDoc(ref('a'), nearbyNotification({ body: 'x'.repeat(1001) })));
+    await assertFails(setDoc(ref('b'), nearbyNotification({ title: 'x'.repeat(301) })));
+    await assertFails(setDoc(ref('c'), nearbyNotification({ signalTitle: 'x'.repeat(301) })));
+    await assertFails(setDoc(ref('d'), nearbyNotification({ role: 'admin' })));
+  });
+
+  // Without expiresAt the document would outlive the TTL policy forever.
+  it('rejects a create with no expiresAt', async () => {
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const data = nearbyNotification();
+    delete data.expiresAt;
+    await assertFails(setDoc(doc(db, 'users', OWNER, 'notifications', 'nb_1'), data));
+  });
+
+  it('lets the owner mark a notification read, and nothing else', async () => {
+    await seedNotification();
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const ref = doc(db, 'users', OWNER, 'notifications', 'n1');
+
+    await assertSucceeds(updateDoc(ref, { read: true }));
+    await assertFails(updateDoc(ref, { read: true, title: 'Rewritten' }));
+    await assertFails(updateDoc(ref, { signalId: 'somewhere-else' }));
+  });
+
+  it('denies another user marking it read', async () => {
+    await seedNotification();
+    const db = testEnv.authenticatedContext(OTHER).firestore();
+    await assertFails(
+      updateDoc(doc(db, 'users', OWNER, 'notifications', 'n1'), { read: true })
+    );
+  });
+
+  it('lets only the owner delete a notification', async () => {
+    await seedNotification();
+    const other = testEnv.authenticatedContext(OTHER).firestore();
+    await assertFails(deleteDoc(doc(other, 'users', OWNER, 'notifications', 'n1')));
+
+    const owner = testEnv.authenticatedContext(OWNER).firestore();
+    await assertSucceeds(deleteDoc(doc(owner, 'users', OWNER, 'notifications', 'n1')));
+  });
+});
+
+// The unread counter behind the iOS badge. Owner-writable by design: the client
+// recomputes it with a count() aggregation on resume to repair the drift the
+// server's non-idempotent increments leave behind.
+describe('userCounters', () => {
+  const OWNER = REPORTER;
+
+  beforeEach(() => testEnv.clearFirestore());
+
+  it('lets the owner read and write their own counter', async () => {
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    await assertSucceeds(setDoc(doc(db, 'userCounters', OWNER), { unread: 3, updatedAt: new Date() }));
+    await assertSucceeds(getDoc(doc(db, 'userCounters', OWNER)));
+  });
+
+  it("denies reading or writing someone else's counter", async () => {
+    const db = testEnv.authenticatedContext(OTHER).firestore();
+    await assertFails(getDoc(doc(db, 'userCounters', OWNER)));
+    await assertFails(setDoc(doc(db, 'userCounters', OWNER), { unread: 0 }));
+  });
+
+  it('rejects a negative count, a non-int count, and unknown fields', async () => {
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const ref = doc(db, 'userCounters', OWNER);
+    await assertFails(setDoc(ref, { unread: -1 }));
+    await assertFails(setDoc(ref, { unread: 'many' }));
+    await assertFails(setDoc(ref, { unread: 1, role: 'admin' }));
+  });
+});

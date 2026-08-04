@@ -856,6 +856,32 @@ class AppLocalizationsBg extends AppLocalizations {
   }
 
   @override
+  String get notificationNewSignalTitle => 'Нов сигнал наблизо';
+
+  @override
+  String notificationNewSignalBody(String signalType, String signalTitle) {
+    return '$signalType: $signalTitle';
+  }
+
+  @override
+  String get notificationStatusChangeTitle => 'Статусът на сигнал е променен';
+
+  @override
+  String notificationStatusChangeBody(String signalTitle, String status) {
+    return '$signalTitle: $status';
+  }
+
+  @override
+  String notificationNewCommentTitle(String signalTitle) {
+    return 'Нов коментар по: $signalTitle';
+  }
+
+  @override
+  String notificationNearbySignalBody(String signalType, String signalTitle) {
+    return '$signalType · $signalTitle';
+  }
+
+  @override
   String get completeYourProfile => 'Попълнете профила си';
 
   @override

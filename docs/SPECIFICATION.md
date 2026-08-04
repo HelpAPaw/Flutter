@@ -185,13 +185,41 @@ Subcollection **`comments/{commentId}`** — two shapes:
 | `createdAt`, `updatedAt` | Timestamp | |
 | `deleted`, `deletedAt` | bool/Timestamp | tombstone written by `deleteAccount` |
 
-Subcollection **`notifications/{id}`** — `{ type, title, body, read, createdAt, … }`.
-Read and mutated by `/my_notifications`, deleted by `deleteAccount`. **Nothing
-currently writes it** — see §7.13.
+Subcollection **`notifications/{id}`** — the in-app inbox, see §7.13.
+
+| field | type | notes |
+|---|---|---|
+| `type` | string | `new_signal` \| `status_change` \| `new_comment` \| `nearby_signal` — the same vocabulary as the FCM `data.type` |
+| `signalId` | string | deep-link target |
+| `signalTitle` | string | rendered client-side |
+| `signalType` | int? | `new_signal` / `nearby_signal` |
+| `statusCode` | int? | `status_change` |
+| `commentExcerpt` | string? | `new_comment` |
+| `title`, `body` | string | the English push text — **fallback only**, see §7.13 |
+| `read` | bool | flipped by the owner; the only field the rules let a client update |
+| `testMode` | bool | keeps `signals_test` entries out of the production inbox |
+| `createdAt` | Timestamp | list ordering |
+| `expiresAt` | Timestamp | `createdAt + 90d`; drives the TTL policy |
+
+Ids are deterministic — `sig_{signalId}`, `st_{signalId}_{status}`,
+`cmt_{commentId}`, `nb_{signalId}` — because Firestore triggers are
+at-least-once and a retry must overwrite rather than duplicate.
 
 #### `userLocations/{uid}` — private, owner-only
 
 `{ geopoint: GeoPoint, geohash: string, updatedAt: Timestamp }`
+
+#### `userCounters/{uid}` — private, owner-only
+
+`{ unread: int, updatedAt: Timestamp }` — the unread-notification count behind
+the iOS app badge. Top-level for the same reason as `userLocations`:
+`onUserTokensWritten` fires on every `users/{uid}` write, so a counter on the
+user doc would cost one function invocation per recipient per notification.
+
+**Advisory, not authoritative.** The fan-out only ever increments it, and TTL
+deletions are observed by nobody, so it drifts. The app repairs it with a
+`count()` aggregation on resume and when the inbox is opened — which is why the
+owner is allowed to write it directly. Do not add a trigger to "fix" this.
 
 Deliberately separate from the user doc so high-frequency location writes don't invoke
 the `onUserTokensWritten` trigger. Written from Dart *and* from native Android/iOS code.
@@ -273,7 +301,9 @@ attention" set used as a Firestore `whereIn` filter. Unknown codes resolve to
 | Path | read | create | update | delete |
 |---|---|---|---|---|
 | `users/{uid}` | owner | owner | owner | owner |
+| `users/{uid}/notifications/{id}` | owner | owner, **`type == 'nearby_signal'` only**, `read == false`, allowlisted+bounded fields, `expiresAt` required | owner, only `read` may change | owner |
 | `userLocations/{uid}` | owner | owner | owner | owner |
+| `userCounters/{uid}` | owner | owner, `{unread,updatedAt}` only, `unread >= 0` | same | — |
 | `publicProfiles/{uid}` | `get` any signed-in; **`list` denied** | owner, `name` only, validated | owner, only `name` may change | owner |
 | `signals/{id}`, `signals_test/{id}` | **public** | signed-in, `reporter == self`, bounded fields | reporter (anything) *or* any signed-in user changing **only** `status`+`lastUpdatedBy` (self-stamped, 0–2) | reporter only |
 | `…/comments/{id}` | public | signed-in, `author == self`, `text` 1–2000 when present | — | parent signal's reporter (delete cascade) |
@@ -284,9 +314,17 @@ Helper functions: `userDoc()`, `isSignalReporter()`, `isParentSignalReporter()`,
 `isSignalCreate()`, `isCommentCreate()`, `isValidProfileName()`, `isStatusOnlyUpdate()`.
 
 **Rules do not cascade into subcollections.** `match /users/{userId}` covers the user
-document only — not `users/{uid}/notifications/{id}`, which matches no rule and is
-therefore denied outright, including to its owner (§7.13). Any future subcollection under
-`users/` needs its own `match` block or a recursive `{document=**}` wildcard.
+document only. `users/{uid}/notifications/{id}` matched no rule for most of the project's
+life and was therefore denied outright, *including to its owner* — which is what kept the
+inbox non-functional (§7.13). It now has its own block. Any future subcollection under
+`users/` needs one too; a recursive `{document=**}` wildcard would also work but grants
+more than intended.
+
+The notification `create` rule is the only place a client may write the inbox: the
+fan-out uses the Admin SDK and bypasses rules entirely, so the rule exists purely to
+constrain the on-device arrival catch-up. Pinning `type == 'nearby_signal'` stops a client
+fabricating an entry claiming the server sent it something; the size caps stop an
+owner-only collection becoming free storage.
 
 **Known open item (M-1, tracked as HelpAPaw/Flutter#67):** signal/comment creation is
 *not yet* blocked server-side for anonymous callers. The intended clause gates on
@@ -410,7 +448,7 @@ Declarative `GoRouter` configured in `main.dart`; all paths are constants in
 | `/complete_profile` | `ProfileCompletionPage` | |
 | `/profile` | `ProfilePage` | |
 | `/my_signals` | `MySignalsPage` | |
-| `/my_notifications` | `MyNotificationsPage` | registered but **not linked from the drawer** (§7.13) |
+| `/my_notifications` | `MyNotificationsPage` | in-app inbox, reached from the drawer (§7.13) |
 | `/notification-settings` | `NotificationSettingsPage` | |
 | `/select-region` | `RegionSelectionPage` | returns a region map via `context.pop(result)` |
 | `/signal_details/:signalId` | `SignalDetailsScreen` | id validated in a route `redirect`; page keyed by id |
@@ -805,56 +843,77 @@ and date. Signed-out users get a sign-in prompt.
 `/privacy_policy` renders in a `webview_flutter` view. The drawer also links out to
 `https://www.helpapaw.org` and offers "Share the app".
 
-### 7.13 My notifications — deferred feature, not yet functional
+### 7.13 My notifications — the in-app inbox
 
-`/my_notifications` is a complete-looking in-app notification centre: newest 50 from
-`users/{uid}/notifications` ordered by `createdAt desc`, unread shown bold,
-swipe-to-delete, mark-all-read and clear-all.
+`/my_notifications` shows the newest 50 entries from `users/{uid}/notifications`
+ordered by `createdAt desc`: unread bold with an orange dot, swipe-to-delete,
+mark-all-read and clear-all, plus signed-out and empty states. It is reached from the
+drawer tile (index 10, between "My signals" and "Notification settings"), whose icon
+carries a `Badge.count` of unread entries.
 
-**It is deferred by decision, not broken by accident.** On 2026-05-30 the owner chose to
-postpone the feature to a later release and **keep the code rather than delete it**
-(`QA_CHECKLIST.md:8`, §6.6). The missing drawer entry is deliberate: the page is not
-user-reachable, so there is nothing to QA. Do not report the orphaned page/route as a
-bug, and do not delete it.
+The feature was deferred on 2026-05-30 — the page and route were kept but deliberately
+left unreachable — and completed on 2026-08-04. The four gaps that had to close, all
+verified rather than assumed before the work started:
 
-What an investigation on 2026-08-01 established about the remaining work — the gap list
-was previously partly assumption, and is now verified:
+1. **Nothing had ever written the subcollection** at any commit in the project's history;
+   pushes were fire-and-forget FCM. `writeInboxEntries` in `functions/src/index.ts` now
+   persists one document per recipient alongside every push. The two Admin-SDK *deletes*
+   in `deleteAccount` and `deleteAnonymousUserData` predated the writer and finally
+   operate on data that can exist.
+2. **The rules denied every operation the page performs**, because rules do not cascade
+   into subcollections (§5.1). There is now a `match /users/{userId}/notifications/{id}`
+   block, covered by `firestore-tests/rules.test.js`.
+3. **No UI entry point.** Added to `home_route_drawer.dart`, deliberately *outside* the
+   signed-in branch: the arrival catch-up writes entries for anonymous users too.
+4. **The `type` vocabularies diverged.** The page rendered `signal_update` / `comment` /
+   `status_change` / `nearby_signal`; the functions emitted `new_signal` /
+   `status_change` / `new_comment`. **The page moved, not the wire** — `data.type` is a
+   contract with every installed build, and `signal_update` was emitted by nothing. The
+   canonical set is now `new_signal | status_change | new_comment | nearby_signal`, used
+   identically by the FCM payload and the stored document.
 
-1. **Nothing has ever written the subcollection.** Verified across all git history: no
-   writer has existed in `functions/src/index.ts` or in Dart, at any commit. Pushes are
-   fire-and-forget FCM only. The two Admin-SDK *deletes* in `deleteAccount` and
-   `deleteAnonymousUserData` therefore operate on data that cannot exist — harmless, and
-   correct once the feature lands.
-2. **The rules deny every operation the page performs** — confirmed empirically, where it
-   was previously an untested belief. `match /users/{userId}` grants the owner
-   read+write, but **Firestore rules do not cascade into subcollections** without a
-   recursive wildcard, and nothing matches `users/{uid}/notifications/{id}`. Emulator-
-   verified with a passing control (the owner *can* write their own user doc): list, get,
-   query, update, delete and create are all denied. So the writer must be server-side
-   (Admin SDK bypasses rules), and the page still needs a rules block of its own.
-3. **The `type` vocabularies don't match.** The page renders icons/colours for
-   `signal_update`, `comment`, `status_change`, `nearby_signal`; the functions emit
-   `new_signal`, `status_change`, `new_comment`. Only `status_change` overlaps. Unknown
-   types degrade to a default icon rather than failing, but the two lists need
-   reconciling.
+**Rows are localized client-side.** The stored `title`/`body` are the English strings the
+push carried and are a *fallback only*: `_title`/`_body` in `my_notifications_page.dart`
+build the display text from the structured fields (`signalType`, `statusCode`,
+`commentExcerpt`) through `AppLocalizations`, reusing `Signal.signalTypeName` and
+`SignalStatus.label`. The Cloud Function has no i18n and the app is bilingual, so
+persisting English would have meant a permanently English inbox.
 
-Remaining work, then: a rules block, a server-side writer in `sendNotificationsToUsers`,
-a drawer entry, and that vocabulary reconciliation.
+**Two writers, one shape.** The fan-out writes `new_signal` / `status_change` /
+`new_comment` server-side. The arrival catch-up writes `nearby_signal` from the device —
+including from the Android *headless* isolate — via
+`NotificationInboxService.recordNearbySignals`. That write sits inside
+`NearbySignalChecker._notify` and **after** `markAllNotified`, deliberately: it is the one
+step there that can fail on its own, and a throw ahead of the dedupe record would
+re-announce every signal on the next check. Living inside `_notify` also inherits
+`NotifiedSignalsStore`'s dedupe, so a signal the server already pushed cannot produce a
+second entry.
 
-Expected document shape:
+**Test-mode entries carry `testMode` and the list filters on it.** A `signals_test` entry
+surfacing in the production inbox would deep-link to an id that does not exist in
+`signals`. This needs the `notifications` composite index (`testMode ASC, createdAt DESC`)
+in `firestore.indexes.json` — the query is dead without it.
 
-```
-users/{uid}/notifications/{id}
-  type      'signal_update' | 'comment' | 'status_change' | 'nearby_signal'
-  title     string        body      string
-  read      bool          signalId  string?
-  createdAt Timestamp
-```
+**The iOS badge (F-008) is fixed by the same machinery.** `userCounters/{uid}` (§4) holds
+the unread count; `_HelpAPawState` reconciles it and the OS badge on resume and the page
+does the same on open, through the native `org.helpapaw.helpapaw/app_badge` channel
+(`AppDelegate.setUpAppBadgeChannel`, no-op on Android where launchers read the shade).
 
-**Finishing it would also fix the iOS badge.** The fan-out currently hardcodes
-`badge: 1` (`index.ts:244`); an unread count in this collection is the server-side path
-F-008 wanted. The cost caveat is real though: it adds a Firestore write per recipient per
-notification, and the fan-out already dominates the projected bill (`COST_ANALYSIS.md`).
+The fan-out sends a real `badge: N`. `writeInboxEntries` reads `userCounters` for its
+recipients in one batched `getAll` *before* incrementing, returns `stored + 1` per uid,
+and the three handlers pass that map to `sendNotificationsToUsers`; a uid with no entry
+falls back to `badge: 1`. If the inbox write fails the map is cleared, so a half-written
+batch cannot put a number on the icon that contradicts the inbox.
+
+⚠️ **Known consequence, accepted deliberately (owner decision, 2026-08-04).** iOS badges
+are sticky — only the app can clear one. On builds predating the client-side reset the
+count climbs and never comes back down, for as long as those users go without updating.
+The alternative was holding the badge at a permanently misleading `1`.
+
+**Cost.** One document write plus one counter write per recipient per event, on top of a
+fan-out that already dominates the projected bill (`COST_ANALYSIS.md`). Retention is 90
+days via a Firestore TTL policy on `expiresAt` — a policy applied out of band with
+`gcloud`, not something `firebase deploy` carries.
 
 ### 7.14 Callable-function transport quirk
 
@@ -904,15 +963,25 @@ page is bilingual with a client-side language switch.
      `notificationPreferences.regionOfInterest.geohash`, within
      `MAX_REGION_RADIUS_KM = 100`.
    These caps must stay ≥ the UI caps (50 / 100) or far-edge matches are missed.
-2. Per candidate, skip: wrong `testMode`, the reporter, no FCM tokens, `enabled != true`,
-   and — **only when `signalTypes` is present** — a type the user excluded.
+2. Per candidate, skip: wrong `testMode`, the reporter, `enabled != true`, and — **only
+   when `signalTypes` is present** — a type the user excluded.
 3. Notify if the Haversine distance to their tracked location ≤ `locationRadiusKm`
    (default 10) **or** to their region centre ≤ region `radiusKm`.
-4. `sendEachForMulticast`; unregistered/invalid tokens are `arrayRemove`d from their
-   owner's doc.
+4. Split the survivors: `inboxRecipients` gets everyone, `userTokens ⊆ inboxRecipients`
+   only those with an FCM token. **Missing tokens rule out the push, not the inbox
+   entry** — a user who turned push off still wants the comment on their own signal.
+5. `writeInboxEntries` (§7.13), then `sendEach` in chunks of 500;
+   unregistered/invalid tokens are `arrayRemove`d from their owner's doc.
 
-Payloads carry `{ signalId, type, click_action: FLUTTER_NOTIFICATION_CLICK }`, Android
-channel `help_a_paw_signals`, APNs `sound: default, badge: 1`.
+Payloads carry `{ signalId, type, signalTitle, signalType|statusCode,
+click_action: FLUTTER_NOTIFICATION_CLICK }`, Android channel `help_a_paw_signals`, APNs
+`sound: default, badge: 1`. The FCM 4KB limit covers `notification` and `data` together,
+so payload strings are bounded by `truncateForPayload`.
+
+⚠️ Sends are **per-message (`sendEach`), chunked at 500** — not one multicast. The
+previous single `sendEachForMulticast` call silently threw past FCM's 500-token cap,
+losing *every* notification for a densely-populated signal. The per-message shape is also
+what a per-recipient `badge: N` requires (§7.13).
 
 **Cost note:** notification fan-out dominates the projected bill; see `COST_ANALYSIS.md`.
 
@@ -1048,9 +1117,10 @@ silently breaks Auth/Firestore/FCM in release builds only.
 | Anonymous callers not blocked server-side on signal/comment create | Open — M-1 second half, gated on an unreleased client fix (#67) |
 | Avatar upload denied; test-mode signal photos denied; failed upload reported as success | Fixed 2026-08-01 (BUG-1/2/3, §5.2); rules deployed, BUG-3 needs an app release |
 | 5-photos-per-signal cap is UI-only | `firestore.rules` does not bound the `photoUrls` array length |
-| `/my_notifications` not functional | **Deferred by decision** — keep the code, don't delete. Verified gap list in §7.13 |
+| `/my_notifications` not functional | **Done 2026-08-04** (§7.13) — writer, rules, drawer entry and localized rendering all shipped. Undeployed at time of writing |
 | iOS deferred deep links | Deliberately not implemented (clipboard prompt cost) |
-| iOS unread badge count | Server sends a fixed `badge: 1`; an accurate count needs a Notification Service Extension or server-side counting |
+| iOS unread badge count | **Fixed 2026-08-04** — real `badge: N` from `userCounters`, cleared on resume via the native badge channel. Accepted consequence: on pre-release builds the badge climbs and never clears (§7.13) |
+| In-app inbox retention | 90 days via a Firestore TTL policy on `expiresAt`; the policy is applied with `gcloud`, **not** by `firebase deploy` |
 | Comment photos | Storage path reserved, no write rule, no UI |
 | `signalLink` push text / server notifications | English only |
 | `Signal.phoneNumber` vs `contactPhone` | Duplicated legacy field, both written with the same value |
@@ -1065,3 +1135,5 @@ silently breaks Auth/Firestore/FCM in release builds only.
 | 2026-08-01 | Investigated the `storage.rules` note: confirmed BUG-1 (avatar upload always denied), BUG-2 (test-mode signal photos denied) and BUG-3 (failed upload reported as success). Recorded the emulator's project-prefixed reference representation as a testing caveat. §5.2, §14. |
 | 2026-08-01 | Fixed all three, added `firestore-tests/storage.rules.test.js` (27 cases) and size/content-type limits (5 MB signal photos, 2 MB avatars, `image/*`). Client now declares `contentType` on every upload; avatar reads are public. **`storage.rules` deployed to production.** §5.2, §13.2, §14. |
 | 2026-08-01 | Investigated `/my_notifications`. It is a deliberate deferral (owner decision 2026-05-30, keep the code); verified the previously-assumed gap list — no writer has ever existed, the subcollection is denied because rules don't cascade into subcollections, and the page's `type` vocabulary doesn't match the functions'. Documented the schema and the iOS-badge link. §5.1, §7.13, §14. |
+| 2026-08-04 | **Built the in-app inbox.** Server writer (`writeInboxEntries`) alongside every push; `users/{uid}/notifications` + `userCounters` rules with 15 new emulator tests; drawer entry with unread badge; client-side localized rendering from structured fields; `nearby_signal` entries from the arrival catch-up (incl. the headless isolate); `userCounters` + native badge channel + resume reconciliation for F-008. Recipients now include users with no FCM token. Adjacent fix: the fan-out's un-chunked `sendEachForMulticast` silently lost every notification past 500 tokens — now `sendEach` chunked at 500. §4, §5.1, §7.13, §9, §14. |
+| 2026-08-04 | Enabled real `badge: N` in the fan-out (F-008 closed). Owner accepted the known consequence that pre-release iOS builds have no reset path, so their badge climbs monotonically. §7.13, §14. |

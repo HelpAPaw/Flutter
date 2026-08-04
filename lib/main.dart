@@ -34,7 +34,9 @@ import 'package:help_a_paw/src/widgets/signal_details_screen.dart';
 import 'package:help_a_paw/src/widgets/clinic_details_screen.dart';
 import 'package:help_a_paw/src/widgets/notification_settings_page.dart';
 import 'package:help_a_paw/src/widgets/region_selection_page.dart';
+import 'package:help_a_paw/src/services/app_badge_service.dart';
 import 'package:help_a_paw/src/services/auth_service.dart';
+import 'package:help_a_paw/src/services/notification_inbox_service.dart';
 import 'package:help_a_paw/src/services/notification_service.dart';
 import 'package:help_a_paw/src/services/deep_link_service.dart';
 import 'package:help_a_paw/src/services/signal_navigator.dart';
@@ -114,6 +116,12 @@ Future<void> backgroundLocationCallbackDispatcher() async {
       // Already initialized in this isolate.
     }
 
+    // App Check is per-isolate too. Firestore does not enforce it today, which
+    // is the only reason this isolate's reads have ever worked without it — and
+    // a failure here would be invisible, because the geo query swallows its
+    // errors and returns an empty list.
+    await _activateAppCheck();
+
     await NearbySignalChecker().check(
       latitude: latitude,
       longitude: longitude,
@@ -126,6 +134,25 @@ Future<void> backgroundLocationCallbackDispatcher() async {
     try {
       await _headlessChannel.invokeMethod<void>('done');
     } catch (_) {}
+  }
+}
+
+/// Activates App Check for the current isolate.
+///
+/// Shared by [main] and [backgroundLocationCallbackDispatcher]: App Check state
+/// does not cross isolates, so the headless engine has to arm it too.
+Future<void> _activateAppCheck() async {
+  try {
+    await FirebaseAppCheck.instance.activate(
+      providerAndroid: kDebugMode
+          ? const AndroidDebugProvider()
+          : const AndroidPlayIntegrityProvider(),
+      providerApple: kDebugMode
+          ? const AppleDebugProvider()
+          : const AppleAppAttestWithDeviceCheckFallbackProvider(),
+    );
+  } catch (e) {
+    debugPrint('App Check activation failed: $e');
   }
 }
 
@@ -154,14 +181,7 @@ Future<void> main() async {
   };
 
   // Initialize App Check
-  try {
-    await FirebaseAppCheck.instance.activate(
-      providerAndroid: kDebugMode ? const AndroidDebugProvider() : const AndroidPlayIntegrityProvider(),
-      providerApple: kDebugMode ? const AppleDebugProvider() : const AppleAppAttestWithDeviceCheckFallbackProvider(),
-    );
-  } catch (e) {
-    debugPrint('App Check activation failed: $e');
-  }
+  await _activateAppCheck();
 
   // Configure Firebase UI Auth providers. Google is integrated directly (see
   // sign_in_page.dart) rather than via a firebase_ui OAuth provider.
@@ -424,7 +444,39 @@ class HelpAPaw extends StatefulWidget {
   State<HelpAPaw> createState() => _HelpAPawState();
 }
 
-class _HelpAPawState extends State<HelpAPaw> {
+class _HelpAPawState extends State<HelpAPaw> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_syncBadge());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Reconcile the app icon badge with the real unread count.
+  ///
+  /// The badge value arrives in the APNs payload and is applied by the OS, so
+  /// nothing but the app can clear it. Doing this on resume also repairs the
+  /// server's unread counter, which only ever increments.
+  ///
+  /// Observed from the app root rather than from `LocationService`, whose
+  /// observer is registered only while location tracking is enabled.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    unawaited(_syncBadge());
+  }
+
+  Future<void> _syncBadge() async {
+    final unread = await NotificationInboxService().syncUnreadCounter();
+    await AppBadgeService().setBadge(unread);
+  }
+
   // Help a Paw Widgets
   @override
   Widget build(BuildContext context) {

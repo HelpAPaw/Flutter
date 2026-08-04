@@ -14,6 +14,7 @@ import '../models/signal_status.dart';
 import '../repositories/repository_provider.dart';
 import 'app_preferences_service.dart';
 import 'background_location_channel.dart';
+import 'notification_inbox_service.dart';
 import 'notification_service.dart';
 import 'notified_signals_store.dart';
 
@@ -329,6 +330,7 @@ class NearbySignalChecker {
     await NotificationService().ensureLocalNotificationsReady();
 
     final l10n = _localizations();
+    final inboxEntries = <NearbyInboxEntry>[];
 
     for (final signal in signals) {
       final typeName = Signal.signalTypeName(l10n, signal.signalType);
@@ -344,12 +346,29 @@ class NearbySignalChecker {
         signalId: signal.id,
         groupKey: _notificationGroupKey,
       );
+
+      inboxEntries.add(NearbyInboxEntry(
+        signalId: signal.id,
+        title: l10n.signalNearbyNotificationTitle,
+        body: body,
+        signalTitle: signal.title,
+        signalType: signal.signalType,
+      ));
     }
 
     await NotifiedSignalsStore().markAllNotified(
       {for (final signal in signals) signal.id: signal.createdAt},
       cutoff: cutoff,
     );
+
+    // After markAllNotified, never before: this write is the one step here that
+    // can fail on its own (permission, network), and a throw ahead of the dedupe
+    // record would re-announce every one of these signals on the next check.
+    //
+    // Keeping it inside _notify also inherits the store's dedupe for free — the
+    // server already skipped these signals, so there is exactly one inbox entry
+    // per signal. Moving it out would produce two.
+    await NotificationInboxService().recordNearbySignals(inboxEntries);
 
     debugPrint('NearbySignalChecker: notified ${signals.length} signal(s)');
   }

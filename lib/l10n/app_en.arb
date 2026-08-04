@@ -413,6 +413,39 @@
     }
   },
 
+  "notificationNewSignalTitle": "New signal nearby",
+  "@notificationNewSignalTitle": {
+    "description": "Inbox row title for a signal reported near the user. The stored push text is English-only, so the inbox row is rendered from these keys instead."
+  },
+  "notificationNewSignalBody": "{signalType}: {signalTitle}",
+  "@notificationNewSignalBody": {
+    "placeholders": {
+      "signalType": {"type": "String"},
+      "signalTitle": {"type": "String"}
+    }
+  },
+  "notificationStatusChangeTitle": "Signal status updated",
+  "notificationStatusChangeBody": "{signalTitle}: {status}",
+  "@notificationStatusChangeBody": {
+    "placeholders": {
+      "signalTitle": {"type": "String"},
+      "status": {"type": "String"}
+    }
+  },
+  "notificationNewCommentTitle": "New comment on: {signalTitle}",
+  "@notificationNewCommentTitle": {
+    "placeholders": {
+      "signalTitle": {"type": "String"}
+    }
+  },
+  "notificationNearbySignalBody": "{signalType} · {signalTitle}",
+  "@notificationNearbySignalBody": {
+    "placeholders": {
+      "signalType": {"type": "String"},
+      "signalTitle": {"type": "String"}
+    }
+  },
+
   "completeYourProfile": "Complete Your Profile",
   "helpUsPersonalize": "Help us personalize your experience",
   "fullNameRequired": "Full Name *",

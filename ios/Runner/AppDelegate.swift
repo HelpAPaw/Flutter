@@ -2,13 +2,16 @@ import FirebaseCore
 import Flutter
 import GoogleMaps
 import UIKit
+import UserNotifications
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
   private static let backgroundLocationChannelName =
     "org.helpapaw.helpapaw/background_location"
+  private static let appBadgeChannelName = "org.helpapaw.helpapaw/app_badge"
 
   private var backgroundLocationChannel: FlutterMethodChannel?
+  private var appBadgeChannel: FlutterMethodChannel?
 
   override func application(
     _ application: UIApplication,
@@ -45,6 +48,7 @@ import UIKit
     )
 
     setUpBackgroundLocationChannel()
+    setUpAppBadgeChannel()
 
     // Re-arm monitoring. Significant-change monitoring does not survive process
     // death on its own — only the wake-up does — so every launch has to restore
@@ -52,6 +56,50 @@ import UIKit
     BackgroundLocationManager.shared.restoreIfEnabled()
 
     return didFinishLaunching
+  }
+
+  /// Lets Dart set the app icon badge.
+  ///
+  /// Needed because the badge value normally arrives in the APNs payload and is
+  /// applied by the OS, so it is sticky: nothing but the app itself can clear it
+  /// once a notification has been delivered. Neither `firebase_messaging` nor
+  /// `flutter_local_notifications` exposes a setter, hence this channel.
+  ///
+  /// Android has no counterpart — launchers derive their badge from the
+  /// notification shade — and the Dart side treats the resulting
+  /// `MissingPluginException` as a no-op.
+  private func setUpAppBadgeChannel() {
+    guard let messenger = registrar(forPlugin: "HelpAPawAppBadge")?.messenger()
+    else {
+      NSLog("AppBadge: ERROR no plugin registrar, badge channel unavailable")
+      return
+    }
+
+    let channel = FlutterMethodChannel(
+      name: Self.appBadgeChannelName,
+      binaryMessenger: messenger
+    )
+    appBadgeChannel = channel
+
+    channel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "setBadge":
+        let arguments = call.arguments as? [String: Any]
+        let count = arguments?["count"] as? Int ?? 0
+        if #available(iOS 16.0, *) {
+          UNUserNotificationCenter.current().setBadgeCount(count) { error in
+            if let error = error {
+              NSLog("AppBadge: setBadgeCount failed: \(error.localizedDescription)")
+            }
+          }
+        } else {
+          UIApplication.shared.applicationIconBadgeNumber = count
+        }
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
   }
 
   private func setUpBackgroundLocationChannel() {
