@@ -667,10 +667,19 @@ instance cache, so on the first Dart-side Firestore call it still believes it is
 the instance and assigns `firestore.settings` to that already-started client.
 `Firestore::set_settings` throws `IllegalState`, nothing catches it, and the process
 aborts — **SIGABRT a few seconds after launch**, with the entry frame varying by whichever
-Dart Firestore call lands first (`querySnapshotApp:`, `aggregateQueryApp:`, …). Android
-survives the identical pattern only because its SDK carries an explicit exemption for a
-repeat assignment of *equal* settings; iOS has none, and the plugin injects a custom
-`dispatchQueue` so its settings can never equal the native defaults.
+Dart Firestore call lands first (`querySnapshotApp:`, `aggregateQueryApp:`, …). iOS has no
+exemption for this, and the plugin injects a custom `dispatchQueue` so its settings could
+never equal the native defaults anyway.
+
+**Android keeps its native write and is safe, but conditionally.** Its SDK throws only
+when the new settings *differ* from those the client started with. Dart's `Settings()`
+leaves every field null, so `getSettingsFromPigeon` skips `setLocalCacheSettings` and
+builds plain SDK defaults — identical to what `LocationUpdateReceiver`'s native write
+started the client with. Assigning **any** custom Firestore `Settings` in Dart breaks that
+equality, and the failure is silent: the headless isolate's geo query fails and
+`NearbySignalChecker` reports it as "no signals nearby". Two things defend this now —
+`test/firestore_settings_guard_test.dart` fails the build on any `.settings` assignment in
+`lib/`, and the geo query reports failures to Crashlytics instead of only `debugPrint`.
 
 So on iOS the delegate only buffers and forwards, and `LocationService._onBackgroundLocation`
 performs the write. This gives up nothing in practice: a significant-change delivery
@@ -1013,11 +1022,11 @@ Things that live in more than one place and fail **silently** when they drift.
 11. **Nothing network-dependent may be awaited before `runApp()`.**
 12. **Deleting `userLocations/{uid}` on opt-out is mandatory** — the fan-out never checks
     `locationTrackingEnabled`.
-13. **On iOS, nothing but the `cloud_firestore` plugin may create the default Firestore
-    instance.** A native `Firestore.firestore()` starts the client, and the plugin's
-    later `settings` assignment aborts the process at launch (§7). This one does *not*
-    fail silently — it is a hard crash — but it is listed here because the offending
-    native call looks entirely innocent at the call site.
+13. **Never assign Firestore `Settings` in Dart, and never let native code create the
+    default Firestore instance on iOS.** Both break the same assumption in
+    `cloud_firestore` — that it alone creates the instance (§7). On iOS it is a hard
+    launch crash; on Android it silently degrades the headless catch-up check. Guarded
+    by `test/firestore_settings_guard_test.dart`.
 
 ---
 

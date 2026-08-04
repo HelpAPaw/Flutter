@@ -118,12 +118,22 @@ default client; `cloud_firestore`'s plugin then assigns `firestore.settings` to
 that already-started client on the first Dart-side Firestore call, and
 `Firestore::set_settings` throws an uncaught `IllegalState` → **SIGABRT at
 launch**. The plugin assumes it is the only thing in the process that creates
-the default instance, and that assumption is unchanged as of 6.7.1. Android
-survives the same pattern only because its SDK explicitly exempts a repeat
-assignment of *equal* settings; iOS has no such exemption. So on iOS the
-delegate only buffers/forwards and `LocationService._onBackgroundLocation` does
-the write — which costs nothing, because a significant-change delivery
+the default instance, and that assumption is unchanged as of 6.7.1. So on iOS
+the delegate only buffers/forwards and `LocationService._onBackgroundLocation`
+does the write — which costs nothing, because a significant-change delivery
 relaunches the whole app anyway.
+
+**Android keeps its native write, and is safe for one specific reason.** Its SDK
+only throws when the *new* settings differ from the ones the client started
+with. Dart's `Settings()` leaves every field null, so the plugin's
+`getSettingsFromPigeon` skips `setLocalCacheSettings` and builds plain SDK
+defaults — exactly what `LocationUpdateReceiver`'s native write started the
+client with, so they compare equal. **Assigning any custom Firestore `Settings`
+in Dart breaks that**, and the resulting failures are *silent*: the headless
+isolate's geo query fails and `NearbySignalChecker` reports it as "no signals
+nearby". `test/firestore_settings_guard_test.dart` fails the build if any Dart
+code assigns `.settings`. If you ever genuinely need custom settings, move the
+Android native write into the headless isolate first, as iOS did.
 
 The geohash therefore has two *production* encoders — Dart
 (`geoflutterfire_plus`) and Kotlin — which **must stay byte-identical** (base32,

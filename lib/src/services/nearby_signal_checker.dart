@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/widgets.dart';
 import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -257,10 +258,27 @@ class NearbySignalChecker {
             .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
             .where('status', whereIn: SignalStatus.openCodes),
       );
-    } catch (e) {
-      // A missing composite index surfaces here, and only here — the query is
-      // otherwise silent about it, so name it explicitly.
+    } catch (e, stack) {
+      // Returning [] here is indistinguishable from "nothing nearby", which is
+      // the normal case — so a systemic failure would look like the feature
+      // quietly doing nothing. Two known causes reach this point and neither is
+      // visible anywhere else: a missing composite index, and a Firestore
+      // client/plugin settings conflict in the Android headless isolate (see
+      // test/firestore_settings_guard_test.dart).
+      //
+      // Reported rather than only printed because this runs in a background
+      // isolate with no UI and, on Android, often with no attached debugger.
       debugPrint('NearbySignalChecker: geo query on $collectionName failed: $e');
+      unawaited(
+        FirebaseCrashlytics.instance
+            .recordError(
+              e,
+              stack,
+              reason: 'NearbySignalChecker geo query on $collectionName',
+              fatal: false,
+            )
+            .catchError((_) {}),
+      );
       return const [];
     }
   }
