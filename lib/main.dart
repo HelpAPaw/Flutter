@@ -284,6 +284,21 @@ Future<void> _bootstrapServices() async {
         .initialize(headlessEntrypoint: backgroundLocationCallbackDispatcher)
         .catchError((e) => debugPrint('Background location init failed: $e')),
   ]);
+
+  // Deliberately last, and deliberately NOT in the app root's initState: the
+  // anonymous sign-in above has completed, so there is a uid to count for. From
+  // initState there usually is not, and the call was a silent no-op.
+  await syncBadgeCount();
+}
+
+/// Reconciles the stored unread counter and the OS badge.
+Future<void> syncBadgeCount() async {
+  try {
+    final unread = await NotificationInboxService().syncUnreadCounter();
+    await AppBadgeService().setBadge(unread);
+  } catch (e) {
+    debugPrint('Badge sync failed: $e');
+  }
 }
 
 final GoRouter _router = GoRouter(
@@ -449,7 +464,8 @@ class _HelpAPawState extends State<HelpAPaw> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    unawaited(_syncBadge());
+    // No badge sync here — the launch-time one runs at the end of
+    // `_bootstrapServices`, which is where a uid exists to count for.
   }
 
   @override
@@ -469,12 +485,7 @@ class _HelpAPawState extends State<HelpAPaw> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) return;
-    unawaited(_syncBadge());
-  }
-
-  Future<void> _syncBadge() async {
-    final unread = await NotificationInboxService().syncUnreadCounter();
-    await AppBadgeService().setBadge(unread);
+    unawaited(syncBadgeCount());
   }
 
   // Help a Paw Widgets
