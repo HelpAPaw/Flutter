@@ -1153,7 +1153,7 @@ silently breaks Auth/Firestore/FCM in release builds only.
 | Anonymous callers not blocked server-side on signal/comment create | Open — M-1 second half, gated on an unreleased client fix (#67) |
 | Avatar upload denied; test-mode signal photos denied; failed upload reported as success | Fixed 2026-08-01 (BUG-1/2/3, §5.2); rules deployed, BUG-3 needs an app release |
 | 5-photos-per-signal cap is UI-only | `firestore.rules` does not bound the `photoUrls` array length |
-| `/my_notifications` not functional | **Done 2026-08-04** (§7.13) — writer, rules, drawer entry and localized rendering all shipped. Undeployed at time of writing |
+| `/my_notifications` not functional | **Done 2026-08-04** (§7.13). Backend live in production (rules, `notifications` index, functions, 90-day TTL policy); device-verified on Android and iOS. The client half reaches users only with the next app release |
 | iOS deferred deep links | Deliberately not implemented (clipboard prompt cost) |
 | iOS unread badge count | **Fixed 2026-08-04** — real `badge: N` from `userCounters`, cleared on resume via the native badge channel. Accepted consequence: on pre-release builds the badge climbs and never clears (§7.13) |
 | In-app inbox retention | 90 days via a Firestore TTL policy on `expiresAt`; the policy is applied with `gcloud`, **not** by `firebase deploy` |
