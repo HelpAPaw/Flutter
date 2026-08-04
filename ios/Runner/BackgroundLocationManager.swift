@@ -1,7 +1,4 @@
 import CoreLocation
-import FirebaseAuth
-import FirebaseCore
-import FirebaseFirestore
 import Foundation
 
 /// Background location monitoring for iOS, built on significant-change updates.
@@ -13,10 +10,21 @@ import Foundation
 /// to deliver an update. That relaunch is what makes tracking survive a user
 /// force-quitting or the system reclaiming the process.
 ///
-/// The Firestore write happens here in native code rather than over the method
-/// channel, so a location update never depends on the Dart engine being up. The
-/// uid comes from the persisted Firebase Auth session, which survives process
-/// death.
+/// The `userLocations/{uid}` write deliberately does **not** happen here.
+///
+/// Touching `Firestore.firestore()` natively starts the shared default client,
+/// and `FLTFirebaseFirestorePlugin.getFIRFirestoreFromAppNameFromPigeon` then
+/// assigns `firestore.settings` to that already-started client on the first
+/// Dart-side Firestore call. `Firestore::set_settings` throws IllegalState in
+/// that case, the plugin does not catch it, and the process aborts (SIGABRT).
+/// So the plugin must be the only thing in this process that ever creates the
+/// default Firestore instance.
+///
+/// On iOS that costs nothing: a significant-change delivery *relaunches the
+/// whole app*, so the Dart engine is always coming up anyway, and
+/// [pendingUpdate]/[drainPendingUpdates] already bridge the seconds before it
+/// installs its handler. Dart does the write in
+/// `LocationService._onBackgroundLocation`.
 final class BackgroundLocationManager: NSObject {
   static let shared = BackgroundLocationManager()
 
@@ -143,42 +151,6 @@ final class BackgroundLocationManager: NSObject {
     return CLLocationManager.authorizationStatus()
   }
 
-  /// Writes the position to `userLocations/{uid}`.
-  ///
-  /// Same document shape the Dart path writes, including the precision-9
-  /// geohash the fan-out's range query depends on.
-  private func writeLocation(_ location: CLLocation) {
-    guard FirebaseApp.app() != nil else {
-      NSLog("BackgroundLocation: Firebase not configured, skipping write")
-      return
-    }
-    guard let uid = Auth.auth().currentUser?.uid else {
-      NSLog("BackgroundLocation: no signed-in user, skipping write")
-      return
-    }
-
-    let latitude = location.coordinate.latitude
-    let longitude = location.coordinate.longitude
-    let geohash = Geohash.encode(latitude: latitude, longitude: longitude)
-
-    Firestore.firestore()
-      .collection("userLocations")
-      .document(uid)
-      .setData(
-        [
-          "geopoint": GeoPoint(latitude: latitude, longitude: longitude),
-          "geohash": geohash,
-          "updatedAt": FieldValue.serverTimestamp(),
-        ],
-        merge: true
-      ) { error in
-        if let error = error {
-          NSLog("BackgroundLocation: write failed: \(error.localizedDescription)")
-        } else {
-          NSLog("BackgroundLocation: wrote location (geohash \(geohash))")
-        }
-      }
-  }
 }
 
 extension BackgroundLocationManager: CLLocationManagerDelegate {
@@ -187,8 +159,6 @@ extension BackgroundLocationManager: CLLocationManagerDelegate {
     didUpdateLocations locations: [CLLocation]
   ) {
     guard let location = locations.last else { return }
-
-    writeLocation(location)
 
     let latitude = location.coordinate.latitude
     let longitude = location.coordinate.longitude

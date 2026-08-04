@@ -694,12 +694,33 @@ significant-change monitoring on either platform, so that path is native.
 | Foreground service | n/a | **None** — deliberately, so there is no permanent notification |
 | Files | `ios/Runner/BackgroundLocationManager.swift`, `AppDelegate.swift`, `Geohash.swift` | `BackgroundLocationManager.kt`, `LocationUpdateReceiver.kt`, `HeadlessNearbyCheck.kt`, `BootReceiver.kt`, `LocationReconcileWorker.kt`, `Geohash.kt` |
 
-Both platforms **write `userLocations/{uid}` in native code**, using the persisted
-Firebase Auth session for the uid, so a location update never depends on a Dart engine.
-That means the geohash encoder exists three times (Dart via `geoflutterfire_plus`, Swift,
-Kotlin) and **all three must produce byte-identical base32, precision 9** — the fan-out
-matches users with a geohash *range* query, so a drifted encoder silently stops matching
-them with no error. Guarded by `android/app/src/test/kotlin/.../GeohashTest.kt`.
+**Android writes `userLocations/{uid}` in native code**, using the persisted Firebase
+Auth session for the uid, so a location update never depends on a Dart engine — its
+deliveries arrive in a process that has none.
+
+⚠️ **iOS deliberately does not, and must not.** Touching `Firestore.firestore()` from
+Swift starts the shared default client. `cloud_firestore`'s
+`FLTFirebaseFirestorePlugin.getFIRFirestoreFromAppNameFromPigeon` keeps its own private
+instance cache, so on the first Dart-side Firestore call it still believes it is creating
+the instance and assigns `firestore.settings` to that already-started client.
+`Firestore::set_settings` throws `IllegalState`, nothing catches it, and the process
+aborts — **SIGABRT a few seconds after launch**, with the entry frame varying by whichever
+Dart Firestore call lands first (`querySnapshotApp:`, `aggregateQueryApp:`, …). Android
+survives the identical pattern only because its SDK carries an explicit exemption for a
+repeat assignment of *equal* settings; iOS has none, and the plugin injects a custom
+`dispatchQueue` so its settings can never equal the native defaults.
+
+So on iOS the delegate only buffers and forwards, and `LocationService._onBackgroundLocation`
+performs the write. This gives up nothing in practice: a significant-change delivery
+relaunches the whole app, and `pendingUpdate`/`drainPendingUpdates` already bridge the
+seconds before Dart installs its handler.
+
+The geohash encoder therefore has **two production implementations** — Dart (via
+`geoflutterfire_plus`) and Kotlin — which must produce **byte-identical base32, precision
+9**: the fan-out matches users with a geohash *range* query, so a drifted encoder silently
+stops matching them with no error. Guarded by
+`android/app/src/test/kotlin/.../GeohashTest.kt`. `ios/Runner/Geohash.swift` survives only
+for `ios/RunnerTests/GeohashTest.swift`; it is no longer on any production path.
 
 Native state (enabled flag, gate, test mode) lives in **native-owned preferences**, not
 Dart's `shared_preferences` — Dart stores doubles there as prefixed *strings* and newer
@@ -1034,9 +1055,10 @@ explicit debug log in `NearbySignalChecker._queryNearbySignals`.
 
 Things that live in more than one place and fail **silently** when they drift.
 
-1. **Geohash encoders (×3).** Dart (`geoflutterfire_plus`), `ios/Runner/Geohash.swift`,
+1. **Geohash encoders (×2 in production).** Dart (`geoflutterfire_plus`) and
    `android/.../Geohash.kt` — base32, precision 9, byte-identical. Guarded by
-   `GeohashTest.kt`.
+   `GeohashTest.kt`. (`ios/Runner/Geohash.swift` is test-only since the iOS native
+   Firestore write was removed — see §7.)
 2. **Signal type list (×3).** `Signal.signalTypes` (Dart), `SIGNAL_TYPES` and
    `SIGNAL_TYPE_NAMES` (functions). A missed copy renders new types as "Other".
 3. **Status codes (×2).** `SignalStatus` (Dart, source of truth) and `SIGNAL_STATUSES`
@@ -1060,6 +1082,11 @@ Things that live in more than one place and fail **silently** when they drift.
 11. **Nothing network-dependent may be awaited before `runApp()`.**
 12. **Deleting `userLocations/{uid}` on opt-out is mandatory** — the fan-out never checks
     `locationTrackingEnabled`.
+13. **On iOS, nothing but the `cloud_firestore` plugin may create the default Firestore
+    instance.** A native `Firestore.firestore()` starts the client, and the plugin's
+    later `settings` assignment aborts the process at launch (§7). This one does *not*
+    fail silently — it is a hard crash — but it is listed here because the offending
+    native call looks entirely innocent at the call site.
 
 ---
 
@@ -1134,6 +1161,7 @@ silently breaks Auth/Firestore/FCM in release builds only.
 | 2026-08-01 | Initial specification, written from the codebase at `6.0.1+125` (branch `dev`). |
 | 2026-08-01 | Investigated the `storage.rules` note: confirmed BUG-1 (avatar upload always denied), BUG-2 (test-mode signal photos denied) and BUG-3 (failed upload reported as success). Recorded the emulator's project-prefixed reference representation as a testing caveat. §5.2, §14. |
 | 2026-08-01 | Fixed all three, added `firestore-tests/storage.rules.test.js` (27 cases) and size/content-type limits (5 MB signal photos, 2 MB avatars, `image/*`). Client now declares `contentType` on every upload; avatar reads are public. **`storage.rules` deployed to production.** §5.2, §13.2, §14. |
+| 2026-08-04 | **Fixed an iOS launch crash (SIGABRT) introduced by the background-location merge.** `BackgroundLocationManager.writeLocation` started the native Firestore client before Dart ran; `cloud_firestore` then assigned settings to that already-started client and the uncaught `IllegalState` aborted the process. The iOS `userLocations` write moves to Dart (`LocationService._onBackgroundLocation`); Android keeps its native write. Never reached users — the shipped `v6.0.1+125` (2026-06-19) predates the offending code by six weeks, and all 10 Crashlytics events came from the test iPad — but it was a blocker for the next iOS build. §7, §12. |
 | 2026-08-01 | Investigated `/my_notifications`. It is a deliberate deferral (owner decision 2026-05-30, keep the code); verified the previously-assumed gap list — no writer has ever existed, the subcollection is denied because rules don't cascade into subcollections, and the page's `type` vocabulary doesn't match the functions'. Documented the schema and the iOS-badge link. §5.1, §7.13, §14. |
 | 2026-08-04 | **Built the in-app inbox.** Server writer (`writeInboxEntries`) alongside every push; `users/{uid}/notifications` + `userCounters` rules with 15 new emulator tests; drawer entry with unread badge; client-side localized rendering from structured fields; `nearby_signal` entries from the arrival catch-up (incl. the headless isolate); `userCounters` + native badge channel + resume reconciliation for F-008. Recipients now include users with no FCM token. Adjacent fix: the fan-out's un-chunked `sendEachForMulticast` silently lost every notification past 500 tokens — now `sendEach` chunked at 500. §4, §5.1, §7.13, §9, §14. |
 | 2026-08-04 | Enabled real `badge: N` in the fan-out (F-008 closed). Owner accepted the known consequence that pre-release iOS builds have no reset path, so their badge climbs monotonically. §7.13, §14. |

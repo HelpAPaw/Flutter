@@ -109,12 +109,29 @@ native and runs alongside it:
   `PendingIntent` → `LocationUpdateReceiver`. Deliberately **no foreground
   service**, so there is no permanent notification in the shade.
 
-Both write `userLocations/{uid}` in native code so a location update never
-depends on a Dart engine. That means the geohash is implemented three times
-(Dart, Swift, Kotlin) and **all three must stay byte-identical** — base32,
-precision 9. The notification fan-out finds users with a geohash *range* query,
+**Android** writes `userLocations/{uid}` in native code, so a location update
+there never depends on a Dart engine — its deliveries land in a process with no
+engine at all.
+
+**iOS must not.** Touching `Firestore.firestore()` from Swift starts the shared
+default client; `cloud_firestore`'s plugin then assigns `firestore.settings` to
+that already-started client on the first Dart-side Firestore call, and
+`Firestore::set_settings` throws an uncaught `IllegalState` → **SIGABRT at
+launch**. The plugin assumes it is the only thing in the process that creates
+the default instance, and that assumption is unchanged as of 6.7.1. Android
+survives the same pattern only because its SDK explicitly exempts a repeat
+assignment of *equal* settings; iOS has no such exemption. So on iOS the
+delegate only buffers/forwards and `LocationService._onBackgroundLocation` does
+the write — which costs nothing, because a significant-change delivery
+relaunches the whole app anyway.
+
+The geohash therefore has two *production* encoders — Dart
+(`geoflutterfire_plus`) and Kotlin — which **must stay byte-identical** (base32,
+precision 9). The notification fan-out finds users with a geohash *range* query,
 so a drifted encoder silently stops matching them with no error. Guarded by
-`android/app/src/test/kotlin/.../GeohashTest.kt`.
+`android/app/src/test/kotlin/.../GeohashTest.kt`. `ios/Runner/Geohash.swift`
+is now used only by `ios/RunnerTests/GeohashTest.swift`; keep or delete both
+together.
 
 Native state (enabled flag, gate) is stored in native-owned prefs, **not** read
 out of `shared_preferences` — Dart doubles are stored there as prefixed *strings*

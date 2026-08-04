@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -80,7 +81,8 @@ class LocationService with WidgetsBindingObserver {
     // iOS delivers significant-change updates into this isolate (the relaunch
     // boots the app). Android has no engine at that point and boots a headless
     // one instead, which is what the entrypoint is for.
-    BackgroundLocationChannel().ensureHandlerInstalled(onUpdate: _runNearbyCheck);
+    BackgroundLocationChannel()
+        .ensureHandlerInstalled(onUpdate: _onBackgroundLocation);
 
     // Not awaited: this is called ahead of runApp, and the mode only affects a
     // background delivery, which cannot arrive this early.
@@ -313,6 +315,35 @@ class LocationService with WidgetsBindingObserver {
     // _updateLocationInFirestore handles its own errors.
     await _updateLocationInFirestore(position);
     await _runNearbyCheck(position.latitude, position.longitude);
+  }
+
+  /// Handles a position delivered by the *native* background monitor.
+  ///
+  /// On iOS the `userLocations/{uid}` write has to happen here rather than in
+  /// Swift: the first native `Firestore.firestore()` use starts the shared
+  /// default client, and the cloud_firestore plugin then assigns settings to
+  /// that started client on its first call and aborts the process. See the
+  /// comment on `BackgroundLocationManager`. Android keeps its native write —
+  /// its deliveries land in a process with no engine at all — so writing again
+  /// here would only duplicate it.
+  Future<void> _onBackgroundLocation(double latitude, double longitude) async {
+    if (Platform.isIOS) {
+      await _updateLocationInFirestore(
+        Position(
+          latitude: latitude,
+          longitude: longitude,
+          timestamp: DateTime.now(),
+          accuracy: 0,
+          altitude: 0,
+          altitudeAccuracy: 0,
+          heading: 0,
+          headingAccuracy: 0,
+          speed: 0,
+          speedAccuracy: 0,
+        ),
+      );
+    }
+    await _runNearbyCheck(latitude, longitude);
   }
 
   /// Catch up on signals the server fan-out couldn't have reached us about,
