@@ -377,21 +377,35 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(DateFormat.yMd(locale).add_jm().format((signal.createdAt as Timestamp).toDate())),
-                              FutureBuilder<String?>(
-                                future: _reporterNameFor(signal.reporter.id),
-                                builder: (context, snapshot) {
-                                  // While the (auth-gated) lookup is still in
-                                  // flight, show nothing rather than flashing a
-                                  // fallback. Once it completes, always show a
-                                  // name — falling back to "Unknown" so a failed
-                                  // or empty lookup never renders blank.
-                                  if (snapshot.connectionState != ConnectionState.done) {
-                                    return const SizedBox.shrink();
-                                  }
-                                  final name = snapshot.data;
-                                  return Text((name != null && name.isNotEmpty) ? name : l10n.unknown);
-                                },
+                              Flexible(
+                                child: Text(
+                                  DateFormat.yMd(locale).add_jm().format((signal.createdAt as Timestamp).toDate()),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: FutureBuilder<String?>(
+                                  future: _reporterNameFor(signal.reporter.id),
+                                  builder: (context, snapshot) {
+                                    // While the (auth-gated) lookup is still in
+                                    // flight, show nothing rather than flashing a
+                                    // fallback. Once it completes, always show a
+                                    // name — falling back to "Unknown" so a failed
+                                    // or empty lookup never renders blank.
+                                    if (snapshot.connectionState != ConnectionState.done) {
+                                      return const SizedBox.shrink();
+                                    }
+                                    final name = snapshot.data;
+                                    return Text(
+                                      (name != null && name.isNotEmpty) ? name : l10n.unknown,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.end,
+                                    );
+                                  },
+                                ),
                               ),
                             ],
                           ),
@@ -560,15 +574,31 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                           subtitle: Row(
                                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                             children: [
-                                              Text(DateFormat.yMd(locale).add_jm().format(commentData['createdAt'].toDate())),
-                                              FutureBuilder<String?>(
-                                                future: PublicProfileService.getName(
-                                                    (commentData['author'] as DocumentReference).id),
-                                                builder: (context, snapshot) {
-                                                  return Text((snapshot.data?.isNotEmpty ?? false)
-                                                      ? snapshot.data!
-                                                      : l10n.unknown);
-                                                },
+                                              Flexible(
+                                                child: Text(
+                                                  DateFormat.yMd(locale).add_jm().format(commentData['createdAt'].toDate()),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              // The author name is user-supplied and capped at 100 chars,
+                                              // so it must be allowed to shrink instead of overflowing the row.
+                                              Flexible(
+                                                child: FutureBuilder<String?>(
+                                                  future: PublicProfileService.getName(
+                                                      (commentData['author'] as DocumentReference).id),
+                                                  builder: (context, snapshot) {
+                                                    return Text(
+                                                      (snapshot.data?.isNotEmpty ?? false)
+                                                          ? snapshot.data!
+                                                          : l10n.unknown,
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                      textAlign: TextAlign.end,
+                                                    );
+                                                  },
+                                                ),
                                               ),
                                             ],
                                           )
