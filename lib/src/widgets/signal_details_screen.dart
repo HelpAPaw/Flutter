@@ -48,11 +48,74 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   final PageController _photoPageController = PageController();
   int _currentPhotoPage = 0;
   bool _hasNavigatedAway = false;
+  // Whether this screen ever rendered the signal. Distinguishes "deleted while
+  // you were reading it" from "was already gone when you opened it", which want
+  // opposite treatments — see the missing-document branch in build().
+  bool _signalWasLoaded = false;
 
   // Note: every field above is memoized per signal. Navigating signal->signal
   // must therefore build a fresh State rather than reuse this one — the route
   // gives this screen a ValueKey on the signal id (see main.dart) so the
   // framework disposes and rebuilds instead of swapping `widget` underneath us.
+
+  /// Leaves this screen the way the rest of the screen does: back if there is
+  /// somewhere to go back to, otherwise to the map. A cold deep link makes this
+  /// the first route in the stack, so there is nothing to pop.
+  void _leaveScreen(BuildContext context) {
+    if (Navigator.of(context).canPop()) {
+      context.pop();
+    } else {
+      context.go(Routes.home);
+    }
+  }
+
+  /// Shown when the signal did not exist to begin with, rather than vanishing
+  /// while it was on screen.
+  Widget _buildNotFound(BuildContext context, AppLocalizations l10n) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(l10n.signalDetails),
+        backgroundColor: Colors.orange,
+        foregroundColor: Colors.white,
+        leading: Semantics(
+          label: l10n.backToMap,
+          button: true,
+          child: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => _leaveScreen(context),
+          ),
+        ),
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
+              const SizedBox(height: 16),
+              Text(
+                l10n.signalNoLongerAvailable,
+                style: const TextStyle(fontSize: 20),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                l10n.signalNoLongerAvailableHint,
+                style: TextStyle(color: Colors.grey[600]),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () => _leaveScreen(context),
+                child: Text(l10n.backToMap),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -69,29 +132,35 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
           body: Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.orange))),
         );
       } else if (!(snapshot.data?.exists ?? false)) {
-        // The signal was deleted while this screen was open (e.g. the author
-        // removed it while another user was reading it). Pop back to the map
-        // instead of rendering a blank view. Navigation can't happen during
-        // build, so defer it to after the current frame.
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted || _hasNavigatedAway) return;
-          _hasNavigatedAway = true;
-          // Capture the (app-level) messenger before popping, since this
-          // screen's element is torn down by the navigation.
-          final messenger = ScaffoldMessenger.of(context);
-          if (Navigator.of(context).canPop()) {
-            context.pop();
-          } else {
-            context.go(Routes.home);
-          }
-          messenger.showSnackBar(
-            SnackBar(content: Text(l10n.signalNoLongerAvailable)),
+        // Two different situations land here and they want opposite treatments.
+        if (_signalWasLoaded) {
+          // The signal was deleted while this screen was open (e.g. the author
+          // removed it while another user was reading it). Pop back to the map
+          // instead of rendering a blank view. Navigation can't happen during
+          // build, so defer it to after the current frame.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || _hasNavigatedAway) return;
+            _hasNavigatedAway = true;
+            // Capture the (app-level) messenger before popping, since this
+            // screen's element is torn down by the navigation.
+            final messenger = ScaffoldMessenger.of(context);
+            _leaveScreen(context);
+            messenger.showSnackBar(
+              SnackBar(content: Text(l10n.signalNoLongerAvailable)),
+            );
+          });
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.orange))),
           );
-        });
-        return const Scaffold(
-          body: Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.orange))),
-        );
+        }
+        // The signal was already gone when the screen was opened — an inbox
+        // entry or a shared link pointing at a since-deleted id. Auto-popping
+        // here would push a screen that instantly dismisses itself, which reads
+        // as a dead tap (R5-004). Show a real not-found state and let the user
+        // leave deliberately.
+        return _buildNotFound(context, l10n);
       } else {
+        _signalWasLoaded = true;
         final signalData = snapshot.data!.data() as Map<String, dynamic>;
         signal = Signal.fromJson(signalData);
       }
@@ -100,11 +169,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         canPop: false,
         onPopInvokedWithResult: (didPop, result) {
           if (!didPop) {
-            if (Navigator.of(context).canPop()) {
-              context.pop();
-            } else {
-              context.go(Routes.home);
-            }
+            _leaveScreen(context);
           }
         },
         child: Scaffold(
@@ -879,11 +944,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         ),
       );
 
-      if (Navigator.of(context).canPop()) {
-        context.pop();
-      } else {
-        context.go(Routes.home);
-      }
+      _leaveScreen(context);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

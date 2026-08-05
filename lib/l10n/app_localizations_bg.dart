@@ -1022,6 +1022,13 @@ class AppLocalizationsBg extends AppLocalizations {
   String get signalNoLongerAvailable => 'Този сигнал вече не е наличен';
 
   @override
+  String get signalNoLongerAvailableHint =>
+      'Възможно е да е изтрит от човека, който го е подал.';
+
+  @override
+  String get backToMap => 'Обратно към картата';
+
+  @override
   String get failedToUpdateSignal =>
       'Неуспешно обновяване на сигнала. Моля, опитайте отново.';
 

@@ -506,6 +506,8 @@
   "signalUpdatedSuccessfully": "Signal updated successfully",
   "signalDeletedSuccessfully": "Signal deleted successfully",
   "signalNoLongerAvailable": "This signal is no longer available",
+  "signalNoLongerAvailableHint": "It may have been deleted by the person who reported it.",
+  "backToMap": "Back to map",
   "failedToUpdateSignal": "Failed to update signal. Please try again.",
   "failedToDeleteSignal": "Failed to delete signal. Please try again.",
   "contactPhone": "Contact Phone",

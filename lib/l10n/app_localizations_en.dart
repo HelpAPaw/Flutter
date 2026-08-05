@@ -1008,6 +1008,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get signalNoLongerAvailable => 'This signal is no longer available';
 
   @override
+  String get signalNoLongerAvailableHint =>
+      'It may have been deleted by the person who reported it.';
+
+  @override
+  String get backToMap => 'Back to map';
+
+  @override
   String get failedToUpdateSignal =>
       'Failed to update signal. Please try again.';
 

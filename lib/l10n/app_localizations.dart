@@ -1874,6 +1874,18 @@ abstract class AppLocalizations {
   /// **'This signal is no longer available'**
   String get signalNoLongerAvailable;
 
+  /// No description provided for @signalNoLongerAvailableHint.
+  ///
+  /// In en, this message translates to:
+  /// **'It may have been deleted by the person who reported it.'**
+  String get signalNoLongerAvailableHint;
+
+  /// No description provided for @backToMap.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to map'**
+  String get backToMap;
+
   /// No description provided for @failedToUpdateSignal.
   ///
   /// In en, this message translates to:
