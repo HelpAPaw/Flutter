@@ -96,7 +96,10 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
     FutureBuilder<void>(
         future: _browserLaunched, builder: (context, snapshot) => _browserLaunchStatus(context, snapshot, l10n));
     return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
+      // userChanges() rather than authStateChanges(): the latter only fires on
+      // sign-in/sign-out, so editing the name or avatar on the profile screen
+      // left this header showing the old values until the next launch.
+      stream: FirebaseAuth.instance.userChanges(),
       builder: (context, snapshot) {
         final isLoggedIn = snapshot.hasData &&
                            snapshot.data != null &&
