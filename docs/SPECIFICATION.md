@@ -625,6 +625,11 @@ Live `snapshots()` on the signal doc plus a live ordered stream of its comments.
 
 - **Deleted while open:** the screen pops back (or `go(/home)`) and shows a
   "no longer available" snackbar, guarded by `_hasNavigatedAway`.
+- **Already deleted on arrival** (a stale inbox row or a shared link to a removed
+  signal): a static not-found screen instead — icon, "no longer available", a hint,
+  and a "Back to map" exit. The two cases are told apart by `_signalWasLoaded`;
+  auto-popping this one would dismiss the screen inside its own push transition and
+  read as a dead tap.
 - **Photos:** horizontal `PageView` with dot indicators, full-screen `PhotoView` gallery
   with pinch-zoom, cached via `cached_network_image`. The author gets an inline
   "Add photo" page (cap 5) and a per-photo delete (Firestore `arrayRemove` first, then a
