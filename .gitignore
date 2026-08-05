@@ -95,5 +95,16 @@ app.*.map.json
 # Integration test credentials (never commit real credentials)
 /integration_test/test_credentials.json
 
+# Release signing secrets. The release build currently signs with the DEBUG key
+# (see the TODO in android/app/build.gradle); wiring up the real upload keystore
+# means creating android/key.properties, which holds plaintext passwords.
+# Ignored ahead of that so it can never be committed by accident.
+/android/key.properties
+*.jks
+*.keystore
+# iOS App Store Connect API keys
+AuthKey_*.p8
+/ios/ExportOptions.plist
+
 # Claude Code local settings
 /.claude/
