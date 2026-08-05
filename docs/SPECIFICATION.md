@@ -529,6 +529,17 @@ directly in `sign_in_page.dart::_signInWithGoogle`. v6's `SignInHubActivity` cau
 NPE crash on process recreation. `GoogleSignIn.instance.initialize()` is memoized in
 `ensureGoogleSignInInitialized()` and kept off the startup critical path.
 
+Neither `signInWithCredential` nor `linkWithCredential` copies the provider's profile
+onto the top-level Auth record — `firebase_ui_oauth_google` used to, and the v7
+migration dropped it — so `user.displayName` was null and every downstream name fell
+back to the email's local part, including the public one other users see (R5-001).
+`AuthService.adoptProviderDisplayName()` closes that: it fills a **blank** Auth
+display name from the credential's profile or the linked provider record, never
+overwriting a name the user chose. It runs on all three Google outcomes (in-place
+link, plain sign-in, `credential-already-in-use` merge) and once at startup in
+`_bootstrapServices`, which repairs accounts created before the fix without needing
+them to sign in again.
+
 **Email verification** (`email_verification_page.dart`): passive status screen. Exactly
 one verification email is sent at account creation / credential link; the screen does
 **not** auto-send on arrival. It polls `user.reload()` every 15s and on app resume, and
@@ -538,8 +549,9 @@ object but not the ID token's claims. Resend has a 60s cooldown.
 **Profile completion** (`profile_completion_page.dart`): name (required, ≥2 chars,
 ≤100, single-line) and optional phone. Writes `users/{uid}` (`name`, `phone`, `email`,
 `profileCompleted:true`) and mirrors the name to `publicProfiles/{uid}`. "Skip" still
-writes `profileCompleted:true` and a best-available name (Auth display name, else the
-email local part) so the user never renders as "Unknown". Exits by popping every
+writes `profileCompleted:true` and a best-available name (Auth display name, else a
+linked provider's name, else the email local part) so the user never renders as
+"Unknown". Exits by popping every
 `Routes.authRoutes` entry off the stack, falling back to `/home`.
 
 **Profile** (`profile_page.dart`): edit display name (mirrored to `publicProfiles`) and

@@ -261,6 +261,12 @@ Future<void> _bootstrapServices() async {
     }
   }
 
+  // Repair accounts that signed in through a build which didn't carry Google's
+  // name onto the Auth record (R5-001). A no-op for anonymous users and for
+  // anyone who already has a name, so it costs nothing after the first launch.
+  unawaited(
+      AuthService.adoptProviderDisplayName(FirebaseAuth.instance.currentUser));
+
   // Both need the uid from the sign-in above, but not each other — run them
   // together rather than making the restore of background tracking queue behind
   // a full FCM token fetch. They only touch through

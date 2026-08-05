@@ -41,6 +41,67 @@ class AuthService {
   static bool hasPasswordProvider(User? user) =>
       user?.providerData.any((info) => info.providerId == 'password') ?? false;
 
+  /// The name the OAuth provider knows this user by, or null.
+  ///
+  /// Neither `signInWithCredential` nor `linkWithCredential` copies the
+  /// provider's profile onto the top-level Auth record — the
+  /// `firebase_ui_oauth_google` provider used to do that for us, and the
+  /// google_sign_in v7 migration dropped it. So `user.displayName` is null on
+  /// accounts created through the current flow even though the real name is
+  /// sitting right there on the provider record (R5-001).
+  static String? providerDisplayName(User user, [UserCredential? credential]) =>
+      pickProviderName(
+        credential?.additionalUserInfo?.profile?['name'],
+        user.providerData.map((info) => info.displayName),
+      );
+
+  /// The picking rule behind [providerDisplayName], over plain values so it can
+  /// be tested without faking the Auth SDK's sealed types.
+  ///
+  /// The freshly-signed-in credential's profile wins; the linked provider
+  /// records are the fallback for a session that outlived it (a sign-in the app
+  /// didn't drive, or a later launch).
+  @visibleForTesting
+  static String? pickProviderName(
+      Object? credentialName, Iterable<String?> providerNames) {
+    final candidates = <Object?>[credentialName, ...providerNames];
+    for (final candidate in candidates) {
+      if (candidate is! String) continue;
+      final name = candidate.trim();
+      if (name.isNotEmpty) return name;
+    }
+    return null;
+  }
+
+  /// Copy the provider's name onto the Auth user when it has none of its own.
+  ///
+  /// Only ever fills a blank — a name the user typed themselves always wins —
+  /// so this is safe to call on every sign-in, including for accounts that
+  /// predate it. Without it the app falls back to the email's local part, and
+  /// that is not just a form default: it is what Profile Completion saves to
+  /// `publicProfiles`, so it becomes the reporter/comment-author name every
+  /// other user sees (R5-001). Best-effort — never fails a sign-in.
+  static Future<void> adoptProviderDisplayName(User? user,
+      [UserCredential? credential]) async {
+    if (user == null) return;
+    final existing = user.displayName?.trim();
+    if (existing != null && existing.isNotEmpty) return;
+
+    final name = providerDisplayName(user, credential);
+    if (name == null) return;
+
+    try {
+      // Updates the cached currentUser and emits a userChanges() event, so the
+      // Profile Completion screen we're about to push reads the new name.
+      // Time-boxed because callers await it on the interactive sign-in path: if
+      // it doesn't land, the screen still falls back to the provider record.
+      await user.updateDisplayName(name).timeout(const Duration(seconds: 10));
+      debugPrint('Adopted provider display name');
+    } catch (e) {
+      debugPrint('Could not adopt provider display name: $e');
+    }
+  }
+
   /// Attempt to link anonymous account to a credential
   /// Returns the result of the linking attempt
   Future<LinkResult> linkAnonymousAccount(AuthCredential credential) async {

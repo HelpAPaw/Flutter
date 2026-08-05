@@ -6,6 +6,7 @@ import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 
 import '../config/routes.dart';
+import '../services/auth_service.dart';
 import '../services/public_profile_service.dart';
 
 class ProfileCompletionPage extends StatefulWidget {
@@ -39,13 +40,22 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
   }
 
   /// Best-available display name for [user]: the Auth display name (Google
-  /// OAuth / existing), else the local part of the email (e.g. "john.doe"
-  /// from "john.doe@example.com"). Returns null if neither is available.
+  /// OAuth / existing), else the name on a linked provider record, else the
+  /// local part of the email (e.g. "john.doe" from "john.doe@example.com").
+  /// Returns null if none is available.
   String? _suggestedName(User user) {
     final displayName = user.displayName?.trim();
     if (displayName != null && displayName.isNotEmpty) {
       return displayName;
     }
+    // The sign-in path copies Google's name onto the Auth record, so this only
+    // catches accounts that predate that or whose copy didn't land (R5-001).
+    // Worth keeping: whatever ends up here is published to publicProfiles as
+    // the name every other user sees, so an email local part is a poor last
+    // resort.
+    final fromProvider = AuthService.providerDisplayName(user);
+    if (fromProvider != null) return fromProvider;
+
     final email = user.email;
     if (email != null && email.contains('@')) {
       final local = email.split('@').first.trim();

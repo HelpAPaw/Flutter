@@ -264,6 +264,8 @@ class _SignInPageState extends State<SignInPage> {
       final existingUser = result.user;
       if (existingUser != null) {
         await AuthService().mergeFcmTokens(existingUser.uid, anonTokens);
+        // No-op if this account already has a name of its own (R5-001).
+        await AuthService.adoptProviderDisplayName(existingUser, result);
         unawaited(NotificationService().onUserLogin());
       }
       if (context.mounted) {
@@ -309,8 +311,12 @@ class _SignInPageState extends State<SignInPage> {
         // Upgrade the anonymous account in place (preserves UID + data, R3-001).
         try {
           final result = await current.linkWithCredential(credential);
-          if (context.mounted && result.user != null) {
-            await _onCredentialLinked(context, result.user!);
+          final linked = result.user;
+          if (linked != null) {
+            // Before navigating: Profile Completion pre-fills from the Auth
+            // record, and linking doesn't carry Google's name over (R5-001).
+            await AuthService.adoptProviderDisplayName(linked, result);
+            if (context.mounted) await _onCredentialLinked(context, linked);
           }
         } on FirebaseAuthException catch (e) {
           if (e.code == 'credential-already-in-use') {
@@ -323,6 +329,7 @@ class _SignInPageState extends State<SignInPage> {
       } else {
         final result =
             await FirebaseAuth.instance.signInWithCredential(credential);
+        await AuthService.adoptProviderDisplayName(result.user, result);
         final isNewUser = result.additionalUserInfo?.isNewUser ?? false;
         if (context.mounted) {
           if (isNewUser) {
