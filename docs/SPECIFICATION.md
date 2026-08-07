@@ -614,6 +614,12 @@ token, 5s timeout) → `GoogleSignIn.signOut()` (so the next sign-in shows the c
   it, falling back to the user's own location only if the replay reports it could not
   focus (e.g. the signal was deleted). Without the park this dereferenced the
   `late _mapController` and crashed (`LateInitializationError`, iOS 6.0.2+126).
+  `_mapController` is consequently a plain `GoogleMapController?`, not `late` beside a
+  `_mapControllerReady` bool — the bool was a convention the compiler could not enforce
+  and 7 of the 12 uses simply never checked it. Every use now states its assumption: `!`
+  where a live map is a precondition (map-dispatched callbacks, marker taps), a null
+  check where it is not (toolbar buttons, which are painted with the Scaffold and are
+  tappable before the platform view comes up).
   A focused deep link owns the camera (`_deepLinkOwnsCamera`), so the fly-to-user that
   `initState` schedules is skipped when the GPS fix lands after the focus — otherwise it
   would pan away from the signal the user tapped through to. The onboarding sheet's

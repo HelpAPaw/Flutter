@@ -40,8 +40,13 @@ class _MapScreenState extends ConsumerState<MapScreen>
   static const _kPinHeight = 29.0;
 
   late AnimationController _fabAnimationController;
-  late GoogleMapController _mapController;
-  bool _mapControllerReady = false;
+  // Null until the platform view calls onMapCreated, and never null again.
+  // Deliberately nullable rather than `late` + a separate readiness bool: the
+  // flag was a convention the compiler didn't enforce, and forgetting it is
+  // what shipped a LateInitializationError to production (see
+  // _focusSignalOnMap). Now every use has to say what it does without a map —
+  // `!` where a live map is a precondition, a null check where it isn't.
+  GoogleMapController? _mapController;
   final _markerBuilder = MapMarkerBuilder();
   bool _showOnboardingButton = false;
   bool _onboardingSheetShown = false;
@@ -78,7 +83,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
   late final Set<ClusterManager> _clusterManagers = {_signalClusterManager};
 
   void _onClusterTap(Cluster cluster) {
-    _mapController.animateCamera(
+    // Dispatched by the GoogleMap widget, so the map exists by construction.
+    _mapController!.animateCamera(
       CameraUpdate.newLatLngBounds(cluster.bounds, 50),
     );
   }
@@ -204,19 +210,22 @@ class _MapScreenState extends ConsumerState<MapScreen>
   /// resolved position. Safe to call before the map controller is ready
   /// (the [onMapCreated] handler covers that race).
   void _flyToUserLocation() {
-    if (!mounted || !_mapControllerReady) return;
+    final map = _mapController;
+    if (!mounted || map == null) return;
     final s = ref.read(mapViewModelProvider);
     if (s.centerLatitude == MapScreenState.defaultLatitude &&
         s.centerLongitude == MapScreenState.defaultLongitude) {
       return;
     }
-    _mapController.animateCamera(
+    map.animateCamera(
       CameraUpdate.newLatLng(LatLng(s.centerLatitude, s.centerLongitude)),
     );
   }
 
+  /// Precondition: the map exists — this is handed to [NewSignalForm], which
+  /// only calls it on submit, long after the map has been panned into place.
   Future<(double, double)> _getMapCenter() async {
-    final visibleRegion = await _mapController.getVisibleRegion();
+    final visibleRegion = await _mapController!.getVisibleRegion();
     final centerLatitude = (visibleRegion.northeast.latitude +
             visibleRegion.southwest.latitude) /
         2;
@@ -231,16 +240,18 @@ class _MapScreenState extends ConsumerState<MapScreen>
   /// discarded when a newer idle event has already been dispatched.
   int _cameraIdleToken = 0;
 
+  /// Precondition: the map exists. Dispatched by the GoogleMap widget.
   void _onCameraIdle() async {
+    final map = _mapController!;
     final token = ++_cameraIdleToken;
-    final region = await _mapController.getVisibleRegion();
+    final region = await map.getVisibleRegion();
     if (!mounted || token != _cameraIdleToken) return;
 
     final centerLat =
         (region.northeast.latitude + region.southwest.latitude) / 2;
     final centerLng =
         (region.northeast.longitude + region.southwest.longitude) / 2;
-    final zoom = await _mapController.getZoomLevel();
+    final zoom = await map.getZoomLevel();
     if (!mounted || token != _cameraIdleToken) return;
 
     final viewModel = ref.read(mapViewModelProvider.notifier);
@@ -255,16 +266,21 @@ class _MapScreenState extends ConsumerState<MapScreen>
   }
 
   Future<void> _loadVetClinics() async {
+    // Reached from toolbar buttons, which are painted with the Scaffold and so
+    // can be tapped before the platform view has come up.
+    final map = _mapController;
+    if (map == null) return;
+
     final l10n = AppLocalizations.of(context);
     final viewModel = ref.read(mapViewModelProvider.notifier);
 
     try {
-      final region = await _mapController.getVisibleRegion();
+      final region = await map.getVisibleRegion();
       final centerLat =
           (region.northeast.latitude + region.southwest.latitude) / 2;
       final centerLng =
           (region.northeast.longitude + region.southwest.longitude) / 2;
-      final zoom = await _mapController.getZoomLevel();
+      final zoom = await map.getZoomLevel();
 
       await viewModel.loadVetClinics(
         center: LatLng(centerLat, centerLng),
@@ -350,9 +366,10 @@ class _MapScreenState extends ConsumerState<MapScreen>
   /// out, or moved outside the geo-query radius while its window was open.
   /// The window is gone anyway, so swallow it rather than crashing.
   Future<void> _showMarkerInfoWindow(String signalId) async {
-    if (!_mapControllerReady) return;
+    final map = _mapController;
+    if (map == null) return;
     try {
-      await _mapController.showMarkerInfoWindow(MarkerId(signalId));
+      await map.showMarkerInfoWindow(MarkerId(signalId));
     } on PlatformException {
       // Marker no longer on the map — nothing to show.
     }
@@ -360,9 +377,10 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
   /// Best-effort native InfoWindow hide. See [_showMarkerInfoWindow].
   Future<void> _hideMarkerInfoWindow(String signalId) async {
-    if (!_mapControllerReady) return;
+    final map = _mapController;
+    if (map == null) return;
     try {
-      await _mapController.hideMarkerInfoWindow(MarkerId(signalId));
+      await map.hideMarkerInfoWindow(MarkerId(signalId));
     } on PlatformException {
       // Marker no longer on the map — nothing to hide.
     }
@@ -388,7 +406,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
     // Fire-and-forget — independent of screen coordinate calculation.
     _showMarkerInfoWindow(signal.id);
 
-    final screenCoord = await _mapController.getScreenCoordinate(
+    // Precondition: the map exists — this comes from tapping one of its markers.
+    final screenCoord = await _mapController!.getScreenCoordinate(
       LatLng(signal.location.latitude, signal.location.longitude),
     );
     if (!mounted) return;
@@ -414,7 +433,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
   Future<void> _updateOverlayPosition() async {
     if (_selectedSignal == null) return;
     final signal = _selectedSignal!;
-    final screenCoord = await _mapController.getScreenCoordinate(
+    // Precondition: a selected signal implies its marker was tapped on a map.
+    final screenCoord = await _mapController!.getScreenCoordinate(
       LatLng(signal.location.latitude, signal.location.longitude),
     );
     if (!mounted || _selectedSignal?.id != signal.id) return;
@@ -465,7 +485,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
     // before the map's platform view has called onMapCreated — so the
     // controller may not exist yet. Hand the request over to onMapCreated
     // rather than dropping it, or the deep link silently does nothing.
-    if (!_mapControllerReady) {
+    final map = _mapController;
+    if (map == null) {
       _deferredFocusSignalId = signalId;
       return false;
     }
@@ -500,7 +521,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
     if (!mounted) return false;
 
     _deepLinkOwnsCamera = true;
-    await _mapController.animateCamera(
+    await map.animateCamera(
       CameraUpdate.newLatLngZoom(
         LatLng(geoPoint.latitude, geoPoint.longitude),
         14.0,
@@ -607,7 +628,6 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 ),
                 onMapCreated: (GoogleMapController controller) async {
                   _mapController = controller;
-                  _mapControllerReady = true;
 
                   // A deep link that arrived before the map existed outranks
                   // the initial move to the user's own location — but fall
