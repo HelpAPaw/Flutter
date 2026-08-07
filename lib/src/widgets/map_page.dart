@@ -58,6 +58,14 @@ class _MapScreenState extends ConsumerState<MapScreen>
   // before showing its info window (used after signal creation / notification).
   ProviderSubscription<AsyncValue<List<SignalWithId>>>? _pendingInfoWindowSub;
 
+  // A signal we were asked to focus before the map's platform view was ready.
+  // Replayed from [onMapCreated]; see [_focusSignalOnMap].
+  String? _deferredFocusSignalId;
+
+  // Set once a deep link has put the camera on a signal, so the fly-to-user
+  // that [initState] schedules doesn't yank it away when the fix lands late.
+  bool _deepLinkOwnsCamera = false;
+
   // Test mode toggle state
   int _titleTapCount = 0;
   DateTime? _lastTitleTap;
@@ -84,8 +92,11 @@ class _MapScreenState extends ConsumerState<MapScreen>
     );
     _markerBuilder.loadAllPins();
 
-    // Initialize location in ViewModel, then animate camera to it
+    // Initialize location in ViewModel, then animate camera to it — unless a
+    // deep link got there first. The GPS fix can land seconds after the map,
+    // long after a notification tap has already focused its signal.
     ref.read(mapViewModelProvider.notifier).getUserLocation().then((_) {
+      if (_deepLinkOwnsCamera) return;
       _flyToUserLocation();
     });
 
@@ -445,7 +456,20 @@ class _MapScreenState extends ConsumerState<MapScreen>
     });
   }
 
-  Future<void> _focusSignalOnMap(String signalId) async {
+  /// Moves the camera to [signalId] and opens its info window.
+  ///
+  /// Returns whether the camera ended up on the signal, so the [onMapCreated]
+  /// replay can fall back to the user's own location when it did not.
+  Future<bool> _focusSignalOnMap(String signalId) async {
+    // This runs from a post-frame callback, which on a cold launch fires
+    // before the map's platform view has called onMapCreated — so the
+    // controller may not exist yet. Hand the request over to onMapCreated
+    // rather than dropping it, or the deep link silently does nothing.
+    if (!_mapControllerReady) {
+      _deferredFocusSignalId = signalId;
+      return false;
+    }
+
     // Try to find the signal in the already-loaded stream first
     final signals = ref.read(signalsStreamProvider).value;
     GeoPoint? geoPoint;
@@ -464,7 +488,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
       final fetched = await RepositoryProvider
           .instance.signalRepository
           .getSignalById(signalId);
-      if (fetched == null || !mounted) return;
+      if (fetched == null || !mounted) return false;
       geoPoint = fetched.location;
       ref.read(mapViewModelProvider.notifier).updateMapCenter(
             geoPoint.latitude,
@@ -473,17 +497,18 @@ class _MapScreenState extends ConsumerState<MapScreen>
           );
     }
 
-    if (!mounted) return;
+    if (!mounted) return false;
 
-    final lat = geoPoint.latitude;
-    final lng = geoPoint.longitude;
-
+    _deepLinkOwnsCamera = true;
     await _mapController.animateCamera(
-      CameraUpdate.newLatLngZoom(LatLng(lat, lng), 14.0),
+      CameraUpdate.newLatLngZoom(
+        LatLng(geoPoint.latitude, geoPoint.longitude),
+        14.0,
+      ),
     );
 
-    if (!mounted) return;
-    _showSignalInfoWindow(signalId);
+    if (mounted) _showSignalInfoWindow(signalId);
+    return true;
   }
 
   @override
@@ -580,20 +605,21 @@ class _MapScreenState extends ConsumerState<MapScreen>
                   tilt: 0.0,
                   zoom: 11.0,
                 ),
-                onMapCreated: (GoogleMapController controller) {
+                onMapCreated: (GoogleMapController controller) async {
                   _mapController = controller;
                   _mapControllerReady = true;
-                  // If getUserLocation() resolved before the map was ready,
-                  // animate now.
-                  final s = ref.read(mapViewModelProvider);
-                  if (s.centerLatitude != MapScreenState.defaultLatitude ||
-                      s.centerLongitude != MapScreenState.defaultLongitude) {
-                    _mapController.animateCamera(
-                      CameraUpdate.newLatLng(
-                        LatLng(s.centerLatitude, s.centerLongitude),
-                      ),
-                    );
+
+                  // A deep link that arrived before the map existed outranks
+                  // the initial move to the user's own location — but fall
+                  // back to it if the signal turns out to be gone, rather
+                  // than stranding the camera on the Sofia default.
+                  final deferredId = _deferredFocusSignalId;
+                  _deferredFocusSignalId = null;
+                  if (deferredId != null && await _focusSignalOnMap(deferredId)) {
+                    return;
                   }
+
+                  _flyToUserLocation();
                 },
                 onTap: (_) => _dismissOverlay(),
                 onCameraIdle: () {

@@ -599,6 +599,15 @@ token, 5s timeout) → `GoogleSignIn.signOut()` (so the next sign-in shows the c
 - **Pending focus:** `SignalNavigator.pendingFocusSignalId` is consumed in
   `MapPage.build`; the map animates to the pin at zoom 14 and opens its info window,
   fetching the signal directly and force-recentering if it isn't in the current stream.
+  On a cold launch the consuming post-frame callback runs **before** `onMapCreated`, so
+  `_focusSignalOnMap` parks the id in `_deferredFocusSignalId` and `onMapCreated` replays
+  it, falling back to the user's own location only if the replay reports it could not
+  focus (e.g. the signal was deleted). Without the park this dereferenced the
+  `late _mapController` and crashed (`LateInitializationError`, iOS 6.0.2+126).
+  A focused deep link owns the camera (`_deepLinkOwnsCamera`), so the fly-to-user that
+  `initState` schedules is skipped when the GPS fix lands after the focus — otherwise it
+  would pan away from the signal the user tapped through to. The onboarding sheet's
+  fly-to-user is user-initiated and deliberately not gated.
 
 ### 7.4 Creating a signal
 
