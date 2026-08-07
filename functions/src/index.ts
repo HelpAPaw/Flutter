@@ -123,7 +123,6 @@ async function cleanupInvalidTokens(
   tokens: string[],
   userTokens: Map<string, string[]>
 ): Promise<void> {
-  const batch = db.batch();
   const tokenToUserMap = new Map<string, string>();
 
   // Build reverse mapping from token to userId
@@ -133,7 +132,7 @@ async function cleanupInvalidTokens(
     }
   }
 
-  let hasUpdates = false;
+  const stale: { userId: string; token: string }[] = [];
   response.responses.forEach((resp, idx) => {
     if (!resp.success) {
       const failedToken = tokens[idx];
@@ -144,18 +143,20 @@ async function cleanupInvalidTokens(
         (resp.error?.code === "messaging/registration-token-not-registered" ||
           resp.error?.code === "messaging/invalid-registration-token")
       ) {
-        const userRef = db.collection("users").doc(userId);
-        batch.update(userRef, {
-          fcmTokens: admin.firestore.FieldValue.arrayRemove(failedToken),
-        });
-        hasUpdates = true;
+        stale.push({ userId, token: failedToken });
       }
     }
   });
 
-  if (hasUpdates) {
-    await batch.commit();
-  }
+  // Chunked, not one batch: sends are now issued in FCM_BATCH_SIZE chunks and
+  // the responses concatenated, so a large fan-out can produce more than the
+  // 500 failures a single batch can hold. Exceeding it throws *after* the
+  // notifications have already gone out, where it reads as a send failure.
+  await commitInChunks(stale, (batch, { userId, token }) =>
+    batch.update(db.collection("users").doc(userId), {
+      fcmTokens: admin.firestore.FieldValue.arrayRemove(token),
+    })
+  );
 }
 
 /**

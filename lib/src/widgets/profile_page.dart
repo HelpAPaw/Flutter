@@ -147,23 +147,34 @@ class _ProfilePageState extends State<ProfilePage> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
+    final displayName = _displayNameController.text.trim();
+    // PublicProfileService.setName no-ops on a blank name, so saving one would
+    // report success while everyone else kept seeing the *old* name on this
+    // user's signals and comments. Profile completion already requires a name
+    // (it validates with this same message); the editor has to agree.
+    if (displayName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppLocalizations.of(context).nameIsRequired)),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
-      await user.updateDisplayName(_displayNameController.text.trim());
+      await user.updateDisplayName(displayName);
 
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .set({
-            'displayName': _displayNameController.text.trim(),
+            'displayName': displayName,
             'phone': _phoneController.text.trim(),
             'updatedAt': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
 
       // Mirror the new name to the world-readable public profile.
-      await PublicProfileService.setName(
-          user.uid, _displayNameController.text.trim());
+      await PublicProfileService.setName(user.uid, displayName);
 
       await user.reload();
 

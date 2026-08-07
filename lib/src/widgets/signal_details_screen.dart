@@ -69,6 +69,15 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     }
   }
 
+  /// Shown until the server has told us whether the signal exists.
+  static const _loading = Scaffold(
+    body: Center(
+      child: CircularProgressIndicator(
+        valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+      ),
+    ),
+  );
+
   /// Shown when the signal did not exist to begin with, rather than vanishing
   /// while it was on screen.
   Widget _buildNotFound(BuildContext context, AppLocalizations l10n) {
@@ -128,10 +137,17 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       if (snapshot.hasError) {
         return Text(l10n.somethingWentWrong);
       } else if (snapshot.connectionState == ConnectionState.waiting) {
-        return const Scaffold(
-          body: Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.orange))),
-        );
+        return _loading;
       } else if (!(snapshot.data?.exists ?? false)) {
+        // A listener served from the offline cache reports a document it has
+        // never seen as missing. That means "we haven't heard from the server
+        // yet", not "deleted" — only absence the server confirmed
+        // (isFromCache == false) is something we can tell the user about.
+        // Without this, opening a signal from an inbox row or a shared link
+        // while offline claims a perfectly live signal was deleted.
+        if (snapshot.data?.metadata.isFromCache ?? true) {
+          return _loading;
+        }
         // Two different situations land here and they want opposite treatments.
         if (_signalWasLoaded) {
           // The signal was deleted while this screen was open (e.g. the author
@@ -149,9 +165,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
               SnackBar(content: Text(l10n.signalNoLongerAvailable)),
             );
           });
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.orange))),
-          );
+          return _loading;
         }
         // The signal was already gone when the screen was opened — an inbox
         // entry or a shared link pointing at a since-deleted id. Auto-popping

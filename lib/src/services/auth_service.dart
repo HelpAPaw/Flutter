@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import 'notification_service.dart';
+import 'public_profile_service.dart';
 
 /// Result of attempting to link an anonymous account
 enum LinkResult {
@@ -96,6 +97,15 @@ class AuthService {
       // Time-boxed because callers await it on the interactive sign-in path: if
       // it doesn't land, the screen still falls back to the provider record.
       await user.updateDisplayName(name).timeout(const Duration(seconds: 10));
+
+      // Mirror it to the world-readable profile as well. Repairing only the
+      // Auth record leaves the name every *other* user sees — reporter,
+      // comment author — on the email-derived fallback, which is the actual
+      // R5-001 symptom. Safe to overwrite: we only get here when the Auth name
+      // was blank, and Profile Completion writes both, so there is no name the
+      // user typed themselves to clobber.
+      await PublicProfileService.setName(user.uid, name)
+          .timeout(const Duration(seconds: 10));
       debugPrint('Adopted provider display name');
     } catch (e) {
       debugPrint('Could not adopt provider display name: $e');

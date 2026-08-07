@@ -538,7 +538,17 @@ display name from the credential's profile or the linked provider record, never
 overwriting a name the user chose. It runs on all three Google outcomes (in-place
 link, plain sign-in, `credential-already-in-use` merge) and once at startup in
 `_bootstrapServices`, which repairs accounts created before the fix without needing
-them to sign in again.
+them to sign in again. It mirrors the adopted name to `publicProfiles/{uid}` too —
+repairing only the Auth record would leave the name *other* users actually see on the
+email-derived fallback, which is the visible symptom. Safe because it runs only when the
+Auth name was blank, and Profile Completion writes both, so there is no user-typed name
+to clobber.
+
+⚠️ **This does not reach accounts that already completed Profile Completion.** Those
+saved the email local part to Auth *and* `publicProfiles`, so the blank-name guard
+returns early and they keep the wrong public name. Repairing them automatically is not
+safe — a saved "john.doe" is indistinguishable from one the user typed deliberately —
+so it needs a targeted backfill or a prompt, not a startup rewrite.
 
 **Email verification** (`email_verification_page.dart`): passive status screen. Exactly
 one verification email is sent at account creation / credential link; the screen does
@@ -639,6 +649,10 @@ Live `snapshots()` on the signal doc plus a live ordered stream of its comments.
   and a "Back to map" exit. The two cases are told apart by `_signalWasLoaded`;
   auto-popping this one would dismiss the screen inside its own push transition and
   read as a dead tap.
+- **Neither fires on a cache-only snapshot.** A listener served from the offline cache
+  reports a document it has never seen as missing, which means "no server answer yet",
+  not "deleted". Both branches are gated on `metadata.isFromCache == false`, so opening
+  a signal offline waits instead of claiming a live signal was deleted.
 - **Photos:** horizontal `PageView` with dot indicators, full-screen `PhotoView` gallery
   with pinch-zoom, cached via `cached_network_image`. The author gets an inline
   "Add photo" page (cap 5) and a per-photo delete (Firestore `arrayRemove` first, then a
@@ -954,6 +968,15 @@ in `firestore.indexes.json` — the query is dead without it.
 the unread count; `_HelpAPawState` reconciles it and the OS badge on resume and the page
 does the same on open, through the native `org.helpapaw.helpapaw/app_badge` channel
 (`AppDelegate.setUpAppBadgeChannel`, no-op on Android where launchers read the shade).
+
+`syncUnreadCounter()` returns `int?` and `null` means **unknown**, never zero. `count()`
+is a server-only aggregation with no offline-cache fallback, so any connectivity blip
+throws; folding that into 0 would clear a badge that is still legitimately set, and only
+the app can set it back. Both callers skip the badge write on `null`. It also counts
+**unscoped by test mode** — `userCounters/{uid}.unread` is one mode-agnostic number that
+the fan-out reads for the APNs badge in both modes, so a mode-scoped count would let a
+test-mode resume overwrite the production one. Identical queries for anyone but a dev
+device.
 
 The fan-out sends a real `badge: N`. `writeInboxEntries` reads `userCounters` for its
 recipients in one batched `getAll` *before* incrementing, returns `stored + 1` per uid,

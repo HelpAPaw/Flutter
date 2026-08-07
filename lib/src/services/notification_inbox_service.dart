@@ -206,14 +206,23 @@ class NotificationInboxService {
   /// resume is the whole repair strategy — deliberately not a Cloud Function
   /// trigger, which would cost an invocation per read notification.
   ///
-  /// Returns the true unread count, or 0 if it could not be determined.
-  Future<int> syncUnreadCounter() async {
+  /// Returns the true unread count, or `null` if it could not be determined.
+  /// Callers must not fold `null` into 0 — see the catch below.
+  Future<int?> syncUnreadCounter() async {
     final collection = _collection();
     final counter = _counter();
-    if (collection == null || counter == null) return 0;
+    // No uid to count for. Not the same as "signed out with nothing unread":
+    // auth restore is async and has been seen to report null transiently, so
+    // this is unknown too. The inbox clears the badge explicitly instead.
+    if (collection == null || counter == null) return null;
 
     try {
-      final snapshot = await _scoped(collection)
+      // Deliberately NOT _scoped: `userCounters/{uid}.unread` is a single
+      // mode-agnostic number, and it is what the Cloud Function reads for the
+      // APNs badge in both modes. Counting only the current mode would let a
+      // test-mode resume overwrite the production count with a smaller one.
+      // For everyone but a dev device the two are the same query anyway.
+      final snapshot = await collection
           .where('read', isEqualTo: false)
           .count()
           .get();
@@ -225,8 +234,12 @@ class NotificationInboxService {
       }, SetOptions(merge: true));
       return unread;
     } catch (error) {
+      // count() is a server-only aggregation — it does not fall back to the
+      // offline cache — so any connectivity blip lands here. Reporting 0 would
+      // clear an iOS badge that is still legitimately set, and only the app can
+      // set it back, so the wrong value would persist until the next good sync.
       debugPrint('NotificationInboxService: counter sync failed: $error');
-      return 0;
+      return null;
     }
   }
 

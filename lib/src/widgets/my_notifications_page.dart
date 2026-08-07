@@ -26,6 +26,12 @@ class MyNotificationsPage extends StatefulWidget {
 }
 
 class _MyNotificationsPageState extends State<MyNotificationsPage> {
+  // Memoized so a rebuild doesn't hand StreamBuilder a fresh Stream instance,
+  // which would cancel and re-listen — flashing the spinner and re-reading up
+  // to `pageSize` documents each time. Same `??=` shape as
+  // SignalDetailsScreen's document stream.
+  Stream<QuerySnapshot<Map<String, dynamic>>>? _inboxStream;
+
   @override
   void initState() {
     super.initState();
@@ -36,6 +42,8 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
 
   Future<void> _syncBadge() async {
     final unread = await NotificationInboxService().syncUnreadCounter();
+    // Unknown count — leave the badge as it is rather than clearing it.
+    if (unread == null) return;
     await AppBadgeService().setBadge(unread);
   }
 
@@ -142,7 +150,7 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
     final l10n = AppLocalizations.of(context);
     final user = FirebaseAuth.instance.currentUser;
     final inbox = NotificationInboxService();
-    final stream = inbox.watchInbox();
+    final stream = _inboxStream ??= inbox.watchInbox();
 
     return Scaffold(
       appBar: AppBar(

@@ -301,6 +301,8 @@ Future<void> _bootstrapServices() async {
 Future<void> syncBadgeCount() async {
   try {
     final unread = await NotificationInboxService().syncUnreadCounter();
+    // Unknown count — leave the badge as it is rather than clearing it.
+    if (unread == null) return;
     await AppBadgeService().setBadge(unread);
   } catch (e) {
     debugPrint('Badge sync failed: $e');
