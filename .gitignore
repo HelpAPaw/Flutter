@@ -108,3 +108,7 @@ AuthKey_*.p8
 
 # Claude Code local settings
 /.claude/
+
+# Working notes: QA run logs, prerequisites, one-off analyses. Local scratch,
+# not part of the repo. The as-built spec lives in docs/SPECIFICATION.md.
+/docs/ai/
