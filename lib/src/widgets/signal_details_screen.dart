@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:adaptive_components/adaptive_components.dart';
@@ -22,6 +23,7 @@ import '../config/routes.dart';
 import '../services/navigation_service.dart';
 
 import '../models/signal.dart';
+import '../models/signal_doc_state.dart';
 import '../models/signal_status.dart';
 import '../services/app_preferences_service.dart';
 import '../services/public_profile_service.dart';
@@ -36,11 +38,12 @@ class SignalDetailsScreen extends StatefulWidget {
 }
 
 class _SignalDetailsState extends State<SignalDetailsScreen> {
-  Stream<DocumentSnapshot>? _signalStream;
-  // Memoized reporter-name lookup, keyed by reporter uid so it is resolved
-  // once per signal rather than on every rebuild.
-  String? _reporterId;
-  Future<String?>? _reporterNameFuture;
+  late final Stream<DocumentSnapshot> _signalStream;
+  late final Stream<QuerySnapshot> _commentsStream;
+  // Memoized public-name lookups, keyed by uid so each name is resolved once
+  // per screen rather than once per rebuild — the comment list would otherwise
+  // re-read publicProfiles for every row every time this screen rebuilds.
+  final Map<String, Future<String?>> _nameFutures = {};
   final TextEditingController _newCommentController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _imagePicker = ImagePicker();
@@ -52,21 +55,62 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   // you were reading it" from "was already gone when you opened it", which want
   // opposite treatments — see the missing-document branch in build().
   bool _signalWasLoaded = false;
+  // Set once we have waited long enough for the server to say anything at all.
+  // See SignalDocState.
+  bool _serverUnreachable = false;
+  Timer? _serverConfirmationTimer;
+
+  /// How long to sit on the spinner before treating the device as offline and
+  /// saying so, rather than spinning forever. Generous, because a
+  /// congested-but-working connection reaching this point would be told its
+  /// network is broken when it is only slow.
+  static const _serverConfirmationTimeout = Duration(seconds: 20);
 
   // Note: every field above is memoized per signal. Navigating signal->signal
   // must therefore build a fresh State rather than reuse this one — the route
   // gives this screen a ValueKey on the signal id (see main.dart) so the
   // framework disposes and rebuilds instead of swapping `widget` underneath us.
 
+  DocumentReference<Map<String, dynamic>> get _signalRef =>
+      FirebaseFirestore.instance
+          .collection(AppPreferencesService().signalsCollectionName)
+          .doc(widget.signalId);
+
+  @override
+  void initState() {
+    super.initState();
+    // includeMetadataChanges is what lets the screen tell "the server says this
+    // is gone" from "only our cache thinks so": without it Firestore never
+    // delivers the server confirmation for a document the cache already knows
+    // is absent, because nothing but the metadata differs between the two
+    // events — and the screen waits for it forever (R6-001).
+    _signalStream = _signalRef.snapshots(includeMetadataChanges: true);
+    _commentsStream =
+        _signalRef.collection('comments').orderBy('createdAt').snapshots();
+  }
+
   /// Leaves this screen the way the rest of the screen does: back if there is
   /// somewhere to go back to, otherwise to the map. A cold deep link makes this
   /// the first route in the stack, so there is nothing to pop.
-  void _leaveScreen(BuildContext context) {
+  ///
+  /// Claims the exit on the way out, so that a listener event arriving while
+  /// the route animates away cannot leave a second time on top of this one.
+  void _leaveScreen() {
+    _hasNavigatedAway = true;
     if (Navigator.of(context).canPop()) {
       context.pop();
     } else {
       context.go(Routes.home);
     }
+  }
+
+  /// Drops the offline countdown once the server has answered, so that a later
+  /// cache-only event (a signal deleted while you read it) starts a fresh wait
+  /// instead of inheriting a stale verdict.
+  void _resetServerConfirmationWait() {
+    _serverConfirmationTimer?.cancel();
+    _serverConfirmationTimer = null;
+    _serverUnreachable = false;
   }
 
   /// Shown until the server has told us whether the signal exists.
@@ -78,9 +122,17 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     ),
   );
 
-  /// Shown when the signal did not exist to begin with, rather than vanishing
-  /// while it was on screen.
-  Widget _buildNotFound(BuildContext context, AppLocalizations l10n) {
+  /// The frame shared by the dead ends this screen can land in: an app bar you
+  /// can always leave from and a centred explanation. Every state that is not
+  /// the signal itself must offer a way out — a cold deep link makes this the
+  /// only route in the stack, so a screen without one traps the user (R6-001).
+  Widget _buildMessage({
+    required IconData icon,
+    required String title,
+    String? hint,
+    VoidCallback? onRetry,
+  }) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.signalDetails),
@@ -91,7 +143,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
           button: true,
           child: IconButton(
             icon: const Icon(Icons.arrow_back),
-            onPressed: () => _leaveScreen(context),
+            onPressed: () => _leaveScreen(),
           ),
         ),
       ),
@@ -101,24 +153,28 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
+              Icon(icon, size: 64, color: Colors.grey[400]),
               const SizedBox(height: 16),
               Text(
-                l10n.signalNoLongerAvailable,
+                title,
                 style: const TextStyle(fontSize: 20),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 8),
-              Text(
-                l10n.signalNoLongerAvailableHint,
-                style: TextStyle(color: Colors.grey[600]),
-                textAlign: TextAlign.center,
-              ),
+              if (hint != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  hint,
+                  style: TextStyle(color: Colors.grey[600]),
+                  textAlign: TextAlign.center,
+                ),
+              ],
               const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: () => _leaveScreen(context),
+                onPressed: () => _leaveScreen(),
                 child: Text(l10n.backToMap),
               ),
+              if (onRetry != null)
+                TextButton(onPressed: onRetry, child: Text(l10n.retry)),
             ],
           ),
         ),
@@ -130,60 +186,89 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final locale = Localizations.localeOf(context).languageCode;
-    _signalStream ??= FirebaseFirestore.instance.collection(AppPreferencesService().signalsCollectionName).doc(widget.signalId).snapshots();
-    Signal signal;
+    final dateFormat = DateFormat.yMd(locale).add_jm();
 
     return StreamBuilder(stream: _signalStream, builder: (BuildContext context, AsyncSnapshot<DocumentSnapshot> snapshot) {
-      if (snapshot.hasError) {
-        return Text(l10n.somethingWentWrong);
-      } else if (snapshot.connectionState == ConnectionState.waiting) {
-        return _loading;
-      } else if (!(snapshot.data?.exists ?? false)) {
-        // A listener served from the offline cache reports a document it has
-        // never seen as missing. That means "we haven't heard from the server
-        // yet", not "deleted" — only absence the server confirmed
-        // (isFromCache == false) is something we can tell the user about.
-        // Without this, opening a signal from an inbox row or a shared link
-        // while offline claims a perfectly live signal was deleted.
-        if (snapshot.data?.metadata.isFromCache ?? true) {
+      final docState = resolveSignalDocState(
+        hasError: snapshot.hasError,
+        isWaiting: snapshot.connectionState == ConnectionState.waiting,
+        exists: snapshot.data?.exists ?? false,
+        isFromCache: snapshot.data?.metadata.isFromCache ?? true,
+        wasLoaded: _signalWasLoaded,
+        serverUnreachable: _serverUnreachable,
+      );
+
+      // Rendering the spinner is what starts the clock that eventually turns an
+      // unanswered listen into `unreachable`; anything else means the server has
+      // spoken, so the clock goes away.
+      if (docState == SignalDocState.unknownYet) {
+        _serverConfirmationTimer ??= Timer(_serverConfirmationTimeout, () {
+          if (mounted) setState(() => _serverUnreachable = true);
+        });
+      } else if (docState != SignalDocState.unreachable) {
+        _resetServerConfirmationWait();
+      }
+
+      switch (docState) {
+        case SignalDocState.failed:
+          // A denied read (rules, App Check, or an id from the other collection
+          // while test mode is on) must not leave a bare string on a blank
+          // screen: arriving here by deep link, that is the only route.
+          return _buildMessage(
+            icon: Icons.error_outline,
+            title: l10n.somethingWentWrong,
+          );
+        case SignalDocState.unknownYet:
           return _loading;
-        }
-        // Two different situations land here and they want opposite treatments.
-        if (_signalWasLoaded) {
-          // The signal was deleted while this screen was open (e.g. the author
-          // removed it while another user was reading it). Pop back to the map
-          // instead of rendering a blank view. Navigation can't happen during
-          // build, so defer it to after the current frame.
+        case SignalDocState.unreachable:
+          return _buildMessage(
+            icon: Icons.cloud_off,
+            title: l10n.networkError,
+            // The listener stays subscribed, so retrying only needs to put the
+            // spinner back and start the clock again — a connection that comes
+            // back on its own recovers without being asked.
+            onRetry: () => setState(_resetServerConfirmationWait),
+          );
+        case SignalDocState.deletedWhileOpen:
+          // Deleted while this screen was open (e.g. the author removed it
+          // while another user was reading it). Pop back to the map instead of
+          // rendering a blank view. Navigation can't happen during build, so
+          // defer it to after the current frame.
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted || _hasNavigatedAway) return;
-            _hasNavigatedAway = true;
             // Capture the (app-level) messenger before popping, since this
             // screen's element is torn down by the navigation.
             final messenger = ScaffoldMessenger.of(context);
-            _leaveScreen(context);
+            _leaveScreen();
             messenger.showSnackBar(
               SnackBar(content: Text(l10n.signalNoLongerAvailable)),
             );
           });
           return _loading;
-        }
-        // The signal was already gone when the screen was opened — an inbox
-        // entry or a shared link pointing at a since-deleted id. Auto-popping
-        // here would push a screen that instantly dismisses itself, which reads
-        // as a dead tap (R5-004). Show a real not-found state and let the user
-        // leave deliberately.
-        return _buildNotFound(context, l10n);
-      } else {
-        _signalWasLoaded = true;
-        final signalData = snapshot.data!.data() as Map<String, dynamic>;
-        signal = Signal.fromJson(signalData);
+        case SignalDocState.missing:
+          // Already gone when the screen was opened — an inbox entry or a
+          // shared link pointing at a since-deleted id. Auto-popping here would
+          // push a screen that instantly dismisses itself, which reads as a
+          // dead tap (R5-004). Show a real not-found state and let the user
+          // leave deliberately.
+          return _buildMessage(
+            icon: Icons.search_off,
+            title: l10n.signalNoLongerAvailable,
+            hint: l10n.signalNoLongerAvailableHint,
+          );
+        case SignalDocState.present:
+          break;
       }
+
+      _signalWasLoaded = true;
+      final signal = Signal.fromJson(snapshot.data!.data() as Map<String, dynamic>);
+      final isAuthor = _isUserAuthor(signal);
 
       return PopScope(
         canPop: false,
         onPopInvokedWithResult: (didPop, result) {
           if (!didPop) {
-            _leaveScreen(context);
+            _leaveScreen();
           }
         },
         child: Scaffold(
@@ -194,7 +279,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
               backgroundColor: Colors.orange,
               foregroundColor: Colors.white,
               actions: [
-                if (_isUserAuthor(signal))
+                if (isAuthor)
                   Semantics(
                     label: l10n.editSignal,
                     button: true,
@@ -204,7 +289,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                       onPressed: () => context.push(Routes.editSignal(widget.signalId)),
                     ),
                   ),
-                if (_isUserAuthor(signal))
+                if (isAuthor)
                   Semantics(
                     label: l10n.deleteSignal,
                     button: true,
@@ -252,7 +337,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.start,
                         children: <Widget>[
-                          if (signal.photoUrls.isNotEmpty || _isUserAuthor(signal))
+                          if (signal.photoUrls.isNotEmpty || isAuthor)
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -266,7 +351,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                       });
                                     },
                                     itemCount: signal.photoUrls.length +
-                                        (_isUserAuthor(signal) && signal.photoUrls.length < 5 ? 1 : 0),
+                                        (isAuthor && signal.photoUrls.length < 5 ? 1 : 0),
                                     itemBuilder: (context, index) {
                                       // Show "Add Photo" page if this is the last index and user is author
                                       if (index >= signal.photoUrls.length) {
@@ -379,7 +464,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                                   ),
                                                 ),
                                               ),
-                                              if (_isUserAuthor(signal))
+                                              if (isAuthor)
                                                 Positioned(
                                                   top: 8,
                                                   right: 8,
@@ -424,7 +509,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                 ),
                                 // Page indicator dots
                                 if ((signal.photoUrls.length +
-                                        (_isUserAuthor(signal) && signal.photoUrls.length < 5 ? 1 : 0)) >
+                                        (isAuthor && signal.photoUrls.length < 5 ? 1 : 0)) >
                                     1)
                                   Padding(
                                     padding: const EdgeInsets.only(top: 8.0),
@@ -432,7 +517,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                       mainAxisAlignment: MainAxisAlignment.center,
                                       children: List.generate(
                                         signal.photoUrls.length +
-                                            (_isUserAuthor(signal) && signal.photoUrls.length < 5 ? 1 : 0),
+                                            (isAuthor && signal.photoUrls.length < 5 ? 1 : 0),
                                         (index) => Container(
                                           margin: const EdgeInsets.symmetric(horizontal: 4.0),
                                           width: 8.0,
@@ -458,7 +543,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                             children: [
                               Flexible(
                                 child: Text(
-                                  DateFormat.yMd(locale).add_jm().format((signal.createdAt as Timestamp).toDate()),
+                                  dateFormat.format((signal.createdAt as Timestamp).toDate()),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -466,7 +551,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                               const SizedBox(width: 8),
                               Flexible(
                                 child: FutureBuilder<String?>(
-                                  future: _reporterNameFor(signal.reporter.id),
+                                  future: _nameFor(signal.reporter.id),
                                   builder: (context, snapshot) {
                                     // While the (auth-gated) lookup is still in
                                     // flight, show nothing rather than flashing a
@@ -565,8 +650,12 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                             children: [
                               Text(l10n.comments),
                               StreamBuilder(
-                                stream: FirebaseFirestore.instance.collection(AppPreferencesService().signalsCollectionName).doc(widget.signalId).collection('comments')
-                                  .orderBy('createdAt').snapshots(),
+                                // Memoized like _signalStream: a stream rebuilt
+                                // in place resets the builder to `waiting`, so
+                                // the comment list would blink back to a
+                                // spinner on every parent rebuild — of which
+                                // includeMetadataChanges brings more.
+                                stream: _commentsStream,
                                 builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
                                   if (snapshot.hasError) {
                                     return Text(snapshot.error!.toString(), style: const TextStyle(color: Colors.red),);
@@ -608,7 +697,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                                     const SizedBox(width: 8),
                                                     Expanded(
                                                       child: FutureBuilder<String?>(
-                                                        future: PublicProfileService.getName(
+                                                        future: _nameFor(
                                                             (commentData['author'] as DocumentReference).id),
                                                         builder: (context, snapshot) {
                                                           final authorName = (snapshot.data?.isNotEmpty ?? false)
@@ -629,7 +718,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                               ),
                                             ),
                                             subtitle: Text(
-                                              DateFormat.yMd(locale).add_jm().format(commentData['createdAt'].toDate()),
+                                              dateFormat.format(commentData['createdAt'].toDate()),
                                             ),
                                           );
                                         }
@@ -655,7 +744,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                             children: [
                                               Flexible(
                                                 child: Text(
-                                                  DateFormat.yMd(locale).add_jm().format(commentData['createdAt'].toDate()),
+                                                  dateFormat.format(commentData['createdAt'].toDate()),
                                                   maxLines: 1,
                                                   overflow: TextOverflow.ellipsis,
                                                 ),
@@ -665,7 +754,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                               // so it must be allowed to shrink instead of overflowing the row.
                                               Flexible(
                                                 child: FutureBuilder<String?>(
-                                                  future: PublicProfileService.getName(
+                                                  future: _nameFor(
                                                       (commentData['author'] as DocumentReference).id),
                                                   builder: (context, snapshot) {
                                                     return Text(
@@ -764,6 +853,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
 
   @override
   void dispose() {
+    _serverConfirmationTimer?.cancel();
     _photoPageController.dispose();
     _scrollController.dispose();
     _newCommentController.dispose();
@@ -780,7 +870,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     if (text.isEmpty) return;
 
     try {
-      await FirebaseFirestore.instance.collection(AppPreferencesService().signalsCollectionName).doc(widget.signalId).collection('comments').add({
+      await _signalRef.collection('comments').add({
         'text': text,
         'createdAt': DateTime.now(),
         'author': FirebaseFirestore.instance.collection('users').doc(userId),
@@ -817,29 +907,27 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     }
   }
 
-  /// Resolves (and memoizes) the reporter's public display name. The future is
-  /// created once per reporter uid so rebuilds reuse the in-flight/completed
-  /// result instead of re-fetching.
-  Future<String?> _reporterNameFor(String reporterId) {
-    if (_reporterId != reporterId) {
-      _reporterId = reporterId;
-      _reporterNameFuture = _resolveReporterName(reporterId);
-    }
-    return _reporterNameFuture!;
-  }
+  /// Resolves (and memoizes) a public display name. The future is created once
+  /// per uid so rebuilds — and the several comment rows a single author can
+  /// own — reuse the in-flight/completed result instead of re-fetching.
+  Future<String?> _nameFor(String uid) =>
+      _nameFutures[uid] ??= _resolveName(uid);
 
-  /// Reads the reporter's name from the world-readable public profile, with a
-  /// short retry. The `publicProfiles` read is auth-gated, and right after a
-  /// fresh (anonymous) sign-in the ID token may not be valid yet, so the first
-  /// read can transiently return null; retrying lets the name resolve without
-  /// the user having to reopen the screen.
-  Future<String?> _resolveReporterName(String reporterId) async {
+  /// Reads a name from the world-readable public profile, retrying a failed
+  /// read. The `publicProfiles` read is auth-gated, and right after a fresh
+  /// (anonymous) sign-in the ID token may not be valid yet, so the first read
+  /// can transiently be denied; retrying lets the name resolve without the user
+  /// having to reopen the screen. An account that simply has no name comes back
+  /// without throwing and is not retried.
+  Future<String?> _resolveName(String uid) async {
     const maxAttempts = 4;
     for (var attempt = 0; attempt < maxAttempts; attempt++) {
-      final name = await PublicProfileService.getName(reporterId);
-      if (name != null && name.isNotEmpty) return name;
-      if (attempt == maxAttempts - 1 || !mounted) return null;
-      await Future.delayed(const Duration(milliseconds: 500));
+      try {
+        return await PublicProfileService.readName(uid);
+      } catch (_) {
+        if (attempt == maxAttempts - 1 || !mounted) return null;
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
     }
     return null;
   }
@@ -864,7 +952,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     }
 
     final user = FirebaseAuth.instance.currentUser!;
-    final signalRef = FirebaseFirestore.instance.collection(AppPreferencesService().signalsCollectionName).doc(widget.signalId);
+    final signalRef = _signalRef;
 
     try {
       await signalRef.update({
@@ -914,9 +1002,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     if (confirm != true || !mounted) return;
 
     try {
-      final signalRef = FirebaseFirestore.instance
-          .collection(AppPreferencesService().signalsCollectionName)
-          .doc(widget.signalId);
+      final signalRef = _signalRef;
 
       // Read signal data to get photo URLs before deletion
       final signalDoc = await signalRef.get();
@@ -946,7 +1032,13 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         await batch.commit();
       }
 
-      // Delete the signal document
+      // Claim the exit before the delete, not after it: Firestore applies the
+      // delete to the local cache immediately, so the still-live listener
+      // reports the document missing while this method is parked on the await.
+      // The "deleted while you were reading it" branch would then pop a route
+      // of its own and replace the success message below with the *other*
+      // user's "this signal is no longer available" (R6-002).
+      _hasNavigatedAway = true;
       await signalRef.delete();
 
       if (!mounted) return;
@@ -958,8 +1050,10 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         ),
       );
 
-      _leaveScreen(context);
+      _leaveScreen();
     } catch (e) {
+      // The signal is still there, so give the exit claim back.
+      _hasNavigatedAway = false;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1020,10 +1114,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       try {
         final photoUrl = await _uploadImageToStorage(image);
 
-        await FirebaseFirestore.instance
-            .collection(AppPreferencesService().signalsCollectionName)
-            .doc(widget.signalId)
-            .update({
+        await _signalRef.update({
           'photoUrls': FieldValue.arrayUnion([photoUrl])
         });
 
@@ -1088,10 +1179,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     if (confirm != true) return;
 
     try {
-      await FirebaseFirestore.instance
-          .collection(AppPreferencesService().signalsCollectionName)
-          .doc(widget.signalId)
-          .update({
+      await _signalRef.update({
         'photoUrls': FieldValue.arrayRemove([photoUrl])
       });
 

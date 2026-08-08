@@ -646,27 +646,54 @@ input is capped at the keyboard rather than failing with an opaque `PERMISSION_D
 
 ### 7.5 Signal details (`signal_details_screen.dart`)
 
-Live `snapshots()` on the signal doc plus a live ordered stream of its comments.
+Live `snapshots(includeMetadataChanges: true)` on the signal doc plus a live ordered
+stream of its comments. Both streams are created **once** in `initState`.
 
-- **Deleted while open:** the screen pops back (or `go(/home)`) and shows a
-  "no longer available" snackbar, guarded by `_hasNavigatedAway`.
-- **Already deleted on arrival** (a stale inbox row or a shared link to a removed
-  signal): a static not-found screen instead — icon, "no longer available", a hint,
-  and a "Back to map" exit. The two cases are told apart by `_signalWasLoaded`;
+What the listener is saying is classified by `resolveSignalDocState`
+(`models/signal_doc_state.dart`), a pure function unit-tested in
+`test/signal_doc_state_test.dart`. The ordering between its states is the invariant
+that has regressed repeatedly (R5-004, R6-001, R6-002), which is why it lives outside
+`build()`:
+
+- **Deleted while open** (`deletedWhileOpen` — server-confirmed absence after the signal
+  had rendered): the screen pops back (or `go(/home)`) and shows a "no longer available"
+  snackbar, guarded by `_hasNavigatedAway`, which `_leaveScreen` sets on every exit.
+- **Already deleted on arrival** (`missing` — a stale inbox row or a shared link to a
+  removed signal): a static not-found screen instead — icon, "no longer available", a
+  hint, and a "Back to map" exit. The two cases are told apart by `_signalWasLoaded`;
   auto-popping this one would dismiss the screen inside its own push transition and
   read as a dead tap.
-- **Neither fires on a cache-only snapshot.** A listener served from the offline cache
-  reports a document it has never seen as missing, which means "no server answer yet",
-  not "deleted". Both branches are gated on `metadata.isFromCache == false`, so opening
-  a signal offline waits instead of claiming a live signal was deleted.
+- **Neither fires on a cache-only snapshot** (`unknownYet`). A listener served from the
+  offline cache reports a document it has never seen as missing, which means "no server
+  answer yet", not "deleted". Both branches are gated on `metadata.isFromCache == false`,
+  so opening a signal offline waits instead of claiming a live signal was deleted.
+  **`includeMetadataChanges: true` is what makes that wait terminate:** for a document
+  the cache already knows is absent, the server confirmation differs only in metadata and
+  is otherwise never delivered — the spinner would be permanent (R6-001).
+- **Server never answers** (`unreachable`): after **20 s** of `unknownYet` the device is
+  treated as offline and gets `l10n.networkError` with Back-to-map and Retry, rather than
+  an unbounded spinner. The listener stays subscribed, so a connection that returns on its
+  own recovers the screen without the retry.
+- **Read failed** (`failed`): the same message frame with `l10n.somethingWentWrong`.
+- Every non-signal state is built by `_buildMessage`, which always carries an AppBar with
+  an explicit `leading`. A cold deep link makes this route the only one in the stack, so a
+  state without its own exit traps the user.
+- **The author's own delete claims the exit before the write** (`_hasNavigatedAway = true`
+  ahead of `delete()`), because the local cache applies the delete immediately and the
+  `deletedWhileOpen` branch would otherwise pop a second route and replace the green
+  success snackbar with the other user's "no longer available" (R6-002). The claim is
+  released if the delete throws.
 - **Photos:** horizontal `PageView` with dot indicators, full-screen `PhotoView` gallery
   with pinch-zoom, cached via `cached_network_image`. The author gets an inline
   "Add photo" page (cap 5) and a per-photo delete (Firestore `arrayRemove` first, then a
   best-effort Storage delete).
 - **Header:** title, description, localized type, creation date, reporter name.
-  The reporter name is a **memoized** `FutureBuilder` keyed by reporter uid, with **4
-  attempts at 500 ms** — right after a fresh anonymous sign-in the auth-gated
-  `publicProfiles` read can transiently return null. Nothing is rendered while the
+  The reporter name is a **memoized** `FutureBuilder` keyed by uid, with **4 attempts at
+  500 ms** — right after a fresh anonymous sign-in the auth-gated `publicProfiles` read
+  can transiently be denied. Only a *thrown* read is retried
+  (`PublicProfileService.readName`); an account that simply has no name resolves on the
+  first attempt. Comment-author names share the same per-uid memo, so a thread resolves
+  each author once rather than once per row per rebuild. Nothing is rendered while the
   lookup is in flight; on completion it always renders, falling back to `l10n.unknown`.
 - **Actions:** Navigate (`map_launcher`, chooser sheet when several apps are installed),
   Call (`tel:` intent) when a contact phone exists, Share (§7.9), and — for the author —

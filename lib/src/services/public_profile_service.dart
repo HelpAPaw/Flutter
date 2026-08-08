@@ -45,12 +45,22 @@ class PublicProfileService {
     return value.substring(0, end);
   }
 
+  /// Resolve a user's public display name, or null if there is no name to
+  /// resolve — an account with no profile document, or one already anonymised.
+  ///
+  /// Throws if the read itself failed (denied, offline). That is a different
+  /// situation from "no name": it may succeed later, so callers that care can
+  /// retry it. [getName] is the variant for callers that do not.
+  static Future<String?> readName(String uid) async {
+    final doc = await _profiles.doc(uid).get();
+    final name = doc.data()?['name'] as String?;
+    return (name != null && name.isNotEmpty) ? name : null;
+  }
+
   /// Resolve a user's public display name, or null if unavailable.
   static Future<String?> getName(String uid) async {
     try {
-      final doc = await _profiles.doc(uid).get();
-      final name = doc.data()?['name'] as String?;
-      return (name != null && name.isNotEmpty) ? name : null;
+      return await readName(uid);
     } catch (_) {
       return null;
     }
