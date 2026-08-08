@@ -674,7 +674,10 @@ that has regressed repeatedly (R5-004, R6-001, R6-002), which is why it lives ou
   treated as offline and gets `l10n.networkError` with Back-to-map and Retry, rather than
   an unbounded spinner. The listener stays subscribed, so a connection that returns on its
   own recovers the screen without the retry.
-- **Read failed** (`failed`): the same message frame with `l10n.somethingWentWrong`.
+- **Read failed** (`failed`): the same message frame with `l10n.somethingWentWrong`, and
+  a Retry that **re-subscribes both listeners** — a Firestore listener ends on error, so
+  unlike `unreachable` this state cannot heal by itself once the cause (an App Check or
+  auth token not ready at cold launch) has passed.
 - Every non-signal state is built by `_buildMessage`, which always carries an AppBar with
   an explicit `leading`. A cold deep link makes this route the only one in the stack, so a
   state without its own exit traps the user.
@@ -693,7 +696,10 @@ that has regressed repeatedly (R5-004, R6-001, R6-002), which is why it lives ou
   can transiently be denied. Only a *thrown* read is retried
   (`PublicProfileService.readName`); an account that simply has no name resolves on the
   first attempt. Comment-author names share the same per-uid memo, so a thread resolves
-  each author once rather than once per row per rebuild. Nothing is rendered while the
+  each author once rather than once per row per rebuild. A lookup that failed outright is
+  dropped from the memo **once** so the next rebuild retries it after auth settles;
+  "this account has no name" is a real answer and stays memoized, which is what keeps the
+  known `publicProfiles` "Unknown" population from being re-read on every rebuild. Nothing is rendered while the
   lookup is in flight; on completion it always renders, falling back to `l10n.unknown`.
 - **Actions:** Navigate (`map_launcher`, chooser sheet when several apps are installed),
   Call (`tel:` intent) when a contact phone exists, Share (§7.9), and — for the author —
@@ -706,6 +712,25 @@ that has regressed repeatedly (R5-004, R6-001, R6-002), which is why it lives ou
   through `publicProfiles`.
 - **Delete signal:** confirm → best-effort Storage photo deletes → batch-delete the
   comments subcollection → delete the doc → pop.
+- **Leaving:** `_leaveScreen` is the single exit — it claims the exit
+  (`_hasNavigatedAway`), `popUntil`s away anything this screen pushed (the imperative
+  photo gallery, the edit route, sheets) so the pop targets *this* route and not
+  whatever is on top of it, then `context.popOrHome()`.
+
+#### Deep-linkable routes must carry their own back affordance
+
+`escapeLeading` (`widgets/escape_leading.dart`) is the `AppBar.leading` for any route
+that can be the first in the stack. It returns the platform's own affordance (null →
+implied back button) when the route was pushed, and an explicit labelled arrow when it
+was not.
+
+This is not hypothetical for one route only: `flutter_deeplinking_enabled` is on and the
+`helpapaw://` scheme is registered **unscoped** on both platforms, so *any* path can
+cold-launch as the only route. There the framework implies no back button; on iOS there
+is no hardware back either, and these screens' `PopScope(canPop: false)` disables the
+interactive edge swipe. Without a leading the screen is a dead end that only a force-quit
+escapes (R6-003). Used by signal details (all states) and clinic details (all states,
+including its loading spinner).
 
 ### 7.6 Notifications
 

@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../config/routes.dart';
 import '../services/navigation_service.dart';
+import 'escape_leading.dart';
 import 'package:adaptive_components/adaptive_components.dart';
 
 import '../models/vet_clinic.dart';
@@ -50,23 +51,37 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
     }
   }
 
+  /// This screen's app bar, in every state it can be in. `helpapaw://` is an
+  /// unscoped deep-link scheme, so this route can cold-launch as the only one
+  /// in the stack — and the `PopScope` below disables the iOS edge swipe, which
+  /// would leave no way out at all without an explicit leading (R6-003).
+  AppBar _appBar(AppLocalizations l10n) {
+    return AppBar(
+      title: Text(l10n.clinicDetails),
+      backgroundColor: Colors.orange,
+      foregroundColor: Colors.white,
+      leading: escapeLeading(
+        context,
+        label: l10n.returnToMap,
+        onLeave: () => context.go(Routes.home),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
 
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        appBar: _appBar(l10n),
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     if (_clinic == null) {
       return Scaffold(
-        appBar: AppBar(
-          title: Text(l10n.clinicDetails),
-          backgroundColor: Colors.orange,
-          foregroundColor: Colors.white,
-        ),
+        appBar: _appBar(l10n),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -95,11 +110,7 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
       child: Scaffold(
         body: AdaptiveContainer(
           child: Scaffold(
-            appBar: AppBar(
-              title: Text(l10n.clinicDetails),
-              backgroundColor: Colors.orange,
-              foregroundColor: Colors.white,
-            ),
+            appBar: _appBar(l10n),
             body: SingleChildScrollView(
               padding: const EdgeInsets.all(16.0),
               child: Column(

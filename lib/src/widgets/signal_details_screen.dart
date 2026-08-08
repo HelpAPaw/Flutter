@@ -21,6 +21,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../config/routes.dart';
 import '../services/navigation_service.dart';
+import '../utils/nav_extensions.dart';
+import 'escape_leading.dart';
 
 import '../models/signal.dart';
 import '../models/signal_doc_state.dart';
@@ -38,12 +40,16 @@ class SignalDetailsScreen extends StatefulWidget {
 }
 
 class _SignalDetailsState extends State<SignalDetailsScreen> {
-  late final Stream<DocumentSnapshot> _signalStream;
+  // Not final: a snapshot listener terminates on error, so recovering from a
+  // failed read means replacing the stream, not just rebuilding.
+  late Stream<DocumentSnapshot> _signalStream;
   late final Stream<QuerySnapshot> _commentsStream;
   // Memoized public-name lookups, keyed by uid so each name is resolved once
   // per screen rather than once per rebuild — the comment list would otherwise
   // re-read publicProfiles for every row every time this screen rebuilds.
   final Map<String, Future<String?>> _nameFutures = {};
+  // uids whose lookup has already been given a second chance — see _nameFor.
+  final Set<String> _nameRetried = {};
   final TextEditingController _newCommentController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _imagePicker = ImagePicker();
@@ -79,6 +85,10 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   @override
   void initState() {
     super.initState();
+    _subscribe();
+  }
+
+  void _subscribe() {
     // includeMetadataChanges is what lets the screen tell "the server says this
     // is gone" from "only our cache thinks so": without it Firestore never
     // delivers the server confirmation for a document the cache already knows
@@ -89,6 +99,17 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         _signalRef.collection('comments').orderBy('createdAt').snapshots();
   }
 
+  /// Subscribes again after a failed read. Firestore ends a listener on error,
+  /// so the error is permanent for that stream even once the cause has passed —
+  /// an App Check or auth token that was not ready at cold launch, say. Both
+  /// listeners are replaced: whatever killed one killed the other.
+  void _restartListeners() {
+    setState(() {
+      _resetServerConfirmationWait();
+      _subscribe();
+    });
+  }
+
   /// Leaves this screen the way the rest of the screen does: back if there is
   /// somewhere to go back to, otherwise to the map. A cold deep link makes this
   /// the first route in the stack, so there is nothing to pop.
@@ -97,11 +118,16 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// the route animates away cannot leave a second time on top of this one.
   void _leaveScreen() {
     _hasNavigatedAway = true;
-    if (Navigator.of(context).canPop()) {
-      context.pop();
-    } else {
-      context.go(Routes.home);
+    // Popping pops whatever is topmost, which is not necessarily us: this can
+    // be called from a listener while the full-screen photo gallery, the edit
+    // screen or a sheet sits above. Close those first, or we would dismiss one
+    // of them, claim the exit, and strand this screen underneath. Raw Navigator
+    // because the gallery is pushed imperatively, outside GoRouter.
+    final route = ModalRoute.of(context);
+    if (route != null) {
+      Navigator.of(context).popUntil((r) => r == route);
     }
+    context.popOrHome();
   }
 
   /// Drops the offline countdown once the server has answered, so that a later
@@ -113,19 +139,37 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     _serverUnreachable = false;
   }
 
-  /// Shown until the server has told us whether the signal exists.
-  static const _loading = Scaffold(
-    body: Center(
-      child: CircularProgressIndicator(
-        valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+  /// This screen's app bar, in every state it can be in. The `leading` is what
+  /// keeps a cold deep link from being a dead end — see [escapeLeading].
+  AppBar _appBar(AppLocalizations l10n, {List<Widget>? actions}) {
+    return AppBar(
+      title: Text(l10n.signalDetails),
+      backgroundColor: Colors.orange,
+      foregroundColor: Colors.white,
+      leading: escapeLeading(
+        context,
+        label: l10n.backToMap,
+        onLeave: _leaveScreen,
       ),
-    ),
-  );
+      actions: actions,
+    );
+  }
+
+  /// Shown until the server has told us whether the signal exists. Waiting is
+  /// not a reason to be trapped, so this carries the app bar too.
+  Widget _buildLoading() {
+    return Scaffold(
+      appBar: _appBar(AppLocalizations.of(context)),
+      body: const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+        ),
+      ),
+    );
+  }
 
   /// The frame shared by the dead ends this screen can land in: an app bar you
-  /// can always leave from and a centred explanation. Every state that is not
-  /// the signal itself must offer a way out — a cold deep link makes this the
-  /// only route in the stack, so a screen without one traps the user (R6-001).
+  /// can always leave from and a centred explanation.
   Widget _buildMessage({
     required IconData icon,
     required String title,
@@ -134,19 +178,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   }) {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.signalDetails),
-        backgroundColor: Colors.orange,
-        foregroundColor: Colors.white,
-        leading: Semantics(
-          label: l10n.backToMap,
-          button: true,
-          child: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => _leaveScreen(),
-          ),
-        ),
-      ),
+      appBar: _appBar(l10n),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
@@ -170,7 +202,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
               ],
               const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: () => _leaveScreen(),
+                onPressed: _leaveScreen,
                 child: Text(l10n.backToMap),
               ),
               if (onRetry != null)
@@ -217,9 +249,12 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
           return _buildMessage(
             icon: Icons.error_outline,
             title: l10n.somethingWentWrong,
+            // Unlike `unreachable`, this state cannot heal on its own: the
+            // listener is finished, so retrying has to start a new one.
+            onRetry: _restartListeners,
           );
         case SignalDocState.unknownYet:
-          return _loading;
+          return _buildLoading();
         case SignalDocState.unreachable:
           return _buildMessage(
             icon: Icons.cloud_off,
@@ -244,7 +279,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
               SnackBar(content: Text(l10n.signalNoLongerAvailable)),
             );
           });
-          return _loading;
+          return _buildLoading();
         case SignalDocState.missing:
           // Already gone when the screen was opened — an inbox entry or a
           // shared link pointing at a since-deleted id. Auto-popping here would
@@ -274,11 +309,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         child: Scaffold(
           body: AdaptiveContainer(
             child: Scaffold(
-              appBar: AppBar(
-              title: Text(l10n.signalDetails),
-              backgroundColor: Colors.orange,
-              foregroundColor: Colors.white,
-              actions: [
+              appBar: _appBar(l10n, actions: [
                 if (isAuthor)
                   Semantics(
                     label: l10n.editSignal,
@@ -324,8 +355,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                     );
                   }),
                 ),
-              ],
-            ),
+              ]),
             body: Center(
               child: Padding(
                 padding: const EdgeInsets.all(8.0),
@@ -910,26 +940,39 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// Resolves (and memoizes) a public display name. The future is created once
   /// per uid so rebuilds — and the several comment rows a single author can
   /// own — reuse the in-flight/completed result instead of re-fetching.
-  Future<String?> _nameFor(String uid) =>
-      _nameFutures[uid] ??= _resolveName(uid);
+  ///
+  /// A lookup that *failed* is dropped from the memo once, so the next rebuild
+  /// tries again: the usual cause is the auth window at cold launch, and
+  /// keeping the failure would pin the reporter and every commenter to
+  /// "Unknown" for as long as the screen lives. An account that simply has no
+  /// name did not fail — that answer is final and stays memoized, which is what
+  /// keeps the known "Unknown" population from being re-read every rebuild.
+  Future<String?> _nameFor(String uid) {
+    return _nameFutures[uid] ??= _resolveName(uid).onError((_, __) {
+      // Only the first failure earns a retry; a read that is denied for good
+      // would otherwise start a fresh attempt chain on every rebuild.
+      if (_nameRetried.add(uid)) _nameFutures.remove(uid);
+      return null;
+    });
+  }
 
   /// Reads a name from the world-readable public profile, retrying a failed
   /// read. The `publicProfiles` read is auth-gated, and right after a fresh
   /// (anonymous) sign-in the ID token may not be valid yet, so the first read
-  /// can transiently be denied; retrying lets the name resolve without the user
-  /// having to reopen the screen. An account that simply has no name comes back
-  /// without throwing and is not retried.
+  /// can transiently be denied.
+  ///
+  /// Throws if every attempt failed, which is what tells [_nameFor] the null it
+  /// is about to show is ignorance rather than an answer.
   Future<String?> _resolveName(String uid) async {
     const maxAttempts = 4;
-    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+    for (var attempt = 1; ; attempt++) {
       try {
         return await PublicProfileService.readName(uid);
       } catch (_) {
-        if (attempt == maxAttempts - 1 || !mounted) return null;
+        if (attempt == maxAttempts || !mounted) rethrow;
         await Future.delayed(const Duration(milliseconds: 500));
       }
     }
-    return null;
   }
 
   bool _isUserAuthor(Signal signal) {
