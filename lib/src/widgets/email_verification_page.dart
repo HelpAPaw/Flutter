@@ -6,6 +6,7 @@ import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 
 import '../config/routes.dart';
+import '../services/auth_service.dart';
 import '../utils/nav_extensions.dart';
 
 class EmailVerificationPage extends StatefulWidget {
@@ -186,7 +187,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage>
     // the first tap (previously it took two taps - F-004).
     _timer?.cancel();
     _countdownTimer?.cancel();
-    await FirebaseAuth.instance.signOut();
+    await AuthService().signOutToAnonymous();
     if (!mounted) return;
     context.popOrHome();
   }

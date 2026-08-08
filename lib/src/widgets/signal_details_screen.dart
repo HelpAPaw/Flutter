@@ -40,10 +40,10 @@ class SignalDetailsScreen extends StatefulWidget {
 }
 
 class _SignalDetailsState extends State<SignalDetailsScreen> {
-  // Not final: a snapshot listener terminates on error, so recovering from a
-  // failed read means replacing the stream, not just rebuilding.
+  // Neither is final: a snapshot listener terminates on error, so recovering
+  // from a failed read means replacing the streams, not just rebuilding.
   late Stream<DocumentSnapshot> _signalStream;
-  late final Stream<QuerySnapshot> _commentsStream;
+  late Stream<QuerySnapshot> _commentsStream;
   // Memoized public-name lookups, keyed by uid so each name is resolved once
   // per screen rather than once per rebuild — the comment list would otherwise
   // re-read publicProfiles for every row every time this screen rebuilds.
@@ -118,17 +118,13 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// the route animates away cannot leave a second time on top of this one.
   void _leaveScreen() {
     _hasNavigatedAway = true;
-    // Popping pops whatever is topmost, which is not necessarily us: this can
-    // be called from a listener while the full-screen photo gallery, the edit
-    // screen or a sheet sits above. Close those first, or we would dismiss one
-    // of them, claim the exit, and strand this screen underneath. Raw Navigator
-    // because the gallery is pushed imperatively, outside GoRouter.
-    final route = ModalRoute.of(context);
-    if (route != null) {
-      Navigator.of(context).popUntil((r) => r == route);
-    }
     context.popOrHome();
   }
+
+  /// Whether this screen is the one the user is actually looking at. Popping
+  /// pops whatever is topmost, so anything that leaves on its own initiative —
+  /// rather than because the user pressed something here — has to check first.
+  bool get _isForeground => ModalRoute.of(context)?.isCurrent ?? true;
 
   /// Drops the offline countdown once the server has answered, so that a later
   /// cache-only event (a signal deleted while you read it) starts a fresh wait
@@ -165,6 +161,16 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
           valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
         ),
       ),
+    );
+  }
+
+  /// Shown when the server says the signal is gone.
+  Widget _buildNotFound() {
+    final l10n = AppLocalizations.of(context);
+    return _buildMessage(
+      icon: Icons.search_off,
+      title: l10n.signalNoLongerAvailable,
+      hint: l10n.signalNoLongerAvailableHint,
     );
   }
 
@@ -267,8 +273,15 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         case SignalDocState.deletedWhileOpen:
           // Deleted while this screen was open (e.g. the author removed it
           // while another user was reading it). Pop back to the map instead of
-          // rendering a blank view. Navigation can't happen during build, so
-          // defer it to after the current frame.
+          // rendering a blank view — but only while this is the screen in front
+          // of the user. Popping pops whatever is topmost, so with the photo
+          // gallery, the edit route or another signal pushed above, leaving now
+          // would dismiss *that* and yank them out of something they are
+          // reading. Sit on the not-found state until they come back (reading
+          // `isCurrent` subscribes us to that, so returning rebuilds and takes
+          // the branch below). Navigation can't happen during build, so defer
+          // it to after the current frame.
+          if (!_isForeground) return _buildNotFound();
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted || _hasNavigatedAway) return;
             // Capture the (app-level) messenger before popping, since this
@@ -286,11 +299,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
           // push a screen that instantly dismisses itself, which reads as a
           // dead tap (R5-004). Show a real not-found state and let the user
           // leave deliberately.
-          return _buildMessage(
-            icon: Icons.search_off,
-            title: l10n.signalNoLongerAvailable,
-            hint: l10n.signalNoLongerAvailableHint,
-          );
+          return _buildNotFound();
         case SignalDocState.present:
           break;
       }

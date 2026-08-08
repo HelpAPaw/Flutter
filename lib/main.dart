@@ -250,16 +250,9 @@ Future<void> _bootstrapServices() async {
   unawaited(ensureGoogleSignInInitialized()
       .catchError((e) => debugPrint('Google Sign-In initialization failed: $e')));
 
-  if (FirebaseAuth.instance.currentUser == null) {
-    try {
-      FirebaseCrashlytics.instance.log('Auth: Anonymous sign-in started');
-      await FirebaseAuth.instance
-          .signInAnonymously()
-          .timeout(const Duration(seconds: 15));
-    } catch (e) {
-      debugPrint('Anonymous sign-in failed: $e');
-    }
-  }
+  // A launch can afford to wait longer than a tap can.
+  await AuthService()
+      .ensureAnonymousSession(timeout: const Duration(seconds: 15));
 
   // Repair accounts that signed in through a build which didn't carry Google's
   // name onto the Auth record (R5-001). A no-op for anonymous users and for

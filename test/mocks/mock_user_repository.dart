@@ -64,20 +64,6 @@ class MockUserRepository implements UserRepository {
   bool get canModifyData =>
       _currentAuthState.isAuthenticated && !_currentAuthState.isAnonymous;
 
-  @override
-  Future<void> signInAnonymously() async {
-    setAuthState(AuthState(
-      isAuthenticated: true,
-      isAnonymous: true,
-      isEmailVerified: false,
-    ));
-  }
-
-  @override
-  Future<void> signOut() async {
-    setUnauthenticated();
-  }
-
   /// Preferences per user. A user with no entry reads back as null, i.e. the
   /// "couldn't read it" case rather than "has none saved".
   final Map<String, NotificationPreferences> notificationPreferences = {};

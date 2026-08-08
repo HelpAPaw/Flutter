@@ -33,16 +33,6 @@ class FirebaseUserRepository implements UserRepository {
   }
 
   @override
-  Future<void> signInAnonymously() async {
-    await _auth.signInAnonymously();
-  }
-
-  @override
-  Future<void> signOut() async {
-    await _auth.signOut();
-  }
-
-  @override
   Future<NotificationPreferences?> getNotificationPreferences(
     String userId,
   ) async {

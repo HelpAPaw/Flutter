@@ -59,12 +59,6 @@ abstract class UserRepository {
   /// Check if the current user can perform active operations (submit signals, change status, comment)
   bool get canModifyData;
 
-  /// Sign in anonymously
-  Future<void> signInAnonymously();
-
-  /// Sign out the current user
-  Future<void> signOut();
-
   /// Read the user's notification preferences.
   ///
   /// Returns null when the document can't be read at all — offline, timed out,

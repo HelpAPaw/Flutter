@@ -114,18 +114,33 @@ class _SignInPageState extends State<SignInPage> {
   /// Guards against re-entrant taps on the Google button.
   bool _googleBusy = false;
 
+  /// Whether the page is still establishing the session it needs to link onto.
+  bool _preparingSession = false;
+
   @override
   void initState() {
     super.initState();
-    // Capture the anonymous UID but DO NOT sign the user out. Keeping the
-    // anonymous user signed in lets firebase_ui upgrade the account in place
-    // via linkWithCredential (same UID -> no orphaned Auth user, no data
-    // transfer needed). Signing out here would force a plain sign-in that
-    // mints a new UID and orphans the anonymous account + its data (R3-001).
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null && user.isAnonymous) {
-      _previousAnonymousUid = user.uid;
-    }
+    _prepareSession();
+  }
+
+  /// Both sign-in paths decide "link in place" vs "make a new account" from
+  /// whether `currentUser` is anonymous, and firebase_ui makes that decision
+  /// itself at submit time with no hook to intercept — so the session has to be
+  /// in place before either button can be pressed, not when it is (R6-004).
+  ///
+  /// Note it is *not* signed out here: keeping the anonymous user signed in is
+  /// what lets the account be upgraded in place via `linkWithCredential`, same
+  /// UID, no orphaned Auth user and no data to transfer (R3-001).
+  Future<void> _prepareSession() async {
+    final existing = FirebaseAuth.instance.currentUser;
+    // Normally there already is one, and the page shows straight away.
+    if (existing == null) setState(() => _preparingSession = true);
+    final user = existing ?? await AuthService().ensureAnonymousSession();
+    if (!mounted) return;
+    setState(() {
+      _preparingSession = false;
+      if (user != null && user.isAnonymous) _previousAnonymousUid = user.uid;
+    });
   }
 
   void _setMigrating(bool value) {
@@ -382,7 +397,13 @@ class _SignInPageState extends State<SignInPage> {
           ),
           title: Text(AppLocalizations.of(context).signIn),
         ),
-        body: Stack(
+        body: _preparingSession
+            ? const Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+                ),
+              )
+            : Stack(
           children: [
             SafeArea(
               child: SingleChildScrollView(

@@ -112,6 +112,57 @@ class AuthService {
     }
   }
 
+  /// How long to wait for the anonymous session the app runs on. The default
+  /// suits callers holding up a tap the user just made; `main()` passes a
+  /// longer one, since at launch there is nothing else to be getting on with.
+  static const _anonymousSignInTimeout = Duration(seconds: 5);
+
+  /// The app's baseline: a signed-in user, anonymous if nothing else.
+  ///
+  /// Everything the app stores hangs off a uid — notification prefs, test mode,
+  /// the FCM token, the inbox — so "signed out" means anonymous here, not
+  /// user-less. Returns the session, or null if it could not be established.
+  ///
+  /// Cheap and idempotent when one already exists, which is the normal case.
+  Future<User?> ensureAnonymousSession({
+    Duration timeout = _anonymousSignInTimeout,
+  }) async {
+    if (_auth.currentUser != null) return _auth.currentUser;
+    try {
+      FirebaseCrashlytics.instance.log('Auth: Anonymous sign-in started');
+      await _auth.signInAnonymously().timeout(timeout);
+    } catch (e) {
+      debugPrint('Anonymous sign-in failed: $e');
+      FirebaseCrashlytics.instance.log('Auth: Anonymous sign-in failed');
+    }
+    return _auth.currentUser;
+  }
+
+  /// Ends the current session and returns the app to that baseline.
+  ///
+  /// The re-sign-in matters because the in-place account upgrade links the
+  /// *anonymous* session onto the new credential, keeping its uid and
+  /// everything attached to it. Anonymous sign-in used to happen only in
+  /// `main()`, so between a sign-out and the next launch there was no user at
+  /// all, and signing straight back in took the create-a-new-account branch
+  /// instead of the upgrade — orphaning whatever was made in that window
+  /// (R6-004).
+  ///
+  /// Deliberately *not* an `authStateChanges` listener that re-signs-in on
+  /// null: two flows go through a user-less window on purpose — the
+  /// `credential-already-in-use` merge deletes the anonymous user before
+  /// signing into the real one, and account deletion removes the Auth user
+  /// server-side — and a listener would mint a replacement mid-flight. It would
+  /// also turn a server-side account disable into a silent downgrade to
+  /// anonymous rather than a visible sign-out.
+  ///
+  /// Best-effort: the sign-out is what the user asked for and stands either
+  /// way, and the next launch establishes the session regardless.
+  Future<void> signOutToAnonymous() async {
+    await _auth.signOut();
+    await ensureAnonymousSession();
+  }
+
   /// Attempt to link anonymous account to a credential
   /// Returns the result of the linking attempt
   Future<LinkResult> linkAnonymousAccount(AuthCredential credential) async {

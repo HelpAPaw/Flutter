@@ -72,7 +72,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
     try {
       await AuthService().deleteAccount();
-      await FirebaseAuth.instance.signOut();
+      await AuthService().signOutToAnonymous();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(l10n.deleteAccountSuccess)),

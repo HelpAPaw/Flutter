@@ -5,6 +5,7 @@ import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 
 import '../config/routes.dart';
+import '../services/auth_service.dart';
 import '../models/signal.dart';
 import '../services/location_service.dart';
 import '../services/notification_service.dart';
@@ -34,19 +35,9 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
     // Default to all signal types selected
     _selectedSignalTypes = List.generate(Signal.signalTypes.length, (i) => i);
 
-    var user = FirebaseAuth.instance.currentUser;
-
-    // Ensure user is authenticated (create anonymous account if needed)
-    if (user == null) {
-      try {
-        final credential = await FirebaseAuth.instance.signInAnonymously();
-        user = credential.user;
-      } catch (e) {
-        setState(() => _isLoading = false);
-        return;
-      }
-    }
-
+    // Preferences hang off a uid, so an anonymous session will do — but there
+    // has to be one.
+    final user = await AuthService().ensureAnonymousSession();
     if (user == null) {
       setState(() => _isLoading = false);
       return;
@@ -78,16 +69,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   }
 
   Future<void> _savePreferences() async {
-    var user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      try {
-        final credential = await FirebaseAuth.instance.signInAnonymously();
-        user = credential.user;
-      } catch (_) {
-        return;
-      }
-    }
-
+    final user = await AuthService().ensureAnonymousSession();
     if (user == null) return;
 
     try {

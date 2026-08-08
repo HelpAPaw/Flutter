@@ -497,7 +497,9 @@ launch screen up forever.
 2. `DeepLinkService.initialize()` — subscribing only; must not sit behind sign-in
 3. Post-frame: `DeferredDeepLinkService.resolve(...)`
 4. `ensureGoogleSignInInitialized()` warm-up (unawaited)
-5. Anonymous sign-in if no current user, **time-boxed to 15s**
+5. `AuthService.ensureAnonymousSession(timeout: 15s)` — the one definition of the
+   app's baseline session, also used by sign-out, the sign-in page and the
+   notification-settings screen
 6. In parallel (`Future.wait`, each with its own `catchError`):
    `NotificationService().initialize()` and
    `LocationService().initialize(headlessEntrypoint: backgroundLocationCallbackDispatcher)`
@@ -510,6 +512,25 @@ entry the Android headless engine boots into (§7.7).
 **States:** signed out → anonymous (automatic) → linked/permanent (email+password or
 Google). `AuthState.canModifyData == isAuthenticated && !isAnonymous` gates every
 content-creating action in the UI.
+
+**There is always a session.** "Signed out" means *anonymous*, never user-less:
+everything the app stores hangs off a uid, and the upgrade below links the anonymous
+session onto the new credential. `AuthService.ensureAnonymousSession()` is that
+guarantee and the only place it is expressed; `signOutToAnonymous()` is `signOut()`
+followed by it.
+
+It is deliberately **not** an `authStateChanges` listener that re-signs-in on null: two
+flows pass through a user-less window on purpose — the `credential-already-in-use` merge
+deletes the anonymous user before signing into the real one, and account deletion removes
+the Auth user server-side — and a listener would mint a replacement mid-flight. It would
+also turn a server-side account disable into a silent downgrade rather than a visible
+sign-out.
+
+The sign-in page establishes the session in `initState` rather than at button-press:
+firebase_ui decides link-vs-create from `currentUser` itself at submit time with no hook
+to intercept, so waiting until the tap covers the Google button only. Without a session
+either button silently mints a second account instead of upgrading in place, orphaning
+whatever the anonymous user had (R6-004).
 
 **Anonymous upgrade (the important flow).** The app *links in place* wherever possible
 so the UID and all its data survive:
@@ -577,7 +598,8 @@ Auth user.
 
 **Sign-out** (drawer): best-effort `onUserLogout()` (arrayRemove this device's FCM
 token, 5s timeout) → `GoogleSignIn.signOut()` (so the next sign-in shows the chooser) →
-`FirebaseAuth.signOut()`. The app stays usable anonymously.
+`AuthService.signOutToAnonymous()`. The app stays usable anonymously — literally: the
+anonymous session is re-established there and then, not at the next launch.
 
 ### 7.3 Map and signal browsing (`map_page.dart`, `map_view_model.dart`)
 

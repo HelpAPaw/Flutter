@@ -48,11 +48,17 @@ class PublicProfileService {
   /// Resolve a user's public display name, or null if there is no name to
   /// resolve — an account with no profile document, or one already anonymised.
   ///
-  /// Throws if the read itself failed (denied, offline). That is a different
-  /// situation from "no name": it may succeed later, so callers that care can
-  /// retry it. [getName] is the variant for callers that do not.
+  /// Throws if the read did not produce an answer — denied, offline, or served
+  /// from a cache that has never seen this profile. That last one is the same
+  /// trap as a missing signal document: the offline cache reports a document it
+  /// has never heard of as absent, which means "we don't know", not "there is
+  /// no profile". All three may succeed later, so callers that care can retry.
+  /// [getName] is the variant for callers that do not.
   static Future<String?> readName(String uid) async {
     final doc = await _profiles.doc(uid).get();
+    if (!doc.exists && doc.metadata.isFromCache) {
+      throw StateError('publicProfiles/$uid: cache-only miss, no server answer');
+    }
     final name = doc.data()?['name'] as String?;
     return (name != null && name.isNotEmpty) ? name : null;
   }

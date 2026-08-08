@@ -7,6 +7,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/src/config/routes.dart';
+import 'package:help_a_paw/src/services/auth_service.dart';
 import 'package:help_a_paw/src/services/notification_inbox_service.dart';
 import 'package:help_a_paw/src/services/notification_service.dart';
 import 'package:help_a_paw/src/services/share_service.dart';
@@ -57,7 +58,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
       } catch (e) {
         debugPrint('Google sign-out failed: $e');
       }
-      await FirebaseAuth.instance.signOut();
+      await AuthService().signOutToAnonymous();
       if (mounted) {
         // Close the drawer and stay on home screen for anonymous usage
         Navigator.of(context).pop();
