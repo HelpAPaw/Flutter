@@ -9,6 +9,11 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
 import { geohashQueryBounds, geohashForLocation } from "geofire-common";
 import * as nodemailer from "nodemailer";
+// Urgency is SEPARATE from status: status is how far along the response is,
+// urgency is how bad it is if nobody acts. These live in their own module so
+// scripts/backfill_urgency.js can share them instead of keeping a third copy
+// of the derivation — see the note in ./urgency.
+import { SIGNAL_URGENCIES, URGENCY_RED, urgencyOf } from "./urgency";
 
 admin.initializeApp();
 
@@ -215,13 +220,14 @@ interface InboxEntry {
    * collapse two different status transitions into one.
    */
   docId: string;
-  type: "new_signal" | "status_change" | "new_comment";
+  type: "new_signal" | "status_change" | "urgency_change" | "new_comment";
   title: string;
   body: string;
   signalId: string;
   signalTitle: string;
   signalType?: number;
   statusCode?: number;
+  urgency?: number;
   commentExcerpt?: string;
 }
 
@@ -649,7 +655,12 @@ async function handleSignalCreated(
 
   const signalTypeName =
     SIGNAL_TYPES[signalType] || SIGNAL_TYPES[SIGNAL_TYPES.length - 1];
-  const title = "New signal nearby!";
+  const urgency = urgencyOf(signalData);
+  // A Red Alert has to be distinguishable at a glance on a lock screen —
+  // that is the entire point of the level. Green/Amber keep the plain title so
+  // the prefix stays rare enough to still mean something.
+  const title =
+    urgency === URGENCY_RED ? "🔴 RED ALERT nearby!" : "New signal nearby!";
   const body = `${signalTypeName}: ${signalTitle}`;
 
   const badgeByUid = await writeInboxEntries(
@@ -662,6 +673,7 @@ async function handleSignalCreated(
       signalId,
       signalTitle,
       signalType,
+      urgency,
     },
     isTestMode
   );
@@ -674,6 +686,7 @@ async function handleSignalCreated(
       type: "new_signal",
       signalTitle: truncateForPayload(signalTitle),
       signalType: String(signalType),
+      urgency: String(urgency),
     },
     badgeByUid
   );
@@ -702,9 +715,30 @@ async function handleSignalUpdated(
     return;
   }
 
-  // Check if status changed
   const statusChanged = beforeData.status !== afterData.status;
-  if (!statusChanged) {
+
+  // Urgency notifies on ESCALATION only (Green->Amber, anything->Red). A
+  // de-escalation is good news that can wait for the next time someone opens
+  // the case; waking every subscriber for it would train people to mute the
+  // signal that matters.
+  //
+  // The "after" side must be an EXPLICITLY STORED urgency, never the derived
+  // fallback. `urgencyOf` infers urgency from status for pre-urgency documents
+  // (which the rules still allow clients to create), so on such a document
+  // reopening a resolved case — status 2 -> 0, urgency untouched — would move
+  // the derived value green -> amber and look like an escalation. That would
+  // push a phantom "urgency raised" AND swallow the real status notification,
+  // because the escalation branch returns.
+  //
+  // The "before" side keeps the fallback on purpose: it is what makes the
+  // first explicit write on a legacy document compare against the value the
+  // whole system was already treating it as, so the backfill stays silent.
+  const oldUrgency = urgencyOf(beforeData);
+  const newUrgency = urgencyOf(afterData);
+  const urgencyStored = typeof afterData.urgency === "number";
+  const urgencyEscalated = urgencyStored && newUrgency > oldUrgency;
+
+  if (!statusChanged && !urgencyEscalated) {
     return;
   }
 
@@ -748,34 +782,76 @@ async function handleSignalUpdated(
     return;
   }
 
-  const statusName = SIGNAL_STATUSES[newStatus] || "Updated";
-  const title = "Signal status updated";
-  const body = `${signalTitle}: ${statusName}`;
+  // Which change to announce. When a single write moves both, the escalation
+  // is the more urgent thing to say, and announcing one keeps the subscriber
+  // from being buzzed twice for one action. In practice the app writes them
+  // separately.
+  //
+  // The two shapes differ only in these five values, so they are picked here
+  // and the fan-out below runs once — otherwise every future change to the
+  // payload or badge handling has to be made twice, in step.
+  //
+  // The code in each `docId` is load-bearing: `st_{signalId}` alone would make
+  // a later transition overwrite the earlier entry instead of adding one.
+  // Known and accepted for urgency, which can oscillate: green->amber->green->
+  // amber re-uses an id, overwriting the entry (correct — it *is* a fresh
+  // escalation and should resurface as unread) while `unread` is incremented
+  // again, so the counter over-counts. That counter is advisory by design and
+  // the app repairs it with a count() aggregation on resume; see the
+  // `userCounters` note in docs/SPECIFICATION.md, which says not to add a
+  // trigger to fix it.
+  const change: {
+    docId: string;
+    type: InboxEntry["type"];
+    title: string;
+    body: string;
+    inboxField: Partial<Pick<InboxEntry, "urgency" | "statusCode">>;
+    dataField: Record<string, string>;
+  } = urgencyEscalated
+    ? {
+        docId: `urg_${signalId}_${newUrgency}`,
+        type: "urgency_change" as const,
+        title:
+          newUrgency === URGENCY_RED
+            ? "🔴 Escalated to RED ALERT"
+            : "Signal urgency raised",
+        // No `|| "Updated"` fallback: the rules bound urgency to 0-2 and this
+        // branch already required a stored number, so every key is present.
+        body: `${signalTitle}: ${SIGNAL_URGENCIES[newUrgency]}`,
+        inboxField: { urgency: newUrgency },
+        dataField: { urgency: String(newUrgency) },
+      }
+    : {
+        docId: `st_${signalId}_${newStatus}`,
+        type: "status_change" as const,
+        title: "Signal status updated",
+        body: `${signalTitle}: ${SIGNAL_STATUSES[newStatus] || "Updated"}`,
+        inboxField: { statusCode: newStatus },
+        dataField: { statusCode: String(newStatus) },
+      };
 
   const badgeByUid = await writeInboxEntries(
     inboxRecipients,
     {
-      // The status belongs in the id: `st_{signalId}` alone would make a later
-      // transition overwrite the earlier one instead of adding a second entry.
-      docId: `st_${signalId}_${newStatus}`,
-      type: "status_change",
-      title,
-      body,
+      docId: change.docId,
+      type: change.type,
+      title: change.title,
+      body: change.body,
       signalId,
       signalTitle,
-      statusCode: newStatus,
+      ...change.inboxField,
     },
     isTestMode
   );
 
   await sendNotificationsToUsers(
     userTokens,
-    { title, body },
+    { title: change.title, body: change.body },
     {
       signalId,
-      type: "status_change",
+      type: change.type,
       signalTitle: truncateForPayload(signalTitle),
-      statusCode: String(newStatus),
+      ...change.dataField,
     },
     badgeByUid
   );
@@ -806,11 +882,17 @@ async function handleCommentCreated(
     return;
   }
 
-  // Status-change comments are auto-generated and have no `text` field; their
-  // notifications are sent separately by onSignalUpdated (status_change push).
-  // Skip them here to avoid a TypeError on commentText.length below.
-  if (commentData.type === "status_change") {
-    console.log("Status-change comment, skipping new_comment notification");
+  // Status- and urgency-change comments are auto-generated timeline entries
+  // with no `text` field; their notifications are sent separately by
+  // onSignalUpdated. Skip them here to avoid a TypeError on commentText.length
+  // below — any future system entry type must be added to this list too.
+  if (
+    commentData.type === "status_change" ||
+    commentData.type === "urgency_change"
+  ) {
+    console.log(
+      `System comment (${commentData.type}), skipping new_comment notification`
+    );
     return;
   }
 
