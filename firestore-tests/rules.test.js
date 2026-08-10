@@ -46,6 +46,7 @@ function signalDoc(db, uid, overrides = {}) {
     contactPhone: '+359888123456',
     createdAt: new Date(),
     status: 0,
+    urgency: 1,
     photoUrls: [],
     ...overrides,
   };
@@ -138,6 +139,27 @@ for (const coll of ['signals', 'signals_test']) {
         delete data[field];
         await assertFails(addDoc(collection(db, coll), data));
       }
+    });
+
+    it('accepts every real urgency (0-2) and rejects out-of-range or non-int', async () => {
+      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      for (const urgency of [0, 1, 2]) {
+        await assertSucceeds(addDoc(collection(db, coll), signalDoc(db, REPORTER, { urgency })));
+      }
+      for (const urgency of [-1, 3, '2', 1.5]) {
+        await assertFails(addDoc(collection(db, coll), signalDoc(db, REPORTER, { urgency })));
+      }
+    });
+
+    // `urgency` is validated but NOT required, and must stay that way: app
+    // builds released before the urgency system are still in the wild and
+    // create signals without it. Requiring it would break signal creation for
+    // every user who has not updated.
+    it('still accepts a signal with no urgency field at all (old clients)', async () => {
+      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      const data = signalDoc(db, REPORTER);
+      delete data.urgency;
+      await assertSucceeds(addDoc(collection(db, coll), data));
     });
 
     // Documents the deliberate M-1 gap: the anonymous block is NOT deployed yet,
@@ -264,6 +286,64 @@ for (const coll of ['signals', 'signals_test']) {
       await assertFails(
         updateDoc(doc(db, coll, SIGNAL), { status: 9, lastUpdatedBy: doc(db, 'users', OTHER) }),
       );
+    });
+
+    // Spec 5.2: only the case holder (plus moderators/admins, which do not
+    // exist yet) may set urgency. `isStatusOnlyUpdate` enforces that by leaving
+    // `urgency` out of its affectedKeys allowlist — these are the guards that
+    // fail if someone "helpfully" adds it.
+    it('rejects a non-reporter changing urgency, even alongside status', async () => {
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+
+      await assertFails(
+        updateDoc(doc(db, coll, SIGNAL), { urgency: 2, lastUpdatedBy: doc(db, 'users', OTHER) }),
+      );
+      await assertFails(
+        updateDoc(doc(db, coll, SIGNAL), {
+          status: 1,
+          urgency: 2,
+          lastUpdatedBy: doc(db, 'users', OTHER),
+        }),
+      );
+    });
+
+    it('rejects a non-reporter de-escalating a Red Alert', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, coll, SIGNAL), signalDoc(db, REPORTER, { urgency: 2 }));
+      });
+
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+      await assertFails(
+        updateDoc(doc(db, coll, SIGNAL), { urgency: 0, lastUpdatedBy: doc(db, 'users', OTHER) }),
+      );
+    });
+
+    it('lets the reporter change urgency', async () => {
+      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      await assertSucceeds(updateDoc(doc(db, coll, SIGNAL), { urgency: 2 }));
+    });
+
+    // The reporter branch accepts any field, so without isValidUrgency() on the
+    // update rule an out-of-range value reaches the server, where `42 > 2` makes
+    // every subsequent write look like an escalation and wakes all subscribers.
+    it('rejects an out-of-range or non-int urgency from the reporter', async () => {
+      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      for (const urgency of [-1, 3, 42, '2', 1.5]) {
+        await assertFails(updateDoc(doc(db, coll, SIGNAL), { urgency }));
+      }
+    });
+
+    it('still lets the reporter edit a legacy signal that has no urgency', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        const data = signalDoc(db, REPORTER);
+        delete data.urgency;
+        await setDoc(doc(db, coll, SIGNAL), data);
+      });
+
+      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      await assertSucceeds(updateDoc(doc(db, coll, SIGNAL), { title: 'Updated' }));
     });
 
     it('lets only the reporter delete the signal', async () => {

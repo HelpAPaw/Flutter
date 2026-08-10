@@ -40,13 +40,28 @@ service cloud.firestore {
              && request.resource.data.description.size() <= 10000
              && request.resource.data.signalType is int
              && request.resource.data.signalType >= 0
-             && request.resource.data.signalType <= 6;
+             && request.resource.data.signalType <= 6
+             && isValidUrgency();
     }
 
-    // Validates a comment create (M-1): author pinned to the caller. Covers both
-    // comment shapes — user text comments and the `status_change` system
-    // comments (which carry no `text`), so the text bounds only apply when a
-    // `text` field is present.
+    // Bounds the urgency level, but does NOT require the field.
+    //
+    // Optional on purpose: builds released before the urgency system are still
+    // in the wild and create signals with no `urgency` at all. Making it
+    // mandatory would break signal creation for every user who has not
+    // updated, which is not a trade worth making for a field the client
+    // back-fills on read anyway.
+    function isValidUrgency() {
+      return !('urgency' in request.resource.data)
+             || (request.resource.data.urgency is int
+                 && request.resource.data.urgency >= 0
+                 && request.resource.data.urgency <= 2);
+    }
+
+    // Validates a comment create (M-1): author pinned to the caller. Covers all
+    // three comment shapes — user text comments, and the `status_change` /
+    // `urgency_change` system comments (which carry no `text`) — so the text
+    // bounds only apply when a `text` field is present.
     function isCommentCreate() {
       return request.auth != null
              && request.resource.data.author == userDoc()
@@ -75,6 +90,13 @@ service cloud.firestore {
 
     // Non-reporters may ONLY advance a signal's status (the volunteer flow),
     // and must self-stamp lastUpdatedBy so it can't be spoofed to another user.
+    //
+    // `urgency` is DELIBERATELY absent from the affectedKeys allow-list, and
+    // must stay absent. The spec restricts marking a case Red to the case
+    // holder, a moderator or an admin; with no moderator/admin roles yet, that
+    // means the reporter alone. This omission is the entire enforcement of
+    // that rule — adding 'urgency' here would let any signed-in user escalate
+    // a stranger's case to Red Alert (or quietly de-escalate a real one).
     function isStatusOnlyUpdate() {
       return request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly(['status', 'lastUpdatedBy'])
@@ -209,7 +231,14 @@ service cloud.firestore {
       // Reporter may edit any field; anyone else signed in may only advance the
       // status (self-stamping lastUpdatedBy). Prevents non-reporters from
       // rewriting reporter/title/phone/photos or taking over a signal.
+      //
+      // `isValidUrgency()` applies to BOTH branches. The reporter branch
+      // otherwise accepts any field at any value, and an out-of-range urgency
+      // is not a client-side cosmetic problem: the server reads it raw, so
+      // `urgency: 42` makes every write look like an escalation
+      // (`42 > 2`) and wakes every subscriber with a "Updated" push.
       allow update: if request.auth != null
+                    && isValidUrgency()
                     && (isSignalReporter() || isStatusOnlyUpdate());
       // Only the signal's reporter may delete it
       allow delete: if request.auth != null && isSignalReporter();
@@ -230,6 +259,7 @@ service cloud.firestore {
       allow create: if isSignalCreate();
       // Same rules as prod signals (see helpers above).
       allow update: if request.auth != null
+                    && isValidUrgency()
                     && (isSignalReporter() || isStatusOnlyUpdate());
       allow delete: if request.auth != null && isSignalReporter();
 
