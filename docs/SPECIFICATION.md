@@ -156,19 +156,22 @@ allow-listed in the console or anonymous sign-in fails.
 | `description` | string | ≤10 000 chars |
 | `signalType` | int | 0–6, see §4.4 |
 | `status` | int | stable code, see §4.5 |
+| `urgency` | int | stable code, see §4.6. Optional on the wire — pre-urgency documents omit it and readers derive one |
 | `location` | map | `{ geopoint: GeoPoint, geohash: string }`, geohash precision 9 |
 | `reporter` | DocumentReference | → `users/{uid}`; pinned to the caller by rules |
 | `contactPhone` | string | shown/dialled on the details screen |
 | `phoneNumber` | string | legacy duplicate of `contactPhone`, written with the same value |
 | `createdAt` | Timestamp | client-set at creation |
 | `photoUrls` | string[] | Storage download URLs, max 5 enforced in the UI |
-| `lastUpdatedBy` | DocumentReference | set on status change; rules require self-stamping |
+| `lastUpdatedBy` | DocumentReference | set on status **and** urgency change; rules require self-stamping on the status-only path |
 
-Subcollection **`comments/{commentId}`** — two shapes:
+Subcollection **`comments/{commentId}`** — three shapes:
 
 - *User comment*: `{ text: string (1–2000), createdAt, author: Ref→users/{uid} }`
 - *Status change*: `{ type: 'status_change', oldStatus: int, newStatus: int, createdAt,
   author: Ref }` — **no `text` field**; server handlers must guard on `type`.
+- *Urgency change*: `{ type: 'urgency_change', oldUrgency: int, newUrgency: int,
+  createdAt, author: Ref }` — likewise **no `text` field**.
 
 #### `users/{uid}` — private, owner-only
 
@@ -189,11 +192,12 @@ Subcollection **`notifications/{id}`** — the in-app inbox, see §7.13.
 
 | field | type | notes |
 |---|---|---|
-| `type` | string | `new_signal` \| `status_change` \| `new_comment` \| `nearby_signal` — the same vocabulary as the FCM `data.type` |
+| `type` | string | `new_signal` \| `status_change` \| `urgency_change` \| `new_comment` \| `nearby_signal` — the same vocabulary as the FCM `data.type` |
 | `signalId` | string | deep-link target |
 | `signalTitle` | string | rendered client-side |
 | `signalType` | int? | `new_signal` / `nearby_signal` |
 | `statusCode` | int? | `status_change` |
+| `urgency` | int? | `urgency_change` (also set on `new_signal`) |
 | `commentExcerpt` | string? | `new_comment` |
 | `title`, `body` | string | the English push text — **fallback only**, see §7.13 |
 | `read` | bool | flipped by the owner; the only field the rules let a client update |
@@ -202,8 +206,9 @@ Subcollection **`notifications/{id}`** — the in-app inbox, see §7.13.
 | `expiresAt` | Timestamp | `createdAt + 90d`; drives the TTL policy |
 
 Ids are deterministic — `sig_{signalId}`, `st_{signalId}_{status}`,
-`cmt_{commentId}`, `nb_{signalId}` — because Firestore triggers are
-at-least-once and a retry must overwrite rather than duplicate.
+`urg_{signalId}_{urgency}`, `cmt_{commentId}`, `nb_{signalId}` — because
+Firestore triggers are at-least-once and a retry must overwrite rather than
+duplicate.
 
 #### `userLocations/{uid}` — private, owner-only
 
@@ -280,17 +285,75 @@ Defined in three places that must agree: `Signal.signalTypes` /
 
 ### 4.5 Signal status (`SignalStatus`, `models/signal_status.dart`)
 
-| code | enum | colour | pin asset |
-|---|---|---|---|
-| 0 | `needsHelp` | red | `assets/icons/pin_red.png` |
-| 1 | `inProgress` | orange | `assets/icons/pin_orange.png` |
-| 2 | `resolved` | green | `assets/icons/pin_green.png` |
+| code | enum | colour |
+|---|---|---|
+| 0 | `needsHelp` | red |
+| 1 | `inProgress` | orange |
+| 2 | `resolved` | green |
 
 `code` is a **stable opaque id, not an ordering** — never change or reuse one.
 Declaration order is the display order; a new status appends the next free code and is
 slotted where it should appear. `SignalStatus.openCodes` derives the "still needs
 attention" set used as a Firestore `whereIn` filter. Unknown codes resolve to
 `needsHelp`. The server mirrors labels in `SIGNAL_STATUSES` keyed by code.
+
+Status colours are used for **chips and list accents only**. Map pins encode
+urgency — see §4.6.
+
+### 4.6 Signal urgency (`SignalUrgency`, `models/signal_urgency.dart`)
+
+Master spec §5. Urgency is **separate from status**: status is how far along the
+response is, urgency is how bad it is if nobody acts. A case someone is already
+working on can still be Red; a resolved one is Green.
+
+| code | enum | colour | pin asset |
+|---|---|---|---|
+| 0 | `green` | green | `assets/icons/pin_green.png` |
+| 1 | `amber` | orange | `assets/icons/pin_orange.png` |
+| 2 | `red` | red | `assets/icons/pin_red.png` |
+
+**Map pin colour is urgency and nothing else.** Status is not encoded on the map;
+it appears as a text chip on the details screen and in My Signals. The filter
+sheet has independent Urgency and Status sections.
+
+Rules, mirrored by `SIGNAL_URGENCIES` (functions) and the backfill script:
+
+- `code` is a stable opaque id, as for status. Unknown codes resolve to **`amber`**
+  — never `green` (would hide a real case) or `red` (would cry wolf).
+- **Required at creation** (master spec §4.4): `NewSignalFormState.urgency` is
+  nullable and `isValid` gates submission, so nobody publishes a level they did
+  not choose.
+- **Reporter-only.** Master spec §5.2 limits it to the case holder, a moderator or
+  an admin; with no moderator/admin roles yet the reporter is that whole set.
+  Enforced by `urgency` being **absent** from `isStatusOnlyUpdate`'s allowlist —
+  see §5.1.
+- **Red requires confirmation** (master spec §5.2.1): `RedAlertConfirmationDialog`
+  has a mandatory tick-box and fires only on a *transition into* Red.
+  `UrgencyPicker` owns this so no call site can skip it.
+- **Legacy documents.** `urgency` is optional on the wire; readers derive
+  `status == resolved ? green : amber` (`Signal.urgencyFrom`,
+  `SignalUrgency.fromLegacyStatus`, `urgencyOf()` in functions — keep in step).
+  Nothing is ever *derived* as Red.
+
+  **The derivation is permanent, not a migration step.** Builds released before
+  urgency keep creating signals without the field, and there is no version of
+  this app that can be certain every document has it, so the fallback can never
+  be deleted. It is also the safety net if a future write path forgets the field.
+
+  `functions/scripts/backfill_urgency.js` exists but is **deliberately not run**
+  — it changes nothing anyone can see, and legacy signals age out on their own
+  (§4.10: ~6-month expiry). Run it only when the trigger below arrives.
+
+  > **Backfill before any server-side urgency query.** Firestore excludes
+  > documents that lack the field from a `where('urgency', …)` — silently. A
+  > national "urgent cases" view (master spec §7.3), an urgency-aware fan-out, or
+  > an index on urgency would drop every legacy signal from exactly the view
+  > meant to surface the worst cases. The current Urgency filter is client-side,
+  > like Status, so this does not apply yet.
+
+Not yet implemented from master spec §5: the Red Alert staleness lifecycle
+("needs update" at 5–6h, auto-downgrade at 24–48h) and urgency-misuse reporting
+(§5.3) — both need moderator/admin roles.
 
 ---
 
@@ -305,13 +368,27 @@ attention" set used as a Firestore `whereIn` filter. Unknown codes resolve to
 | `userLocations/{uid}` | owner | owner | owner | owner |
 | `userCounters/{uid}` | owner | owner, `{unread,updatedAt}` only, `unread >= 0` | same | — |
 | `publicProfiles/{uid}` | `get` any signed-in; **`list` denied** | owner, `name` only, validated | owner, only `name` may change | owner |
-| `signals/{id}`, `signals_test/{id}` | **public** | signed-in, `reporter == self`, bounded fields | reporter (anything) *or* any signed-in user changing **only** `status`+`lastUpdatedBy` (self-stamped, 0–2) | reporter only |
+| `signals/{id}`, `signals_test/{id}` | **public** | signed-in, `reporter == self`, bounded fields, `urgency` 0–2 **if present** | reporter (anything) *or* any signed-in user changing **only** `status`+`lastUpdatedBy` (self-stamped, 0–2) — **never `urgency`** | reporter only |
 | `…/comments/{id}` | public | signed-in, `author == self`, `text` 1–2000 when present | — | parent signal's reporter (delete cascade) |
 | `{path=**}/comments/{id}` (group) | signed-in | — | — | — |
 | `feedback/{id}` | denied | signed-in, `userId == self`, bounded message/type/email | denied | denied |
 
 Helper functions: `userDoc()`, `isSignalReporter()`, `isParentSignalReporter()`,
-`isSignalCreate()`, `isCommentCreate()`, `isValidProfileName()`, `isStatusOnlyUpdate()`.
+`isSignalCreate()`, `isCommentCreate()`, `isValidProfileName()`, `isStatusOnlyUpdate()`,
+`isValidUrgency()`.
+
+> **`isStatusOnlyUpdate` must never gain `urgency`.** Its `affectedKeys().hasOnly([...])`
+> list omitting `urgency` is the entire enforcement of the reporter-only rule in §4.6 —
+> adding it would let any signed-in user escalate a stranger's case to Red Alert, or
+> quietly de-escalate a real one. Guarded by `firestore-tests/rules.test.js`.
+>
+> `isValidUrgency()` bounds the value but deliberately does **not** require the field:
+> app builds released before the urgency system still create signals without it, and
+> requiring it would break creation for everyone who has not updated. It is applied to
+> **create and update alike** — the reporter branch otherwise accepts any field at any
+> value, and an out-of-range urgency is not merely cosmetic: the server reads it raw,
+> so `urgency: 42` satisfies `42 > 2` and turns every write into an escalation that
+> wakes every subscriber.
 
 **Rules do not cascade into subcollections.** `match /users/{userId}` covers the user
 document only. `users/{uid}/notifications/{id}` matched no rule for most of the project's
@@ -625,9 +702,13 @@ anonymous session is re-established there and then, not at the next launch.
   350 ms to outlast the asynchronous recluster. **Do not "fix" this by lowering the
   re-query threshold.**
 - **Filters** (`map/filter_bottom_sheet.dart` + `MapFilterState`): signal types (7),
-  statuses (3), and a time range (24h / 7d / 30d / all time, default **30 days**).
-  Type/status filter client-side; the time range is pushed into the query. A red dot on
-  the toolbar icon indicates any non-default filter.
+  urgencies (3), statuses (3), and a time range (24h / 7d / 30d / all time, default
+  **30 days**). Type/urgency/status filter client-side; the time range is pushed into
+  the query. A red dot on the toolbar icon indicates any non-default filter.
+  `MapFilterState`'s "all selected" sets must stay `const` (they are default arguments
+  up to `MapScreenState`), so they cannot be derived from the enums —
+  `test/map_filter_state_test.dart` fails the build if one drifts, which would otherwise
+  silently filter a newly-added status/urgency off the map.
 - **Pending focus:** `SignalNavigator.pendingFocusSignalId` is consumed in
   `MapPage.build`; the map animates to the pin at zoom 14 and opens its info window,
   fetching the signal directly and force-recentering if it isn't in the current stream.
@@ -729,6 +810,15 @@ that has regressed repeatedly (R5-004, R6-001, R6-002), which is why it lives ou
 - **Status change:** dropdown over `SignalStatus.values`. Updates `status` +
   `lastUpdatedBy`, appends a `status_change` comment, and subscribes the actor to the
   signal. Any signed-in non-anonymous user may do this (rules allow status-only updates).
+- **Urgency change:** `UrgencyPicker` for the **reporter only**; everyone else sees a
+  read-only `UrgencyChip` (§4.6). Updates `urgency` + `lastUpdatedBy` and appends an
+  `urgency_change` comment. The picker is disabled while the write is in flight — a
+  double-tap would otherwise post two timeline entries and two pushes. **The edit
+  screen must write the same `urgency_change` comment**, or escalating from there
+  notifies everyone while the case history shows nothing happened. `lastUpdatedBy` is stamped here even though the rules do not
+  need it on the reporter path — `handleSignalUpdated` uses it to skip notifying the
+  actor, and a stale value from an earlier status change would mute the wrong
+  subscriber.
 - **Comments:** text field capped at 2000 chars, whitespace-only input dropped
   client-side; posting also subscribes the author to the signal. Author names resolve
   through `publicProfiles`.
@@ -798,8 +888,23 @@ Other rules of the service:
 from a local notification posted by a headless isolate) funnels into
 `SignalNavigator.open(signalId)`.
 
-**Server fan-out** — see §9. Three push types: `new_signal` (nearby users),
-`status_change` and `new_comment` (subscribers).
+**Server fan-out** — see §9. Four push types: `new_signal` (nearby users),
+`status_change`, `urgency_change` and `new_comment` (subscribers).
+
+A `new_signal` push for a Red Alert is prefixed (`🔴 RED ALERT nearby!`) so it is
+distinguishable on a lock screen, and the inbox row is titled and coloured to
+match. `urgency_change` fires on **escalation only** (Green→Amber,
+anything→Red); a de-escalation is good news that does not justify waking every
+subscriber. When one write changes both status and urgency, the escalation wins
+and only one notification is sent.
+
+**Escalation is judged from an explicitly stored `urgency` only.** `urgencyOf()`
+derives a value from `status` for pre-urgency documents, so comparing derived
+values would make *reopening a resolved legacy signal* (status 2→0, urgency
+untouched) look like green→amber — pushing a phantom "urgency raised" and, because
+the escalation branch returns, swallowing the real status notification. The
+*before* side deliberately keeps the fallback, which is what lets the first
+explicit write on a legacy document compare equal and keeps the backfill silent.
 
 ### 7.7 Location and background tracking
 
