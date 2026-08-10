@@ -20,36 +20,24 @@ import '../../l10n/app_localizations.dart';
 /// resolved(code: 2, ...), // keeps code 2 in the DB
 /// ```
 enum SignalStatus {
-  needsHelp(
-    code: 0,
-    color: Colors.red,
-    pinAsset: 'assets/icons/pin_red.png',
-  ),
-  inProgress(
-    code: 1,
-    color: Colors.orange,
-    pinAsset: 'assets/icons/pin_orange.png',
-  ),
-  resolved(
-    code: 2,
-    color: Colors.green,
-    pinAsset: 'assets/icons/pin_green.png',
-  );
+  needsHelp(code: 0, color: Colors.red),
+  inProgress(code: 1, color: Colors.orange),
+  resolved(code: 2, color: Colors.green);
 
   const SignalStatus({
     required this.code,
     required this.color,
-    required this.pinAsset,
   });
 
   /// Stable identifier persisted in Firestore. Never change or reuse.
   final int code;
 
-  /// Color for status badges, text and accents.
+  /// Color for status badges, chips and list accents.
+  ///
+  /// **Not a map pin.** Pin color encodes [SignalUrgency] and nothing else —
+  /// status deliberately has no pin asset, so nothing can quietly go back to
+  /// painting the map by status. Use a dot or a chip instead.
   final Color color;
-
-  /// Map-pin / list icon asset for this status.
-  final String pinAsset;
 
   /// Resolve a persisted [code] to a status, defaulting to [needsHelp] for any
   /// unknown/legacy value (the safe "still needs attention" default).

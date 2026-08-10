@@ -2,13 +2,15 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-import '../models/signal_status.dart';
+import '../models/signal_urgency.dart';
 import '../repositories/signal_repository.dart';
 
 /// Utility for loading map pins and building signal markers
 class MapMarkerBuilder {
-  /// Loaded signal pins keyed by [SignalStatus.code].
-  final Map<int, BitmapDescriptor> _statusPins = {};
+  /// Loaded signal pins keyed by [SignalUrgency.code].
+  ///
+  /// Pin color encodes **urgency, not status** — see [SignalUrgency].
+  final Map<int, BitmapDescriptor> _urgencyPins = {};
   BitmapDescriptor? hospitalPin;
 
   bool _pinsLoaded = false;
@@ -17,13 +19,13 @@ class MapMarkerBuilder {
   bool get arePinsLoaded => _pinsLoaded;
   bool get isHospitalPinLoaded => _hospitalPinLoaded;
 
-  /// Load a map pin for every [SignalStatus]. Adding a status automatically
+  /// Load a map pin for every [SignalUrgency]. Adding an urgency automatically
   /// loads its pin — nothing to change here.
   Future<void> loadSignalPins() async {
-    for (final status in SignalStatus.values) {
-      _statusPins[status.code] = await BitmapDescriptor.asset(
+    for (final urgency in SignalUrgency.values) {
+      _urgencyPins[urgency.code] = await BitmapDescriptor.asset(
         const ImageConfiguration(size: Size(24, 29)),
-        status.pinAsset,
+        urgency.pinAsset,
       );
     }
     _pinsLoaded = true;
@@ -43,9 +45,9 @@ class MapMarkerBuilder {
     await Future.wait([loadSignalPins(), loadHospitalPin()]);
   }
 
-  /// Get the loaded pin for a signal status code.
-  BitmapDescriptor getSignalPin(int status) =>
-      _statusPins[SignalStatus.fromCode(status).code] ??
+  /// Get the loaded pin for a signal urgency code.
+  BitmapDescriptor getSignalPin(int urgency) =>
+      _urgencyPins[SignalUrgency.fromCode(urgency).code] ??
       BitmapDescriptor.defaultMarker;
 
   /// Build a set of markers from a list of signals.
@@ -56,12 +58,13 @@ class MapMarkerBuilder {
   /// via [Marker.onTap] so the caller can overlay an invisible tap target.
   Set<Marker> buildSignalMarkers({
     required List<SignalWithId> signals,
-    required bool Function(int signalType, int status) filterPredicate,
+    required bool Function(int signalType, int status, int urgency)
+        filterPredicate,
     required void Function(SignalWithId signal) onMarkerTap,
     ClusterManagerId? clusterManagerId,
   }) {
     return signals.where((signal) {
-      return filterPredicate(signal.signalType, signal.status);
+      return filterPredicate(signal.signalType, signal.status, signal.urgency);
     }).map((signal) {
       final GeoPoint location = signal.location;
 
@@ -72,7 +75,7 @@ class MapMarkerBuilder {
           title: signal.signal.title,
           snippet: signal.signal.description,
         ),
-        icon: getSignalPin(signal.status),
+        icon: getSignalPin(signal.urgency),
         clusterManagerId: clusterManagerId,
         onTap: () => onMarkerTap(signal),
       );

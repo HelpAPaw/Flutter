@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import '../config/routes.dart';
 import '../models/signal.dart';
 import '../models/signal_status.dart';
+import '../models/signal_urgency.dart';
 import '../services/app_badge_service.dart';
 import '../services/notification_inbox_service.dart';
 import '../utils/nav_extensions.dart';
@@ -55,6 +56,8 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
         return Icons.comment;
       case 'status_change':
         return Icons.info;
+      case 'urgency_change':
+        return Icons.priority_high;
       case 'nearby_signal':
         return Icons.location_on;
       default:
@@ -62,14 +65,30 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
     }
   }
 
-  Color _getNotificationColor(String type) {
+  /// Whether an entry announces a Red Alert.
+  ///
+  /// Entries written before the urgency system carry no `urgency`, so a missing
+  /// value is deliberately *not* a Red Alert.
+  bool _isRedAlert(Map<String, dynamic> data) =>
+      (data['urgency'] as int?) == SignalUrgency.red.code;
+
+  /// Row accent color.
+  ///
+  /// Urgency rows take the color of the level they announce rather than a
+  /// fixed one, so the inbox agrees with the map about what red means.
+  Color _getNotificationColor(String type, Map<String, dynamic> data) {
     switch (type) {
       case 'new_signal':
-        return Colors.blue;
+        return _isRedAlert(data) ? SignalUrgency.red.color : Colors.blue;
       case 'new_comment':
         return Colors.green;
       case 'status_change':
         return Colors.orange;
+      case 'urgency_change':
+        // No null special-case: fromCode already resolves an unknown/missing
+        // level to amber, and inventing a red default here would contradict
+        // the fallback the rest of the feature relies on.
+        return SignalUrgency.fromCode(data['urgency'] as int? ?? -1).color;
       case 'nearby_signal':
         return Colors.red;
       default:
@@ -84,9 +103,18 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
 
     switch (data['type']) {
       case 'new_signal':
-        return l10n.notificationNewSignalTitle;
+        // The push for a nearby Red Alert is prefixed; the inbox row has to
+        // say so too, or a user who missed the push cannot tell a critical
+        // case from a routine one in the list.
+        return _isRedAlert(data)
+            ? l10n.notificationNewRedAlertTitle
+            : l10n.notificationNewSignalTitle;
       case 'status_change':
         return l10n.notificationStatusChangeTitle;
+      case 'urgency_change':
+        return _isRedAlert(data)
+            ? l10n.notificationRedAlertTitle
+            : l10n.notificationUrgencyChangeTitle;
       case 'new_comment':
         return l10n.notificationNewCommentTitle(signalTitle);
       case 'nearby_signal':
@@ -121,6 +149,13 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
         return l10n.notificationStatusChangeBody(
           signalTitle,
           SignalStatus.fromCode(statusCode).label(l10n),
+        );
+      case 'urgency_change':
+        final urgency = data['urgency'] as int?;
+        if (urgency == null) return fallback;
+        return l10n.notificationUrgencyChangeBody(
+          signalTitle,
+          SignalUrgency.fromCode(urgency).label(l10n),
         );
       case 'new_comment':
         return data['commentExcerpt'] as String? ?? fallback;
@@ -305,10 +340,11 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
                       },
                       child: ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: _getNotificationColor(type).withAlpha(51),
+                          backgroundColor:
+                              _getNotificationColor(type, data).withAlpha(51),
                           child: Icon(
                             _getNotificationIcon(type),
-                            color: _getNotificationColor(type),
+                            color: _getNotificationColor(type, data),
                           ),
                         ),
                         title: Text(

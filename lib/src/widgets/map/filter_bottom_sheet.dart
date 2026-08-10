@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/signal.dart';
 import '../../models/signal_status.dart';
+import '../../models/signal_urgency.dart';
 import '../../state/map_state.dart';
 import '../../viewmodels/map_view_model.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
@@ -120,6 +121,25 @@ class _FilterBottomSheetContent extends ConsumerWidget {
                     const SizedBox(height: 16),
                     const Divider(),
                     Text(
+                      l10n.urgency,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ...SignalUrgency.values.map(
+                      (urgency) => _buildIconCheckbox(
+                        label: urgency.label(l10n),
+                        iconPath: urgency.pinAsset,
+                        isSelected: filterState.selectedUrgencies
+                            .contains(urgency.code),
+                        onToggle: () => viewModel.toggleUrgency(urgency.code),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Divider(),
+                    Text(
                       l10n.status,
                       style: const TextStyle(
                         fontSize: 16,
@@ -127,11 +147,12 @@ class _FilterBottomSheetContent extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 8),
+                    // Status rows deliberately carry no pin icon: the map pin
+                    // means urgency now, so showing one here would re-imply the
+                    // old status/colour link this change exists to break.
                     ...SignalStatus.values.map(
-                      (status) => _buildStatusCheckbox(
-                        status: status.code,
+                      (status) => _buildPlainCheckbox(
                         label: status.label(l10n),
-                        iconPath: status.pinAsset,
                         isSelected:
                             filterState.selectedStatuses.contains(status.code),
                         onToggle: () => viewModel.toggleStatus(status.code),
@@ -148,8 +169,7 @@ class _FilterBottomSheetContent extends ConsumerWidget {
                     ),
                     const SizedBox(height: 8),
                     ...List.generate(Signal.signalTypes.length, (index) {
-                      return _buildTypeCheckbox(
-                        type: index,
+                      return _buildPlainCheckbox(
                         label: Signal.getLocalizedSignalTypeName(context, index),
                         isSelected:
                             filterState.selectedSignalTypes.contains(index),
@@ -187,8 +207,7 @@ class _FilterBottomSheetContent extends ConsumerWidget {
     );
   }
 
-  Widget _buildStatusCheckbox({
-    required int status,
+  Widget _buildIconCheckbox({
     required String label,
     required String iconPath,
     required bool isSelected,
@@ -210,8 +229,7 @@ class _FilterBottomSheetContent extends ConsumerWidget {
     );
   }
 
-  Widget _buildTypeCheckbox({
-    required int type,
+  Widget _buildPlainCheckbox({
     required String label,
     required bool isSelected,
     required VoidCallback onToggle,

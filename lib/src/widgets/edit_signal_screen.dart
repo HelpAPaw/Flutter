@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:help_a_paw/src/models/signal.dart';
+import 'package:help_a_paw/src/models/signal_urgency.dart';
 import 'package:help_a_paw/src/services/app_preferences_service.dart';
+import 'package:help_a_paw/src/widgets/urgency_picker.dart';
 
 class EditSignalScreen extends StatefulWidget {
   const EditSignalScreen({
@@ -24,6 +26,11 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
   final _descriptionController = TextEditingController();
   final _phoneController = TextEditingController();
   int _signalType = 0;
+  int _urgency = SignalUrgency.amber.code;
+
+  /// Urgency as loaded, so a save can tell whether it actually changed and
+  /// record a timeline entry to match the details screen.
+  int _originalUrgency = SignalUrgency.amber.code;
   bool _isLoading = true;
   bool _isSaving = false;
 
@@ -53,6 +60,8 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
         _descriptionController.text = signal.description;
         _phoneController.text = signal.contactPhone;
         _signalType = signal.signalType;
+        _urgency = signal.urgency;
+        _originalUrgency = signal.urgency;
       } else {
         if (mounted) context.pop();
         return;
@@ -78,16 +87,47 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
     final l10n = AppLocalizations.of(context);
     setState(() => _isSaving = true);
 
-    try {
-      await FirebaseFirestore.instance
-          .collection(AppPreferencesService().signalsCollectionName)
-          .doc(widget.signalId)
-          .update({
-        'title': _titleController.text.trim(),
-        'description': _descriptionController.text.trim(),
-        'contactPhone': _phoneController.text.trim(),
-        'signalType': _signalType,
+    final signalRef = FirebaseFirestore.instance
+        .collection(AppPreferencesService().signalsCollectionName)
+        .doc(widget.signalId);
+    final userRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(FirebaseAuth.instance.currentUser!.uid);
+    final urgencyChanged = _urgency != _originalUrgency;
+
+    // One batch so an urgency change and the timeline entry describing it land
+    // together — a failed second write would leave a push sent with no history
+    // to explain it — and so the whole save costs one round trip.
+    final batch = FirebaseFirestore.instance.batch();
+    batch.update(signalRef, {
+      'title': _titleController.text.trim(),
+      'description': _descriptionController.text.trim(),
+      'contactPhone': _phoneController.text.trim(),
+      'signalType': _signalType,
+      'urgency': _urgency,
+      // Changing urgency here fires the same update notification as the
+      // details screen, so the actor has to be recorded — otherwise a stale
+      // lastUpdatedBy from an earlier status change decides who gets skipped.
+      'lastUpdatedBy': userRef,
+    });
+
+    // Same timeline entry the details screen writes. Without it, escalating
+    // to Red from this screen would push every subscriber while the case
+    // history showed nothing changed — and the spec's Red-Alert-misuse
+    // handling has nothing to review.
+    if (urgencyChanged) {
+      batch.set(signalRef.collection('comments').doc(), {
+        'type': 'urgency_change',
+        'oldUrgency': _originalUrgency,
+        'newUrgency': _urgency,
+        'createdAt': DateTime.now(),
+        'author': userRef,
       });
+    }
+
+    try {
+      await batch.commit();
+      _originalUrgency = _urgency;
 
       if (!mounted) return;
 
@@ -217,6 +257,22 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
                         border: const OutlineInputBorder(),
                       ),
                       keyboardType: TextInputType.phone,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      l10n.urgency,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    // Only the reporter can reach this screen at all
+                    // (_loadSignal pops otherwise), so no extra gate is needed
+                    // for the reporter-only urgency rule here.
+                    UrgencyPicker(
+                      value: _urgency,
+                      enabled: !_isSaving,
+                      onChanged: (value) => setState(() => _urgency = value),
                     ),
                   ],
                 ),

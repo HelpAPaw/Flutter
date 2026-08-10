@@ -30,76 +30,86 @@ enum TimeRange {
 /// Default time range for the map
 const defaultTimeRange = TimeRange.last30Days;
 
-/// Immutable state for signal type and status filters
+/// Immutable state for signal type, status and urgency filters
 @immutable
 class MapFilterState {
   final Set<int> selectedSignalTypes;
   final Set<int> selectedStatuses;
+  final Set<int> selectedUrgencies;
   final TimeRange selectedTimeRange;
 
   const MapFilterState({
-    this.selectedSignalTypes = const {0, 1, 2, 3, 4, 5, 6},
-    this.selectedStatuses = const {0, 1, 2},
+    this.selectedSignalTypes = allSignalTypes,
+    this.selectedStatuses = allStatuses,
+    this.selectedUrgencies = allUrgencies,
     this.selectedTimeRange = defaultTimeRange,
   });
 
-  /// All signal types selected (no filter active)
+  /// All signal types selected (no filter active).
+  ///
+  /// These three sets have to stay `const` (they are default arguments all the
+  /// way up to `MapScreenState`), so they can't be derived from their enums
+  /// here. `test/map_filter_state_test.dart` fails the build if one of them
+  /// drifts out of step — without that guard, appending a status or urgency
+  /// would silently leave it filtered off the map with no error anywhere.
   static const allSignalTypes = {0, 1, 2, 3, 4, 5, 6};
 
   /// All statuses selected (no filter active)
   static const allStatuses = {0, 1, 2};
 
+  /// All urgencies selected (no filter active)
+  static const allUrgencies = {0, 1, 2};
+
   /// Check if any filter is active
   bool get hasActiveFilters =>
-      selectedSignalTypes.length < 7 ||
-      selectedStatuses.length < 3 ||
+      selectedSignalTypes.length < allSignalTypes.length ||
+      selectedStatuses.length < allStatuses.length ||
+      selectedUrgencies.length < allUrgencies.length ||
       selectedTimeRange != defaultTimeRange;
 
   /// Check if a signal passes the current filter
-  bool signalPassesFilter(int signalType, int status) {
+  bool signalPassesFilter(int signalType, int status, int urgency) {
     return selectedSignalTypes.contains(signalType) &&
-        selectedStatuses.contains(status);
+        selectedStatuses.contains(status) &&
+        selectedUrgencies.contains(urgency);
   }
 
   MapFilterState copyWith({
     Set<int>? selectedSignalTypes,
     Set<int>? selectedStatuses,
+    Set<int>? selectedUrgencies,
     TimeRange? selectedTimeRange,
   }) {
     return MapFilterState(
       selectedSignalTypes: selectedSignalTypes ?? this.selectedSignalTypes,
       selectedStatuses: selectedStatuses ?? this.selectedStatuses,
+      selectedUrgencies: selectedUrgencies ?? this.selectedUrgencies,
       selectedTimeRange: selectedTimeRange ?? this.selectedTimeRange,
     );
   }
 
+  /// [set] with [value] added if absent, removed if present.
+  static Set<int> _toggled(Set<int> set, int value) =>
+      set.contains(value) ? ({...set}..remove(value)) : {...set, value};
+
   /// Toggle a signal type on/off
-  MapFilterState toggleSignalType(int type) {
-    final newTypes = Set<int>.from(selectedSignalTypes);
-    if (newTypes.contains(type)) {
-      newTypes.remove(type);
-    } else {
-      newTypes.add(type);
-    }
-    return copyWith(selectedSignalTypes: newTypes);
-  }
+  MapFilterState toggleSignalType(int type) =>
+      copyWith(selectedSignalTypes: _toggled(selectedSignalTypes, type));
 
   /// Toggle a status on/off
-  MapFilterState toggleStatus(int status) {
-    final newStatuses = Set<int>.from(selectedStatuses);
-    if (newStatuses.contains(status)) {
-      newStatuses.remove(status);
-    } else {
-      newStatuses.add(status);
-    }
-    return copyWith(selectedStatuses: newStatuses);
-  }
+  MapFilterState toggleStatus(int status) =>
+      copyWith(selectedStatuses: _toggled(selectedStatuses, status));
+
+  /// Toggle an urgency on/off
+  MapFilterState toggleUrgency(int urgency) =>
+      copyWith(selectedUrgencies: _toggled(selectedUrgencies, urgency));
 
   /// Select all filters
   MapFilterState selectAll() {
     return MapFilterState(
-      selectedSignalTypes: const {0, 1, 2, 3, 4, 5, 6},
-      selectedStatuses: const {0, 1, 2},
+      selectedSignalTypes: allSignalTypes,
+      selectedStatuses: allStatuses,
+      selectedUrgencies: allUrgencies,
       selectedTimeRange: selectedTimeRange,
     );
   }
@@ -109,6 +119,7 @@ class MapFilterState {
     return MapFilterState(
       selectedSignalTypes: const {},
       selectedStatuses: const {},
+      selectedUrgencies: const {},
       selectedTimeRange: selectedTimeRange,
     );
   }
@@ -119,6 +130,7 @@ class MapFilterState {
     return other is MapFilterState &&
         setEquals(other.selectedSignalTypes, selectedSignalTypes) &&
         setEquals(other.selectedStatuses, selectedStatuses) &&
+        setEquals(other.selectedUrgencies, selectedUrgencies) &&
         other.selectedTimeRange == selectedTimeRange;
   }
 
@@ -126,6 +138,7 @@ class MapFilterState {
   int get hashCode => Object.hash(
         Object.hashAll(selectedSignalTypes),
         Object.hashAll(selectedStatuses),
+        Object.hashAll(selectedUrgencies),
         selectedTimeRange,
       );
 }
@@ -137,6 +150,14 @@ class NewSignalFormState {
   final String description;
   final String phoneNumber;
   final int signalType;
+
+  /// Chosen urgency, or null if the reporter has not picked one yet.
+  ///
+  /// Nullable on purpose: the spec makes urgency a required field on every
+  /// case, so defaulting it would let people publish a level they never
+  /// actually chose — which is exactly how an urgency system stops meaning
+  /// anything. [isValid] keeps submit disabled until it is set.
+  final int? urgency;
   final XFile? selectedImage;
   final bool isSubmitting;
 
@@ -145,12 +166,16 @@ class NewSignalFormState {
     this.description = '',
     this.phoneNumber = '',
     this.signalType = 0,
+    this.urgency,
     this.selectedImage,
     this.isSubmitting = false,
   });
 
   /// Check if the form is valid for submission
-  bool get isValid => title.trim().isNotEmpty && description.trim().isNotEmpty;
+  bool get isValid =>
+      title.trim().isNotEmpty &&
+      description.trim().isNotEmpty &&
+      urgency != null;
 
   /// Check if title is empty
   bool get isTitleEmpty => title.trim().isEmpty;
@@ -158,11 +183,15 @@ class NewSignalFormState {
   /// Check if description is empty
   bool get isDescriptionEmpty => description.trim().isEmpty;
 
+  /// Check if no urgency has been chosen
+  bool get isUrgencyUnset => urgency == null;
+
   NewSignalFormState copyWith({
     String? title,
     String? description,
     String? phoneNumber,
     int? signalType,
+    int? urgency,
     XFile? selectedImage,
     bool? isSubmitting,
     bool clearImage = false,
@@ -172,6 +201,7 @@ class NewSignalFormState {
       description: description ?? this.description,
       phoneNumber: phoneNumber ?? this.phoneNumber,
       signalType: signalType ?? this.signalType,
+      urgency: urgency ?? this.urgency,
       selectedImage: clearImage ? null : (selectedImage ?? this.selectedImage),
       isSubmitting: isSubmitting ?? this.isSubmitting,
     );
@@ -190,6 +220,7 @@ class NewSignalFormState {
         other.description == description &&
         other.phoneNumber == phoneNumber &&
         other.signalType == signalType &&
+        other.urgency == urgency &&
         other.selectedImage?.path == selectedImage?.path &&
         other.isSubmitting == isSubmitting;
   }
@@ -200,6 +231,7 @@ class NewSignalFormState {
         description,
         phoneNumber,
         signalType,
+        urgency,
         selectedImage?.path,
         isSubmitting,
       );

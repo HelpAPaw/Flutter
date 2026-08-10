@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../models/signal.dart';
 import '../../viewmodels/map_view_model.dart';
+import '../urgency_picker.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 
 /// Form widget for creating a new signal
@@ -151,6 +152,28 @@ class _NewSignalFormState extends ConsumerState<NewSignalForm> {
                                     .setFormSignalType(index);
                               }
                             },
+                          ),
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              l10n.urgency,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          UrgencyPicker(
+                            value: formState.urgency,
+                            // The form is a short scrollable strip, so the
+                            // per-level guidance would push everything else out
+                            // of reach. The details/edit screens show it.
+                            showDescriptions: false,
+                            enabled: !formState.isSubmitting,
+                            onChanged: (urgency) => ref
+                                .read(mapViewModelProvider.notifier)
+                                .setFormUrgency(urgency),
                           ),
                           if (formState.selectedImage != null)
                             _buildImagePreview(context, formState.selectedImage!),
@@ -360,6 +383,9 @@ class _NewSignalFormState extends ConsumerState<NewSignalForm> {
         break;
       case 'description_empty':
         errorMessage = l10n.pleaseEnterDescription;
+        break;
+      case 'urgency_unset':
+        errorMessage = l10n.pleaseSelectUrgency;
         break;
       case 'not_authenticated':
         errorMessage = l10n.authenticationError;

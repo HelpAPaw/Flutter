@@ -27,6 +27,8 @@ import 'escape_leading.dart';
 import '../models/signal.dart';
 import '../models/signal_doc_state.dart';
 import '../models/signal_status.dart';
+import '../models/signal_urgency.dart';
+import 'urgency_picker.dart';
 import '../services/app_preferences_service.dart';
 import '../services/public_profile_service.dart';
 
@@ -54,6 +56,11 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _imagePicker = ImagePicker();
   bool _isUploadingPhoto = false;
+
+  /// Guards a status or urgency write. Without it a double-tap posts two
+  /// timeline entries and (on an urgency escalation) two pushes to every
+  /// subscriber.
+  bool _isApplyingLevelChange = false;
   final PageController _photoPageController = PageController();
   int _currentPhotoPage = 0;
   bool _hasNavigatedAway = false;
@@ -657,8 +664,33 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                 ),
                             ],
                           ),
+                          Text(' ${l10n.urgency}'),
+                          // Urgency is reporter-only. The spec restricts it to
+                          // the case holder, a moderator or an admin; there are
+                          // no moderator/admin roles yet, so the reporter is
+                          // the whole of that set today. Firestore's
+                          // `isStatusOnlyUpdate` enforces the same rule, so
+                          // hiding this is UI courtesy, not the security
+                          // boundary. Everyone else sees the level read-only.
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: isAuthor
+                                ? UrgencyPicker(
+                                    value: signal.urgency,
+                                    enabled: !_isApplyingLevelChange,
+                                    onChanged: (value) => _updateSignalUrgency(
+                                      signal.urgency,
+                                      value,
+                                    ),
+                                  )
+                                : Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: UrgencyChip(urgency: signal.urgency),
+                                  ),
+                          ),
+                          const SizedBox(height: 8),
                           Text(' ${l10n.status}'),
-                          DropdownButton(
+                          DropdownButton<int>(
                             itemHeight: 64,
                             isExpanded: true,
                             value: signal.status,
@@ -668,9 +700,16 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                       value: status.code,
                                       child: Row(
                                         children: [
+                                          // A coloured dot, not a map pin: the
+                                          // pin is the urgency vocabulary now,
+                                          // and reusing it here would re-imply
+                                          // that pin colour tracks status.
                                           Padding(
                                             padding: const EdgeInsets.all(12.0),
-                                            child: Image.asset(status.pinAsset),
+                                            child: CircleAvatar(
+                                              radius: 6,
+                                              backgroundColor: status.color,
+                                            ),
                                           ),
                                           SizedBox.fromSize(size: const Size(8, 8)),
                                           Text(status.label(l10n)),
@@ -679,11 +718,17 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                     ),
                                   )
                                   .toList(),
-                              onChanged: (value) {
-                                if (value != null) {
-                                  _updateSignalStatus(signal.status, value);
-                                }
-                              },
+                              // Disabled mid-write for the same reason as the
+                              // urgency picker: a second selection before the
+                              // first lands posts a duplicate timeline entry.
+                              onChanged: _isApplyingLevelChange
+                                  ? null
+                                  : (value) {
+                                      if (value != null) {
+                                        _updateSignalStatus(
+                                            signal.status, value);
+                                      }
+                                    },
                           ),
                           Column(
                             children: [
@@ -710,10 +755,58 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                       itemCount: comments.length,
                                       itemBuilder: (BuildContext context, int index) {
                                         Map<String, dynamic> commentData = comments[index].data()! as Map<String, dynamic>;
-                                        final bool isStatusChange = commentData['type'] == 'status_change';
+                                        final String? changeType =
+                                            commentData['type'] as String?;
+                                        final bool isUrgencyChange =
+                                            changeType == 'urgency_change';
+                                        final bool isSystemEntry =
+                                            changeType == 'status_change' ||
+                                                isUrgencyChange;
 
-                                        if (isStatusChange) {
-                                          // Status change entry
+                                        if (isSystemEntry) {
+                                          // Status / urgency change entry. Both
+                                          // are system entries carrying no
+                                          // `text`, so neither can fall through
+                                          // to the regular-comment branch below.
+                                          //
+                                          // The two variants are resolved here
+                                          // rather than deep inside the tree
+                                          // below, where the conditionals would
+                                          // sit at ~60 columns of indentation.
+                                          final int newLevel = isUrgencyChange
+                                              ? commentData['newUrgency']
+                                              : commentData['newStatus'];
+                                          // An urgency entry keeps the map pin,
+                                          // since that is exactly what changed
+                                          // on the map; a status entry gets a
+                                          // plain dot (status has no pin).
+                                          final Widget levelIcon = isUrgencyChange
+                                              ? Image.asset(
+                                                  SignalUrgency.fromCode(newLevel)
+                                                      .pinAsset,
+                                                  width: 24,
+                                                  height: 24,
+                                                )
+                                              : CircleAvatar(
+                                                  radius: 8,
+                                                  backgroundColor:
+                                                      SignalStatus.fromCode(
+                                                              newLevel)
+                                                          .color,
+                                                );
+                                          String levelText(String author) =>
+                                              isUrgencyChange
+                                                  ? l10n.changedUrgencyTo(
+                                                      author,
+                                                      SignalUrgency.fromCode(
+                                                              newLevel)
+                                                          .label(l10n),
+                                                    )
+                                                  : l10n.changedStatusTo(
+                                                      author,
+                                                      _getStatusName(
+                                                          context, newLevel),
+                                                    );
                                           return ListTile(
                                             title: Container(
                                               decoration: BoxDecoration(
@@ -728,11 +821,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                                 padding: const EdgeInsets.all(8.0),
                                                 child: Row(
                                                   children: [
-                                                    Image.asset(
-                                                      _getStatusIcon(commentData['newStatus']),
-                                                      width: 24,
-                                                      height: 24,
-                                                    ),
+                                                    levelIcon,
                                                     const SizedBox(width: 8),
                                                     Expanded(
                                                       child: FutureBuilder<String?>(
@@ -743,10 +832,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                                               ? snapshot.data!
                                                               : l10n.someone;
                                                           return Text(
-                                                            l10n.changedStatusTo(
-                                                              authorName,
-                                                              _getStatusName(context, commentData['newStatus']),
-                                                            ),
+                                                            levelText(authorName),
                                                             style: const TextStyle(fontStyle: FontStyle.italic),
                                                           );
                                                         },
@@ -993,10 +1079,55 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   String _getStatusName(BuildContext context, int status) =>
       SignalStatus.fromCode(status).label(AppLocalizations.of(context));
 
-  String _getStatusIcon(int status) => SignalStatus.fromCode(status).pinAsset;
-
   Future<void> _updateSignalStatus(int oldStatus, int newStatus) async {
-    if (oldStatus == newStatus) return;
+    await _applyLevelChange(
+      field: 'status',
+      commentType: 'status_change',
+      oldKey: 'oldStatus',
+      newKey: 'newStatus',
+      oldValue: oldStatus,
+      newValue: newStatus,
+      errorText: (l10n) => l10n.errorUpdatingStatus,
+    );
+  }
+
+  /// Change the signal's urgency and record it on the timeline.
+  ///
+  /// The Red Alert confirmation has already been handled by [UrgencyPicker]
+  /// before this is called.
+  Future<void> _updateSignalUrgency(int oldUrgency, int newUrgency) async {
+    await _applyLevelChange(
+      field: 'urgency',
+      commentType: 'urgency_change',
+      oldKey: 'oldUrgency',
+      newKey: 'newUrgency',
+      oldValue: oldUrgency,
+      newValue: newUrgency,
+      errorText: (l10n) => l10n.errorUpdatingUrgency,
+    );
+  }
+
+  /// Moves a signal from one level to another — status or urgency — and records
+  /// it on the case timeline.
+  ///
+  /// One implementation for both because the protocol around them is identical
+  /// and must stay so: gate on a real account, write the field, append the
+  /// matching system comment, subscribe the actor, report failure.
+  ///
+  /// `lastUpdatedBy` is stamped for both. The rules only need it on the
+  /// non-reporter status path, but `handleSignalUpdated` uses it to avoid
+  /// notifying whoever made the change — so leaving it stale on an urgency
+  /// write would silently mute a subscriber.
+  Future<void> _applyLevelChange({
+    required String field,
+    required String commentType,
+    required String oldKey,
+    required String newKey,
+    required int oldValue,
+    required int newValue,
+    required String Function(AppLocalizations) errorText,
+  }) async {
+    if (oldValue == newValue || _isApplyingLevelChange) return;
 
     if (!RepositoryProvider.instance.userRepository.canModifyData) {
       _showSignInDialog();
@@ -1004,29 +1135,37 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     }
 
     final user = FirebaseAuth.instance.currentUser!;
+    final userRef =
+        FirebaseFirestore.instance.collection('users').doc(user.uid);
     final signalRef = _signalRef;
 
+    setState(() => _isApplyingLevelChange = true);
+
+    // One batch, so the field change and the timeline entry it describes land
+    // together or not at all. Written separately, a failed second write left a
+    // notification sent with no history to explain it.
+    final batch = FirebaseFirestore.instance.batch();
+    batch.update(signalRef, {field: newValue, 'lastUpdatedBy': userRef});
+    batch.set(signalRef.collection('comments').doc(), {
+      'type': commentType,
+      oldKey: oldValue,
+      newKey: newValue,
+      'createdAt': DateTime.now(),
+      'author': userRef,
+    });
+
     try {
-      await signalRef.update({
-        'status': newStatus,
-        'lastUpdatedBy': FirebaseFirestore.instance.collection('users').doc(user.uid),
-      });
-
-      await signalRef.collection('comments').add({
-        'type': 'status_change',
-        'oldStatus': oldStatus,
-        'newStatus': newStatus,
-        'createdAt': DateTime.now(),
-        'author': FirebaseFirestore.instance.collection('users').doc(user.uid),
-      });
-
-      await _subscribeToSignal(user.uid);
+      // The subscription is independent and best-effort (it swallows its own
+      // errors), so it overlaps the commit instead of adding a round trip.
+      await Future.wait([batch.commit(), _subscribeToSignal(user.uid)]);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppLocalizations.of(context).errorUpdatingStatus)),
+          SnackBar(content: Text(errorText(AppLocalizations.of(context)))),
         );
       }
+    } finally {
+      if (mounted) setState(() => _isApplyingLevelChange = false);
     }
   }
 

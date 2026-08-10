@@ -141,6 +141,13 @@ class MapViewModel extends Notifier<MapScreenState> {
     );
   }
 
+  /// Toggle an urgency filter
+  void toggleUrgency(int urgency) {
+    state = state.copyWith(
+      filterState: state.filterState.toggleUrgency(urgency),
+    );
+  }
+
   /// Set the time range filter
   void setTimeRange(TimeRange timeRange) {
     state = state.copyWith(
@@ -163,8 +170,8 @@ class MapViewModel extends Notifier<MapScreenState> {
   }
 
   /// Check if a signal passes the current filter
-  bool signalPassesFilter(int signalType, int status) {
-    return state.filterState.signalPassesFilter(signalType, status);
+  bool signalPassesFilter(int signalType, int status, int urgency) {
+    return state.filterState.signalPassesFilter(signalType, status, urgency);
   }
 
   // ============================================================
@@ -216,6 +223,13 @@ class MapViewModel extends Notifier<MapScreenState> {
     );
   }
 
+  /// Set form urgency
+  void setFormUrgency(int urgency) {
+    state = state.copyWith(
+      formState: state.formState.copyWith(urgency: urgency),
+    );
+  }
+
   /// Set selected image
   void setFormImage(XFile? image) {
     state = state.copyWith(
@@ -246,10 +260,13 @@ class MapViewModel extends Notifier<MapScreenState> {
       if (state.formState.isDescriptionEmpty) {
         return (false, 'description_empty');
       }
+      if (state.formState.isUrgencyUnset) {
+        return (false, 'urgency_unset');
+      }
       return (false, 'invalid_form');
     }
 
-    FirebaseCrashlytics.instance.log('Signal: Submitting - type: ${state.formState.signalType}, location: $latitude/$longitude');
+    FirebaseCrashlytics.instance.log('Signal: Submitting - type: ${state.formState.signalType}, urgency: ${state.formState.urgency}, location: $latitude/$longitude');
 
     state = state.copyWith(
       formState: state.formState.copyWith(isSubmitting: true),
@@ -275,6 +292,8 @@ class MapViewModel extends Notifier<MapScreenState> {
         latitude: latitude,
         longitude: longitude,
         reporterUserId: userId,
+        // Non-null: `isValid` gates submission on it above.
+        urgency: state.formState.urgency!,
       );
 
       if (!result.success) {

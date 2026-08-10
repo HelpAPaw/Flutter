@@ -20,6 +20,28 @@
   "statusInProgress": "In progress",
   "statusResolved": "Resolved",
 
+  "urgency": "Urgency",
+  "urgencyGreen": "Green — under control",
+  "urgencyGreenDescription": "Not in immediate danger, or the situation is being managed.",
+  "urgencyAmber": "Amber — support needed ASAP",
+  "urgencyAmberDescription": "Needs help quickly, but is not life-or-death within hours.",
+  "urgencyRed": "Red — immediate critical help",
+  "urgencyRedDescription": "Serious harm, death or disappearance may follow if help does not happen now.",
+  "pleaseSelectUrgency": "Please select how urgent this is",
+  "errorUpdatingUrgency": "Failed to update urgency. Please try again.",
+  "changedUrgencyTo": "{name} changed the urgency to {urgency}",
+  "@changedUrgencyTo": {
+    "placeholders": {
+      "name": {"type": "String"},
+      "urgency": {"type": "String"}
+    }
+  },
+
+  "redAlertConfirmTitle": "Publish as a Red Alert?",
+  "redAlertConfirmBody": "Red Alert is only for critical cases where the animal may die, disappear, be seriously harmed, or remain in immediate danger if help does not happen now.\n\nMisusing Red Alert reduces trust in the system and may affect your account.",
+  "redAlertConfirmCheckbox": "I understand and confirm this is an immediate critical case",
+  "redAlertConfirmAction": "Confirm Red Alert",
+
   "signalTypeEmergency": "Emergency",
   "signalTypeLostOrFound": "Lost or Found",
   "signalTypeBloodDonation": "Blood donation",
@@ -301,7 +323,9 @@
   "faqHowHelpAnswer": "When you see a signal on the map, tap it to view details. You can leave a comment to coordinate with others, update the signal status if you're helping, or contact the person who created the signal.",
 
   "faqWhatStatusesMean": "What do the signal statuses mean?",
-  "faqWhatStatusesMeanAnswer": "Red (Needs help): The animal still needs assistance.\nOrange (In progress): Someone is working on helping.\nGreen (Resolved): The animal has received help or the situation is resolved.",
+  "faqWhatStatusesMeanAnswer": "Needs help: Nobody has taken this on yet.\nIn progress: Someone is working on helping.\nResolved: The animal has received help or the situation is resolved.\n\nStatus is about how far along the response is. It is separate from urgency, which is what the pin colour shows.",
+  "faqWhatUrgencyMeans": "What do the pin colours mean?",
+  "faqWhatUrgencyMeansAnswer": "Pin colour shows urgency — how serious things are if nobody acts:\n\nGreen (Under control): The animal is not in immediate danger, or the situation is being managed.\nAmber (Support needed ASAP): Help is needed quickly, but it is not life-or-death within hours.\nRed (Immediate critical help): The animal may die, disappear or be seriously harmed if help does not happen now.\n\nOnly the person who created a signal can change its urgency. Please keep Red for genuine emergencies — if it is overused it stops meaning anything and help gets pulled away from animals truly at risk.",
 
   "faqCantHelpDirectly": "I'm not able to help directly. What can I do?",
   "faqCantHelpDirectlyAnswer": "You can share the signal with friends who might be able to help, leave helpful comments with advice or contacts of local animal rescue organizations, or simply spread awareness about the app to grow our community of helpers.",
@@ -414,6 +438,7 @@
   },
 
   "notificationNewSignalTitle": "New signal nearby",
+  "notificationNewRedAlertTitle": "Red Alert nearby",
   "@notificationNewSignalTitle": {
     "description": "Inbox row title for a signal reported near the user. The stored push text is English-only, so the inbox row is rendered from these keys instead."
   },
@@ -430,6 +455,15 @@
     "placeholders": {
       "signalTitle": {"type": "String"},
       "status": {"type": "String"}
+    }
+  },
+  "notificationUrgencyChangeTitle": "Signal urgency raised",
+  "notificationRedAlertTitle": "Escalated to Red Alert",
+  "notificationUrgencyChangeBody": "{signalTitle}: {urgency}",
+  "@notificationUrgencyChangeBody": {
+    "placeholders": {
+      "signalTitle": {"type": "String"},
+      "urgency": {"type": "String"}
     }
   },
   "notificationNewCommentTitle": "New comment on: {signalTitle}",

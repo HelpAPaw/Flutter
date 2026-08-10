@@ -200,6 +200,90 @@ abstract class AppLocalizations {
   /// **'Resolved'**
   String get statusResolved;
 
+  /// No description provided for @urgency.
+  ///
+  /// In en, this message translates to:
+  /// **'Urgency'**
+  String get urgency;
+
+  /// No description provided for @urgencyGreen.
+  ///
+  /// In en, this message translates to:
+  /// **'Green — under control'**
+  String get urgencyGreen;
+
+  /// No description provided for @urgencyGreenDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Not in immediate danger, or the situation is being managed.'**
+  String get urgencyGreenDescription;
+
+  /// No description provided for @urgencyAmber.
+  ///
+  /// In en, this message translates to:
+  /// **'Amber — support needed ASAP'**
+  String get urgencyAmber;
+
+  /// No description provided for @urgencyAmberDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs help quickly, but is not life-or-death within hours.'**
+  String get urgencyAmberDescription;
+
+  /// No description provided for @urgencyRed.
+  ///
+  /// In en, this message translates to:
+  /// **'Red — immediate critical help'**
+  String get urgencyRed;
+
+  /// No description provided for @urgencyRedDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Serious harm, death or disappearance may follow if help does not happen now.'**
+  String get urgencyRedDescription;
+
+  /// No description provided for @pleaseSelectUrgency.
+  ///
+  /// In en, this message translates to:
+  /// **'Please select how urgent this is'**
+  String get pleaseSelectUrgency;
+
+  /// No description provided for @errorUpdatingUrgency.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to update urgency. Please try again.'**
+  String get errorUpdatingUrgency;
+
+  /// No description provided for @changedUrgencyTo.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} changed the urgency to {urgency}'**
+  String changedUrgencyTo(String name, String urgency);
+
+  /// No description provided for @redAlertConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Publish as a Red Alert?'**
+  String get redAlertConfirmTitle;
+
+  /// No description provided for @redAlertConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Red Alert is only for critical cases where the animal may die, disappear, be seriously harmed, or remain in immediate danger if help does not happen now.\n\nMisusing Red Alert reduces trust in the system and may affect your account.'**
+  String get redAlertConfirmBody;
+
+  /// No description provided for @redAlertConfirmCheckbox.
+  ///
+  /// In en, this message translates to:
+  /// **'I understand and confirm this is an immediate critical case'**
+  String get redAlertConfirmCheckbox;
+
+  /// No description provided for @redAlertConfirmAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm Red Alert'**
+  String get redAlertConfirmAction;
+
   /// No description provided for @signalTypeEmergency.
   ///
   /// In en, this message translates to:
@@ -1229,8 +1313,20 @@ abstract class AppLocalizations {
   /// No description provided for @faqWhatStatusesMeanAnswer.
   ///
   /// In en, this message translates to:
-  /// **'Red (Needs help): The animal still needs assistance.\nOrange (In progress): Someone is working on helping.\nGreen (Resolved): The animal has received help or the situation is resolved.'**
+  /// **'Needs help: Nobody has taken this on yet.\nIn progress: Someone is working on helping.\nResolved: The animal has received help or the situation is resolved.\n\nStatus is about how far along the response is. It is separate from urgency, which is what the pin colour shows.'**
   String get faqWhatStatusesMeanAnswer;
+
+  /// No description provided for @faqWhatUrgencyMeans.
+  ///
+  /// In en, this message translates to:
+  /// **'What do the pin colours mean?'**
+  String get faqWhatUrgencyMeans;
+
+  /// No description provided for @faqWhatUrgencyMeansAnswer.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin colour shows urgency — how serious things are if nobody acts:\n\nGreen (Under control): The animal is not in immediate danger, or the situation is being managed.\nAmber (Support needed ASAP): Help is needed quickly, but it is not life-or-death within hours.\nRed (Immediate critical help): The animal may die, disappear or be seriously harmed if help does not happen now.\n\nOnly the person who created a signal can change its urgency. Please keep Red for genuine emergencies — if it is overused it stops meaning anything and help gets pulled away from animals truly at risk.'**
+  String get faqWhatUrgencyMeansAnswer;
 
   /// No description provided for @faqCantHelpDirectly.
   ///
@@ -1586,6 +1682,12 @@ abstract class AppLocalizations {
   /// **'New signal nearby'**
   String get notificationNewSignalTitle;
 
+  /// No description provided for @notificationNewRedAlertTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Red Alert nearby'**
+  String get notificationNewRedAlertTitle;
+
   /// No description provided for @notificationNewSignalBody.
   ///
   /// In en, this message translates to:
@@ -1603,6 +1705,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{signalTitle}: {status}'**
   String notificationStatusChangeBody(String signalTitle, String status);
+
+  /// No description provided for @notificationUrgencyChangeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Signal urgency raised'**
+  String get notificationUrgencyChangeTitle;
+
+  /// No description provided for @notificationRedAlertTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Escalated to Red Alert'**
+  String get notificationRedAlertTitle;
+
+  /// No description provided for @notificationUrgencyChangeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{signalTitle}: {urgency}'**
+  String notificationUrgencyChangeBody(String signalTitle, String urgency);
 
   /// No description provided for @notificationNewCommentTitle.
   ///

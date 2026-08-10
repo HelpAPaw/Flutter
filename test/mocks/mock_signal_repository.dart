@@ -52,6 +52,7 @@ class MockSignalRepository implements SignalRepository {
     required double latitude,
     required double longitude,
     required String reporterUserId,
+    required int urgency,
   }) async {
     createdSignals.add({
       'title': title,
@@ -61,6 +62,7 @@ class MockSignalRepository implements SignalRepository {
       'latitude': latitude,
       'longitude': longitude,
       'reporterUserId': reporterUserId,
+      'urgency': urgency,
     });
 
     if (shouldCreateSucceed) {

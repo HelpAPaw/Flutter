@@ -60,6 +60,56 @@ class AppLocalizationsEn extends AppLocalizations {
   String get statusResolved => 'Resolved';
 
   @override
+  String get urgency => 'Urgency';
+
+  @override
+  String get urgencyGreen => 'Green — under control';
+
+  @override
+  String get urgencyGreenDescription =>
+      'Not in immediate danger, or the situation is being managed.';
+
+  @override
+  String get urgencyAmber => 'Amber — support needed ASAP';
+
+  @override
+  String get urgencyAmberDescription =>
+      'Needs help quickly, but is not life-or-death within hours.';
+
+  @override
+  String get urgencyRed => 'Red — immediate critical help';
+
+  @override
+  String get urgencyRedDescription =>
+      'Serious harm, death or disappearance may follow if help does not happen now.';
+
+  @override
+  String get pleaseSelectUrgency => 'Please select how urgent this is';
+
+  @override
+  String get errorUpdatingUrgency =>
+      'Failed to update urgency. Please try again.';
+
+  @override
+  String changedUrgencyTo(String name, String urgency) {
+    return '$name changed the urgency to $urgency';
+  }
+
+  @override
+  String get redAlertConfirmTitle => 'Publish as a Red Alert?';
+
+  @override
+  String get redAlertConfirmBody =>
+      'Red Alert is only for critical cases where the animal may die, disappear, be seriously harmed, or remain in immediate danger if help does not happen now.\n\nMisusing Red Alert reduces trust in the system and may affect your account.';
+
+  @override
+  String get redAlertConfirmCheckbox =>
+      'I understand and confirm this is an immediate critical case';
+
+  @override
+  String get redAlertConfirmAction => 'Confirm Red Alert';
+
+  @override
   String get signalTypeEmergency => 'Emergency';
 
   @override
@@ -635,7 +685,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get faqWhatStatusesMeanAnswer =>
-      'Red (Needs help): The animal still needs assistance.\nOrange (In progress): Someone is working on helping.\nGreen (Resolved): The animal has received help or the situation is resolved.';
+      'Needs help: Nobody has taken this on yet.\nIn progress: Someone is working on helping.\nResolved: The animal has received help or the situation is resolved.\n\nStatus is about how far along the response is. It is separate from urgency, which is what the pin colour shows.';
+
+  @override
+  String get faqWhatUrgencyMeans => 'What do the pin colours mean?';
+
+  @override
+  String get faqWhatUrgencyMeansAnswer =>
+      'Pin colour shows urgency — how serious things are if nobody acts:\n\nGreen (Under control): The animal is not in immediate danger, or the situation is being managed.\nAmber (Support needed ASAP): Help is needed quickly, but it is not life-or-death within hours.\nRed (Immediate critical help): The animal may die, disappear or be seriously harmed if help does not happen now.\n\nOnly the person who created a signal can change its urgency. Please keep Red for genuine emergencies — if it is overused it stops meaning anything and help gets pulled away from animals truly at risk.';
 
   @override
   String get faqCantHelpDirectly =>
@@ -848,6 +905,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationNewSignalTitle => 'New signal nearby';
 
   @override
+  String get notificationNewRedAlertTitle => 'Red Alert nearby';
+
+  @override
   String notificationNewSignalBody(String signalType, String signalTitle) {
     return '$signalType: $signalTitle';
   }
@@ -858,6 +918,17 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String notificationStatusChangeBody(String signalTitle, String status) {
     return '$signalTitle: $status';
+  }
+
+  @override
+  String get notificationUrgencyChangeTitle => 'Signal urgency raised';
+
+  @override
+  String get notificationRedAlertTitle => 'Escalated to Red Alert';
+
+  @override
+  String notificationUrgencyChangeBody(String signalTitle, String urgency) {
+    return '$signalTitle: $urgency';
   }
 
   @override

@@ -53,6 +53,7 @@ class FirebaseSignalRepository implements SignalRepository {
     required double latitude,
     required double longitude,
     required String reporterUserId,
+    required int urgency,
   }) async {
     try {
       final signalLocation = {
@@ -69,6 +70,7 @@ class FirebaseSignalRepository implements SignalRepository {
         contactPhone: phoneNumber,
         location: signalLocation,
         createdAt: Timestamp.now(),
+        urgency: urgency,
       );
 
       final docRef = await _signalsRef.add(newSignal.toJson());

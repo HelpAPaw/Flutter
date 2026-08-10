@@ -68,6 +68,10 @@ class FaqsPage extends StatelessWidget {
                 answer: l10n.faqHowHelpAnswer,
               ),
               _FaqItem(
+                question: l10n.faqWhatUrgencyMeans,
+                answer: l10n.faqWhatUrgencyMeansAnswer,
+              ),
+              _FaqItem(
                 question: l10n.faqWhatStatusesMean,
                 answer: l10n.faqWhatStatusesMeanAnswer,
               ),

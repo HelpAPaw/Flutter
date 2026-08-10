@@ -51,6 +51,13 @@ class SignalWithId {
   GeoPoint get location => rawData['location']['geopoint'] as GeoPoint;
   int get status => rawData['status'] ?? 0;
   int get signalType => rawData['signalType'] ?? 0;
+
+  /// Urgency code, falling back to the status-derived value for documents
+  /// written before the urgency system. See [Signal.urgencyFrom].
+  ///
+  /// Reads the already-parsed value rather than re-deriving from [rawData]:
+  /// marker building calls this twice per signal per rebuild.
+  int get urgency => signal.urgency;
 }
 
 /// Abstract interface for signal CRUD operations and geo-queries
@@ -75,6 +82,7 @@ abstract class SignalRepository {
     required double latitude,
     required double longitude,
     required String reporterUserId,
+    required int urgency,
   });
 
   /// Update signal status

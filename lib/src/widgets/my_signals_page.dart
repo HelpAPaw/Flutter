@@ -5,6 +5,9 @@ import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/src/models/signal.dart';
 import 'package:help_a_paw/src/models/signal_status.dart';
+import 'package:help_a_paw/src/models/signal_urgency.dart';
+import 'package:help_a_paw/src/widgets/level_chip.dart';
+import 'package:help_a_paw/src/widgets/urgency_picker.dart';
 import 'package:help_a_paw/src/services/app_preferences_service.dart';
 import 'package:intl/intl.dart';
 
@@ -15,6 +18,8 @@ class MySignalsPage extends StatelessWidget {
   const MySignalsPage({super.key});
 
   Color _getStatusColor(int status) => SignalStatus.fromCode(status).color;
+
+  Color _getUrgencyColor(int urgency) => SignalUrgency.fromCode(urgency).color;
 
   String _getStatusText(int status, AppLocalizations l10n) =>
       SignalStatus.fromCode(status).label(l10n);
@@ -146,11 +151,15 @@ class MySignalsPage extends StatelessWidget {
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
                       child: ListTile(
+                        // Tinted by urgency, not status: colour means "how bad
+                        // is it" everywhere in the app now, and a row whose
+                        // avatar and chip disagreed about what red meant would
+                        // reintroduce exactly the confusion this replaces.
                         leading: CircleAvatar(
-                          backgroundColor: _getStatusColor(signal.status).withAlpha(51),
+                          backgroundColor: _getUrgencyColor(signal.urgency).withAlpha(51),
                           child: Icon(
                             _getSignalTypeIcon(signal.signalType),
-                            color: _getStatusColor(signal.status),
+                            color: _getUrgencyColor(signal.urgency),
                           ),
                         ),
                         title: Text(
@@ -167,27 +176,16 @@ class MySignalsPage extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 4),
-                            Row(
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 4,
+                              crossAxisAlignment: WrapCrossAlignment.center,
                               children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: _getStatusColor(signal.status).withAlpha(51),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    _getStatusText(signal.status, l10n),
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: _getStatusColor(signal.status),
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
+                                UrgencyChip(urgency: signal.urgency),
+                                LevelChip(
+                                  color: _getStatusColor(signal.status),
+                                  label: _getStatusText(signal.status, l10n),
                                 ),
-                                const SizedBox(width: 8),
                                 Text(
                                   dateStr,
                                   style: TextStyle(

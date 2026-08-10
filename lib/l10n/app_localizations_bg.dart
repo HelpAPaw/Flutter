@@ -60,6 +60,56 @@ class AppLocalizationsBg extends AppLocalizations {
   String get statusResolved => 'Решен';
 
   @override
+  String get urgency => 'Спешност';
+
+  @override
+  String get urgencyGreen => 'Зелено — под контрол';
+
+  @override
+  String get urgencyGreenDescription =>
+      'Животното не е в непосредствена опасност или ситуацията е овладяна.';
+
+  @override
+  String get urgencyAmber => 'Оранжево — нужна е помощ скоро';
+
+  @override
+  String get urgencyAmberDescription =>
+      'Нужна е бърза помощ, но не е въпрос на живот и смърт в рамките на часове.';
+
+  @override
+  String get urgencyRed => 'Червено — незабавна критична помощ';
+
+  @override
+  String get urgencyRedDescription =>
+      'Възможни са тежки наранявания, смърт или изчезване, ако помощта не дойде сега.';
+
+  @override
+  String get pleaseSelectUrgency => 'Моля, изберете колко спешен е случаят';
+
+  @override
+  String get errorUpdatingUrgency =>
+      'Неуспешна промяна на спешността. Моля, опитайте отново.';
+
+  @override
+  String changedUrgencyTo(String name, String urgency) {
+    return '$name промени спешността на $urgency';
+  }
+
+  @override
+  String get redAlertConfirmTitle => 'Публикуване като червен сигнал?';
+
+  @override
+  String get redAlertConfirmBody =>
+      'Червен сигнал се използва само за критични случаи, при които животното може да умре, да изчезне, да бъде сериозно наранено или да остане в непосредствена опасност, ако помощта не дойде сега.\n\nЗлоупотребата с червен сигнал намалява доверието в системата и може да се отрази на профила ви.';
+
+  @override
+  String get redAlertConfirmCheckbox =>
+      'Разбирам и потвърждавам, че това е незабавен критичен случай';
+
+  @override
+  String get redAlertConfirmAction => 'Потвърди червен сигнал';
+
+  @override
   String get signalTypeEmergency => 'Спешен случай';
 
   @override
@@ -644,7 +694,14 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get faqWhatStatusesMeanAnswer =>
-      'Червен (Нужна е помощ): Животното все още се нуждае от помощ.\nОранжев (В процес): Някой работи по проблема.\nЗелен (Решен): Животното е получило помощ или ситуацията е разрешена.';
+      'Нужна е помощ: Все още никой не се е заел със сигнала.\nВ процес: Някой работи по проблема.\nРешен: Животното е получило помощ или ситуацията е разрешена.\n\nСтатусът показва докъде е стигнала реакцията. Той е отделен от спешността, която се вижда по цвета на маркера.';
+
+  @override
+  String get faqWhatUrgencyMeans => 'Какво означават цветовете на маркерите?';
+
+  @override
+  String get faqWhatUrgencyMeansAnswer =>
+      'Цветът на маркера показва спешността — колко сериозно е положението, ако никой не реагира:\n\nЗелено (Под контрол): Животното не е в непосредствена опасност или ситуацията е овладяна.\nОранжево (Нужна е помощ скоро): Помощта е нужна бързо, но не е въпрос на живот и смърт в рамките на часове.\nЧервено (Незабавна критична помощ): Животното може да умре, да изчезне или да бъде сериозно наранено, ако помощта не дойде сега.\n\nСамо създателят на сигнала може да променя спешността. Моля, пазете червеното за истински спешни случаи — при злоупотреба то губи смисъл и помощта се отклонява от животните в реален риск.';
 
   @override
   String get faqCantHelpDirectly =>
@@ -859,6 +916,9 @@ class AppLocalizationsBg extends AppLocalizations {
   String get notificationNewSignalTitle => 'Нов сигнал наблизо';
 
   @override
+  String get notificationNewRedAlertTitle => 'Червен сигнал наблизо';
+
+  @override
   String notificationNewSignalBody(String signalType, String signalTitle) {
     return '$signalType: $signalTitle';
   }
@@ -869,6 +929,18 @@ class AppLocalizationsBg extends AppLocalizations {
   @override
   String notificationStatusChangeBody(String signalTitle, String status) {
     return '$signalTitle: $status';
+  }
+
+  @override
+  String get notificationUrgencyChangeTitle =>
+      'Спешността на сигнал е повишена';
+
+  @override
+  String get notificationRedAlertTitle => 'Повишен до червен сигнал';
+
+  @override
+  String notificationUrgencyChangeBody(String signalTitle, String urgency) {
+    return '$signalTitle: $urgency';
   }
 
   @override

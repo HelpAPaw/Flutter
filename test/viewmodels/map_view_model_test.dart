@@ -5,6 +5,7 @@ import 'package:firebase_crashlytics_platform_interface/firebase_crashlytics_pla
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart' show XFile;
+import 'package:help_a_paw/src/models/signal_urgency.dart';
 import 'package:help_a_paw/src/repositories/repository_provider.dart';
 import 'package:help_a_paw/src/state/map_state.dart';
 import 'package:help_a_paw/src/viewmodels/map_view_model.dart';
@@ -164,11 +165,22 @@ void main() {
       expect(viewModel.state.filterState.selectedStatuses.length, 3);
     });
 
+    test('toggleUrgency removes and restores an urgency', () {
+      viewModel.toggleUrgency(2); // remove Red
+      expect(viewModel.state.filterState.selectedUrgencies.contains(2), false);
+      expect(viewModel.state.filterState.hasActiveFilters, true);
+
+      viewModel.toggleUrgency(2); // add back
+      expect(viewModel.state.filterState.selectedUrgencies.contains(2), true);
+      expect(viewModel.state.filterState.hasActiveFilters, false);
+    });
+
     test('clearAllFilters clears all', () {
       viewModel.clearAllFilters();
 
       expect(viewModel.state.filterState.selectedSignalTypes, isEmpty);
       expect(viewModel.state.filterState.selectedStatuses, isEmpty);
+      expect(viewModel.state.filterState.selectedUrgencies, isEmpty);
       expect(viewModel.state.filterState.hasActiveFilters, true);
     });
 
@@ -178,23 +190,30 @@ void main() {
 
       expect(viewModel.state.filterState.selectedSignalTypes.length, 7);
       expect(viewModel.state.filterState.selectedStatuses.length, 3);
+      expect(viewModel.state.filterState.selectedUrgencies.length, 3);
       expect(viewModel.state.filterState.hasActiveFilters, false);
     });
 
-    test('signalPassesFilter checks both type and status', () {
+    test('signalPassesFilter checks type, status and urgency', () {
       // All filters selected - everything passes
-      expect(viewModel.signalPassesFilter(0, 0), true);
-      expect(viewModel.signalPassesFilter(3, 2), true);
+      expect(viewModel.signalPassesFilter(0, 0, 0), true);
+      expect(viewModel.signalPassesFilter(3, 2, 2), true);
 
       // Remove type 0
       viewModel.toggleSignalType(0);
-      expect(viewModel.signalPassesFilter(0, 0), false);
-      expect(viewModel.signalPassesFilter(1, 0), true);
+      expect(viewModel.signalPassesFilter(0, 0, 0), false);
+      expect(viewModel.signalPassesFilter(1, 0, 0), true);
 
       // Remove status 2
       viewModel.toggleStatus(2);
-      expect(viewModel.signalPassesFilter(1, 2), false);
-      expect(viewModel.signalPassesFilter(1, 1), true);
+      expect(viewModel.signalPassesFilter(1, 2, 0), false);
+      expect(viewModel.signalPassesFilter(1, 1, 0), true);
+
+      // Remove urgency 2 (Red). Urgency filters independently of status: a
+      // signal can be In progress AND Red.
+      viewModel.toggleUrgency(2);
+      expect(viewModel.signalPassesFilter(1, 1, 2), false);
+      expect(viewModel.signalPassesFilter(1, 1, 1), true);
     });
   });
 
@@ -275,9 +294,44 @@ void main() {
       expect(errorMessage, 'description_empty');
     });
 
+    test('submitSignal fails when no urgency was chosen', () async {
+      // Urgency is a required field on every case. Defaulting it would let
+      // people publish a level they never picked, which is how an urgency
+      // system stops meaning anything.
+      viewModel.updateFormTitle('Title');
+      viewModel.updateFormDescription('Description');
+
+      final (success, errorMessage) = await viewModel.submitSignal(
+        latitude: 42.0,
+        longitude: 23.0,
+      );
+
+      expect(success, false);
+      expect(errorMessage, 'urgency_unset');
+      expect(mockSignalRepo.createdSignals, isEmpty);
+    });
+
+    test('submitSignal passes the chosen urgency through', () async {
+      viewModel.updateFormTitle('Injured dog');
+      viewModel.updateFormDescription('Hit by a car');
+      viewModel.setFormUrgency(SignalUrgency.red.code);
+
+      final (success, _) = await viewModel.submitSignal(
+        latitude: 42.0,
+        longitude: 23.0,
+      );
+
+      expect(success, true);
+      expect(
+        mockSignalRepo.createdSignals.single['urgency'],
+        SignalUrgency.red.code,
+      );
+    });
+
     test('submitSignal succeeds with valid form', () async {
       viewModel.updateFormTitle('Help needed');
       viewModel.updateFormDescription('Dog stuck in fence');
+      viewModel.setFormUrgency(SignalUrgency.amber.code);
       viewModel.updateFormPhoneNumber('0888123456');
 
       final (success, errorMessage) = await viewModel.submitSignal(
@@ -305,6 +359,7 @@ void main() {
     test('submitSignal attaches the photo when the upload succeeds', () async {
       viewModel.updateFormTitle('Help needed');
       viewModel.updateFormDescription('Dog stuck in fence');
+      viewModel.setFormUrgency(SignalUrgency.amber.code);
       viewModel.setFormImage(XFile('/tmp/mock-photo.jpg'));
 
       final (success, errorMessage) = await viewModel.submitSignal(
@@ -331,6 +386,7 @@ void main() {
 
       viewModel.updateFormTitle('Help needed');
       viewModel.updateFormDescription('Dog stuck in fence');
+      viewModel.setFormUrgency(SignalUrgency.amber.code);
       viewModel.setFormImage(XFile('/tmp/mock-photo.jpg'));
 
       final (success, errorMessage) = await viewModel.submitSignal(
@@ -357,6 +413,7 @@ void main() {
 
       viewModel.updateFormTitle('Title');
       viewModel.updateFormDescription('Description');
+      viewModel.setFormUrgency(SignalUrgency.amber.code);
 
       final (success, errorMessage) = await viewModel.submitSignal(
         latitude: 42.0,
@@ -373,6 +430,7 @@ void main() {
 
       viewModel.updateFormTitle('Title');
       viewModel.updateFormDescription('Description');
+      viewModel.setFormUrgency(SignalUrgency.amber.code);
 
       final (success, errorMessage) = await viewModel.submitSignal(
         latitude: 42.0,
@@ -386,6 +444,7 @@ void main() {
     test('submitSignal stores newly created signal ID', () async {
       viewModel.updateFormTitle('Title');
       viewModel.updateFormDescription('Description');
+      viewModel.setFormUrgency(SignalUrgency.amber.code);
 
       await viewModel.submitSignal(latitude: 42.0, longitude: 23.0);
       expect(viewModel.state.newlyCreatedSignalId, isNotNull);
@@ -437,7 +496,7 @@ void main() {
   });
 
   group('NewSignalFormState immutability', () {
-    test('isValid requires title and description', () {
+    test('isValid requires title, description and urgency', () {
       const emptyForm = NewSignalFormState();
       expect(emptyForm.isValid, false);
 
@@ -447,7 +506,17 @@ void main() {
       const descOnly = NewSignalFormState(description: 'Desc');
       expect(descOnly.isValid, false);
 
-      const valid = NewSignalFormState(title: 'Title', description: 'Desc');
+      // Urgency is a required field on every case (spec 4.4), so title +
+      // description alone is not publishable.
+      const noUrgency = NewSignalFormState(title: 'Title', description: 'Desc');
+      expect(noUrgency.isValid, false);
+      expect(noUrgency.isUrgencyUnset, true);
+
+      final valid = NewSignalFormState(
+        title: 'Title',
+        description: 'Desc',
+        urgency: SignalUrgency.amber.code,
+      );
       expect(valid.isValid, true);
     });
 
@@ -457,6 +526,7 @@ void main() {
         description: 'Desc',
         phoneNumber: '123',
         signalType: 2,
+        urgency: 2,
         isSubmitting: true,
       );
 
@@ -466,6 +536,8 @@ void main() {
       expect(reset.description, '');
       expect(reset.phoneNumber, '');
       expect(reset.signalType, 0);
+      // Back to "unchosen", not to a level the next reporter never picked.
+      expect(reset.urgency, isNull);
       expect(reset.isSubmitting, false);
     });
   });

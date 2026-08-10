@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 
+import 'signal_urgency.dart';
+
 class Signal {
   final String title;
   final String description;
@@ -14,6 +16,10 @@ class Signal {
   final List<String> photoUrls;
   int status = 0;
 
+  /// How critical the situation is — see [SignalUrgency]. Separate from
+  /// [status], and the only thing the map pin color encodes.
+  final int urgency;
+
   Signal({
     required this.title,
     required this.description,
@@ -23,6 +29,7 @@ class Signal {
     required this.reporter,
     required this.contactPhone,
     required this.createdAt,
+    required this.urgency,
     this.photoUrls = const [],
     this.status = 0,
   });
@@ -38,6 +45,7 @@ class Signal {
       'contactPhone': contactPhone,
       'createdAt': createdAt,
       'status': status,
+      'urgency': urgency,
       'photoUrls': photoUrls,
     };
   }
@@ -53,11 +61,26 @@ class Signal {
       contactPhone: json['contactPhone'] ?? '',
       createdAt: json['createdAt'] ?? Timestamp.now(),
       status: json['status'] ?? 0,
+      urgency: urgencyFrom(json),
       photoUrls: (json['photoUrls'] as List<dynamic>?)
           ?.map((e) => e as String)
           .toList() ?? [],
     );
   }
+
+  /// Urgency code for a raw signal document.
+  ///
+  /// Documents created before the urgency system (and any the backfill script
+  /// missed) carry no `urgency`. Deriving it from status keeps the map
+  /// rendering rather than blowing up on a null when markers are built, and
+  /// matches what the backfill writes — so a document converges on the same
+  /// value whether or not it has been migrated yet.
+  ///
+  /// Pulled out of [fromJson] so it can be tested without a Firebase app: the
+  /// factory's `reporter` fallback touches `FirebaseFirestore.instance`.
+  static int urgencyFrom(Map<String, dynamic> json) =>
+      json['urgency'] ??
+      SignalUrgency.fromLegacyStatus(json['status'] ?? 0).code;
 
   /// The localized type names, in [signalTypes] order.
   ///
