@@ -292,17 +292,23 @@ async function writeInboxEntries(
   }
 
   const { docId, ...content } = entry;
-  const now = admin.firestore.Timestamp.now();
-  const expiresAt = admin.firestore.Timestamp.fromMillis(
-    now.toMillis() + INBOX_RETENTION_DAYS * 24 * 60 * 60 * 1000
-  );
 
-  // Firestore rejects `undefined` values, and the per-type fields are optional.
-  const fields = Object.fromEntries(
-    Object.entries(content).filter(([, value]) => value !== undefined)
-  );
-
+  // Everything below is inside the try, including the timestamp arithmetic and
+  // the field filtering. It reads like setup that cannot fail, which is exactly
+  // why it was outside — and a throw there escaped this function and killed the
+  // push, the one thing the catch below says must never happen. Nothing between
+  // here and the return is allowed to reach the caller.
   try {
+    const now = admin.firestore.Timestamp.now();
+    const expiresAt = admin.firestore.Timestamp.fromMillis(
+      now.toMillis() + INBOX_RETENTION_DAYS * 24 * 60 * 60 * 1000
+    );
+
+    // Firestore rejects `undefined` values, and the per-type fields are optional.
+    const fields = Object.fromEntries(
+      Object.entries(content).filter(([, value]) => value !== undefined)
+    );
+
     // Read the counters *before* incrementing so the badge can be computed in
     // one batched RPC rather than a round trip per recipient after the fact.
     // `getAll` chunked at 300 mirrors the candidate load in handleSignalCreated.
