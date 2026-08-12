@@ -313,6 +313,24 @@ class NearbySignalChecker {
         continue;
       }
 
+      // Species, same rule — a signal with none matches everyone.
+      if (!preferences.wantsAnimalType(data['animalType'] as String?)) {
+        continue;
+      }
+
+      // Help tags, deliberately stricter than the server's fan-out.
+      //
+      // The fan-out tops its recipient list up to a floor, pulling in people
+      // whose tags do not match when too few do. This check cannot reproduce
+      // that: it runs on one device, and whether *this* user would have won a
+      // backfill slot depends on everyone else who was nearby at the time.
+      // So catch-up notifies on a genuine match only. Erring the other way
+      // would mean a user whose tags match nothing still gets pinged every time
+      // they travel, which is exactly the noise the tags exist to remove.
+      if (!preferences.matchesSignalTags(Signal.helpNeededTagsFrom(data))) {
+        continue;
+      }
+
       // Don't tell people about their own signals.
       final reporter = data['reporter'] as DocumentReference?;
       if (reporter != null && reporter.id == uid) continue;

@@ -22,6 +22,7 @@ import 'package:help_a_paw/src/widgets/about_page.dart';
 import 'package:help_a_paw/src/widgets/email_verification_page.dart';
 import 'package:help_a_paw/src/widgets/faqs_page.dart';
 import 'package:help_a_paw/src/widgets/feedback_page.dart';
+import 'package:help_a_paw/src/widgets/helper_tags_gate.dart';
 import 'package:help_a_paw/src/widgets/home_route.dart';
 import 'package:help_a_paw/src/widgets/my_notifications_page.dart';
 import 'package:help_a_paw/src/widgets/my_signals_page.dart';
@@ -329,7 +330,11 @@ final GoRouter _router = GoRouter(
     GoRoute(
       name: 'initial_route',
       path: Routes.home,
-      builder: (BuildContext context, GoRouterState state) => const HomeRoute(),
+      // Wrapped rather than gated by a `redirect`, so the check can be async
+      // and so signal-details deep links are exempt without any route matching.
+      // See HelperTagsGate for the full reasoning.
+      builder: (BuildContext context, GoRouterState state) =>
+          const HelperTagsGate(child: HomeRoute()),
     ),
     GoRoute(
       name: 'sign_in',

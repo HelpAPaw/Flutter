@@ -23,6 +23,7 @@ import 'home_route_drawer.dart';
 import 'map/filter_bottom_sheet.dart';
 import 'map/new_signal_form.dart';
 import 'notification_onboarding_button.dart';
+import 'helper_tags_gate.dart';
 import 'notification_onboarding_sheet.dart';
 
 class MapScreen extends ConsumerStatefulWidget {
@@ -118,6 +119,20 @@ class _MapScreenState extends ConsumerState<MapScreen>
   }
 
   Future<void> _checkOnboardingState() async {
+    // Stay out of the way of the helper-tag gate.
+    //
+    // The gate renders this screen while it is still reading preferences (so a
+    // slow read never blanks the map), which means this runs before it can swap
+    // itself in. Without this check the notification sheet is pushed onto the
+    // navigator first and then sits *on top of* the mandatory tag picker — two
+    // onboarding flows stacked, which is what device testing showed.
+    //
+    // Skipping is safe rather than merely deferring: finishing the gate rebuilds
+    // this subtree, so initState runs again and the sheet gets its turn then.
+    final helperTags =
+        ref.read(helperTagsPreferencesProvider).asData?.value?.helperTags;
+    if (helperTags == null || helperTags.isEmpty) return;
+
     final prefs = AppPreferencesService();
 
     if (prefs.shouldShowOnboardingSheet()) {

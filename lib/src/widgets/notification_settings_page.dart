@@ -6,9 +6,11 @@ import 'package:go_router/go_router.dart';
 
 import '../config/routes.dart';
 import '../services/auth_service.dart';
+import '../models/animal_type.dart';
 import '../models/signal.dart';
 import '../services/location_service.dart';
 import '../services/notification_service.dart';
+import 'help_tag_selector.dart';
 
 class NotificationSettingsPage extends StatefulWidget {
   const NotificationSettingsPage({super.key});
@@ -22,6 +24,8 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   bool _locationTrackingEnabled = false;
   double _locationRadiusKm = 10.0;
   late List<int> _selectedSignalTypes;
+  late List<String> _selectedAnimalTypes;
+  List<String> _selectedHelperTags = const [];
   Map<String, dynamic>? _regionOfInterest;
   bool _isLoading = true;
 
@@ -32,8 +36,13 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   }
 
   Future<void> _loadPreferences() async {
-    // Default to all signal types selected
+    // "Never chose" means every type, so the unselected-yet screen shows all
+    // types ticked — matching what the fan-out actually does for these users.
+    // A *stored* empty list is different and must survive as empty: it can only
+    // have come from the old "Deselect all" button, and those users deliberately
+    // receive nothing. Overwriting it here would silently opt them back in.
     _selectedSignalTypes = List.generate(Signal.signalTypes.length, (i) => i);
+    _selectedAnimalTypes = List.of(AnimalType.allCodes);
 
     // Preferences hang off a uid, so an anonymous session will do — but there
     // has to be one.
@@ -57,6 +66,8 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
             _locationTrackingEnabled = prefs['locationTrackingEnabled'] ?? false;
             _locationRadiusKm = (prefs['locationRadiusKm'] as num?)?.toDouble() ?? 10.0;
             _selectedSignalTypes = (prefs['signalTypes'] as List<dynamic>?)?.cast<int>() ?? List.generate(Signal.signalTypes.length, (i) => i);
+            _selectedAnimalTypes = (prefs['animalTypes'] as List<dynamic>?)?.cast<String>() ?? List.of(AnimalType.allCodes);
+            _selectedHelperTags = (prefs['helperTags'] as List<dynamic>?)?.cast<String>() ?? const [];
             _regionOfInterest = prefs['regionOfInterest'] as Map<String, dynamic>?;
           });
         }
@@ -68,7 +79,30 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
     setState(() => _isLoading = false);
   }
 
+  /// The reason a save is being refused, or null if it can go ahead.
+  ///
+  /// Scoped to [_notificationsEnabled] on purpose. "Receive nothing" is what
+  /// the master switch is for; an empty type or species list is a
+  /// misconfiguration that looks identical to a bug from the user's side, so
+  /// while notifications are on we require at least one of each. With the
+  /// switch off none of it matters and the screen stays editable.
+  String? _validationError(AppLocalizations l10n) {
+    if (!_notificationsEnabled) return null;
+    if (_selectedSignalTypes.isEmpty) return l10n.selectAtLeastOneSignalType;
+    if (_selectedAnimalTypes.isEmpty) return l10n.selectAtLeastOneAnimalType;
+    if (_selectedHelperTags.isEmpty) return l10n.selectAtLeastOneHelperTag;
+    return null;
+  }
+
   Future<void> _savePreferences() async {
+    final l10n = AppLocalizations.of(context);
+    final error = _validationError(l10n);
+    if (error != null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error)));
+      return;
+    }
+
     final user = await AuthService().ensureAnonymousSession();
     if (user == null) return;
 
@@ -80,6 +114,8 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
             'locationTrackingEnabled': _locationTrackingEnabled,
             'locationRadiusKm': _locationRadiusKm,
             'signalTypes': _selectedSignalTypes,
+            'animalTypes': _selectedAnimalTypes,
+            'helperTags': _selectedHelperTags,
             if (_regionOfInterest != null) 'regionOfInterest': _regionOfInterest,
           },
         },
@@ -162,27 +198,37 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
     await _savePreferences();
   }
 
+  /// Whether emptying a selection should be refused, with the reason shown.
+  ///
+  /// Checked **before** the `setState`, not after. Mutating first and letting
+  /// the save reject leaves the chip looking deselected while Firestore still
+  /// holds the old value — the screen then lies about what is stored until it
+  /// is reloaded. Device testing caught exactly that.
+  bool _refusesEmpty(List<Object?> next, String message) {
+    if (_notificationsEnabled && next.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
+      return true;
+    }
+    return false;
+  }
+
   void _toggleSignalType(int type, bool selected) {
-    setState(() {
-      if (selected) {
-        _selectedSignalTypes.add(type);
-      } else {
-        _selectedSignalTypes.remove(type);
-      }
-    });
+    final next = selected
+        ? [..._selectedSignalTypes, type]
+        : _selectedSignalTypes.where((t) => t != type).toList();
+    if (_refusesEmpty(
+        next, AppLocalizations.of(context).selectAtLeastOneSignalType)) {
+      return;
+    }
+
+    setState(() => _selectedSignalTypes = next);
     _savePreferences();
   }
 
   void _selectAllSignalTypes() {
     setState(() {
       _selectedSignalTypes = List.generate(Signal.signalTypes.length, (i) => i);
-    });
-    _savePreferences();
-  }
-
-  void _deselectAllSignalTypes() {
-    setState(() {
-      _selectedSignalTypes = [];
     });
     _savePreferences();
   }
@@ -333,6 +379,40 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
           ),
         const Divider(),
 
+        // How the user can help. Drives which signals reach them first.
+        _buildSectionHeader(l10n.helperTags),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: HelpTagSelector(
+            selected: _selectedHelperTags,
+            semanticPrefix: 'settingsHelperTag',
+            onToggle: (code) {
+              final next = toggledCode(_selectedHelperTags, code);
+              if (_refusesEmpty(next, l10n.selectAtLeastOneHelperTag)) return;
+              setState(() => _selectedHelperTags = next);
+              _savePreferences();
+            },
+          ),
+        ),
+        const Divider(),
+
+        // Species
+        _buildSectionHeader(l10n.animalTypes),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: AnimalTypeSelector(
+            selected: _selectedAnimalTypes,
+            semanticPrefix: 'settingsAnimalType',
+            onToggle: (code) {
+              final next = toggledCode(_selectedAnimalTypes, code);
+              if (_refusesEmpty(next, l10n.selectAtLeastOneAnimalType)) return;
+              setState(() => _selectedAnimalTypes = next);
+              _savePreferences();
+            },
+          ),
+        ),
+        const Divider(),
+
         // Signal types
         _buildSectionHeader(l10n.signalTypes),
         Padding(
@@ -343,10 +423,10 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                 onPressed: _notificationsEnabled ? _selectAllSignalTypes : null,
                 child: Text(l10n.selectAll),
               ),
-              TextButton(
-                onPressed: _notificationsEnabled ? _deselectAllSignalTypes : null,
-                child: Text(l10n.deselectAll),
-              ),
+              // No "Deselect all". It was the only way to produce an empty
+              // list, which the fan-out reads as "notify me about nothing" —
+              // indistinguishable from the app being broken. Turning
+              // notifications off is the supported way to receive nothing.
             ],
           ),
         ),
