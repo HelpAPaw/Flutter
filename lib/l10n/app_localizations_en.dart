@@ -238,13 +238,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get helperTagsOnboardingContinue => 'Continue';
 
   @override
-  String get helperTagsOnboardingNeedHelpTag =>
-      'Choose at least one way you can help';
-
-  @override
-  String get helperTagsOnboardingNeedAnimalType => 'Choose at least one animal';
-
-  @override
   String get helperTagsSaveFailed =>
       'Could not save your choices. Please try again.';
 
@@ -271,9 +264,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get clearAll => 'Clear All';
-
-  @override
-  String get deselectAll => 'Deselect All';
 
   @override
   String get status => 'Status';

@@ -98,23 +98,25 @@ export function selectRecipients(
 
   const byDistance = (a: RecipientCandidate, b: RecipientCandidate) =>
     a.distanceKm - b.distanceKm;
-  tierA.sort(byDistance);
-  tierC.sort(byDistance);
-  tierB.sort(byDistance);
-  tierD.sort(byDistance);
 
+  // Tier A ships whole, so its order is presentation only, not selection.
+  tierA.sort(byDistance);
   const uids = tierA.map((c) => c.uid);
 
   // Walk the backfill tiers in priority order, nearest first within each, until
   // the floor is met or we run out of people.
-  let backfilled = 0;
+  //
+  // Sorted lazily, as each tier is reached. In the common case tier A alone
+  // meets the floor and none of these are touched — and on the widened path
+  // tier D is both the largest and the least likely to be drawn from, so
+  // sorting all three up front was work thrown away on almost every signal.
   for (const tier of [tierC, tierB, tierD]) {
+    if (uids.length >= config.minRecipients) break;
+    tier.sort(byDistance);
     for (const candidate of tier) {
       if (uids.length >= config.minRecipients) break;
       uids.push(candidate.uid);
-      backfilled++;
     }
-    if (uids.length >= config.minRecipients) break;
   }
 
   return {
@@ -125,6 +127,8 @@ export function selectRecipients(
       b: tierB.length,
       d: tierD.length,
     },
-    backfilled,
+    // Derived rather than counted: tier A always ships whole, so everything
+    // past it is backfill by construction.
+    backfilled: uids.length - tierA.length,
   };
 }

@@ -2,6 +2,28 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
 
+/// [current] with [code] added if absent, removed if present — as a **new list**.
+///
+/// Non-mutating on purpose. These selections come from Firestore reads
+/// (`.cast<String>()` views), from `const []` field initializers, and from
+/// immutable state objects; calling `List.remove` on any of those throws
+/// `UnsupportedError` at runtime rather than failing to compile. Every toggle
+/// callback goes through here so no call site has to remember that.
+///
+/// Lives beside the vocabulary rather than with the chip widgets because it is
+/// a pure list operation — `NewSignalFormState` uses it, and the state layer
+/// must not have to import a widget file to reach it. Shared with
+/// [AnimalType] selections, which is why it takes bare codes.
+///
+/// Adding past [max] is a no-op, matching the disabled chips in the selector.
+List<String> toggledCode(List<String> current, String code, {int? max}) {
+  if (current.contains(code)) {
+    return current.where((c) => c != code).toList();
+  }
+  if (max != null && current.length >= max) return List.of(current);
+  return [...current, code];
+}
+
 /// A kind of help — declared by a signal ("this is what is needed") and by a
 /// user ("this is what I can do").
 ///

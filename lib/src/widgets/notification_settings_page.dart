@@ -7,6 +7,8 @@ import 'package:go_router/go_router.dart';
 import '../config/routes.dart';
 import '../services/auth_service.dart';
 import '../models/animal_type.dart';
+import '../models/help_tag.dart';
+import '../models/notification_preferences.dart';
 import '../models/signal.dart';
 import '../services/location_service.dart';
 import '../services/notification_service.dart';
@@ -61,14 +63,21 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
       if (doc.exists) {
         final prefs = doc.data()?['notificationPreferences'] as Map<String, dynamic>?;
         if (prefs != null) {
+          // Through the typed model rather than a fourth hand-rolled reader of
+          // this map: `animalTypes` and `helperTags` carry opposite absent/empty
+          // rules, and those rules are documented on the model. Parsing them
+          // again here is how the two copies drift.
+          final typed = NotificationPreferences.fromMap(prefs);
           setState(() {
-            _notificationsEnabled = prefs['enabled'] ?? false;
-            _locationTrackingEnabled = prefs['locationTrackingEnabled'] ?? false;
-            _locationRadiusKm = (prefs['locationRadiusKm'] as num?)?.toDouble() ?? 10.0;
-            _selectedSignalTypes = (prefs['signalTypes'] as List<dynamic>?)?.cast<int>() ?? List.generate(Signal.signalTypes.length, (i) => i);
-            _selectedAnimalTypes = (prefs['animalTypes'] as List<dynamic>?)?.cast<String>() ?? List.of(AnimalType.allCodes);
-            _selectedHelperTags = (prefs['helperTags'] as List<dynamic>?)?.cast<String>() ?? const [];
-            _regionOfInterest = prefs['regionOfInterest'] as Map<String, dynamic>?;
+            _notificationsEnabled = typed.enabled;
+            _locationTrackingEnabled = typed.locationTrackingEnabled;
+            _locationRadiusKm = typed.locationRadiusKm;
+            _selectedSignalTypes = typed.signalTypes ??
+                List.generate(Signal.signalTypes.length, (i) => i);
+            _selectedAnimalTypes =
+                typed.animalTypes ?? List.of(AnimalType.allCodes);
+            _selectedHelperTags = typed.helperTags ?? const [];
+            _regionOfInterest = typed.regionOfInterest;
           });
         }
       }
@@ -149,7 +158,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
     // user with an empty stored selection — anyone who reached the map through
     // the gate's offline fall-through — would otherwise see the switch flip to
     // ON, get a snackbar, have nothing written, and find it reverted next time
-    // they opened the screen. Same trap `_refusesEmpty` exists for below.
+    // they opened the screen. Same trap `_applySelection` exists for below.
     if (value) {
       final blocked = _validationError(AppLocalizations.of(context),
           notificationsEnabled: true);
@@ -217,32 +226,39 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
     await _savePreferences();
   }
 
-  /// Whether emptying a selection should be refused, with the reason shown.
+  /// Commit a changed selection, or refuse it with a reason.
   ///
-  /// Checked **before** the `setState`, not after. Mutating first and letting
-  /// the save reject leaves the chip looking deselected while Firestore still
-  /// holds the old value — the screen then lies about what is stored until it
-  /// is reloaded. Device testing caught exactly that.
-  bool _refusesEmpty(List<Object?> next, String message) {
+  /// The check happens **before** the `setState`, not after. Mutating first and
+  /// letting the save reject leaves the chip looking deselected while Firestore
+  /// still holds the old value — the screen then lies about what is stored
+  /// until it is reloaded. Device testing caught exactly that.
+  ///
+  /// One applier for all three lists because the rule is one rule; the three
+  /// sites previously repeated build-check-set-save verbatim, so a fourth
+  /// filter meant a fourth copy.
+  void _applySelection<T>(
+    List<T> next,
+    String emptyMessage,
+    void Function(List<T>) assign,
+  ) {
     if (_notificationsEnabled && next.isEmpty) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(message)));
-      return true;
-    }
-    return false;
-  }
-
-  void _toggleSignalType(int type, bool selected) {
-    final next = selected
-        ? [..._selectedSignalTypes, type]
-        : _selectedSignalTypes.where((t) => t != type).toList();
-    if (_refusesEmpty(
-        next, AppLocalizations.of(context).selectAtLeastOneSignalType)) {
+          .showSnackBar(SnackBar(content: Text(emptyMessage)));
       return;
     }
 
-    setState(() => _selectedSignalTypes = next);
+    setState(() => assign(next));
     _savePreferences();
+  }
+
+  void _toggleSignalType(int type, bool selected) {
+    _applySelection(
+      selected
+          ? [..._selectedSignalTypes, type]
+          : _selectedSignalTypes.where((t) => t != type).toList(),
+      AppLocalizations.of(context).selectAtLeastOneSignalType,
+      (v) => _selectedSignalTypes = v,
+    );
   }
 
   void _selectAllSignalTypes() {
@@ -405,12 +421,11 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
           child: HelpTagSelector(
             selected: _selectedHelperTags,
             semanticPrefix: 'settingsHelperTag',
-            onToggle: (code) {
-              final next = toggledCode(_selectedHelperTags, code);
-              if (_refusesEmpty(next, l10n.selectAtLeastOneHelperTag)) return;
-              setState(() => _selectedHelperTags = next);
-              _savePreferences();
-            },
+            onToggle: (code) => _applySelection(
+              toggledCode(_selectedHelperTags, code),
+              l10n.selectAtLeastOneHelperTag,
+              (v) => _selectedHelperTags = v,
+            ),
           ),
         ),
         const Divider(),
@@ -422,12 +437,11 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
           child: AnimalTypeSelector(
             selected: _selectedAnimalTypes,
             semanticPrefix: 'settingsAnimalType',
-            onToggle: (code) {
-              final next = toggledCode(_selectedAnimalTypes, code);
-              if (_refusesEmpty(next, l10n.selectAtLeastOneAnimalType)) return;
-              setState(() => _selectedAnimalTypes = next);
-              _savePreferences();
-            },
+            onToggle: (code) => _applySelection(
+              toggledCode(_selectedAnimalTypes, code),
+              l10n.selectAtLeastOneAnimalType,
+              (v) => _selectedAnimalTypes = v,
+            ),
           ),
         ),
         const Divider(),

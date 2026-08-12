@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../models/help_tag.dart';
 import '../services/auth_service.dart';
 import 'help_tag_selector.dart';
 
@@ -31,8 +32,8 @@ class HelperTagsOnboardingPage extends StatefulWidget {
 }
 
 class _HelperTagsOnboardingPageState extends State<HelperTagsOnboardingPage> {
-  final List<String> _helperTags = [];
-  final List<String> _animalTypes = [];
+  List<String> _helperTags = const [];
+  List<String> _animalTypes = const [];
   bool _isSaving = false;
   String? _error;
 
@@ -41,28 +42,19 @@ class _HelperTagsOnboardingPageState extends State<HelperTagsOnboardingPage> {
   void _toggleHelperTag(String code) {
     setState(() {
       _error = null;
-      if (!_helperTags.remove(code)) _helperTags.add(code);
+      _helperTags = toggledCode(_helperTags, code);
     });
   }
 
   void _toggleAnimalType(String code) {
     setState(() {
       _error = null;
-      if (!_animalTypes.remove(code)) _animalTypes.add(code);
+      _animalTypes = toggledCode(_animalTypes, code);
     });
   }
 
   Future<void> _save() async {
     final l10n = AppLocalizations.of(context);
-
-    if (_helperTags.isEmpty) {
-      setState(() => _error = l10n.helperTagsOnboardingNeedHelpTag);
-      return;
-    }
-    if (_animalTypes.isEmpty) {
-      setState(() => _error = l10n.helperTagsOnboardingNeedAnimalType);
-      return;
-    }
 
     setState(() {
       _isSaving = true;

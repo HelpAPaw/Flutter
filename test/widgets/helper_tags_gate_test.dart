@@ -6,7 +6,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:help_a_paw/src/models/help_tag.dart';
 import 'package:help_a_paw/src/models/notification_preferences.dart';
-import 'package:help_a_paw/src/widgets/help_tag_selector.dart';
 import 'package:help_a_paw/src/widgets/helper_tags_gate.dart';
 
 /// The gate decides whether the user can reach the map at all, so its failure

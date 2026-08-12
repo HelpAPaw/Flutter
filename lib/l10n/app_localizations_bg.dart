@@ -239,13 +239,6 @@ class AppLocalizationsBg extends AppLocalizations {
   String get helperTagsOnboardingContinue => 'Продължи';
 
   @override
-  String get helperTagsOnboardingNeedHelpTag =>
-      'Изберете поне един начин, по който можете да помогнете';
-
-  @override
-  String get helperTagsOnboardingNeedAnimalType => 'Изберете поне едно животно';
-
-  @override
   String get helperTagsSaveFailed =>
       'Изборът не можа да бъде запазен. Моля, опитайте отново.';
 
@@ -272,9 +265,6 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get clearAll => 'Изчисти всички';
-
-  @override
-  String get deselectAll => 'Премахни всички';
 
   @override
   String get status => 'Статус';

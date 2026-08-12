@@ -569,18 +569,39 @@ async function collectCandidates(
     perRangeLimit ? q.limit(perRangeLimit) : q;
 
   // Path 1: users whose tracked location is near the signal.
+  // Path 2: users whose region-of-interest covers the signal.
+  //
+  // Issued together. They read different collections and populate different
+  // maps, so there is no ordering between them — awaiting one before starting
+  // the other just added a round trip, and the widened pass pays it twice.
   const locBounds = geohashQueryBounds(center, locationRadiusKm * 1000);
-  const locSnaps = await Promise.all(
-    locBounds.map(([start, end]) =>
-      capped(
-        db
-          .collection("userLocations")
-          .orderBy("geohash")
-          .startAt(start)
-          .endAt(end)
-      ).get()
-    )
-  );
+  const regBounds = geohashQueryBounds(center, regionRadiusKm * 1000);
+  const [locSnaps, regSnaps] = await Promise.all([
+    Promise.all(
+      locBounds.map(([start, end]) =>
+        capped(
+          db
+            .collection("userLocations")
+            .orderBy("geohash")
+            .startAt(start)
+            .endAt(end)
+        ).get()
+      )
+    ),
+    Promise.all(
+      regBounds.map(([start, end]) =>
+        capped(
+          db
+            .collection("users")
+            .where("notificationPreferences.enabled", "==", true)
+            .orderBy("notificationPreferences.regionOfInterest.geohash")
+            .startAt(start)
+            .endAt(end)
+        ).get()
+      )
+    ),
+  ]);
+
   for (const snap of locSnaps) {
     for (const doc of snap.docs) {
       const geopoint = doc.data().geopoint as
@@ -592,20 +613,6 @@ async function collectCandidates(
     }
   }
 
-  // Path 2: users whose region-of-interest covers the signal.
-  const regBounds = geohashQueryBounds(center, regionRadiusKm * 1000);
-  const regSnaps = await Promise.all(
-    regBounds.map(([start, end]) =>
-      capped(
-        db
-          .collection("users")
-          .where("notificationPreferences.enabled", "==", true)
-          .orderBy("notificationPreferences.regionOfInterest.geohash")
-          .startAt(start)
-          .endAt(end)
-      ).get()
-    )
-  );
   for (const snap of regSnaps) {
     for (const doc of snap.docs) {
       usersById.set(doc.id, doc.data() as UserData);
@@ -616,11 +623,14 @@ async function collectCandidates(
   const missingUids = [...currentLocationByUid.keys()].filter(
     (uid) => !usersById.has(uid)
   );
+  const chunks: Promise<admin.firestore.DocumentSnapshot[]>[] = [];
   for (let i = 0; i < missingUids.length; i += 300) {
     const refs = missingUids
       .slice(i, i + 300)
       .map((uid) => db.collection("users").doc(uid));
-    const userDocs = await db.getAll(...refs);
+    chunks.push(db.getAll(...refs));
+  }
+  for (const userDocs of await Promise.all(chunks)) {
     for (const doc of userDocs) {
       if (doc.exists) {
         usersById.set(doc.id, doc.data() as UserData);
@@ -810,19 +820,20 @@ async function handleSignalCreated(
   // pushed to. A user with push disabled still wants to find this in the app.
   const inboxRecipients = selection.uids;
   const userTokens: Map<string, string[]> = new Map();
-  const distanceByUid = new Map<string, number>();
-  const distanceLookup = new Map(
-    candidates.map((c) => [c.uid, c.distanceKm])
+  // Built from the selected set only, not from every candidate. No finiteness
+  // re-check either: selectRecipients drops non-finite distances before tiering,
+  // so nothing it returns can have one.
+  const selected = new Set(inboxRecipients);
+  const distanceByUid = new Map(
+    candidates
+      .filter((c) => selected.has(c.uid))
+      .map((c) => [c.uid, c.distanceKm] as const)
   );
 
   for (const uid of inboxRecipients) {
     const tokens = usersById.get(uid)?.fcmTokens;
     if (tokens && tokens.length > 0) {
       userTokens.set(uid, tokens);
-    }
-    const distance = distanceLookup.get(uid);
-    if (distance !== undefined && Number.isFinite(distance)) {
-      distanceByUid.set(uid, distance);
     }
   }
 

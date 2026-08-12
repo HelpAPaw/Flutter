@@ -34,8 +34,16 @@ final helperTagsPreferencesProvider =
   // `asData?.value` is null while the stream has not emitted yet; fall back to
   // a synchronous read for the common case of an already-restored session,
   // which avoids a needless map-then-gate flicker on a warm start.
-  final uid = ref.watch(_gateUidProvider).asData?.value ??
-      FirebaseAuth.instance.currentUser?.uid;
+  // `select` so this recomputes when the *uid* changes, not every time the
+  // stream's AsyncValue wrapper does. Watching the wrapper meant the body ran
+  // once on the initial loading state (falling back to `currentUser`) and again
+  // when authStateChanges emitted the same user a turn later — two reads of the
+  // same document on every launch, the first discarded.
+  final uid = ref.watch(
+    _gateUidProvider.select(
+      (v) => v.asData?.value ?? FirebaseAuth.instance.currentUser?.uid,
+    ),
+  );
   if (uid == null) return null;
   return RepositoryProvider.instance.userRepository
       .getNotificationPreferences(uid);
@@ -81,9 +89,7 @@ class HelperTagsGate extends ConsumerWidget {
         // the app. This is the one branch that must not be simplified into the
         // "no tags" case below.
         if (prefs == null) return child;
-
-        final tags = prefs.helperTags;
-        if (tags != null && tags.isNotEmpty) return child;
+        if (prefs.hasChosenHelperTags) return child;
 
         return HelperTagsOnboardingPage(
           onSaved: () => ref.invalidate(helperTagsPreferencesProvider),

@@ -336,13 +336,6 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isSignalCreate();
       // Same rules as prod signals (see helpers above).
-      //
-      // The tag/species validators apply to both branches for the same reason,
-      // and the cap especially: `helpNeededTags` is a *reach* limit, so leaving
-      // update unvalidated means a reporter can create a compliant signal and
-      // then widen it to the whole vocabulary, matching every user in the
-      // fan-out's set intersection. The edit screen writes both fields on
-      // update, so this is the path that field actually travels.
       allow update: if request.auth != null
                     && isValidUrgency()
                     && isValidHelpNeededTags()

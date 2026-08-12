@@ -89,6 +89,15 @@ class NotificationPreferences {
     return animalTypes?.contains(animalType) ?? true;
   }
 
+  /// Whether the user has actually picked their helper tags.
+  ///
+  /// Distinct from [effectiveHelperTags], which never returns empty and so can
+  /// never answer this. The onboarding gate and the notification onboarding
+  /// both branch on it, and they must agree — two hand-rolled copies of
+  /// `tags != null && tags.isNotEmpty` is how the sheet ended up stacked on top
+  /// of the gate.
+  bool get hasChosenHelperTags => helperTags?.isNotEmpty ?? false;
+
   /// The tags this user actually matches on — never empty.
   ///
   /// See [helperTags] for why absent and empty collapse to the same answer.

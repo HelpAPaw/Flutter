@@ -524,18 +524,6 @@ abstract class AppLocalizations {
   /// **'Continue'**
   String get helperTagsOnboardingContinue;
 
-  /// No description provided for @helperTagsOnboardingNeedHelpTag.
-  ///
-  /// In en, this message translates to:
-  /// **'Choose at least one way you can help'**
-  String get helperTagsOnboardingNeedHelpTag;
-
-  /// No description provided for @helperTagsOnboardingNeedAnimalType.
-  ///
-  /// In en, this message translates to:
-  /// **'Choose at least one animal'**
-  String get helperTagsOnboardingNeedAnimalType;
-
   /// No description provided for @helperTagsSaveFailed.
   ///
   /// In en, this message translates to:
@@ -583,12 +571,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Clear All'**
   String get clearAll;
-
-  /// No description provided for @deselectAll.
-  ///
-  /// In en, this message translates to:
-  /// **'Deselect All'**
-  String get deselectAll;
 
   /// No description provided for @status.
   ///

@@ -13,7 +13,6 @@ import 'package:go_router/go_router.dart';
 import '../config/routes.dart';
 import '../repositories/repository_provider.dart';
 import '../repositories/signal_repository.dart';
-import '../models/notification_preferences.dart';
 import '../services/app_preferences_service.dart';
 import '../services/location_service.dart';
 import '../services/signal_navigator.dart';
@@ -119,20 +118,18 @@ class _MapScreenState extends ConsumerState<MapScreen>
     super.dispose();
   }
 
-  /// Whether the helper-tag gate has been satisfied, so the notification
-  /// onboarding may take the screen.
-  ///
-  /// The gate renders this screen while it is still *reading* preferences (so a
-  /// slow read never blanks the map), which means onboarding would otherwise be
-  /// pushed onto the navigator first and then sit on top of the mandatory tag
-  /// picker — two flows stacked, which device testing showed.
-  bool _helperTagsChosen(AsyncValue<NotificationPreferences?> prefs) {
-    final tags = prefs.asData?.value?.helperTags;
-    return tags != null && tags.isNotEmpty;
-  }
-
   Future<void> _checkOnboardingState() async {
-    // Waiting on the *resolved* value, not a single read of it.
+    final prefs = AppPreferencesService();
+
+    // Local and synchronous, so ask it before awaiting anything. For the common
+    // case — an existing user with nothing to show — this returns without ever
+    // touching the network.
+    if (!prefs.shouldShowOnboardingSheet() &&
+        !prefs.shouldShowOnboardingButton()) {
+      return;
+    }
+
+    // Then wait for the *resolved* preferences, not a single read of them.
     //
     // A one-shot `ref.read` here always lost: this runs from a post-frame
     // callback in initState, when the provider is still loading, so it returned
@@ -142,14 +139,13 @@ class _MapScreenState extends ConsumerState<MapScreen>
     // both its loading and data branches, so the element is reused, initState
     // never runs a second time, and the notification onboarding was silently
     // never offered again.
-    if (!_helperTagsChosen(ref.read(helperTagsPreferencesProvider))) {
-      final resolved = await ref.read(helperTagsPreferencesProvider.future);
-      if (!mounted) return;
-      final tags = resolved?.helperTags;
-      if (tags == null || tags.isEmpty) return;
-    }
-
-    final prefs = AppPreferencesService();
+    //
+    // Staying out of the gate's way matters because the gate renders this screen
+    // while it is still reading (so a slow read never blanks the map) — without
+    // this, onboarding is pushed onto the navigator first and then sits on top
+    // of the mandatory tag picker.
+    final resolved = await ref.read(helperTagsPreferencesProvider.future);
+    if (!mounted || !(resolved?.hasChosenHelperTags ?? false)) return;
 
     if (prefs.shouldShowOnboardingSheet()) {
       _showOnboardingSheet();

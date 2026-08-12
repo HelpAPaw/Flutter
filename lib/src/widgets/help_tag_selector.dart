@@ -4,23 +4,6 @@ import '../../l10n/app_localizations.dart';
 import '../models/animal_type.dart';
 import '../models/help_tag.dart';
 
-/// [current] with [code] added if absent, removed if present — as a **new list**.
-///
-/// Non-mutating on purpose. These selections come from Firestore reads
-/// (`.cast<String>()` views), from `const []` field initializers, and from
-/// immutable state objects; calling `List.remove` on any of those throws
-/// `UnsupportedError` at runtime rather than failing to compile. Every toggle
-/// callback in the app goes through here so no call site has to remember that.
-///
-/// Adding past [max] is a no-op, matching the disabled chips in [HelpTagSelector].
-List<String> toggledCode(List<String> current, String code, {int? max}) {
-  if (current.contains(code)) {
-    return current.where((c) => c != code).toList();
-  }
-  if (max != null && current.length >= max) return List.of(current);
-  return [...current, code];
-}
-
 /// Chip picker for [HelpTag] values.
 ///
 /// Shared by the new-signal form, the edit screen, the onboarding gate and

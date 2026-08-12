@@ -92,8 +92,6 @@
   "helperTagsOnboardingHelpSection": "What can you help with?",
   "helperTagsOnboardingAnimalSection": "Which animals can you help?",
   "helperTagsOnboardingContinue": "Continue",
-  "helperTagsOnboardingNeedHelpTag": "Choose at least one way you can help",
-  "helperTagsOnboardingNeedAnimalType": "Choose at least one animal",
   "helperTagsSaveFailed": "Could not save your choices. Please try again.",
 
   "selectAtLeastOneSignalType": "Choose at least one signal type, or turn notifications off",
@@ -104,7 +102,6 @@
   "toggleVetClinics": "Toggle veterinary clinics",
   "selectAll": "Select All",
   "clearAll": "Clear All",
-  "deselectAll": "Deselect All",
   "status": "Status",
   "signalType": "Signal Type",
   "timeRange": "Time Range",

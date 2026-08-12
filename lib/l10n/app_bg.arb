@@ -92,8 +92,6 @@
   "helperTagsOnboardingHelpSection": "С какво можете да помогнете?",
   "helperTagsOnboardingAnimalSection": "На кои животни можете да помогнете?",
   "helperTagsOnboardingContinue": "Продължи",
-  "helperTagsOnboardingNeedHelpTag": "Изберете поне един начин, по който можете да помогнете",
-  "helperTagsOnboardingNeedAnimalType": "Изберете поне едно животно",
   "helperTagsSaveFailed": "Изборът не можа да бъде запазен. Моля, опитайте отново.",
 
   "selectAtLeastOneSignalType": "Изберете поне един вид сигнал или изключете известията",
@@ -104,7 +102,6 @@
   "toggleVetClinics": "Покажи/скрий ветеринарни клиники",
   "selectAll": "Избери всички",
   "clearAll": "Изчисти всички",
-  "deselectAll": "Премахни всички",
   "status": "Статус",
   "signalType": "Тип сигнал",
   "timeRange": "Времеви обхват",

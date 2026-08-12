@@ -4,7 +4,6 @@ import 'package:image_picker/image_picker.dart';
 
 import '../models/help_tag.dart';
 import '../models/vet_clinic.dart';
-import '../widgets/help_tag_selector.dart' show toggledCode;
 
 /// Time range options for filtering signals by creation date
 enum TimeRange {
@@ -209,8 +208,6 @@ class NewSignalFormState {
   /// Check if no animal has been chosen
   bool get isAnimalTypeUnset => animalType == null;
 
-  /// Whether another help tag can still be added.
-  bool get canAddHelpTag => helpTags.length < HelpTag.maxPerSignal;
 
   /// [helpTags] with [code] added or removed.
   ///
