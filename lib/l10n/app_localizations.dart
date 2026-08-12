@@ -326,6 +326,240 @@ abstract class AppLocalizations {
   /// **'Other'**
   String get signalTypeOther;
 
+  /// No description provided for @helpTagRescue.
+  ///
+  /// In en, this message translates to:
+  /// **'Rescue'**
+  String get helpTagRescue;
+
+  /// No description provided for @helpTagFoster.
+  ///
+  /// In en, this message translates to:
+  /// **'Fostering'**
+  String get helpTagFoster;
+
+  /// No description provided for @helpTagTransport.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport'**
+  String get helpTagTransport;
+
+  /// No description provided for @helpTagVetCare.
+  ///
+  /// In en, this message translates to:
+  /// **'Vet care'**
+  String get helpTagVetCare;
+
+  /// No description provided for @helpTagFood.
+  ///
+  /// In en, this message translates to:
+  /// **'Food & supplies'**
+  String get helpTagFood;
+
+  /// No description provided for @helpTagTrapping.
+  ///
+  /// In en, this message translates to:
+  /// **'Trapping'**
+  String get helpTagTrapping;
+
+  /// No description provided for @helpTagFundraising.
+  ///
+  /// In en, this message translates to:
+  /// **'Fundraising'**
+  String get helpTagFundraising;
+
+  /// No description provided for @helpTagAdoption.
+  ///
+  /// In en, this message translates to:
+  /// **'Adoption'**
+  String get helpTagAdoption;
+
+  /// No description provided for @helpTagBabyCare.
+  ///
+  /// In en, this message translates to:
+  /// **'Newborn care'**
+  String get helpTagBabyCare;
+
+  /// No description provided for @helpTagRescueHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'I can go to an animal in need'**
+  String get helpTagRescueHelper;
+
+  /// No description provided for @helpTagFosterHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'I can take an animal into my home for a while'**
+  String get helpTagFosterHelper;
+
+  /// No description provided for @helpTagTransportHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'I can drive an animal somewhere'**
+  String get helpTagTransportHelper;
+
+  /// No description provided for @helpTagVetCareHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'I can help with a vet visit or treatment'**
+  String get helpTagVetCareHelper;
+
+  /// No description provided for @helpTagFoodHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'I can bring food or supplies'**
+  String get helpTagFoodHelper;
+
+  /// No description provided for @helpTagTrappingHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'I can trap an animal, or I have a trap or cage'**
+  String get helpTagTrappingHelper;
+
+  /// No description provided for @helpTagFundraisingHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'I can help raise or share funds'**
+  String get helpTagFundraisingHelper;
+
+  /// No description provided for @helpTagAdoptionHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'I am looking to adopt, or can help find a home'**
+  String get helpTagAdoptionHelper;
+
+  /// No description provided for @helpTagBabyCareHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'I can bottle-feed or care for newborns'**
+  String get helpTagBabyCareHelper;
+
+  /// No description provided for @animalTypeCat.
+  ///
+  /// In en, this message translates to:
+  /// **'Cat'**
+  String get animalTypeCat;
+
+  /// No description provided for @animalTypeDog.
+  ///
+  /// In en, this message translates to:
+  /// **'Dog'**
+  String get animalTypeDog;
+
+  /// No description provided for @animalTypeOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other animal'**
+  String get animalTypeOther;
+
+  /// No description provided for @helpNeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Help needed'**
+  String get helpNeeded;
+
+  /// No description provided for @animalType.
+  ///
+  /// In en, this message translates to:
+  /// **'Animal'**
+  String get animalType;
+
+  /// No description provided for @animalTypes.
+  ///
+  /// In en, this message translates to:
+  /// **'Animals'**
+  String get animalTypes;
+
+  /// No description provided for @helperTags.
+  ///
+  /// In en, this message translates to:
+  /// **'How I can help'**
+  String get helperTags;
+
+  /// No description provided for @pleaseSelectHelpTag.
+  ///
+  /// In en, this message translates to:
+  /// **'Please choose at least one kind of help needed'**
+  String get pleaseSelectHelpTag;
+
+  /// No description provided for @pleaseSelectAnimalType.
+  ///
+  /// In en, this message translates to:
+  /// **'Please choose which animal this is about'**
+  String get pleaseSelectAnimalType;
+
+  /// No description provided for @helpTagLimitReached.
+  ///
+  /// In en, this message translates to:
+  /// **'You can choose up to {count} kinds of help'**
+  String helpTagLimitReached(int count);
+
+  /// No description provided for @helperTagsOnboardingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'How can you help?'**
+  String get helperTagsOnboardingTitle;
+
+  /// No description provided for @helperTagsOnboardingIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick what you can realistically do, and which animals you can help. We use this to send you the cases you can actually act on — you can change it any time in settings.'**
+  String get helperTagsOnboardingIntro;
+
+  /// No description provided for @helperTagsOnboardingHelpSection.
+  ///
+  /// In en, this message translates to:
+  /// **'What can you help with?'**
+  String get helperTagsOnboardingHelpSection;
+
+  /// No description provided for @helperTagsOnboardingAnimalSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Which animals can you help?'**
+  String get helperTagsOnboardingAnimalSection;
+
+  /// No description provided for @helperTagsOnboardingContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get helperTagsOnboardingContinue;
+
+  /// No description provided for @helperTagsOnboardingNeedHelpTag.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose at least one way you can help'**
+  String get helperTagsOnboardingNeedHelpTag;
+
+  /// No description provided for @helperTagsOnboardingNeedAnimalType.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose at least one animal'**
+  String get helperTagsOnboardingNeedAnimalType;
+
+  /// No description provided for @helperTagsSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save your choices. Please try again.'**
+  String get helperTagsSaveFailed;
+
+  /// No description provided for @selectAtLeastOneSignalType.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose at least one signal type, or turn notifications off'**
+  String get selectAtLeastOneSignalType;
+
+  /// No description provided for @selectAtLeastOneAnimalType.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose at least one animal, or turn notifications off'**
+  String get selectAtLeastOneAnimalType;
+
+  /// No description provided for @selectAtLeastOneHelperTag.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose at least one way you can help'**
+  String get selectAtLeastOneHelperTag;
+
   /// No description provided for @filterSignals.
   ///
   /// In en, this message translates to:
