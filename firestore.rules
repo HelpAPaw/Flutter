@@ -146,9 +146,18 @@ service cloud.firestore {
     // and so would any future subcollection.
     match /users/{userId} {
       allow read: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null
-                   && request.auth.uid == userId
-                   && isValidHelperPrefs();
+
+      // create/update and delete are split on purpose. `isValidHelperPrefs`
+      // dereferences `request.resource.data`, which is **null on a delete** — a
+      // combined `allow write` therefore errors and denies every delete,
+      // including the owner's own. That breaks `detachAnonymousData`, which
+      // deletes this doc and `userLocations/{uid}` in one try block: the first
+      // delete throws, the second never runs, and the abandoned uid keeps a live
+      // location doc that the fan-out still treats as a candidate.
+      allow create, update: if request.auth != null
+                            && request.auth.uid == userId
+                            && isValidHelperPrefs();
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
     // Size caps on the tag/species preference lists.
@@ -297,8 +306,17 @@ service cloud.firestore {
       // is not a client-side cosmetic problem: the server reads it raw, so
       // `urgency: 42` makes every write look like an escalation
       // (`42 > 2`) and wakes every subscriber with a "Updated" push.
+      //
+      // The tag/species validators apply to both branches for the same reason,
+      // and the cap especially: `helpNeededTags` is a *reach* limit, so leaving
+      // update unvalidated means a reporter can create a compliant signal and
+      // then widen it to the whole vocabulary, matching every user in the
+      // fan-out's set intersection. The edit screen writes both fields on
+      // update, so this is the path that field actually travels.
       allow update: if request.auth != null
                     && isValidUrgency()
+                    && isValidHelpNeededTags()
+                    && isValidAnimalType()
                     && (isSignalReporter() || isStatusOnlyUpdate());
       // Only the signal's reporter may delete it
       allow delete: if request.auth != null && isSignalReporter();
@@ -318,8 +336,17 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isSignalCreate();
       // Same rules as prod signals (see helpers above).
+      //
+      // The tag/species validators apply to both branches for the same reason,
+      // and the cap especially: `helpNeededTags` is a *reach* limit, so leaving
+      // update unvalidated means a reporter can create a compliant signal and
+      // then widen it to the whole vocabulary, matching every user in the
+      // fan-out's set intersection. The edit screen writes both fields on
+      // update, so this is the path that field actually travels.
       allow update: if request.auth != null
                     && isValidUrgency()
+                    && isValidHelpNeededTags()
+                    && isValidAnimalType()
                     && (isSignalReporter() || isStatusOnlyUpdate());
       allow delete: if request.auth != null && isSignalReporter();
 

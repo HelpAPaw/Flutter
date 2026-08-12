@@ -202,6 +202,29 @@ for (const coll of ['signals', 'signals_test']) {
       }
     });
 
+    // The cap is a REACH limit, so it has to hold on update too: otherwise a
+    // reporter creates a compliant signal and then widens it to the whole
+    // vocabulary, matching every user in the fan-out's set intersection.
+    it('enforces the tag cap on update, not just create', async () => {
+      const SIGNAL_U = 'signal-update-cap';
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(
+          doc(ctx.firestore(), coll, SIGNAL_U),
+          signalDoc(ctx.firestore(), REPORTER),
+        );
+      });
+      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, coll, SIGNAL_U), { helpNeededTags: ['rescue', 'foster'] }),
+      );
+      await assertFails(
+        updateDoc(doc(db, coll, SIGNAL_U), {
+          helpNeededTags: ['rescue', 'foster', 'transport', 'vetCare'],
+        }),
+      );
+      await assertFails(updateDoc(doc(db, coll, SIGNAL_U), { animalType: 3 }));
+    });
+
     // Same reasoning as urgency above: pre-tag builds are still in the wild and
     // create signals with neither field. Tightening these to mandatory is step 3
     // of the rollout, after adoption — not now.
@@ -451,6 +474,26 @@ describe('users', () => {
         notificationPreferences: { animalTypes: 'cat' },
       }),
     );
+  });
+
+  // Regression: `isValidHelperPrefs` dereferences request.resource.data, which is
+  // null on a delete. Folding it into a combined `allow write` denied every
+  // delete — including the owner's own — and broke detachAnonymousData, leaving
+  // an orphaned userLocations doc live in the fan-out.
+  it('lets the owner delete their own doc', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', OWNER), { phone: '123' });
+    });
+    const mine = testEnv.authenticatedContext(OWNER).firestore();
+    await assertSucceeds(deleteDoc(doc(mine, 'users', OWNER)));
+  });
+
+  it('still refuses a delete by anyone else', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', OWNER), { phone: '123' });
+    });
+    const theirs = testEnv.authenticatedContext(OTHER).firestore();
+    await assertFails(deleteDoc(doc(theirs, 'users', OWNER)));
   });
 
   // Every writer of this document uses a merged partial write, so most updates
