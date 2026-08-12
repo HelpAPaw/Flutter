@@ -20,6 +20,17 @@ class Signal {
   /// [status], and the only thing the map pin color encodes.
   final int urgency;
 
+  /// What this case needs — [HelpTag.code] values, most urgent first.
+  ///
+  /// Matched against a user's helper tags to decide who hears about the signal.
+  /// Order is the priority the reporter gave, kept for display; matching itself
+  /// is order-independent.
+  final List<String> helpNeededTags;
+
+  /// Which animal this is about — an [AnimalType.code], or null on documents
+  /// written before the field existed. Null matches every species filter.
+  final String? animalType;
+
   Signal({
     required this.title,
     required this.description,
@@ -30,6 +41,8 @@ class Signal {
     required this.contactPhone,
     required this.createdAt,
     required this.urgency,
+    this.helpNeededTags = const [],
+    this.animalType,
     this.photoUrls = const [],
     this.status = 0,
   });
@@ -46,6 +59,11 @@ class Signal {
       'createdAt': createdAt,
       'status': status,
       'urgency': urgency,
+      'helpNeededTags': helpNeededTags,
+      // Omitted rather than written as null: Firestore stores an explicit null,
+      // and the fan-out's "absent means every species" check reads more
+      // honestly when absent really means absent.
+      if (animalType != null) 'animalType': animalType,
       'photoUrls': photoUrls,
     };
   }
@@ -62,11 +80,29 @@ class Signal {
       createdAt: json['createdAt'] ?? Timestamp.now(),
       status: json['status'] ?? 0,
       urgency: urgencyFrom(json),
+      helpNeededTags: helpNeededTagsFrom(json),
+      animalType: json['animalType'] as String?,
       photoUrls: (json['photoUrls'] as List<dynamic>?)
           ?.map((e) => e as String)
           .toList() ?? [],
     );
   }
+
+  /// Help tags for a raw signal document.
+  ///
+  /// Empty for documents written before the field existed. Deliberately *not*
+  /// defaulted to [HelpTag.fallback] here: the empty list is what tells the UI
+  /// there is nothing to show, while the matching code substitutes the fallback
+  /// itself (see [NotificationPreferences.matchesSignalTags]). Baking the
+  /// default in at parse time would make a legacy signal claim it was tagged.
+  ///
+  /// Pulled out of [fromJson] for the same reason as [urgencyFrom] — so it can
+  /// be tested without a Firebase app.
+  static List<String> helpNeededTagsFrom(Map<String, dynamic> json) =>
+      (json['helpNeededTags'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList() ??
+      const [];
 
   /// Urgency code for a raw signal document.
   ///

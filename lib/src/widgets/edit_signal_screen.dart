@@ -6,6 +6,8 @@ import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:help_a_paw/src/models/signal.dart';
 import 'package:help_a_paw/src/models/signal_urgency.dart';
 import 'package:help_a_paw/src/services/app_preferences_service.dart';
+import 'package:help_a_paw/src/models/help_tag.dart';
+import 'package:help_a_paw/src/widgets/help_tag_selector.dart';
 import 'package:help_a_paw/src/widgets/urgency_picker.dart';
 
 class EditSignalScreen extends StatefulWidget {
@@ -27,6 +29,9 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
   final _phoneController = TextEditingController();
   int _signalType = 0;
   int _urgency = SignalUrgency.amber.code;
+
+  List<String> _helpTags = const [];
+  String? _animalType;
 
   /// Urgency as loaded, so a save can tell whether it actually changed and
   /// record a timeline entry to match the details screen.
@@ -62,6 +67,11 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
         _signalType = signal.signalType;
         _urgency = signal.urgency;
         _originalUrgency = signal.urgency;
+        // Signals created before tags existed load with none. The picker then
+        // requires a choice before saving, which quietly migrates them as their
+        // reporters edit — no backfill needed.
+        _helpTags = List.of(signal.helpNeededTags);
+        _animalType = signal.animalType;
       } else {
         if (mounted) context.pop();
         return;
@@ -85,6 +95,21 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     final l10n = AppLocalizations.of(context);
+
+    // The pickers are not form fields, so they are validated by hand.
+    if (_helpTags.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.pleaseSelectHelpTag)),
+      );
+      return;
+    }
+    if (_animalType == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.pleaseSelectAnimalType)),
+      );
+      return;
+    }
+
     setState(() => _isSaving = true);
 
     final signalRef = FirebaseFirestore.instance
@@ -105,6 +130,8 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
       'contactPhone': _phoneController.text.trim(),
       'signalType': _signalType,
       'urgency': _urgency,
+      'helpNeededTags': _helpTags,
+      'animalType': _animalType,
       // Changing urgency here fires the same update notification as the
       // details screen, so the actor has to be recorded — otherwise a stale
       // lastUpdatedBy from an earlier status change decides who gets skipped.
@@ -273,6 +300,42 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
                       value: _urgency,
                       enabled: !_isSaving,
                       onChanged: (value) => setState(() => _urgency = value),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      l10n.animalType,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    AnimalTypeSelector(
+                      selected: [if (_animalType != null) _animalType!],
+                      singleSelect: true,
+                      semanticPrefix: 'editAnimalType',
+                      onToggle: (code) => setState(() => _animalType = code),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      l10n.helpNeeded,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    HelpTagSelector(
+                      selected: _helpTags,
+                      maxSelection: HelpTag.maxPerSignal,
+                      semanticPrefix: 'editHelpTag',
+                      onToggle: (code) => setState(() {
+                        _helpTags = toggledCode(
+                          _helpTags,
+                          code,
+                          max: HelpTag.maxPerSignal,
+                        );
+                      }),
                     ),
                   ],
                 ),

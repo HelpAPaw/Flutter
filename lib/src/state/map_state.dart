@@ -2,7 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../models/help_tag.dart';
 import '../models/vet_clinic.dart';
+import '../widgets/help_tag_selector.dart' show toggledCode;
 
 /// Time range options for filtering signals by creation date
 enum TimeRange {
@@ -158,6 +160,17 @@ class NewSignalFormState {
   /// actually chose — which is exactly how an urgency system stops meaning
   /// anything. [isValid] keeps submit disabled until it is set.
   final int? urgency;
+
+  /// What the case needs — [HelpTag.code] values, in the order chosen.
+  ///
+  /// Order is the priority the reporter assigned and is preserved on write.
+  /// A list rather than a set for exactly that reason.
+  final List<String> helpTags;
+
+  /// Which animal, or null until the reporter picks. Nullable for the same
+  /// reason as [urgency]: defaulting it publishes a claim nobody made.
+  final String? animalType;
+
   final XFile? selectedImage;
   final bool isSubmitting;
 
@@ -167,6 +180,8 @@ class NewSignalFormState {
     this.phoneNumber = '',
     this.signalType = 0,
     this.urgency,
+    this.helpTags = const [],
+    this.animalType,
     this.selectedImage,
     this.isSubmitting = false,
   });
@@ -175,7 +190,9 @@ class NewSignalFormState {
   bool get isValid =>
       title.trim().isNotEmpty &&
       description.trim().isNotEmpty &&
-      urgency != null;
+      urgency != null &&
+      helpTags.isNotEmpty &&
+      animalType != null;
 
   /// Check if title is empty
   bool get isTitleEmpty => title.trim().isEmpty;
@@ -186,12 +203,30 @@ class NewSignalFormState {
   /// Check if no urgency has been chosen
   bool get isUrgencyUnset => urgency == null;
 
+  /// Check if no kind of help has been chosen
+  bool get isHelpTagsEmpty => helpTags.isEmpty;
+
+  /// Check if no animal has been chosen
+  bool get isAnimalTypeUnset => animalType == null;
+
+  /// Whether another help tag can still be added.
+  bool get canAddHelpTag => helpTags.length < HelpTag.maxPerSignal;
+
+  /// [helpTags] with [code] added or removed.
+  ///
+  /// Adding past [HelpTag.maxPerSignal] is a no-op rather than an error — the
+  /// UI disables the remaining chips, and this is the backstop.
+  List<String> toggledHelpTag(String code) =>
+      toggledCode(helpTags, code, max: HelpTag.maxPerSignal);
+
   NewSignalFormState copyWith({
     String? title,
     String? description,
     String? phoneNumber,
     int? signalType,
     int? urgency,
+    List<String>? helpTags,
+    String? animalType,
     XFile? selectedImage,
     bool? isSubmitting,
     bool clearImage = false,
@@ -202,6 +237,8 @@ class NewSignalFormState {
       phoneNumber: phoneNumber ?? this.phoneNumber,
       signalType: signalType ?? this.signalType,
       urgency: urgency ?? this.urgency,
+      helpTags: helpTags ?? this.helpTags,
+      animalType: animalType ?? this.animalType,
       selectedImage: clearImage ? null : (selectedImage ?? this.selectedImage),
       isSubmitting: isSubmitting ?? this.isSubmitting,
     );
@@ -221,6 +258,8 @@ class NewSignalFormState {
         other.phoneNumber == phoneNumber &&
         other.signalType == signalType &&
         other.urgency == urgency &&
+        listEquals(other.helpTags, helpTags) &&
+        other.animalType == animalType &&
         other.selectedImage?.path == selectedImage?.path &&
         other.isSubmitting == isSubmitting;
   }
@@ -232,6 +271,8 @@ class NewSignalFormState {
         phoneNumber,
         signalType,
         urgency,
+        Object.hashAll(helpTags),
+        animalType,
         selectedImage?.path,
         isSubmitting,
       );

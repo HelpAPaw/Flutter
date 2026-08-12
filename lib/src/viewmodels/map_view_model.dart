@@ -230,6 +230,21 @@ class MapViewModel extends Notifier<MapScreenState> {
     );
   }
 
+  /// Add or remove a help-needed tag on the form.
+  void toggleFormHelpTag(String code) {
+    state = state.copyWith(
+      formState: state.formState
+          .copyWith(helpTags: state.formState.toggledHelpTag(code)),
+    );
+  }
+
+  /// Set which animal the form's signal is about.
+  void setFormAnimalType(String code) {
+    state = state.copyWith(
+      formState: state.formState.copyWith(animalType: code),
+    );
+  }
+
   /// Set selected image
   void setFormImage(XFile? image) {
     state = state.copyWith(
@@ -263,6 +278,12 @@ class MapViewModel extends Notifier<MapScreenState> {
       if (state.formState.isUrgencyUnset) {
         return (false, 'urgency_unset');
       }
+      if (state.formState.isHelpTagsEmpty) {
+        return (false, 'help_tags_empty');
+      }
+      if (state.formState.isAnimalTypeUnset) {
+        return (false, 'animal_type_unset');
+      }
       return (false, 'invalid_form');
     }
 
@@ -292,8 +313,10 @@ class MapViewModel extends Notifier<MapScreenState> {
         latitude: latitude,
         longitude: longitude,
         reporterUserId: userId,
-        // Non-null: `isValid` gates submission on it above.
+        // Non-null / non-empty: `isValid` gates submission on all three above.
         urgency: state.formState.urgency!,
+        helpNeededTags: state.formState.helpTags,
+        animalType: state.formState.animalType!,
       );
 
       if (!result.success) {
