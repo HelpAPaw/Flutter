@@ -78,13 +78,23 @@ const MAX_REGION_RADIUS_KM = 100;
 // if that is hundreds. It only matters when tag matching would otherwise leave
 // a signal seen by almost nobody — a thin area, or a need few people cover.
 //
-// **0 disables the backfill entirely** and is the correct value for a deploy
-// that must not change anyone's notifications: tier A still ships whole, so
-// recipients are exactly the pre-tag radius-only set — including the empty set
-// when nobody is in range, which a floor of 1 would not reproduce. Pinned by
-// the MIN_RECIPIENTS = 0 tests in recipientSelection.test.ts. It also stops the
-// widened re-scan, whose trigger is `candidates.length < MIN_RECIPIENTS`.
-const MIN_RECIPIENTS = 50;
+// **10 is a deliberate choice to over-reach during the mixed-version period.**
+// While old and new builds coexist, tag matching is lopsided in both
+// directions: a user on an old build has no tags, so only `rescue` signals
+// match them; and a signal from an old build is treated as `rescue`, so only
+// users who picked `rescue` match it. Both cases demote someone to backfill
+// who would previously have been notified outright — and the floor is what
+// stops that demotion turning into silence. With the enabled-user base still
+// under ten, it means everyone eligible hears about everything, which is the
+// intended trade while the population is this thin.
+//
+// The cost is real and worth naming: recipients can be outside the radius they
+// configured, and the app does not yet display the distance that would explain
+// it. Lower this to 0 if that becomes the complaint — 0 reproduces the pre-tag
+// behaviour exactly, including the empty set when nobody is in range, which a
+// floor of 1 does not. Pinned by the MIN_RECIPIENTS = 0 tests in
+// recipientSelection.test.ts, which stay as the description of that baseline.
+const MIN_RECIPIENTS = 10;
 
 // Radius (km) for the single widened re-scan used when the normal scan turns up
 // fewer than MIN_RECIPIENTS eligible people. Wide enough to cover Bulgaria from
@@ -487,9 +497,10 @@ async function sendNotificationsToUsers(
       // **Nothing in the app reads this yet.** It is carried so the client can
       // start showing it without a second server deploy, but until it does, the
       // explanation it is supposed to provide does not reach anyone. That is a
-      // reason to keep MIN_RECIPIENTS at 0 on first deploy — with no backfill
-      // there is no unexplained distance to explain. Raising the floor and
-      // landing the client-side display belong in the same release.
+      // reason the client-side display is the next thing to land: with
+      // MIN_RECIPIENTS at 10 and a small user base, most recipients of most
+      // signals are reached by the backfill, so "why am I being told about
+      // something 40 km away" is a question the app currently cannot answer.
       ...(distanceByUid?.has(uid)
         ? { distanceKm: distanceByUid.get(uid)!.toFixed(1) }
         : {}),
