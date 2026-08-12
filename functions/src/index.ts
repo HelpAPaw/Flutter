@@ -77,6 +77,13 @@ const MAX_REGION_RADIUS_KM = 100;
 // A FLOOR, never a ceiling: everyone whose helper tags match is notified even
 // if that is hundreds. It only matters when tag matching would otherwise leave
 // a signal seen by almost nobody — a thin area, or a need few people cover.
+//
+// **0 disables the backfill entirely** and is the correct value for a deploy
+// that must not change anyone's notifications: tier A still ships whole, so
+// recipients are exactly the pre-tag radius-only set — including the empty set
+// when nobody is in range, which a floor of 1 would not reproduce. Pinned by
+// the MIN_RECIPIENTS = 0 tests in recipientSelection.test.ts. It also stops the
+// widened re-scan, whose trigger is `candidates.length < MIN_RECIPIENTS`.
 const MIN_RECIPIENTS = 50;
 
 // Radius (km) for the single widened re-scan used when the normal scan turns up
@@ -480,7 +487,7 @@ async function sendNotificationsToUsers(
       // **Nothing in the app reads this yet.** It is carried so the client can
       // start showing it without a second server deploy, but until it does, the
       // explanation it is supposed to provide does not reach anyone. That is a
-      // reason to keep MIN_RECIPIENTS at 1 on first deploy — with no backfill
+      // reason to keep MIN_RECIPIENTS at 0 on first deploy — with no backfill
       // there is no unexplained distance to explain. Raising the floor and
       // landing the client-side display belong in the same release.
       ...(distanceByUid?.has(uid)

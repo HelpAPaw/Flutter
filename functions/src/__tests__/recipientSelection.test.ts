@@ -134,6 +134,48 @@ describe("selectRecipients", () => {
   });
 });
 
+// The rollout's central claim: deploying the server before the app changes
+// nobody's notifications. Everyone is untagged, so everyone matches, so tier A
+// is exactly the set the old radius-only code notified.
+describe("MIN_RECIPIENTS = 0 reproduces the pre-tag behaviour exactly", () => {
+  const untagged = (uid: string, withinOwnRadius: boolean, km: number) =>
+    candidate(uid, true, withinOwnRadius, km);
+
+  it("notifies everyone in radius and nobody else", () => {
+    const world = [
+      untagged("in1", true, 1),
+      untagged("in2", true, 2),
+      untagged("out", false, 40),
+    ];
+
+    expect(selectRecipients(world, { minRecipients: 0 }).uids).toEqual([
+      "in1",
+      "in2",
+    ]);
+  });
+
+  it("notifies nobody when nobody is in radius", () => {
+    // The case that separates 0 from 1. A floor of 1 reaches one person outside
+    // the radius they configured, where the old code reached none — small, but
+    // not the "identical behaviour" a pre-app deploy is supposed to have.
+    const nobodyNear = [untagged("far1", false, 40), untagged("far2", false, 60)];
+
+    expect(selectRecipients(nobodyNear, { minRecipients: 0 }).uids).toEqual([]);
+    expect(selectRecipients(nobodyNear, { minRecipients: 1 }).uids).toEqual([
+      "far1",
+    ]);
+  });
+
+  it("still never truncates tier A, whatever the floor", () => {
+    const many = Array.from({ length: 8 }, (_, i) =>
+      untagged(`in${i}`, true, i)
+    );
+
+    expect(selectRecipients(many, { minRecipients: 0 }).uids).toHaveLength(8);
+    expect(selectRecipients(many, { minRecipients: 1 }).uids).toHaveLength(8);
+  });
+});
+
 describe("helpNeededTagsOf", () => {
   it("falls back to rescue for a signal written before the field existed", () => {
     // The property the staged rollout depends on: legacy signals still reach
