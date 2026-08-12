@@ -90,6 +90,18 @@ const MIN_RECIPIENTS = 50;
 const WIDEN_RADIUS_KM = 250;
 const WIDEN_MAX_CANDIDATES = 500;
 
+// Documents the widened pass may read per geohash range. At 250 km the bounds
+// cover most of the country, so without this the "exceptional" pass is the
+// largest read in the whole fan-out — and while it *fires* only when few users
+// are eligible, "few eligible" is not "few documents": a region where most
+// users have push off has exactly that shape. geohashQueryBounds returns a
+// handful of ranges, so the real ceiling is a small multiple of this.
+//
+// Ordering is by geohash, not by distance, so the cap can drop someone nearer
+// than someone it keeps. That is acceptable for a last-resort backfill and is
+// the reason it is not applied to the narrow pass, which must stay exact.
+const WIDEN_PER_RANGE_LIMIT = 200;
+
 // How long cached Places API results stay fresh (vet clinics rarely change).
 const PLACES_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
@@ -462,9 +474,15 @@ async function sendNotificationsToUsers(
     data: {
       ...data,
       // Per-recipient, unlike everything else here. Tag matching can reach a
-      // helper further away than the radius they configured, so the app needs
-      // to be able to say how far — otherwise that notification just reads as
-      // the radius setting being broken.
+      // helper further away than the radius they configured, and a notification
+      // that does not say how far just reads as the radius setting being broken.
+      //
+      // **Nothing in the app reads this yet.** It is carried so the client can
+      // start showing it without a second server deploy, but until it does, the
+      // explanation it is supposed to provide does not reach anyone. That is a
+      // reason to keep MIN_RECIPIENTS at 1 on first deploy — with no backfill
+      // there is no unexplained distance to explain. Raising the floor and
+      // landing the client-side display belong in the same release.
       ...(distanceByUid?.has(uid)
         ? { distanceKm: distanceByUid.get(uid)!.toFixed(1) }
         : {}),
@@ -539,18 +557,28 @@ async function collectCandidates(
   locationRadiusKm: number,
   regionRadiusKm: number,
   usersById: Map<string, UserData>,
-  currentLocationByUid: Map<string, admin.firestore.GeoPoint>
+  currentLocationByUid: Map<string, admin.firestore.GeoPoint>,
+  // Per-range read cap. The narrow pass leaves this off; the widened pass sets
+  // it, because at 250 km the bounds cover most of the country and nothing else
+  // limits what comes back. `WIDEN_MAX_CANDIDATES` only gates whether to widen
+  // at all, judged on the narrow pass — it says nothing about the size of the
+  // wide one, which is where the reads actually are.
+  perRangeLimit?: number
 ): Promise<void> {
+  const capped = <T extends admin.firestore.Query>(q: T) =>
+    perRangeLimit ? q.limit(perRangeLimit) : q;
+
   // Path 1: users whose tracked location is near the signal.
   const locBounds = geohashQueryBounds(center, locationRadiusKm * 1000);
   const locSnaps = await Promise.all(
     locBounds.map(([start, end]) =>
-      db
-        .collection("userLocations")
-        .orderBy("geohash")
-        .startAt(start)
-        .endAt(end)
-        .get()
+      capped(
+        db
+          .collection("userLocations")
+          .orderBy("geohash")
+          .startAt(start)
+          .endAt(end)
+      ).get()
     )
   );
   for (const snap of locSnaps) {
@@ -568,13 +596,14 @@ async function collectCandidates(
   const regBounds = geohashQueryBounds(center, regionRadiusKm * 1000);
   const regSnaps = await Promise.all(
     regBounds.map(([start, end]) =>
-      db
-        .collection("users")
-        .where("notificationPreferences.enabled", "==", true)
-        .orderBy("notificationPreferences.regionOfInterest.geohash")
-        .startAt(start)
-        .endAt(end)
-        .get()
+      capped(
+        db
+          .collection("users")
+          .where("notificationPreferences.enabled", "==", true)
+          .orderBy("notificationPreferences.regionOfInterest.geohash")
+          .startAt(start)
+          .endAt(end)
+      ).get()
     )
   );
   for (const snap of regSnaps) {
@@ -759,7 +788,8 @@ async function handleSignalCreated(
       WIDEN_RADIUS_KM,
       WIDEN_RADIUS_KM,
       usersById,
-      currentLocationByUid
+      currentLocationByUid,
+      WIDEN_PER_RANGE_LIMIT
     );
     candidates = buildCandidates();
   }

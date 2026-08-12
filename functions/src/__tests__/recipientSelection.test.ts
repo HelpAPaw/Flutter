@@ -107,15 +107,30 @@ describe("selectRecipients", () => {
     expect(result.backfilled).toBe(0);
   });
 
-  it("sorts candidates with no usable position last", () => {
+  // Someone who turned live tracking off and set no region of interest, but
+  // whose stale userLocations doc still exists. Distance was the only way the
+  // old code could ever reach them, so it never did — the floor must not either,
+  // or it pushes on the strength of a position they stopped sharing.
+  it("never backfills a candidate with no usable position", () => {
     const candidates = [
-      candidate("unknown", false, false, Infinity),
+      candidate("unplaceable", true, false, Infinity),
       candidate("known", false, false, 100),
     ];
 
-    const result = selectRecipients(candidates, { minRecipients: 2 });
+    const result = selectRecipients(candidates, { minRecipients: 50 });
 
-    expect(result.uids).toEqual(["known", "unknown"]);
+    expect(result.uids).toEqual(["known"]);
+    expect(result.uids).not.toContain("unplaceable");
+  });
+
+  it("keeps the unplaceable out of the tier counts too", () => {
+    const result = selectRecipients(
+      [candidate("unplaceable", true, true, Infinity)],
+      { minRecipients: 50 }
+    );
+
+    expect(result.uids).toEqual([]);
+    expect(result.tierCounts).toEqual({ a: 0, c: 0, b: 0, d: 0 });
   });
 });
 

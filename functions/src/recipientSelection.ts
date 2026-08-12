@@ -80,6 +80,15 @@ export function selectRecipients(
   const tierD: RecipientCandidate[] = [];
 
   for (const candidate of candidates) {
+    // A candidate we cannot place is not backfill material. This is someone who
+    // turned live tracking off and set no region of interest, but whose stale
+    // `userLocations` doc still exists — an OS permission revoked, or a stop
+    // that never reached the delete. The old code could never notify them,
+    // because distance was the only way in. Letting the floor reach them would
+    // push on the strength of a position they explicitly stopped sharing, and
+    // there is no opt-out short of turning notifications off entirely.
+    if (!Number.isFinite(candidate.distanceKm)) continue;
+
     if (candidate.matchesTags) {
       (candidate.withinOwnRadius ? tierA : tierC).push(candidate);
     } else {
