@@ -86,8 +86,13 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   /// misconfiguration that looks identical to a bug from the user's side, so
   /// while notifications are on we require at least one of each. With the
   /// switch off none of it matters and the screen stays editable.
-  String? _validationError(AppLocalizations l10n) {
-    if (!_notificationsEnabled) return null;
+  String? _validationError(
+    AppLocalizations l10n, {
+    bool? notificationsEnabled,
+  }) {
+    // `notificationsEnabled` overrides the current field so the master toggle
+    // can ask "would this be valid once I turn it on?" before doing anything.
+    if (!(notificationsEnabled ?? _notificationsEnabled)) return null;
     if (_selectedSignalTypes.isEmpty) return l10n.selectAtLeastOneSignalType;
     if (_selectedAnimalTypes.isEmpty) return l10n.selectAtLeastOneAnimalType;
     if (_selectedHelperTags.isEmpty) return l10n.selectAtLeastOneHelperTag;
@@ -139,7 +144,21 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   }
 
   Future<void> _toggleNotifications(bool value) async {
+    // Checked before the OS prompt and before any setState, because switching
+    // notifications ON is what makes the "at least one of each" rule apply. A
+    // user with an empty stored selection — anyone who reached the map through
+    // the gate's offline fall-through — would otherwise see the switch flip to
+    // ON, get a snackbar, have nothing written, and find it reverted next time
+    // they opened the screen. Same trap `_refusesEmpty` exists for below.
     if (value) {
+      final blocked = _validationError(AppLocalizations.of(context),
+          notificationsEnabled: true);
+      if (blocked != null) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(blocked)));
+        return;
+      }
+
       // Request notification permissions from the OS
       try {
         final granted = await NotificationService().requestNotificationPermission();

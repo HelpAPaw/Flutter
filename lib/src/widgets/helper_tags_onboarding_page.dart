@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -76,15 +78,37 @@ class _HelperTagsOnboardingPageState extends State<HelperTagsOnboardingPage> {
 
       // Merged partial write, like every other writer of this document. A full
       // set here would wipe fcmTokens and signalSubscriptions.
-      await FirebaseFirestore.instance.collection('users').doc(uid).set(
-        {
-          'notificationPreferences': {
-            'helperTags': _helperTags,
-            'animalTypes': _animalTypes,
-          },
-        },
-        SetOptions(merge: true),
-      );
+      //
+      // **Time-boxed, and a timeout is treated as success.** A Firestore write
+      // future does not complete until the *server* acknowledges it, so with no
+      // connectivity this await never returns. This screen has no skip and no
+      // back button, so that leaves the user on a spinner with the map
+      // unreachable — the exact opposite of the gate's own rule that we never
+      // lock anyone out of reporting an animal. Retrying does not help either,
+      // because offline it will always time out.
+      //
+      // Proceeding is safe rather than optimistic: the write is already durable
+      // in Firestore's offline cache and will sync on its own, and the gate's
+      // re-read falls back to that same cache, so it sees the tags and lets the
+      // user through. A write that genuinely *fails* (rules, bad data) throws
+      // immediately instead, and is handled below.
+      try {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .set(
+              {
+                'notificationPreferences': {
+                  'helperTags': _helperTags,
+                  'animalTypes': _animalTypes,
+                },
+              },
+              SetOptions(merge: true),
+            )
+            .timeout(const Duration(seconds: 10));
+      } on TimeoutException {
+        debugPrint('Helper tags: write not acknowledged; queued offline');
+      }
 
       if (!mounted) return;
       widget.onSaved();

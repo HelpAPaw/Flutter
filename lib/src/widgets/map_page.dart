@@ -13,6 +13,7 @@ import 'package:go_router/go_router.dart';
 import '../config/routes.dart';
 import '../repositories/repository_provider.dart';
 import '../repositories/signal_repository.dart';
+import '../models/notification_preferences.dart';
 import '../services/app_preferences_service.dart';
 import '../services/location_service.dart';
 import '../services/signal_navigator.dart';
@@ -118,20 +119,35 @@ class _MapScreenState extends ConsumerState<MapScreen>
     super.dispose();
   }
 
+  /// Whether the helper-tag gate has been satisfied, so the notification
+  /// onboarding may take the screen.
+  ///
+  /// The gate renders this screen while it is still *reading* preferences (so a
+  /// slow read never blanks the map), which means onboarding would otherwise be
+  /// pushed onto the navigator first and then sit on top of the mandatory tag
+  /// picker — two flows stacked, which device testing showed.
+  bool _helperTagsChosen(AsyncValue<NotificationPreferences?> prefs) {
+    final tags = prefs.asData?.value?.helperTags;
+    return tags != null && tags.isNotEmpty;
+  }
+
   Future<void> _checkOnboardingState() async {
-    // Stay out of the way of the helper-tag gate.
+    // Waiting on the *resolved* value, not a single read of it.
     //
-    // The gate renders this screen while it is still reading preferences (so a
-    // slow read never blanks the map), which means this runs before it can swap
-    // itself in. Without this check the notification sheet is pushed onto the
-    // navigator first and then sits *on top of* the mandatory tag picker — two
-    // onboarding flows stacked, which is what device testing showed.
-    //
-    // Skipping is safe rather than merely deferring: finishing the gate rebuilds
-    // this subtree, so initState runs again and the sheet gets its turn then.
-    final helperTags =
-        ref.read(helperTagsPreferencesProvider).asData?.value?.helperTags;
-    if (helperTags == null || helperTags.isEmpty) return;
+    // A one-shot `ref.read` here always lost: this runs from a post-frame
+    // callback in initState, when the provider is still loading, so it returned
+    // early every time. That was fine for an untagged user — the gate swaps in,
+    // and coming back rebuilds this subtree so initState runs again. But for a
+    // user who *already has* tags the gate returns the very same child widget in
+    // both its loading and data branches, so the element is reused, initState
+    // never runs a second time, and the notification onboarding was silently
+    // never offered again.
+    if (!_helperTagsChosen(ref.read(helperTagsPreferencesProvider))) {
+      final resolved = await ref.read(helperTagsPreferencesProvider.future);
+      if (!mounted) return;
+      final tags = resolved?.helperTags;
+      if (tags == null || tags.isEmpty) return;
+    }
 
     final prefs = AppPreferencesService();
 
