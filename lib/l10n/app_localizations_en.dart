@@ -447,6 +447,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get caseHistory => 'Case history';
 
   @override
+  String get historyPartiallyUnavailable =>
+      'Part of this history could not be loaded.';
+
+  @override
   String get historyFilterAll => 'All';
 
   @override

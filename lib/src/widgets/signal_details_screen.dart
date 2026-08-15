@@ -961,6 +961,25 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     return Column(
       children: [
         Text(l10n.caseHistory),
+        // Exactly one source failed. The list below is missing rows and would
+        // otherwise look complete — the silent-failure shape this codebase
+        // keeps getting bitten by. A Firestore listener ends on error and never
+        // heals, so the retry is the only way back short of leaving the screen.
+        if ((_commentsError == null) != (_eventsError == null))
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                const Icon(Icons.error_outline, size: 18),
+                const SizedBox(width: 8),
+                Expanded(child: Text(l10n.historyPartiallyUnavailable)),
+                TextButton(
+                  onPressed: _restartListeners,
+                  child: Text(l10n.retry),
+                ),
+              ],
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Wrap(

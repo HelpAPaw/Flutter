@@ -161,6 +161,7 @@
   "comments": "Коментари",
   "enterYourComment": "Въведете коментар",
   "caseHistory": "История на случая",
+  "historyPartiallyUnavailable": "Част от историята не можа да бъде заредена.",
   "historyFilterAll": "Всичко",
   "historyFilterEvents": "Събития",
   "reportedThisCase": "{name} подаде този сигнал",

@@ -939,7 +939,12 @@ that has regressed repeatedly (R5-004, R6-001, R6-002), which is why it lives ou
   backfill, correct for every signal ever created). Two explicit `StreamSubscription`s
   rather than `StreamBuilder`s, because the lists have to be sorted together before
   anything can render; null means "not delivered yet" and is distinct from empty. The
-  spinner shows only while *both* are silent. Ties break by document id — Dart's `sort`
+  spinner shows only while *both* are silent, and **errors are tracked per collection**:
+  the history gives up only when neither can be read, and when exactly one fails it renders
+  what it has above an inline "part of this history could not be loaded" row with a Retry.
+  One shared error slot blanked a perfectly readable comment thread the moment the `events`
+  read was denied — which is every device until the rules are deployed, and any future
+  single-collection rules mistake. Ties break by document id — Dart's `sort`
   is not stable, and the list would otherwise reshuffle between rebuilds. A document with
   an unknown `type` is **skipped, not thrown on**: it came from a newer build.
   *All* / *Events* chips filter in memory; both listeners stay subscribed either way.

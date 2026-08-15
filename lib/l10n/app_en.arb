@@ -187,6 +187,7 @@
   "comments": "Comments",
   "enterYourComment": "Enter your comment",
   "caseHistory": "Case history",
+  "historyPartiallyUnavailable": "Part of this history could not be loaded.",
   "historyFilterAll": "All",
   "historyFilterEvents": "Events",
   "reportedThisCase": "{name} reported this case",

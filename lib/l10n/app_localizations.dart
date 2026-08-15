@@ -896,6 +896,12 @@ abstract class AppLocalizations {
   /// **'Case history'**
   String get caseHistory;
 
+  /// No description provided for @historyPartiallyUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Part of this history could not be loaded.'**
+  String get historyPartiallyUnavailable;
+
   /// No description provided for @historyFilterAll.
   ///
   /// In en, this message translates to:

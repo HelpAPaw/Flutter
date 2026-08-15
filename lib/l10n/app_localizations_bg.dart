@@ -454,6 +454,10 @@ class AppLocalizationsBg extends AppLocalizations {
   String get caseHistory => 'История на случая';
 
   @override
+  String get historyPartiallyUnavailable =>
+      'Част от историята не можа да бъде заредена.';
+
+  @override
   String get historyFilterAll => 'Всичко';
 
   @override
