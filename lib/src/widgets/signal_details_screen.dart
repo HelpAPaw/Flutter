@@ -65,7 +65,14 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   StreamSubscription<QuerySnapshot>? _eventsSub;
   List<CaseHistoryEntry>? _commentEntries;
   List<CaseHistoryEntry>? _eventEntries;
-  Object? _historyError;
+
+  // Errors are tracked PER COLLECTION, and the history only gives up when both
+  // fail. One shared slot meant a denied `events` read blanked the comments
+  // too — which is the state every device is in until the rules carrying the
+  // `events` block are deployed, and the state any single future rules mistake
+  // would recreate. Half a history beats none.
+  Object? _commentsError;
+  Object? _eventsError;
 
   /// Which rows the history list is showing. Client-side over data already in
   /// memory — both listeners stay subscribed either way.
@@ -131,15 +138,18 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     _eventsSub?.cancel();
     _commentEntries = null;
     _eventEntries = null;
-    _historyError = null;
+    _commentsError = null;
+    _eventsError = null;
 
     _commentsSub = _listenToHistory(
       'comments',
-      (entries) => _commentEntries = entries,
+      onEntries: (entries) => _commentEntries = entries,
+      onError: (error) => _commentsError = error,
     );
     _eventsSub = _listenToHistory(
       'events',
-      (entries) => _eventEntries = entries,
+      onEntries: (entries) => _eventEntries = entries,
+      onError: (error) => _eventsError = error,
     );
   }
 
@@ -148,9 +158,10 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// an unrecognised `type` means a newer client wrote it, and one row it cannot
   /// render must not take out the whole thread.
   StreamSubscription<QuerySnapshot> _listenToHistory(
-    String collection,
-    void Function(List<CaseHistoryEntry>) assign,
-  ) {
+    String collection, {
+    required void Function(List<CaseHistoryEntry>) onEntries,
+    required void Function(Object) onError,
+  }) {
     return _signalRef
         .collection(collection)
         .orderBy('createdAt')
@@ -159,19 +170,16 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       (snapshot) {
         if (!mounted) return;
         setState(() {
-          assign(snapshot.docs
+          onEntries(snapshot.docs
               .map((doc) => CaseHistoryEntry.fromDocument(
                   doc.id, doc.data()))
               .whereType<CaseHistoryEntry>()
               .toList());
         });
       },
-      // Both collections share one error slot: whatever denied or dropped one
-      // read (App Check, auth, connectivity) applies to the other, and the
-      // retry replaces both listeners anyway.
       onError: (Object error) {
         if (!mounted) return;
-        setState(() => _historyError = error);
+        setState(() => onError(error));
       },
     );
   }
@@ -918,16 +926,23 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     AppLocalizations l10n,
     DateFormat dateFormat,
   ) {
-    if (_historyError != null) {
+    // Only when BOTH sources are unreadable. If one still works the history is
+    // incomplete rather than unavailable, and showing the half we have beats
+    // replacing the whole thread with a Firestore error string — which is what
+    // a device on rules that predate the `events` block would otherwise see.
+    if (_commentsError != null && _eventsError != null) {
       return Text(
-        _historyError.toString(),
+        _commentsError.toString(),
         style: const TextStyle(color: Colors.red),
       );
     }
-    // Only while BOTH are still silent. Rendering as soon as either arrives
-    // means rows appear rather than a spinner sitting there — and the two
-    // listeners are created together, so the gap is a frame or two.
-    if (_commentEntries == null && _eventEntries == null) {
+    // Likewise only while BOTH are still silent: rendering as soon as either
+    // arrives means rows appear rather than a spinner sitting there, and the
+    // two listeners are created together so the gap is a frame or two.
+    if (_commentEntries == null &&
+        _eventEntries == null &&
+        _commentsError == null &&
+        _eventsError == null) {
       return const CircularProgressIndicator();
     }
 
