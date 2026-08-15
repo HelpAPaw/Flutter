@@ -451,7 +451,7 @@ class AppLocalizationsBg extends AppLocalizations {
   String get enterYourComment => 'Въведете коментар';
 
   @override
-  String get caseHistory => 'История на случая';
+  String get signalHistory => 'История на сигнала';
 
   @override
   String get historyPartiallyUnavailable =>
@@ -464,7 +464,7 @@ class AppLocalizationsBg extends AppLocalizations {
   String get historyFilterEvents => 'Събития';
 
   @override
-  String reportedThisCase(String name) {
+  String reportedThisSignal(String name) {
     return '$name подаде този сигнал';
   }
 
@@ -478,7 +478,7 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get updateNoteHint =>
-      'Добавете кратка бележка към историята на случая';
+      'Добавете кратка бележка към историята на сигнала';
 
   @override
   String get updateNoteRequired =>

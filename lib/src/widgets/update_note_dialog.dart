@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../l10n/app_localizations.dart';
-import '../models/case_event.dart';
+import '../models/signal_event.dart';
 
 /// Asks for the mandatory update note that accompanies a status or urgency
 /// change (spec §4.6: "Every status change requires an update note").
 ///
-/// The note is what makes the case history worth reading. Without it the
+/// The note is what makes the signal's history worth reading. Without it the
 /// timeline says *"Milen changed the status to Resolved"* and the next person to
-/// pick the case up learns nothing — which is exactly the Facebook-thread
-/// problem the case system exists to replace.
+/// pick the signal up learns nothing — which is exactly the Facebook-thread
+/// problem the signal system exists to replace.
 ///
 /// It is required rather than optional on purpose. An optional field on a
 /// one-tap dropdown is left empty essentially always, which is the state the app
@@ -99,9 +99,9 @@ class _UpdateNoteDialogState extends State<_UpdateNoteDialog> {
               minLines: 2,
               textCapitalization: TextCapitalization.sentences,
               // Mirrors the 500-char bound in firestore.rules. The two are
-              // guarded together — see case_event_vocabulary_guard_test.dart.
+              // guarded together — see signal_event_vocabulary_guard_test.dart.
               inputFormatters: [
-                LengthLimitingTextInputFormatter(CaseEventType.maxNoteLength),
+                LengthLimitingTextInputFormatter(SignalEventType.maxNoteLength),
               ],
               decoration: InputDecoration(
                 hintText: l10n.updateNoteHint,

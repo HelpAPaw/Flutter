@@ -1097,7 +1097,7 @@ async function handleCommentCreated(
   // onSignalUpdated. Skip them here to avoid a TypeError on commentText.length
   // below — any future system entry type must be added to this list too.
   //
-  // These are LEGACY now: the case timeline writes them to the signal's
+  // These are LEGACY now: the signal timeline writes them to the signal's
   // `events` subcollection instead, which has no trigger at all (a second
   // notification path for the same change would double-notify). This guard
   // still has to stay — nothing was backfilled, and every already released

@@ -24,7 +24,7 @@ import '../services/navigation_service.dart';
 import '../utils/nav_extensions.dart';
 import 'escape_leading.dart';
 
-import '../models/case_event.dart';
+import '../models/signal_event.dart';
 import '../models/signal.dart';
 import '../models/signal_doc_state.dart';
 import '../models/signal_status.dart';
@@ -50,8 +50,8 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   // failed read means replacing the stream, not just rebuilding.
   late Stream<DocumentSnapshot> _signalStream;
 
-  // The case history is read from TWO collections and merged (see
-  // [mergeCaseHistory]): `events` holds everything written since the case
+  // The signal history is read from TWO collections and merged (see
+  // [mergeSignalHistory]): `events` holds everything written since the case
   // timeline shipped, `comments` holds the conversation plus every status and
   // urgency change written by an already released build. Nothing was
   // backfilled, so both stay in play indefinitely.
@@ -63,8 +63,8 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   // empty list, which is a real answer.
   StreamSubscription<QuerySnapshot>? _commentsSub;
   StreamSubscription<QuerySnapshot>? _eventsSub;
-  List<CaseHistoryEntry>? _commentEntries;
-  List<CaseHistoryEntry>? _eventEntries;
+  List<SignalHistoryEntry>? _commentEntries;
+  List<SignalHistoryEntry>? _eventEntries;
 
   // Errors are tracked PER COLLECTION, and the history only gives up when both
   // fail. One shared slot meant a denied `events` read blanked the comments
@@ -76,7 +76,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
 
   /// Which rows the history list is showing. Client-side over data already in
   /// memory — both listeners stay subscribed either way.
-  CaseHistoryFilter _historyFilter = CaseHistoryFilter.all;
+  SignalHistoryFilter _historyFilter = SignalHistoryFilter.all;
   // Memoized public-name lookups, keyed by uid so each name is resolved once
   // per screen rather than once per rebuild — the comment list would otherwise
   // re-read publicProfiles for every row every time this screen rebuilds.
@@ -159,7 +159,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// render must not take out the whole thread.
   StreamSubscription<QuerySnapshot> _listenToHistory(
     String collection, {
-    required void Function(List<CaseHistoryEntry>) onEntries,
+    required void Function(List<SignalHistoryEntry>) onEntries,
     required void Function(Object) onError,
   }) {
     return _signalRef
@@ -171,9 +171,9 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         if (!mounted) return;
         setState(() {
           onEntries(snapshot.docs
-              .map((doc) => CaseHistoryEntry.fromDocument(
+              .map((doc) => SignalHistoryEntry.fromDocument(
                   doc.id, doc.data()))
-              .whereType<CaseHistoryEntry>()
+              .whereType<SignalHistoryEntry>()
               .toList());
         });
       },
@@ -744,7 +744,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                           ),
                           Text(' ${l10n.urgency}'),
                           // Urgency is reporter-only. The spec restricts it to
-                          // the case holder, a moderator or an admin; there are
+                          // the signal holder, a moderator or an admin; there are
                           // no moderator/admin roles yet, so the reporter is
                           // the whole of that set today. Firestore's
                           // `isStatusOnlyUpdate` enforces the same rule, so
@@ -766,7 +766,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                     child: UrgencyChip(urgency: signal.urgency),
                                   ),
                           ),
-                          // What the case needs, read-only. Editing lives on the
+                          // What the signal needs, read-only. Editing lives on the
                           // edit screen with the rest of the reporter's fields.
                           // Signals from before tags existed have none, so the
                           // whole block is omitted rather than showing an empty
@@ -845,7 +845,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                       }
                                     },
                           ),
-                          _buildCaseHistory(signal, l10n, dateFormat),
+                          _buildSignalHistory(signal, l10n, dateFormat),
                         ],
                       ),
                     ),
@@ -919,9 +919,9 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     });
   }
 
-  /// The case timeline (spec §4.6): what happened to this case, and what people
+  /// The signal timeline (spec §4.6): what happened to this signal, and what people
   /// said about it, in one chronological thread.
-  Widget _buildCaseHistory(
+  Widget _buildSignalHistory(
     Signal signal,
     AppLocalizations l10n,
     DateFormat dateFormat,
@@ -946,9 +946,9 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       return const CircularProgressIndicator();
     }
 
-    final entries = filterCaseHistory(
-      mergeCaseHistory(
-        created: CaseHistoryEntry.created(
+    final entries = filterSignalHistory(
+      mergeSignalHistory(
+        created: SignalHistoryEntry.created(
           reporterId: signal.reporter.id,
           createdAt: _createdAtOf(signal),
         ),
@@ -960,7 +960,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
 
     return Column(
       children: [
-        Text(l10n.caseHistory),
+        Text(l10n.signalHistory),
         // Exactly one source failed. The list below is missing rows and would
         // otherwise look complete — the silent-failure shape this codebase
         // keeps getting bitten by. A Firestore listener ends on error and never
@@ -986,11 +986,11 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
             spacing: 8,
             alignment: WrapAlignment.center,
             children: [
-              for (final filter in CaseHistoryFilter.values)
+              for (final filter in SignalHistoryFilter.values)
                 ChoiceChip(
                   label: Text(switch (filter) {
-                    CaseHistoryFilter.all => l10n.historyFilterAll,
-                    CaseHistoryFilter.events => l10n.historyFilterEvents,
+                    SignalHistoryFilter.all => l10n.historyFilterAll,
+                    SignalHistoryFilter.events => l10n.historyFilterEvents,
                   }),
                   selected: _historyFilter == filter,
                   visualDensity: VisualDensity.compact,
@@ -1022,22 +1022,22 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       };
 
   Widget _buildHistoryRow(
-    CaseHistoryEntry entry,
+    SignalHistoryEntry entry,
     AppLocalizations l10n,
     DateFormat dateFormat,
   ) =>
       switch (entry.kind) {
-        CaseHistoryKind.created => _buildCreatedRow(entry, l10n, dateFormat),
-        CaseHistoryKind.statusChange ||
-        CaseHistoryKind.urgencyChange =>
+        SignalHistoryKind.created => _buildCreatedRow(entry, l10n, dateFormat),
+        SignalHistoryKind.statusChange ||
+        SignalHistoryKind.urgencyChange =>
           _buildEventRow(entry, l10n, dateFormat),
-        CaseHistoryKind.comment => _buildCommentRow(entry, l10n, dateFormat),
+        SignalHistoryKind.comment => _buildCommentRow(entry, l10n, dateFormat),
       };
 
   /// The row every timeline opens with. Not stored — see
-  /// [CaseHistoryEntry.created].
+  /// [SignalHistoryEntry.created].
   Widget _buildCreatedRow(
-    CaseHistoryEntry entry,
+    SignalHistoryEntry entry,
     AppLocalizations l10n,
     DateFormat dateFormat,
   ) {
@@ -1058,7 +1058,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                 child: _actorText(
                   entry.actorId,
                   l10n,
-                  (name) => l10n.reportedThisCase(name),
+                  (name) => l10n.reportedThisSignal(name),
                 ),
               ),
             ],
@@ -1071,11 +1071,11 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
 
   /// A status or urgency change, with the update note that explains it.
   Widget _buildEventRow(
-    CaseHistoryEntry entry,
+    SignalHistoryEntry entry,
     AppLocalizations l10n,
     DateFormat dateFormat,
   ) {
-    final isUrgency = entry.kind == CaseHistoryKind.urgencyChange;
+    final isUrgency = entry.kind == SignalHistoryKind.urgencyChange;
     // An urgency entry keeps the map pin, since that is exactly what changed on
     // the map; a status entry gets a plain dot (status has no pin).
     final Widget levelIcon = isUrgency
@@ -1141,7 +1141,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   }
 
   Widget _buildCommentRow(
-    CaseHistoryEntry entry,
+    SignalHistoryEntry entry,
     AppLocalizations l10n,
     DateFormat dateFormat,
   ) {
@@ -1184,14 +1184,14 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     );
   }
 
-  Widget? _dateSubtitle(CaseHistoryEntry entry, DateFormat dateFormat) {
+  Widget? _dateSubtitle(SignalHistoryEntry entry, DateFormat dateFormat) {
     final text = _formatDate(entry, dateFormat);
     return text.isEmpty ? null : Text(text);
   }
 
   /// Empty while a write is still in flight and has no timestamp yet — the row
   /// itself still renders, it just has no date to show.
-  String _formatDate(CaseHistoryEntry entry, DateFormat dateFormat) {
+  String _formatDate(SignalHistoryEntry entry, DateFormat dateFormat) {
     final at = entry.createdAt;
     return at == null ? '' : dateFormat.format(at);
   }
@@ -1334,7 +1334,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     final status = SignalStatus.fromCode(newStatus);
     await _applyLevelChange(
       field: 'status',
-      eventType: CaseEventType.statusChange,
+      eventType: SignalEventType.statusChange,
       oldKey: 'oldStatus',
       newKey: 'newStatus',
       oldValue: oldStatus,
@@ -1353,7 +1353,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     final urgency = SignalUrgency.fromCode(newUrgency);
     await _applyLevelChange(
       field: 'urgency',
-      eventType: CaseEventType.urgencyChange,
+      eventType: SignalEventType.urgencyChange,
       oldKey: 'oldUrgency',
       newKey: 'newUrgency',
       oldValue: oldUrgency,
@@ -1365,7 +1365,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   }
 
   /// Moves a signal from one level to another — status or urgency — and records
-  /// it on the case timeline.
+  /// it on the signal timeline.
   ///
   /// One implementation for both because the protocol around them is identical
   /// and must stay so: gate on a real account, ask for the update note, write
@@ -1377,7 +1377,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// write would silently mute a subscriber.
   Future<void> _applyLevelChange({
     required String field,
-    required CaseEventType eventType,
+    required SignalEventType eventType,
     required String oldKey,
     required String newKey,
     required int oldValue,
@@ -1394,7 +1394,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     }
 
     // Spec §4.6: every change carries a note saying what happened. Asked before
-    // anything is written, so backing out of the dialog leaves the case exactly
+    // anything is written, so backing out of the dialog leaves the signal exactly
     // as it was — the dropdown and the picker both read their value from the
     // signal stream, so neither needs reverting.
     //
@@ -1531,7 +1531,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// Empties one of a signal's history subcollections ahead of deleting it.
   ///
   /// A single batch, matching what the comment cascade always did: these are
-  /// bounded by what one case accumulates, and a 500-document case has never
+  /// bounded by what one signal accumulates, and a 500-document case has never
   /// existed. If one ever does, this is where the chunking goes.
   Future<void> _deleteSubcollection(CollectionReference<Object?> ref) async {
     final docs = await ref.get();

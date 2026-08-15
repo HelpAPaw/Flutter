@@ -1,11 +1,11 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:help_a_paw/src/models/case_event.dart';
+import 'package:help_a_paw/src/models/signal_event.dart';
 
 /// Guards the copy of the case-event vocabulary that lives in `firestore.rules`.
 ///
-/// [CaseEventType] is the source of truth, but the rules validate a closed list
+/// [SignalEventType] is the source of truth, but the rules validate a closed list
 /// of their own — that is the whole point of putting events in their own
 /// subcollection instead of leaving them in `comments`. Two lists, one meaning,
 /// and the two failure modes are not symmetrical:
@@ -31,7 +31,7 @@ void main() {
 
   test('the rules accept exactly the types the app can write', () {
     final source = rules.readAsStringSync();
-    final validator = _function(source, 'isCaseEventCreate');
+    final validator = _function(source, 'isSignalEventCreate');
 
     final accepted = RegExp(r"data\.type\s*==\s*'([^']+)'")
         .allMatches(validator)
@@ -40,9 +40,9 @@ void main() {
 
     expect(
       accepted,
-      CaseEventType.allCodes.toSet(),
-      reason: 'isCaseEventCreate in firestore.rules has drifted from '
-          'CaseEventType. A type only the rules know about is stored and then '
+      SignalEventType.allCodes.toSet(),
+      reason: 'isSignalEventCreate in firestore.rules has drifted from '
+          'SignalEventType. A type only the rules know about is stored and then '
           'never rendered, and nothing reports it.',
     );
   });
@@ -58,9 +58,9 @@ void main() {
         reason: 'isValidEventNote no longer bounds the note length');
     expect(
       int.parse(match!.group(1)!),
-      CaseEventType.maxNoteLength,
+      SignalEventType.maxNoteLength,
       reason: 'The note dialog\'s input formatter uses '
-          'CaseEventType.maxNoteLength. If the rules bound is lower, people can '
+          'SignalEventType.maxNoteLength. If the rules bound is lower, people can '
           'type a note that the write then rejects with an opaque '
           'PERMISSION_DENIED.',
     );

@@ -890,11 +890,11 @@ abstract class AppLocalizations {
   /// **'Enter your comment'**
   String get enterYourComment;
 
-  /// No description provided for @caseHistory.
+  /// No description provided for @signalHistory.
   ///
   /// In en, this message translates to:
-  /// **'Case history'**
-  String get caseHistory;
+  /// **'Signal history'**
+  String get signalHistory;
 
   /// No description provided for @historyPartiallyUnavailable.
   ///
@@ -914,11 +914,11 @@ abstract class AppLocalizations {
   /// **'Events'**
   String get historyFilterEvents;
 
-  /// No description provided for @reportedThisCase.
+  /// No description provided for @reportedThisSignal.
   ///
   /// In en, this message translates to:
-  /// **'{name} reported this case'**
-  String reportedThisCase(String name);
+  /// **'{name} reported this signal'**
+  String reportedThisSignal(String name);
 
   /// No description provided for @updateNoteTitle.
   ///
@@ -935,13 +935,13 @@ abstract class AppLocalizations {
   /// No description provided for @updateNoteHint.
   ///
   /// In en, this message translates to:
-  /// **'Add a short note for the case history'**
+  /// **'Add a short note for the signal history'**
   String get updateNoteHint;
 
   /// No description provided for @updateNoteRequired.
   ///
   /// In en, this message translates to:
-  /// **'Please say what changed — everyone following this case sees it.'**
+  /// **'Please say what changed — everyone following this signal sees it.'**
   String get updateNoteRequired;
 
   /// No description provided for @changedStatusTo.

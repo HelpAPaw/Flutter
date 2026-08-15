@@ -1,9 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:help_a_paw/src/models/case_event.dart';
+import 'package:help_a_paw/src/models/signal_event.dart';
 
-/// The case history is assembled from two collections that will never be
-/// reconciled — `events` for everything written since the case timeline
+/// The signal history is assembled from two collections that will never be
+/// reconciled — `events` for everything written since the signal timeline
 /// shipped, `comments` for the conversation plus every status and urgency
 /// change written by an already released build. Nothing was backfilled, so the
 /// merge is permanent and its edges are what this covers.
@@ -30,9 +30,9 @@ void main() {
 
   group('fromDocument', () {
     test('decodes a status_change event', () {
-      final entry = CaseHistoryEntry.fromDocument('e1', statusEvent())!;
+      final entry = SignalHistoryEntry.fromDocument('e1', statusEvent())!;
 
-      expect(entry.kind, CaseHistoryKind.statusChange);
+      expect(entry.kind, SignalHistoryKind.statusChange);
       expect(entry.level, 2);
       expect(entry.note, 'Vet took her in');
       expect(entry.actorId, 'u1');
@@ -40,7 +40,7 @@ void main() {
     });
 
     test('decodes an urgency_change event', () {
-      final entry = CaseHistoryEntry.fromDocument('e2', {
+      final entry = SignalHistoryEntry.fromDocument('e2', {
         'type': 'urgency_change',
         'oldUrgency': 0,
         'newUrgency': 2,
@@ -49,18 +49,18 @@ void main() {
         'actor': actor,
       })!;
 
-      expect(entry.kind, CaseHistoryKind.urgencyChange);
+      expect(entry.kind, SignalHistoryKind.urgencyChange);
       expect(entry.level, 2);
     });
 
     test('decodes a plain comment', () {
-      final entry = CaseHistoryEntry.fromDocument('c1', {
+      final entry = SignalHistoryEntry.fromDocument('c1', {
         'text': 'I can be there in an hour',
         'createdAt': DateTime(2026, 8, 14),
         'author': actor,
       })!;
 
-      expect(entry.kind, CaseHistoryKind.comment);
+      expect(entry.kind, SignalHistoryKind.comment);
       expect(entry.text, 'I can be there in an hour');
       expect(entry.isEvent, isFalse);
     });
@@ -68,7 +68,7 @@ void main() {
     test('reads a legacy system entry that lives in comments', () {
       // Written by a released build: named `author`, and with no note. It has to
       // keep rendering — these are never migrated.
-      final entry = CaseHistoryEntry.fromDocument('c2', {
+      final entry = SignalHistoryEntry.fromDocument('c2', {
         'type': 'status_change',
         'oldStatus': 0,
         'newStatus': 1,
@@ -76,14 +76,14 @@ void main() {
         'author': actor,
       })!;
 
-      expect(entry.kind, CaseHistoryKind.statusChange);
+      expect(entry.kind, SignalHistoryKind.statusChange);
       expect(entry.level, 1);
       expect(entry.note, isNull);
       expect(entry.actorId, 'u1');
     });
 
     test('converts a Firestore Timestamp', () {
-      final entry = CaseHistoryEntry.fromDocument(
+      final entry = SignalHistoryEntry.fromDocument(
         'e3',
         statusEvent()..['createdAt'] = Timestamp.fromDate(DateTime(2026, 3, 1)),
       )!;
@@ -96,7 +96,7 @@ void main() {
       // transfer. Guessing at what it meant would put a wrong sentence in the
       // history, and throwing would take out the whole thread.
       expect(
-        CaseHistoryEntry.fromDocument(
+        SignalHistoryEntry.fromDocument(
             'e4', statusEvent(type: 'ownership_transfer')),
         isNull,
       );
@@ -104,12 +104,12 @@ void main() {
 
     test('skips a malformed document rather than throwing', () {
       expect(
-        CaseHistoryEntry.fromDocument('e5', {'type': 'status_change'}),
+        SignalHistoryEntry.fromDocument('e5', {'type': 'status_change'}),
         isNull,
         reason: 'no actor',
       );
       expect(
-        CaseHistoryEntry.fromDocument('e6', {
+        SignalHistoryEntry.fromDocument('e6', {
           'type': 'status_change',
           'createdAt': DateTime(2026, 8, 14),
           'actor': actor,
@@ -118,7 +118,7 @@ void main() {
         reason: 'no newStatus',
       );
       expect(
-        CaseHistoryEntry.fromDocument('c3', {
+        SignalHistoryEntry.fromDocument('c3', {
           'createdAt': DateTime(2026, 8, 14),
           'author': actor,
         }),
@@ -128,30 +128,30 @@ void main() {
     });
 
     test('keeps a row whose write is still in flight', () {
-      final entry = CaseHistoryEntry.fromDocument(
+      final entry = SignalHistoryEntry.fromDocument(
           'e7', statusEvent()..['createdAt'] = null)!;
 
       // No timestamp yet is not a reason to hide what someone just did.
       expect(entry.createdAt, isNull);
-      expect(entry.kind, CaseHistoryKind.statusChange);
+      expect(entry.kind, SignalHistoryKind.statusChange);
     });
   });
 
-  group('mergeCaseHistory', () {
-    CaseHistoryEntry at(String id, DateTime? time,
-            {CaseHistoryKind kind = CaseHistoryKind.comment}) =>
-        CaseHistoryEntry(
+  group('mergeSignalHistory', () {
+    SignalHistoryEntry at(String id, DateTime? time,
+            {SignalHistoryKind kind = SignalHistoryKind.comment}) =>
+        SignalHistoryEntry(
             id: id, kind: kind, actorId: 'u1', createdAt: time, text: 'x');
 
     test('interleaves the two sources chronologically', () {
-      final merged = mergeCaseHistory(
+      final merged = mergeSignalHistory(
         comments: [
           at('c1', DateTime(2026, 8, 14, 9)),
           at('c2', DateTime(2026, 8, 14, 12)),
         ],
         events: [
           at('e1', DateTime(2026, 8, 14, 10),
-              kind: CaseHistoryKind.statusChange),
+              kind: SignalHistoryKind.statusChange),
         ],
       );
 
@@ -159,8 +159,8 @@ void main() {
     });
 
     test('puts the created row first whatever its timestamp', () {
-      final merged = mergeCaseHistory(
-        created: CaseHistoryEntry.created(
+      final merged = mergeSignalHistory(
+        created: SignalHistoryEntry.created(
           reporterId: 'u1',
           // Later than the first change — a clock skew, not a reordering.
           createdAt: DateTime(2026, 8, 14, 23),
@@ -169,14 +169,14 @@ void main() {
         events: const [],
       );
 
-      expect(merged.first.kind, CaseHistoryKind.created);
+      expect(merged.first.kind, SignalHistoryKind.created);
     });
 
     test('breaks ties by id so the list does not reshuffle', () {
       final sameInstant = DateTime(2026, 8, 14, 10);
-      final merged = mergeCaseHistory(
+      final merged = mergeSignalHistory(
         comments: [at('b', sameInstant)],
-        events: [at('a', sameInstant, kind: CaseHistoryKind.statusChange)],
+        events: [at('a', sameInstant, kind: SignalHistoryKind.statusChange)],
       );
 
       // Dart's sort is not stable, so without the tie-break these two could
@@ -185,7 +185,7 @@ void main() {
     });
 
     test('sorts a timestamp-less row last', () {
-      final merged = mergeCaseHistory(
+      final merged = mergeSignalHistory(
         comments: [at('c1', null), at('c2', DateTime(2026, 8, 14))],
         events: const [],
       );
@@ -194,32 +194,32 @@ void main() {
     });
   });
 
-  group('filterCaseHistory', () {
+  group('filterSignalHistory', () {
     final entries = [
-      CaseHistoryEntry.created(reporterId: 'u1', createdAt: DateTime(2026, 1)),
-      CaseHistoryEntry(
+      SignalHistoryEntry.created(reporterId: 'u1', createdAt: DateTime(2026, 1)),
+      SignalHistoryEntry(
           id: 'e1',
-          kind: CaseHistoryKind.statusChange,
+          kind: SignalHistoryKind.statusChange,
           actorId: 'u1',
           createdAt: DateTime(2026, 2)),
-      CaseHistoryEntry(
+      SignalHistoryEntry(
           id: 'c1',
-          kind: CaseHistoryKind.comment,
+          kind: SignalHistoryKind.comment,
           actorId: 'u1',
           createdAt: DateTime(2026, 3),
           text: 'hi'),
     ];
 
     test('all keeps everything', () {
-      expect(filterCaseHistory(entries, CaseHistoryFilter.all).length, 3);
+      expect(filterSignalHistory(entries, SignalHistoryFilter.all).length, 3);
     });
 
     test('events drops the conversation but keeps the opening row', () {
-      final filtered = filterCaseHistory(entries, CaseHistoryFilter.events);
+      final filtered = filterSignalHistory(entries, SignalHistoryFilter.events);
 
       expect(filtered.map((e) => e.kind), [
-        CaseHistoryKind.created,
-        CaseHistoryKind.statusChange,
+        SignalHistoryKind.created,
+        SignalHistoryKind.statusChange,
       ]);
     });
   });

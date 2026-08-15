@@ -115,15 +115,15 @@ service cloud.firestore {
     // "only when present" clause per event type, the way isCommentCreate() had
     // to for the two system shapes it still has to tolerate.
     //
-    // The type list is duplicated from CaseEventType (lib/src/models/case_event.dart)
-    // and guarded by test/case_event_vocabulary_guard_test.dart. A type the app
+    // The type list is duplicated from SignalEventType (lib/src/models/signal_event.dart)
+    // and guarded by test/signal_event_vocabulary_guard_test.dart. A type the app
     // can write but the rules reject fails loudly (the write is denied); a type
     // the rules accept but the app cannot read fails SILENTLY — the row just
     // never appears in anyone's history.
     //
     // A `status_change` event does not by itself authorise the status change:
     // the signal write travels through isStatusOnlyUpdate() separately.
-    function isCaseEventCreate() {
+    function isSignalEventCreate() {
       return request.auth != null
              && request.resource.data.actor == userDoc()
              && request.resource.data.createdAt is timestamp
@@ -178,7 +178,7 @@ service cloud.firestore {
     // and must self-stamp lastUpdatedBy so it can't be spoofed to another user.
     //
     // `urgency` is DELIBERATELY absent from the affectedKeys allow-list, and
-    // must stay absent. The spec restricts marking a case Red to the case
+    // must stay absent. The spec restricts marking a signal Red to the case
     // holder, a moderator or an admin; with no moderator/admin roles yet, that
     // means the reporter alone. This omission is the entire enforcement of
     // that rule — adding 'urgency' here would let any signed-in user escalate
@@ -384,11 +384,11 @@ service cloud.firestore {
                       && isParentSignalReporter('signals', signalId);
       }
 
-      // Case timeline (spec 4.6). See isCaseEventCreate() for why this is not
-      // in `comments`.
+      // Signal timeline (master spec 4.6). See isSignalEventCreate() for why
+      // this is not in `comments`.
       match /events/{eventId} {
         allow read: if true;  // Public read, like the signal it describes
-        allow create: if isCaseEventCreate();
+        allow create: if isSignalEventCreate();
         // An event is a record of what happened; nobody edits history.
         allow update: if false;
         // KNOWN GAP: the reporter can delete individual events, so the history
@@ -424,7 +424,7 @@ service cloud.firestore {
 
       match /events/{eventId} {
         allow read: if true;
-        allow create: if isCaseEventCreate();
+        allow create: if isSignalEventCreate();
         allow update: if false;
         allow delete: if request.auth != null
                       && isParentSignalReporter('signals_test', signalId);

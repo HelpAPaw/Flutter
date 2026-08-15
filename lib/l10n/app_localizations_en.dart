@@ -444,7 +444,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get enterYourComment => 'Enter your comment';
 
   @override
-  String get caseHistory => 'Case history';
+  String get signalHistory => 'Signal history';
 
   @override
   String get historyPartiallyUnavailable =>
@@ -457,8 +457,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get historyFilterEvents => 'Events';
 
   @override
-  String reportedThisCase(String name) {
-    return '$name reported this case';
+  String reportedThisSignal(String name) {
+    return '$name reported this signal';
   }
 
   @override
@@ -470,11 +470,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get updateNoteHint => 'Add a short note for the case history';
+  String get updateNoteHint => 'Add a short note for the signal history';
 
   @override
   String get updateNoteRequired =>
-      'Please say what changed — everyone following this case sees it.';
+      'Please say what changed — everyone following this signal sees it.';
 
   @override
   String changedStatusTo(String name, String status) {

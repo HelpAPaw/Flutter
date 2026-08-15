@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
-import 'package:help_a_paw/src/models/case_event.dart';
+import 'package:help_a_paw/src/models/signal_event.dart';
 import 'package:help_a_paw/src/models/signal.dart';
 import 'package:help_a_paw/src/models/signal_urgency.dart';
 import 'package:help_a_paw/src/services/app_preferences_service.dart';
@@ -117,7 +117,7 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
     // Spec §4.6: an urgency change carries an update note wherever it is made.
     // Asked before the save starts, so cancelling leaves the form as it is and
     // nothing is written — the same protocol as the details screen, which is
-    // the point: two ways to escalate a case must not produce two different
+    // the point: two ways to escalate a signal must not produce two different
     // kinds of history.
     String? note;
     if (urgencyChanged) {
@@ -163,7 +163,7 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
     // handling has nothing to review.
     if (urgencyChanged) {
       batch.set(signalRef.collection('events').doc(), {
-        'type': CaseEventType.urgencyChange.code,
+        'type': SignalEventType.urgencyChange.code,
         'oldUrgency': _originalUrgency,
         'newUrgency': _urgency,
         'note': note,

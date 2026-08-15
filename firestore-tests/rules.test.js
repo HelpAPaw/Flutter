@@ -110,7 +110,7 @@ after(async () => {
   await testEnv?.cleanup();
 });
 
-// Both signal collections get identical rules, so every case runs against both.
+// Both signal collections get identical rules, so every signal runs against both.
 for (const coll of ['signals', 'signals_test']) {
   describe(`${coll} — create`, () => {
     beforeEach(() => testEnv.clearFirestore());
@@ -340,7 +340,7 @@ for (const coll of ['signals', 'signals_test']) {
     });
   });
 
-  describe(`${coll} — events (case timeline)`, () => {
+  describe(`${coll} — events (signal timeline)`, () => {
     const SIGNAL = 'signal-1';
     const eventsPath = `${coll}/${SIGNAL}/events`;
 
@@ -526,7 +526,7 @@ for (const coll of ['signals', 'signals_test']) {
       );
     });
 
-    // Spec 5.2: only the case holder (plus moderators/admins, which do not
+    // Spec 5.2: only the signal holder (plus moderators/admins, which do not
     // exist yet) may set urgency. `isStatusOnlyUpdate` enforces that by leaving
     // `urgency` out of its affectedKeys allowlist — these are the guards that
     // fail if someone "helpfully" adds it.

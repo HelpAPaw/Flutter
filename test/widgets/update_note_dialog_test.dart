@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
-import 'package:help_a_paw/src/models/case_event.dart';
+import 'package:help_a_paw/src/models/signal_event.dart';
 import 'package:help_a_paw/src/widgets/update_note_dialog.dart';
 
-/// The note is what makes the case history worth reading (spec §4.6), so the
+/// The note is what makes the signal's history worth reading (spec §4.6), so the
 /// only behaviour that really matters here is that it cannot be skipped —
 /// everything else about this dialog is cosmetic.
 void main() {
@@ -83,8 +83,8 @@ void main() {
     await tester.tap(find.byType(TextButton));
     await tester.pumpAndSettle();
 
-    // Null is the caller's signal to leave the case untouched. An empty string
-    // would not do — the caller would happily write that.
+    // Null is what tells the caller to leave the signal untouched. An empty
+    // string would not do — the caller would happily write that.
     expect(result.returned, isTrue);
     expect(result.note, isNull);
   });
@@ -94,14 +94,14 @@ void main() {
 
     await tester.enterText(
       find.byType(TextField),
-      'x' * (CaseEventType.maxNoteLength + 50),
+      'x' * (SignalEventType.maxNoteLength + 50),
     );
     await tester.pump();
 
     // Stopped at the keyboard rather than failing the write, the same way the
     // comment field mirrors its own 2000-char rule.
     final field = tester.widget<TextField>(find.byType(TextField));
-    expect(field.controller!.text.length, CaseEventType.maxNoteLength);
+    expect(field.controller!.text.length, SignalEventType.maxNoteLength);
   });
 }
 
