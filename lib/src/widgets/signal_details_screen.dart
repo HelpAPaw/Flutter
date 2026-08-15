@@ -24,12 +24,14 @@ import '../services/navigation_service.dart';
 import '../utils/nav_extensions.dart';
 import 'escape_leading.dart';
 
+import '../models/case_event.dart';
 import '../models/signal.dart';
 import '../models/signal_doc_state.dart';
 import '../models/signal_status.dart';
 import '../models/animal_type.dart';
 import '../models/help_tag.dart';
 import '../models/signal_urgency.dart';
+import 'update_note_dialog.dart';
 import 'urgency_picker.dart';
 import '../services/app_preferences_service.dart';
 import '../services/public_profile_service.dart';
@@ -44,10 +46,30 @@ class SignalDetailsScreen extends StatefulWidget {
 }
 
 class _SignalDetailsState extends State<SignalDetailsScreen> {
-  // Neither is final: a snapshot listener terminates on error, so recovering
-  // from a failed read means replacing the streams, not just rebuilding.
+  // Not final: a snapshot listener terminates on error, so recovering from a
+  // failed read means replacing the stream, not just rebuilding.
   late Stream<DocumentSnapshot> _signalStream;
-  late Stream<QuerySnapshot> _commentsStream;
+
+  // The case history is read from TWO collections and merged (see
+  // [mergeCaseHistory]): `events` holds everything written since the case
+  // timeline shipped, `comments` holds the conversation plus every status and
+  // urgency change written by an already released build. Nothing was
+  // backfilled, so both stay in play indefinitely.
+  //
+  // Explicit subscriptions rather than two StreamBuilders because the two lists
+  // have to be sorted into one thread before anything can be rendered, and
+  // rather than a merge package because that would be a new dependency for what
+  // is four fields. Null means "nothing delivered yet" and is distinct from an
+  // empty list, which is a real answer.
+  StreamSubscription<QuerySnapshot>? _commentsSub;
+  StreamSubscription<QuerySnapshot>? _eventsSub;
+  List<CaseHistoryEntry>? _commentEntries;
+  List<CaseHistoryEntry>? _eventEntries;
+  Object? _historyError;
+
+  /// Which rows the history list is showing. Client-side over data already in
+  /// memory — both listeners stay subscribed either way.
+  CaseHistoryFilter _historyFilter = CaseHistoryFilter.all;
   // Memoized public-name lookups, keyed by uid so each name is resolved once
   // per screen rather than once per rebuild — the comment list would otherwise
   // re-read publicProfiles for every row every time this screen rebuilds.
@@ -104,8 +126,54 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     // is absent, because nothing but the metadata differs between the two
     // events — and the screen waits for it forever (R6-001).
     _signalStream = _signalRef.snapshots(includeMetadataChanges: true);
-    _commentsStream =
-        _signalRef.collection('comments').orderBy('createdAt').snapshots();
+
+    _commentsSub?.cancel();
+    _eventsSub?.cancel();
+    _commentEntries = null;
+    _eventEntries = null;
+    _historyError = null;
+
+    _commentsSub = _listenToHistory(
+      'comments',
+      (entries) => _commentEntries = entries,
+    );
+    _eventsSub = _listenToHistory(
+      'events',
+      (entries) => _eventEntries = entries,
+    );
+  }
+
+  /// One ordered listener on a history collection, decoded into the merged row
+  /// type. Documents this build cannot read are dropped rather than thrown on —
+  /// an unrecognised `type` means a newer client wrote it, and one row it cannot
+  /// render must not take out the whole thread.
+  StreamSubscription<QuerySnapshot> _listenToHistory(
+    String collection,
+    void Function(List<CaseHistoryEntry>) assign,
+  ) {
+    return _signalRef
+        .collection(collection)
+        .orderBy('createdAt')
+        .snapshots()
+        .listen(
+      (snapshot) {
+        if (!mounted) return;
+        setState(() {
+          assign(snapshot.docs
+              .map((doc) => CaseHistoryEntry.fromDocument(
+                  doc.id, doc.data()))
+              .whereType<CaseHistoryEntry>()
+              .toList());
+        });
+      },
+      // Both collections share one error slot: whatever denied or dropped one
+      // read (App Check, auth, connectivity) applies to the other, and the
+      // retry replaces both listeners anyway.
+      onError: (Object error) {
+        if (!mounted) return;
+        setState(() => _historyError = error);
+      },
+    );
   }
 
   /// Subscribes again after a failed read. Firestore ends a listener on error,
@@ -769,179 +837,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                       }
                                     },
                           ),
-                          Column(
-                            children: [
-                              Text(l10n.comments),
-                              StreamBuilder(
-                                // Memoized like _signalStream: a stream rebuilt
-                                // in place resets the builder to `waiting`, so
-                                // the comment list would blink back to a
-                                // spinner on every parent rebuild — of which
-                                // includeMetadataChanges brings more.
-                                stream: _commentsStream,
-                                builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
-                                  if (snapshot.hasError) {
-                                    return Text(snapshot.error!.toString(), style: const TextStyle(color: Colors.red),);
-                                  } else if (snapshot.connectionState == ConnectionState.waiting) {
-                                    return const CircularProgressIndicator();
-                                  } else {
-                                    var comments = snapshot.data!.docs;
-
-                                    return ListView.builder(
-                                      padding: const EdgeInsets.fromLTRB(0, 0, 0, 80),
-                                      shrinkWrap: true,
-                                      physics: const NeverScrollableScrollPhysics(),
-                                      itemCount: comments.length,
-                                      itemBuilder: (BuildContext context, int index) {
-                                        Map<String, dynamic> commentData = comments[index].data()! as Map<String, dynamic>;
-                                        final String? changeType =
-                                            commentData['type'] as String?;
-                                        final bool isUrgencyChange =
-                                            changeType == 'urgency_change';
-                                        final bool isSystemEntry =
-                                            changeType == 'status_change' ||
-                                                isUrgencyChange;
-
-                                        if (isSystemEntry) {
-                                          // Status / urgency change entry. Both
-                                          // are system entries carrying no
-                                          // `text`, so neither can fall through
-                                          // to the regular-comment branch below.
-                                          //
-                                          // The two variants are resolved here
-                                          // rather than deep inside the tree
-                                          // below, where the conditionals would
-                                          // sit at ~60 columns of indentation.
-                                          final int newLevel = isUrgencyChange
-                                              ? commentData['newUrgency']
-                                              : commentData['newStatus'];
-                                          // An urgency entry keeps the map pin,
-                                          // since that is exactly what changed
-                                          // on the map; a status entry gets a
-                                          // plain dot (status has no pin).
-                                          final Widget levelIcon = isUrgencyChange
-                                              ? Image.asset(
-                                                  SignalUrgency.fromCode(newLevel)
-                                                      .pinAsset,
-                                                  width: 24,
-                                                  height: 24,
-                                                )
-                                              : CircleAvatar(
-                                                  radius: 8,
-                                                  backgroundColor:
-                                                      SignalStatus.fromCode(
-                                                              newLevel)
-                                                          .color,
-                                                );
-                                          String levelText(String author) =>
-                                              isUrgencyChange
-                                                  ? l10n.changedUrgencyTo(
-                                                      author,
-                                                      SignalUrgency.fromCode(
-                                                              newLevel)
-                                                          .label(l10n),
-                                                    )
-                                                  : l10n.changedStatusTo(
-                                                      author,
-                                                      _getStatusName(
-                                                          context, newLevel),
-                                                    );
-                                          return ListTile(
-                                            title: Container(
-                                              decoration: BoxDecoration(
-                                                color: Colors.orange.shade50,
-                                                borderRadius: BorderRadius.circular(10),
-                                                border: Border.all(
-                                                  color: Colors.orange.shade200,
-                                                  width: 1,
-                                                ),
-                                              ),
-                                              child: Padding(
-                                                padding: const EdgeInsets.all(8.0),
-                                                child: Row(
-                                                  children: [
-                                                    levelIcon,
-                                                    const SizedBox(width: 8),
-                                                    Expanded(
-                                                      child: FutureBuilder<String?>(
-                                                        future: _nameFor(
-                                                            (commentData['author'] as DocumentReference).id),
-                                                        builder: (context, snapshot) {
-                                                          final authorName = (snapshot.data?.isNotEmpty ?? false)
-                                                              ? snapshot.data!
-                                                              : l10n.someone;
-                                                          return Text(
-                                                            levelText(authorName),
-                                                            style: const TextStyle(fontStyle: FontStyle.italic),
-                                                          );
-                                                        },
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ),
-                                            subtitle: Text(
-                                              dateFormat.format(commentData['createdAt'].toDate()),
-                                            ),
-                                          );
-                                        }
-
-                                        // Regular comment
-                                        return ListTile(
-                                          title: Container(
-                                            decoration: BoxDecoration(
-                                              color: Colors.white,
-                                              borderRadius: BorderRadius.circular(10),
-                                              border: Border.all(
-                                                color: Colors.grey,
-                                                width: 1,
-                                              ),
-                                            ),
-                                            child: Padding(
-                                              padding: const EdgeInsets.all(8.0),
-                                              child: Text(commentData['text']),
-                                            )
-                                          ),
-                                          subtitle: Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Flexible(
-                                                child: Text(
-                                                  dateFormat.format(commentData['createdAt'].toDate()),
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              // The author name is user-supplied and capped at 100 chars,
-                                              // so it must be allowed to shrink instead of overflowing the row.
-                                              Flexible(
-                                                child: FutureBuilder<String?>(
-                                                  future: _nameFor(
-                                                      (commentData['author'] as DocumentReference).id),
-                                                  builder: (context, snapshot) {
-                                                    return Text(
-                                                      (snapshot.data?.isNotEmpty ?? false)
-                                                          ? snapshot.data!
-                                                          : l10n.unknown,
-                                                      maxLines: 1,
-                                                      overflow: TextOverflow.ellipsis,
-                                                      textAlign: TextAlign.end,
-                                                    );
-                                                  },
-                                                ),
-                                              ),
-                                            ],
-                                          )
-                                        );
-                                      },
-                                    );
-                                  }
-                                }
-                              ),
-                            ],
-                          ),
+                          _buildCaseHistory(signal, l10n, dateFormat),
                         ],
                       ),
                     ),
@@ -1015,9 +911,294 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     });
   }
 
+  /// The case timeline (spec §4.6): what happened to this case, and what people
+  /// said about it, in one chronological thread.
+  Widget _buildCaseHistory(
+    Signal signal,
+    AppLocalizations l10n,
+    DateFormat dateFormat,
+  ) {
+    if (_historyError != null) {
+      return Text(
+        _historyError.toString(),
+        style: const TextStyle(color: Colors.red),
+      );
+    }
+    // Only while BOTH are still silent. Rendering as soon as either arrives
+    // means rows appear rather than a spinner sitting there — and the two
+    // listeners are created together, so the gap is a frame or two.
+    if (_commentEntries == null && _eventEntries == null) {
+      return const CircularProgressIndicator();
+    }
+
+    final entries = filterCaseHistory(
+      mergeCaseHistory(
+        created: CaseHistoryEntry.created(
+          reporterId: signal.reporter.id,
+          createdAt: _createdAtOf(signal),
+        ),
+        comments: _commentEntries ?? const [],
+        events: _eventEntries ?? const [],
+      ),
+      _historyFilter,
+    );
+
+    return Column(
+      children: [
+        Text(l10n.caseHistory),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Wrap(
+            spacing: 8,
+            alignment: WrapAlignment.center,
+            children: [
+              for (final filter in CaseHistoryFilter.values)
+                ChoiceChip(
+                  label: Text(switch (filter) {
+                    CaseHistoryFilter.all => l10n.historyFilterAll,
+                    CaseHistoryFilter.events => l10n.historyFilterEvents,
+                  }),
+                  selected: _historyFilter == filter,
+                  visualDensity: VisualDensity.compact,
+                  onSelected: (_) =>
+                      setState(() => _historyFilter = filter),
+                ),
+            ],
+          ),
+        ),
+        ListView.builder(
+          padding: const EdgeInsets.fromLTRB(0, 0, 0, 80),
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: entries.length,
+          itemBuilder: (context, index) =>
+              _buildHistoryRow(entries[index], l10n, dateFormat),
+        ),
+      ],
+    );
+  }
+
+  /// `createdAt` is `dynamic` on [Signal] and has always been a `Timestamp` in
+  /// practice; decoded defensively here because this row is the one thing in the
+  /// history with no document of its own to fall back on.
+  DateTime? _createdAtOf(Signal signal) => switch (signal.createdAt) {
+        Timestamp t => t.toDate(),
+        DateTime d => d,
+        _ => null,
+      };
+
+  Widget _buildHistoryRow(
+    CaseHistoryEntry entry,
+    AppLocalizations l10n,
+    DateFormat dateFormat,
+  ) =>
+      switch (entry.kind) {
+        CaseHistoryKind.created => _buildCreatedRow(entry, l10n, dateFormat),
+        CaseHistoryKind.statusChange ||
+        CaseHistoryKind.urgencyChange =>
+          _buildEventRow(entry, l10n, dateFormat),
+        CaseHistoryKind.comment => _buildCommentRow(entry, l10n, dateFormat),
+      };
+
+  /// The row every timeline opens with. Not stored — see
+  /// [CaseHistoryEntry.created].
+  Widget _buildCreatedRow(
+    CaseHistoryEntry entry,
+    AppLocalizations l10n,
+    DateFormat dateFormat,
+  ) {
+    return ListTile(
+      title: Container(
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Row(
+            children: [
+              const Icon(Icons.flag_outlined, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _actorText(
+                  entry.actorId,
+                  l10n,
+                  (name) => l10n.reportedThisCase(name),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      subtitle: _dateSubtitle(entry, dateFormat),
+    );
+  }
+
+  /// A status or urgency change, with the update note that explains it.
+  Widget _buildEventRow(
+    CaseHistoryEntry entry,
+    AppLocalizations l10n,
+    DateFormat dateFormat,
+  ) {
+    final isUrgency = entry.kind == CaseHistoryKind.urgencyChange;
+    // An urgency entry keeps the map pin, since that is exactly what changed on
+    // the map; a status entry gets a plain dot (status has no pin).
+    final Widget levelIcon = isUrgency
+        ? Image.asset(
+            SignalUrgency.fromCode(entry.level).pinAsset,
+            width: 24,
+            height: 24,
+          )
+        : CircleAvatar(
+            radius: 8,
+            backgroundColor: SignalStatus.fromCode(entry.level).color,
+          );
+    final note = entry.note;
+
+    return ListTile(
+      title: Container(
+        decoration: BoxDecoration(
+          color: Colors.orange.shade50,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.orange.shade200, width: 1),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  levelIcon,
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _actorText(
+                      entry.actorId,
+                      l10n,
+                      (name) => isUrgency
+                          ? l10n.changedUrgencyTo(
+                              name,
+                              SignalUrgency.fromCode(entry.level).label(l10n),
+                            )
+                          : l10n.changedStatusTo(
+                              name,
+                              SignalStatus.fromCode(entry.level).label(l10n),
+                            ),
+                      fallback: l10n.someone,
+                      style: const TextStyle(fontStyle: FontStyle.italic),
+                    ),
+                  ),
+                ],
+              ),
+              // Absent on entries written before the note was mandatory. Those
+              // are the legacy rows still living in `comments`, and they have to
+              // keep rendering exactly as they always did.
+              if (note != null && note.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(note),
+              ],
+            ],
+          ),
+        ),
+      ),
+      subtitle: _dateSubtitle(entry, dateFormat),
+    );
+  }
+
+  Widget _buildCommentRow(
+    CaseHistoryEntry entry,
+    AppLocalizations l10n,
+    DateFormat dateFormat,
+  ) {
+    return ListTile(
+      title: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.grey, width: 1),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Text(entry.text ?? ''),
+        ),
+      ),
+      subtitle: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Flexible(
+            child: Text(
+              _formatDate(entry, dateFormat),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          // The author name is user-supplied and capped at 100 chars, so it must
+          // be allowed to shrink instead of overflowing the row.
+          Flexible(
+            child: _actorText(
+              entry.actorId,
+              l10n,
+              (name) => name,
+              textAlign: TextAlign.end,
+              ellipsize: true,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget? _dateSubtitle(CaseHistoryEntry entry, DateFormat dateFormat) {
+    final text = _formatDate(entry, dateFormat);
+    return text.isEmpty ? null : Text(text);
+  }
+
+  /// Empty while a write is still in flight and has no timestamp yet — the row
+  /// itself still renders, it just has no date to show.
+  String _formatDate(CaseHistoryEntry entry, DateFormat dateFormat) {
+    final at = entry.createdAt;
+    return at == null ? '' : dateFormat.format(at);
+  }
+
+  /// Resolves [uid] to a display name through the per-screen memo and renders
+  /// [sentence] around it. Nothing is rendered while the lookup is in flight;
+  /// on completion it always renders, falling back to [fallback].
+  /// [ellipsize] for the one place the name shares a row with the date: it is
+  /// user-supplied and capped at 100 chars, so it has to shrink rather than
+  /// overflow.
+  Widget _actorText(
+    String uid,
+    AppLocalizations l10n,
+    String Function(String name) sentence, {
+    String? fallback,
+    TextStyle? style,
+    TextAlign? textAlign,
+    bool ellipsize = false,
+  }) {
+    return FutureBuilder<String?>(
+      future: _nameFor(uid),
+      builder: (context, snapshot) {
+        final name = (snapshot.data?.isNotEmpty ?? false)
+            ? snapshot.data!
+            : (fallback ?? l10n.unknown);
+        return Text(
+          sentence(name),
+          style: style,
+          textAlign: textAlign,
+          maxLines: ellipsize ? 1 : null,
+          overflow: ellipsize ? TextOverflow.ellipsis : null,
+        );
+      },
+    );
+  }
+
   @override
   void dispose() {
     _serverConfirmationTimer?.cancel();
+    _commentsSub?.cancel();
+    _eventsSub?.cancel();
     _photoPageController.dispose();
     _scrollController.dispose();
     _newCommentController.dispose();
@@ -1115,17 +1296,17 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     return signal.reporter.id == currentUser.uid;
   }
 
-  String _getStatusName(BuildContext context, int status) =>
-      SignalStatus.fromCode(status).label(AppLocalizations.of(context));
-
   Future<void> _updateSignalStatus(int oldStatus, int newStatus) async {
+    final status = SignalStatus.fromCode(newStatus);
     await _applyLevelChange(
       field: 'status',
-      commentType: 'status_change',
+      eventType: CaseEventType.statusChange,
       oldKey: 'oldStatus',
       newKey: 'newStatus',
       oldValue: oldStatus,
       newValue: newStatus,
+      levelLabel: (l10n) => status.label(l10n),
+      levelIcon: CircleAvatar(radius: 8, backgroundColor: status.color),
       errorText: (l10n) => l10n.errorUpdatingStatus,
     );
   }
@@ -1135,13 +1316,16 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// The Red Alert confirmation has already been handled by [UrgencyPicker]
   /// before this is called.
   Future<void> _updateSignalUrgency(int oldUrgency, int newUrgency) async {
+    final urgency = SignalUrgency.fromCode(newUrgency);
     await _applyLevelChange(
       field: 'urgency',
-      commentType: 'urgency_change',
+      eventType: CaseEventType.urgencyChange,
       oldKey: 'oldUrgency',
       newKey: 'newUrgency',
       oldValue: oldUrgency,
       newValue: newUrgency,
+      levelLabel: (l10n) => urgency.label(l10n),
+      levelIcon: Image.asset(urgency.pinAsset, width: 24, height: 24),
       errorText: (l10n) => l10n.errorUpdatingUrgency,
     );
   }
@@ -1150,8 +1334,8 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// it on the case timeline.
   ///
   /// One implementation for both because the protocol around them is identical
-  /// and must stay so: gate on a real account, write the field, append the
-  /// matching system comment, subscribe the actor, report failure.
+  /// and must stay so: gate on a real account, ask for the update note, write
+  /// the field, append the matching event, subscribe the actor, report failure.
   ///
   /// `lastUpdatedBy` is stamped for both. The rules only need it on the
   /// non-reporter status path, but `handleSignalUpdated` uses it to avoid
@@ -1159,11 +1343,13 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// write would silently mute a subscriber.
   Future<void> _applyLevelChange({
     required String field,
-    required String commentType,
+    required CaseEventType eventType,
     required String oldKey,
     required String newKey,
     required int oldValue,
     required int newValue,
+    required String Function(AppLocalizations) levelLabel,
+    required Widget levelIcon,
     required String Function(AppLocalizations) errorText,
   }) async {
     if (oldValue == newValue || _isApplyingLevelChange) return;
@@ -1172,6 +1358,20 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       _showSignInDialog();
       return;
     }
+
+    // Spec §4.6: every change carries a note saying what happened. Asked before
+    // anything is written, so backing out of the dialog leaves the case exactly
+    // as it was — the dropdown and the picker both read their value from the
+    // signal stream, so neither needs reverting.
+    //
+    // On the urgency path this runs AFTER UrgencyPicker's Red Alert
+    // confirmation: confirm the intent first, then explain it.
+    final note = await showUpdateNoteDialog(
+      context,
+      levelLabel: levelLabel(AppLocalizations.of(context)),
+      levelIcon: levelIcon,
+    );
+    if (note == null || !mounted) return;
 
     final user = FirebaseAuth.instance.currentUser!;
     final userRef =
@@ -1185,12 +1385,13 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     // notification sent with no history to explain it.
     final batch = FirebaseFirestore.instance.batch();
     batch.update(signalRef, {field: newValue, 'lastUpdatedBy': userRef});
-    batch.set(signalRef.collection('comments').doc(), {
-      'type': commentType,
+    batch.set(signalRef.collection('events').doc(), {
+      'type': eventType.code,
       oldKey: oldValue,
       newKey: newValue,
+      'note': note,
       'createdAt': DateTime.now(),
-      'author': userRef,
+      'actor': userRef,
     });
 
     try {
@@ -1252,15 +1453,13 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         }
       }
 
-      // Batch-delete subcollection comments
-      final comments = await signalRef.collection('comments').get();
-      if (comments.docs.isNotEmpty) {
-        final batch = FirebaseFirestore.instance.batch();
-        for (final doc in comments.docs) {
-          batch.delete(doc.reference);
-        }
-        await batch.commit();
-      }
+      // Batch-delete both history subcollections. `events` has to be included:
+      // Firestore keeps subcollection documents when the parent document is
+      // deleted, so anything missed here is orphaned with nothing left to reach
+      // it by. This is also the only reason the rules let the reporter delete
+      // events at all — see the known gap on that rule (HelpAPaw/Flutter#68).
+      await _deleteSubcollection(signalRef.collection('comments'));
+      await _deleteSubcollection(signalRef.collection('events'));
 
       // Claim the exit before the delete, not after it: Firestore applies the
       // delete to the local cache immediately, so the still-live listener
@@ -1293,6 +1492,22 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         );
       }
     }
+  }
+
+  /// Empties one of a signal's history subcollections ahead of deleting it.
+  ///
+  /// A single batch, matching what the comment cascade always did: these are
+  /// bounded by what one case accumulates, and a 500-document case has never
+  /// existed. If one ever does, this is where the chunking goes.
+  Future<void> _deleteSubcollection(CollectionReference<Object?> ref) async {
+    final docs = await ref.get();
+    if (docs.docs.isEmpty) return;
+
+    final batch = FirebaseFirestore.instance.batch();
+    for (final doc in docs.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
   }
 
   void _showImageSourceDialog() {

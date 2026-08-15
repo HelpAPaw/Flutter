@@ -444,6 +444,35 @@ class AppLocalizationsEn extends AppLocalizations {
   String get enterYourComment => 'Enter your comment';
 
   @override
+  String get caseHistory => 'Case history';
+
+  @override
+  String get historyFilterAll => 'All';
+
+  @override
+  String get historyFilterEvents => 'Events';
+
+  @override
+  String reportedThisCase(String name) {
+    return '$name reported this case';
+  }
+
+  @override
+  String get updateNoteTitle => 'What changed?';
+
+  @override
+  String updateNoteChangingTo(String level) {
+    return 'Changing to: $level';
+  }
+
+  @override
+  String get updateNoteHint => 'Add a short note for the case history';
+
+  @override
+  String get updateNoteRequired =>
+      'Please say what changed — everyone following this case sees it.';
+
+  @override
   String changedStatusTo(String name, String status) {
     return '$name changed the status to $status';
   }

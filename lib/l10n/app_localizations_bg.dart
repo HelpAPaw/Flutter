@@ -451,6 +451,36 @@ class AppLocalizationsBg extends AppLocalizations {
   String get enterYourComment => 'Въведете коментар';
 
   @override
+  String get caseHistory => 'История на случая';
+
+  @override
+  String get historyFilterAll => 'Всичко';
+
+  @override
+  String get historyFilterEvents => 'Събития';
+
+  @override
+  String reportedThisCase(String name) {
+    return '$name подаде този сигнал';
+  }
+
+  @override
+  String get updateNoteTitle => 'Какво се промени?';
+
+  @override
+  String updateNoteChangingTo(String level) {
+    return 'Промяна на: $level';
+  }
+
+  @override
+  String get updateNoteHint =>
+      'Добавете кратка бележка към историята на случая';
+
+  @override
+  String get updateNoteRequired =>
+      'Моля, опишете какво се промени — всички, които следят сигнала, ще го видят.';
+
+  @override
   String changedStatusTo(String name, String status) {
     return '$name промени статуса на $status';
   }

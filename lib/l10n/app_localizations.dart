@@ -890,6 +890,54 @@ abstract class AppLocalizations {
   /// **'Enter your comment'**
   String get enterYourComment;
 
+  /// No description provided for @caseHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Case history'**
+  String get caseHistory;
+
+  /// No description provided for @historyFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get historyFilterAll;
+
+  /// No description provided for @historyFilterEvents.
+  ///
+  /// In en, this message translates to:
+  /// **'Events'**
+  String get historyFilterEvents;
+
+  /// No description provided for @reportedThisCase.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} reported this case'**
+  String reportedThisCase(String name);
+
+  /// No description provided for @updateNoteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What changed?'**
+  String get updateNoteTitle;
+
+  /// No description provided for @updateNoteChangingTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Changing to: {level}'**
+  String updateNoteChangingTo(String level);
+
+  /// No description provided for @updateNoteHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a short note for the case history'**
+  String get updateNoteHint;
+
+  /// No description provided for @updateNoteRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please say what changed — everyone following this case sees it.'**
+  String get updateNoteRequired;
+
   /// No description provided for @changedStatusTo.
   ///
   /// In en, this message translates to:

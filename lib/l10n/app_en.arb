@@ -186,6 +186,24 @@
   },
   "comments": "Comments",
   "enterYourComment": "Enter your comment",
+  "caseHistory": "Case history",
+  "historyFilterAll": "All",
+  "historyFilterEvents": "Events",
+  "reportedThisCase": "{name} reported this case",
+  "@reportedThisCase": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "updateNoteTitle": "What changed?",
+  "updateNoteChangingTo": "Changing to: {level}",
+  "@updateNoteChangingTo": {
+    "placeholders": {
+      "level": {"type": "String"}
+    }
+  },
+  "updateNoteHint": "Add a short note for the case history",
+  "updateNoteRequired": "Please say what changed — everyone following this case sees it.",
   "changedStatusTo": "{name} changed the status to {status}",
   "@changedStatusTo": {
     "placeholders": {
@@ -223,7 +241,6 @@
   "displayName": "Display Name",
   "noNameSet": "No name set",
   "signals": "Signals",
-  "comments": "Comments",
   "email": "Email",
   "notSet": "Not set",
   "emailVerified": "Email Verified",
