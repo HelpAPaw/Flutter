@@ -6,6 +6,7 @@ import {
   effectiveHelperTags,
   helpNeededTagsOf,
   helpTagHeadline,
+  signalHeadline,
   HELP_TAGS,
   HELP_TAGS_WITHOUT_NEEDED_SUFFIX,
   matchesHelpTags,
@@ -286,6 +287,43 @@ describe("helpTagHeadline", () => {
   it("exempts only codes that exist", () => {
     for (const code of HELP_TAGS_WITHOUT_NEEDED_SUFFIX) {
       expect(HELP_TAGS).toContain(code);
+    }
+  });
+});
+
+describe("signalHeadline — the phased-release path", () => {
+  // The shipped build (6.0.2+129) writes `signalType` and no tags, and keeps
+  // doing so until users update. Without the legacy table every one of its
+  // signals would headline as "Rescue needed", because helpNeededTagsOf
+  // substitutes the fallback for anything untagged — the server discarding a
+  // category the client still sends and still means.
+  it("keeps the real category for a signal from the shipped build", () => {
+    expect(signalHeadline({ signalType: 2 })).toBe("Blood donation needed");
+    expect(signalHeadline({ signalType: 1 })).toBe("Lost / found");
+    expect(signalHeadline({ signalType: 4 })).toBe("Neutering needed");
+    expect(signalHeadline({ signalType: 3 })).toBe("Foster needed");
+  });
+
+  it("prefers tags whenever the signal has them", () => {
+    // A new-build signal must never be routed through the retired table, even
+    // if something upstream also wrote a type.
+    expect(signalHeadline({ helpNeededTags: ["foster"], signalType: 0 }))
+      .toBe("Foster needed");
+    expect(signalHeadline({ helpNeededTags: ["lostFound"] }))
+      .toBe("Lost / found");
+  });
+
+  it("falls back for a signal carrying neither, or a nonsense type", () => {
+    expect(signalHeadline({})).toBe("Rescue needed");
+    expect(signalHeadline({ helpNeededTags: [] })).toBe("Rescue needed");
+    expect(signalHeadline({ signalType: 99 })).toBe("Rescue needed");
+    expect(signalHeadline({ signalType: "two" })).toBe("Rescue needed");
+  });
+
+  it("covers every retired type code", () => {
+    // 0-6 were the whole vocabulary; a gap would silently become "Rescue".
+    for (let type = 0; type <= 6; type++) {
+      expect(signalHeadline({ signalType: type })).toBeTruthy();
     }
   });
 });

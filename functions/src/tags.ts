@@ -81,6 +81,56 @@ export const HELP_TAGS_WITHOUT_NEEDED_SUFFIX = [
 ] as const;
 
 /**
+ * Retired signal types, kept only to headline signals from an app build that
+ * still writes them.
+ *
+ * **This is a live path, not a migration.** Builds released before the tag
+ * vocabulary keep creating signals with a `signalType` and no tags for as long
+ * as they stay installed, and a phased release means that is months, not days.
+ * Without this a Blood-donation report from an old build would push as "Rescue
+ * needed", because `helpNeededTagsOf` substitutes the fallback for anything
+ * untagged — the server would be discarding a category the client still sends
+ * and still means.
+ *
+ * Index = the stored int. Delete this, and `legacyHeadline`, once the installed
+ * base has moved on; nothing else depends on it.
+ */
+const RETIRED_SIGNAL_TYPE_HEADLINES = [
+  "Rescue needed", // 0 Emergency — urgency carries the "emergency" part
+  "Lost / found", // 1
+  "Blood donation needed", // 2
+  "Foster needed", // 3 Homeless
+  "Neutering needed", // 4 Unneutered animals
+  "Rescue needed", // 5 Wild animals
+  "Rescue needed", // 6 Other
+];
+
+/**
+ * Push headline for a signal, honouring a legacy `signalType` when there are no
+ * tags to read.
+ *
+ * Prefers tags whenever the document has them, so a new-build signal is never
+ * routed through the retired table.
+ */
+export function signalHeadline(data: {
+  helpNeededTags?: unknown;
+  signalType?: unknown;
+}): string {
+  const raw = data.helpNeededTags;
+  const tagged = Array.isArray(raw) &&
+    raw.some((t) => typeof t === "string" && t.length > 0);
+  if (tagged) return helpTagHeadline(helpNeededTagsOf(data)[0]);
+
+  const type = data.signalType;
+  if (typeof type === "number" &&
+      type >= 0 &&
+      type < RETIRED_SIGNAL_TYPE_HEADLINES.length) {
+    return RETIRED_SIGNAL_TYPE_HEADLINES[type];
+  }
+  return helpTagHeadline(HELP_TAG_FALLBACK);
+}
+
+/**
  * Headline form of a tag for push text — "Rescue needed", "Lost / found".
  *
  * Unknown codes (written by a newer client) fall back to the raw code rather

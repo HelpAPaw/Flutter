@@ -17,7 +17,7 @@ import { SIGNAL_URGENCIES, URGENCY_RED, urgencyOf } from "./urgency";
 import {
   effectiveHelperTags,
   helpNeededTagsOf,
-  helpTagHeadline,
+  signalHeadline,
   HELP_TAG_NAMES,
   matchesHelpTags,
   wantsAnimalType,
@@ -285,11 +285,16 @@ interface InboxEntry {
   signalTitle: string;
   /**
    * What the signal asks for, priority order. Element 0 is the headline the app
-   * renders the row from. Rows written before signal types were folded into the
-   * tag vocabulary carry a `signalType` int instead and no longer resolve to a
-   * label — the app falls back to a generic one for those.
+   * renders the row from.
    */
   helpNeededTags?: string[];
+  /**
+   * The retired category, mirrored only when the signal itself still carries
+   * one. Builds released before the tag vocabulary render the row from this and
+   * show the stored English body without it. Drop it, and the write site in
+   * `handleSignalCreated`, once those builds are gone.
+   */
+  signalType?: number;
   statusCode?: number;
   urgency?: number;
   commentExcerpt?: string;
@@ -854,10 +859,12 @@ async function handleSignalCreated(
   const title =
     urgency === URGENCY_RED ? "🔴 RED ALERT nearby!" : "New signal nearby!";
   // The headline is the signal's top-priority need — its category, now that
-  // signal types are gone (see ./tags). `helpNeededTagsOf` never returns empty,
-  // so [0] is always safe. Red repeats the urgency in the body because the body
-  // is all some surfaces show (the inbox row, a collapsed notification).
-  const headline = helpTagHeadline(signalTags[0]);
+  // signal types are gone (see ./tags). Routed through `signalHeadline` rather
+  // than the tags directly so a signal from a build that still writes
+  // `signalType` keeps its real category instead of collapsing to the fallback.
+  // Red repeats the urgency in the body because the body is all some surfaces
+  // show (the inbox row, a collapsed notification).
+  const headline = signalHeadline(signalData);
   const body =
     urgency === URGENCY_RED ?
       `Urgent · ${headline} — ${signalTitle}` :
@@ -873,6 +880,14 @@ async function handleSignalCreated(
       signalId,
       signalTitle,
       helpNeededTags: signalTags,
+      // Mirrored for builds that predate the tag vocabulary: they render the
+      // inbox row from `signalType` and fall back to the stored English body
+      // without it, which would show Bulgarian users English text. Written only
+      // when the signal actually carries one — a new signal has none, and
+      // inventing a value would resurrect the field this replaced.
+      ...(typeof signalData.signalType === "number" ?
+        { signalType: signalData.signalType as number } :
+        {}),
       urgency,
     },
     isTestMode

@@ -359,12 +359,32 @@ Keeping a mandatory situation-shaped type would have filed it under "Stray" or
 The two things a need vocabulary genuinely cannot say, Lost/Found and a local
 danger warning, became tags of their own (§4.7).
 
-**What survives.** Nothing writes the field. Documents created before the merge
-keep it and are simply not read; `firestore.rules` neither requires nor bounds it
-(a retired field must not be able to reject an old client's write). Notification
-inbox rows written before the merge carry a `signalType` int and no tags — the
-app shows the stored English body for those rather than keeping a retired
-bilingual type table alive purely to re-render history.
+**What survives — and this is a live path, not a migration.** The app release is
+phased, so builds that still write `signalType` and no tags stay installed for
+months after the server changes. Three things exist only for them, and all three
+come out together once the installed base has moved on:
+
+| where | what | why |
+|---|---|---|
+| `functions/src/tags.ts` | `signalHeadline` + `RETIRED_SIGNAL_TYPE_HEADLINES` | Without it `helpNeededTagsOf` substitutes the fallback for every untagged signal, so a Blood-donation report from a shipped build pushes as "Rescue needed" — the server discarding a category the client still sends and still means |
+| `functions/src/index.ts` | inbox entries mirror `signalType` when the signal has one | Shipped builds render the row from `signalType` and fall back to the stored **English** body without it, showing Bulgarian users English text |
+| `firestore.rules` | the inbox `create` allow-list accepts **both** shapes, requires neither | This is a *client* write path (the arrival catch-up), and `NearbySignalChecker` swallows a denial — rejecting the old shape makes inbox entries silently stop appearing |
+
+The earlier plan dropped all three, arguing that four legacy documents did not
+justify a migration mechanism. That was right about existing documents and wrong
+about ongoing writes: the old build keeps creating them. Pinned by
+`'accepts the shape the currently-shipped build writes'` in
+`firestore-tests/rules.test.js` and the `signalHeadline` suite in
+`functions/src/__tests__/`.
+
+> **Deploy order.** Rules and functions are safe to deploy ahead of the client
+> *only* with the three shims above. Firestore rules deploys replace the whole
+> ruleset, so deploy from a branch that has every block — a deploy from a branch
+> missing `match /events/` silently removed it on 2026-08-15.
+
+Documents created before the merge keep `signalType` and are simply not read;
+`firestore.rules` neither requires nor bounds it on signal create (a retired
+field must not be able to reject an old client's write).
 
 The four production signals that predated the merge were fixed by hand rather
 than by a derivation table or a backfill script; at four documents, two of them

@@ -853,6 +853,39 @@ describe('users/{uid}/notifications', () => {
   // fails the whole batch with PERMISSION_DENIED, and the catch-up swallows it —
   // the inbox entry just never appears. That is exactly what happened when
   // `signalType` became `helpNeededTags`.
+  // The release is phased, so the shipped build (6.0.2+129, which writes
+  // `signalType` and no tags) and the tag build are both live for months. This
+  // rule is a *client* write path, and NearbySignalChecker swallows a denial —
+  // so rejecting either shape makes inbox entries silently stop appearing.
+  it('accepts the shape the currently-shipped build writes', async () => {
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const legacy = nearbyNotification();
+    delete legacy.helpNeededTags;
+    legacy.signalType = 0;
+    await assertSucceeds(
+      setDoc(doc(db, 'users', OWNER, 'notifications', 'nb_legacy'), legacy)
+    );
+  });
+
+  it('accepts an entry carrying neither field', async () => {
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const bare = nearbyNotification();
+    delete bare.helpNeededTags;
+    await assertSucceeds(
+      setDoc(doc(db, 'users', OWNER, 'notifications', 'nb_bare'), bare)
+    );
+  });
+
+  it('accepts both fields at once, as the server mirrors them', async () => {
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    await assertSucceeds(
+      setDoc(
+        doc(db, 'users', OWNER, 'notifications', 'nb_both'),
+        nearbyNotification({ signalType: 2 })
+      )
+    );
+  });
+
   it('accepts the tag field the catch-up actually writes', async () => {
     const db = testEnv.authenticatedContext(OWNER).firestore();
     for (const helpNeededTags of [['rescue'], ['foster', 'transport', 'food']]) {
@@ -865,12 +898,18 @@ describe('users/{uid}/notifications', () => {
     }
   });
 
-  it('rejects an unknown field, and an over-long tag list', async () => {
+  it('rejects an unknown field, a bad type, and an over-long tag list', async () => {
     const db = testEnv.authenticatedContext(OWNER).firestore();
     await assertFails(
       setDoc(
         doc(db, 'users', OWNER, 'notifications', 'nb_extra'),
-        nearbyNotification({ signalType: 0 })
+        nearbyNotification({ somethingElse: 1 })
+      )
+    );
+    await assertFails(
+      setDoc(
+        doc(db, 'users', OWNER, 'notifications', 'nb_badtype'),
+        nearbyNotification({ signalType: 'zero' })
       )
     );
     await assertFails(
