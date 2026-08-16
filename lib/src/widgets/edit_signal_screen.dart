@@ -3,12 +3,15 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
+import 'package:help_a_paw/src/models/signal_event.dart';
 import 'package:help_a_paw/src/models/signal.dart';
 import 'package:help_a_paw/src/models/signal_urgency.dart';
 import 'package:help_a_paw/src/services/app_preferences_service.dart';
 import 'package:help_a_paw/src/models/help_tag.dart';
 import 'package:help_a_paw/src/widgets/help_tag_selector.dart';
+import 'package:help_a_paw/src/widgets/level_badge.dart';
 import 'package:help_a_paw/src/widgets/section_header.dart';
+import 'package:help_a_paw/src/widgets/update_note_dialog.dart';
 import 'package:help_a_paw/src/widgets/urgency_picker.dart';
 
 class EditSignalScreen extends StatefulWidget {
@@ -111,6 +114,38 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
       return;
     }
 
+    final urgencyChanged = _urgency != _originalUrgency;
+
+    // Spec §4.6: an urgency change carries an update note wherever it is made.
+    // Asked before the save starts, so cancelling leaves the form as it is and
+    // nothing is written — the same protocol as the details screen, which is
+    // the point: two ways to escalate a signal must not produce two different
+    // kinds of history.
+    String? note;
+    if (urgencyChanged) {
+      final urgency = SignalUrgency.fromCode(_urgency);
+      note = await showUpdateNoteDialog(
+        context,
+        levelLabel: urgency.label(l10n),
+        levelBadge: urgencyBadge(urgency),
+      );
+      // Backing out of the note abandons the whole save, including the title,
+      // description, phone and tag edits made alongside it. That is the right
+      // call — a half-applied save is worse — but it has to be SAID: the dialog
+      // is titled "What changed?", so Cancel reads as "cancel the note", and
+      // without this the Save button would simply un-press and every edit would
+      // be gone with no explanation.
+      if (note == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l10n.nothingWasSaved)),
+          );
+        }
+        return;
+      }
+      if (!mounted) return;
+    }
+
     setState(() => _isSaving = true);
 
     final signalRef = FirebaseFirestore.instance
@@ -119,7 +154,6 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
     final userRef = FirebaseFirestore.instance
         .collection('users')
         .doc(FirebaseAuth.instance.currentUser!.uid);
-    final urgencyChanged = _urgency != _originalUrgency;
 
     // One batch so an urgency change and the timeline entry describing it land
     // together — a failed second write would leave a push sent with no history
@@ -140,17 +174,24 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
     });
 
     // Same timeline entry the details screen writes. Without it, escalating
-    // to Red from this screen would push every subscriber while the case
+    // to Red from this screen would push every subscriber while the signal
     // history showed nothing changed — and the spec's Red-Alert-misuse
     // handling has nothing to review.
     if (urgencyChanged) {
-      batch.set(signalRef.collection('comments').doc(), {
-        'type': 'urgency_change',
-        'oldUrgency': _originalUrgency,
-        'newUrgency': _urgency,
-        'createdAt': DateTime.now(),
-        'author': userRef,
-      });
+      batch.set(
+        signalRef.collection('events').doc(),
+        // Built by the same encoder the details screen uses, so the two writers
+        // cannot drift on field names — the spec's standing warning that these
+        // must stay in step is now a shared function rather than a comment.
+        SignalEventType.urgencyChange.eventData(
+          oldValue: _originalUrgency,
+          newValue: _urgency,
+          // Non-null under the same `urgencyChanged` guard that produced it:
+          // the block above returns when the dialog is cancelled.
+          note: note!,
+          actor: userRef,
+        ),
+      );
     }
 
     try {

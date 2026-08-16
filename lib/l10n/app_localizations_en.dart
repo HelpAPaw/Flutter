@@ -561,6 +561,42 @@ class AppLocalizationsEn extends AppLocalizations {
   String get enterYourComment => 'Enter your comment';
 
   @override
+  String get signalHistory => 'Signal history';
+
+  @override
+  String get historyPartiallyUnavailable =>
+      'Part of this history could not be loaded.';
+
+  @override
+  String get historyFilterAll => 'All';
+
+  @override
+  String get historyFilterEvents => 'Events';
+
+  @override
+  String reportedThisSignal(String name) {
+    return '$name reported this signal';
+  }
+
+  @override
+  String get updateNoteTitle => 'What changed?';
+
+  @override
+  String get nothingWasSaved => 'Nothing was saved.';
+
+  @override
+  String updateNoteChangingTo(String level) {
+    return 'Changing to: $level';
+  }
+
+  @override
+  String get updateNoteHint => 'Add a short note for the signal history';
+
+  @override
+  String get updateNoteRequired =>
+      'Please say what changed — everyone following this signal sees it.';
+
+  @override
   String changedStatusTo(String name, String status) {
     return '$name changed the status to $status';
   }
