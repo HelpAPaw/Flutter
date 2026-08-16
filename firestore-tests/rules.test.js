@@ -47,6 +47,8 @@ function signalDoc(db, uid, overrides = {}) {
     createdAt: new Date(),
     status: 0,
     urgency: 1,
+    helpNeededTags: ['rescue'],
+    animalType: 'dog',
     photoUrls: [],
     ...overrides,
   };
@@ -159,6 +161,78 @@ for (const coll of ['signals', 'signals_test']) {
       const db = testEnv.authenticatedContext(REPORTER).firestore();
       const data = signalDoc(db, REPORTER);
       delete data.urgency;
+      await assertSucceeds(addDoc(collection(db, coll), data));
+    });
+
+    it('accepts 1-3 help tags and rejects an empty or oversized list', async () => {
+      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      for (const helpNeededTags of [['rescue'], ['rescue', 'foster'], ['a', 'b', 'c']]) {
+        await assertSucceeds(
+          addDoc(collection(db, coll), signalDoc(db, REPORTER, { helpNeededTags })),
+        );
+      }
+      for (const helpNeededTags of [[], ['a', 'b', 'c', 'd'], 'rescue']) {
+        await assertFails(
+          addDoc(collection(db, coll), signalDoc(db, REPORTER, { helpNeededTags })),
+        );
+      }
+    });
+
+    // Codes are deliberately NOT checked against an allow-list: a newer app
+    // build must not be rejected by an older deployed ruleset. An unrecognised
+    // code simply never matches anyone in the fan-out.
+    it('accepts a help tag code this ruleset has never heard of', async () => {
+      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      await assertSucceeds(
+        addDoc(collection(db, coll), signalDoc(db, REPORTER, {
+          helpNeededTags: ['somethingAddedLater'],
+        })),
+      );
+    });
+
+    it('accepts a string animalType and rejects other shapes', async () => {
+      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      await assertSucceeds(
+        addDoc(collection(db, coll), signalDoc(db, REPORTER, { animalType: 'cat' })),
+      );
+      for (const animalType of ['', 'a'.repeat(33), 3, ['cat']]) {
+        await assertFails(
+          addDoc(collection(db, coll), signalDoc(db, REPORTER, { animalType })),
+        );
+      }
+    });
+
+    // The cap is a REACH limit, so it has to hold on update too: otherwise a
+    // reporter creates a compliant signal and then widens it to the whole
+    // vocabulary, matching every user in the fan-out's set intersection.
+    it('enforces the tag cap on update, not just create', async () => {
+      const SIGNAL_U = 'signal-update-cap';
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(
+          doc(ctx.firestore(), coll, SIGNAL_U),
+          signalDoc(ctx.firestore(), REPORTER),
+        );
+      });
+      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, coll, SIGNAL_U), { helpNeededTags: ['rescue', 'foster'] }),
+      );
+      await assertFails(
+        updateDoc(doc(db, coll, SIGNAL_U), {
+          helpNeededTags: ['rescue', 'foster', 'transport', 'vetCare'],
+        }),
+      );
+      await assertFails(updateDoc(doc(db, coll, SIGNAL_U), { animalType: 3 }));
+    });
+
+    // Same reasoning as urgency above: pre-tag builds are still in the wild and
+    // create signals with neither field. Tightening these to mandatory is step 3
+    // of the rollout, after adoption — not now.
+    it('still accepts a signal with no tags or species (old clients)', async () => {
+      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      const data = signalDoc(db, REPORTER);
+      delete data.helpNeededTags;
+      delete data.animalType;
       await assertSucceeds(addDoc(collection(db, coll), data));
     });
 
@@ -355,6 +429,87 @@ for (const coll of ['signals', 'signals_test']) {
     });
   });
 }
+
+// The private profile: tokens, prefs, phone. Owner-only, so the bounds below are
+// not an authorization boundary — they cap how far one account can inflate the
+// fan-out, which reads these lists for every candidate on every signal.
+describe('users', () => {
+  const OWNER = REPORTER;
+
+  beforeEach(() => testEnv.clearFirestore());
+
+  it('keeps the document owner-only', async () => {
+    const mine = testEnv.authenticatedContext(OWNER).firestore();
+    const theirs = testEnv.authenticatedContext(OTHER).firestore();
+
+    await assertSucceeds(setDoc(doc(mine, 'users', OWNER), { phone: '123' }));
+    await assertFails(setDoc(doc(theirs, 'users', OWNER), { phone: '123' }));
+    await assertFails(getDoc(doc(theirs, 'users', OWNER)));
+  });
+
+  it('accepts tag and species preferences within bounds', async () => {
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    await assertSucceeds(
+      setDoc(doc(db, 'users', OWNER), {
+        notificationPreferences: {
+          enabled: true,
+          helperTags: ['rescue', 'foster'],
+          animalTypes: ['cat', 'dog'],
+        },
+      }),
+    );
+  });
+
+  it('rejects a preference list long enough to bloat the fan-out', async () => {
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    await assertFails(
+      setDoc(doc(db, 'users', OWNER), {
+        notificationPreferences: {
+          helperTags: Array.from({ length: 33 }, (_, i) => `t${i}`),
+        },
+      }),
+    );
+    await assertFails(
+      setDoc(doc(db, 'users', OWNER), {
+        notificationPreferences: { animalTypes: 'cat' },
+      }),
+    );
+  });
+
+  // Regression: `isValidHelperPrefs` dereferences request.resource.data, which is
+  // null on a delete. Folding it into a combined `allow write` denied every
+  // delete — including the owner's own — and broke detachAnonymousData, leaving
+  // an orphaned userLocations doc live in the fan-out.
+  it('lets the owner delete their own doc', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', OWNER), { phone: '123' });
+    });
+    const mine = testEnv.authenticatedContext(OWNER).firestore();
+    await assertSucceeds(deleteDoc(doc(mine, 'users', OWNER)));
+  });
+
+  it('still refuses a delete by anyone else', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', OWNER), { phone: '123' });
+    });
+    const theirs = testEnv.authenticatedContext(OTHER).firestore();
+    await assertFails(deleteDoc(doc(theirs, 'users', OWNER)));
+  });
+
+  // Every writer of this document uses a merged partial write, so most updates
+  // touch neither list. Requiring them would break all of those writers.
+  it('still accepts writes that touch neither list', async () => {
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    await assertSucceeds(
+      setDoc(doc(db, 'users', OWNER), {
+        notificationPreferences: { enabled: true, locationRadiusKm: 10 },
+      }),
+    );
+    await assertSucceeds(
+      setDoc(doc(db, 'users', OWNER), { fcmTokens: ['abc'] }),
+    );
+  });
+});
 
 // L-2. The app only ever writes `{name}` (PublicProfileService.setName) and only
 // ever reads one uid at a time, so both the field allowlist and the list denial

@@ -23,6 +23,7 @@ import 'home_route_drawer.dart';
 import 'map/filter_bottom_sheet.dart';
 import 'map/new_signal_form.dart';
 import 'notification_onboarding_button.dart';
+import 'helper_tags_gate.dart';
 import 'notification_onboarding_sheet.dart';
 
 class MapScreen extends ConsumerStatefulWidget {
@@ -119,6 +120,32 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
   Future<void> _checkOnboardingState() async {
     final prefs = AppPreferencesService();
+
+    // Local and synchronous, so ask it before awaiting anything. For the common
+    // case — an existing user with nothing to show — this returns without ever
+    // touching the network.
+    if (!prefs.shouldShowOnboardingSheet() &&
+        !prefs.shouldShowOnboardingButton()) {
+      return;
+    }
+
+    // Then wait for the *resolved* preferences, not a single read of them.
+    //
+    // A one-shot `ref.read` here always lost: this runs from a post-frame
+    // callback in initState, when the provider is still loading, so it returned
+    // early every time. That was fine for an untagged user — the gate swaps in,
+    // and coming back rebuilds this subtree so initState runs again. But for a
+    // user who *already has* tags the gate returns the very same child widget in
+    // both its loading and data branches, so the element is reused, initState
+    // never runs a second time, and the notification onboarding was silently
+    // never offered again.
+    //
+    // Staying out of the gate's way matters because the gate renders this screen
+    // while it is still reading (so a slow read never blanks the map) — without
+    // this, onboarding is pushed onto the navigator first and then sits on top
+    // of the mandatory tag picker.
+    final resolved = await ref.read(helperTagsPreferencesProvider.future);
+    if (!mounted || !(resolved?.hasChosenHelperTags ?? false)) return;
 
     if (prefs.shouldShowOnboardingSheet()) {
       _showOnboardingSheet();

@@ -5,6 +5,8 @@ import 'package:firebase_crashlytics_platform_interface/firebase_crashlytics_pla
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart' show XFile;
+import 'package:help_a_paw/src/models/animal_type.dart';
+import 'package:help_a_paw/src/models/help_tag.dart';
 import 'package:help_a_paw/src/models/signal_urgency.dart';
 import 'package:help_a_paw/src/repositories/repository_provider.dart';
 import 'package:help_a_paw/src/state/map_state.dart';
@@ -311,10 +313,90 @@ void main() {
       expect(mockSignalRepo.createdSignals, isEmpty);
     });
 
+    test('submitSignal fails when no help tag was chosen', () async {
+      // Mandatory for the same reason as urgency: an untagged signal falls back
+      // to `rescue` server-side and reaches everyone, which is precisely the
+      // undirected broadcast the tags exist to replace.
+      viewModel.updateFormTitle('Title');
+      viewModel.updateFormDescription('Description');
+      viewModel.setFormUrgency(SignalUrgency.amber.code);
+      viewModel.setFormAnimalType(AnimalType.cat.code);
+
+      final (success, errorMessage) = await viewModel.submitSignal(
+        latitude: 42.0,
+        longitude: 23.0,
+      );
+
+      expect(success, false);
+      expect(errorMessage, 'help_tags_empty');
+      expect(mockSignalRepo.createdSignals, isEmpty);
+    });
+
+    test('submitSignal fails when no animal type was chosen', () async {
+      viewModel.updateFormTitle('Title');
+      viewModel.updateFormDescription('Description');
+      viewModel.setFormUrgency(SignalUrgency.amber.code);
+      viewModel.toggleFormHelpTag(HelpTag.foster.code);
+
+      final (success, errorMessage) = await viewModel.submitSignal(
+        latitude: 42.0,
+        longitude: 23.0,
+      );
+
+      expect(success, false);
+      expect(errorMessage, 'animal_type_unset');
+      expect(mockSignalRepo.createdSignals, isEmpty);
+    });
+
+    test('submitSignal passes the tags and species through', () async {
+      viewModel.updateFormTitle('Kittens');
+      viewModel.updateFormDescription('Found a litter');
+      viewModel.setFormUrgency(SignalUrgency.amber.code);
+      viewModel.toggleFormHelpTag(HelpTag.babyCare.code);
+      viewModel.toggleFormHelpTag(HelpTag.foster.code);
+      viewModel.setFormAnimalType(AnimalType.cat.code);
+
+      final (success, _) = await viewModel.submitSignal(
+        latitude: 42.0,
+        longitude: 23.0,
+      );
+
+      expect(success, true);
+      // Order is the priority the reporter gave and must survive the write.
+      expect(
+        mockSignalRepo.createdSignals.single['helpNeededTags'],
+        [HelpTag.babyCare.code, HelpTag.foster.code],
+      );
+      expect(
+        mockSignalRepo.createdSignals.single['animalType'],
+        AnimalType.cat.code,
+      );
+    });
+
+    test('a help tag toggles off when tapped again', () async {
+      viewModel.toggleFormHelpTag(HelpTag.foster.code);
+      viewModel.toggleFormHelpTag(HelpTag.foster.code);
+
+      expect(viewModel.state.formState.helpTags, isEmpty);
+    });
+
+    test('help tags stop at the per-signal cap', () async {
+      for (final tag in HelpTag.values) {
+        viewModel.toggleFormHelpTag(tag.code);
+      }
+
+      expect(
+        viewModel.state.formState.helpTags,
+        hasLength(HelpTag.maxPerSignal),
+      );
+    });
+
     test('submitSignal passes the chosen urgency through', () async {
       viewModel.updateFormTitle('Injured dog');
       viewModel.updateFormDescription('Hit by a car');
       viewModel.setFormUrgency(SignalUrgency.red.code);
+      viewModel.toggleFormHelpTag(HelpTag.rescue.code);
+      viewModel.setFormAnimalType(AnimalType.dog.code);
 
       final (success, _) = await viewModel.submitSignal(
         latitude: 42.0,
@@ -332,6 +414,8 @@ void main() {
       viewModel.updateFormTitle('Help needed');
       viewModel.updateFormDescription('Dog stuck in fence');
       viewModel.setFormUrgency(SignalUrgency.amber.code);
+      viewModel.toggleFormHelpTag(HelpTag.rescue.code);
+      viewModel.setFormAnimalType(AnimalType.dog.code);
       viewModel.updateFormPhoneNumber('0888123456');
 
       final (success, errorMessage) = await viewModel.submitSignal(
@@ -360,6 +444,8 @@ void main() {
       viewModel.updateFormTitle('Help needed');
       viewModel.updateFormDescription('Dog stuck in fence');
       viewModel.setFormUrgency(SignalUrgency.amber.code);
+      viewModel.toggleFormHelpTag(HelpTag.rescue.code);
+      viewModel.setFormAnimalType(AnimalType.dog.code);
       viewModel.setFormImage(XFile('/tmp/mock-photo.jpg'));
 
       final (success, errorMessage) = await viewModel.submitSignal(
@@ -387,6 +473,8 @@ void main() {
       viewModel.updateFormTitle('Help needed');
       viewModel.updateFormDescription('Dog stuck in fence');
       viewModel.setFormUrgency(SignalUrgency.amber.code);
+      viewModel.toggleFormHelpTag(HelpTag.rescue.code);
+      viewModel.setFormAnimalType(AnimalType.dog.code);
       viewModel.setFormImage(XFile('/tmp/mock-photo.jpg'));
 
       final (success, errorMessage) = await viewModel.submitSignal(
@@ -414,6 +502,8 @@ void main() {
       viewModel.updateFormTitle('Title');
       viewModel.updateFormDescription('Description');
       viewModel.setFormUrgency(SignalUrgency.amber.code);
+      viewModel.toggleFormHelpTag(HelpTag.rescue.code);
+      viewModel.setFormAnimalType(AnimalType.dog.code);
 
       final (success, errorMessage) = await viewModel.submitSignal(
         latitude: 42.0,
@@ -431,6 +521,8 @@ void main() {
       viewModel.updateFormTitle('Title');
       viewModel.updateFormDescription('Description');
       viewModel.setFormUrgency(SignalUrgency.amber.code);
+      viewModel.toggleFormHelpTag(HelpTag.rescue.code);
+      viewModel.setFormAnimalType(AnimalType.dog.code);
 
       final (success, errorMessage) = await viewModel.submitSignal(
         latitude: 42.0,
@@ -445,6 +537,8 @@ void main() {
       viewModel.updateFormTitle('Title');
       viewModel.updateFormDescription('Description');
       viewModel.setFormUrgency(SignalUrgency.amber.code);
+      viewModel.toggleFormHelpTag(HelpTag.rescue.code);
+      viewModel.setFormAnimalType(AnimalType.dog.code);
 
       await viewModel.submitSignal(latitude: 42.0, longitude: 23.0);
       expect(viewModel.state.newlyCreatedSignalId, isNotNull);
@@ -512,10 +606,32 @@ void main() {
       expect(noUrgency.isValid, false);
       expect(noUrgency.isUrgencyUnset, true);
 
+      // Help tags and species are required too (spec 4.4), for the same reason:
+      // an untagged signal falls back to reaching everyone.
+      final noTags = NewSignalFormState(
+        title: 'Title',
+        description: 'Desc',
+        urgency: SignalUrgency.amber.code,
+        animalType: AnimalType.dog.code,
+      );
+      expect(noTags.isValid, false);
+      expect(noTags.isHelpTagsEmpty, true);
+
+      final noAnimal = NewSignalFormState(
+        title: 'Title',
+        description: 'Desc',
+        urgency: SignalUrgency.amber.code,
+        helpTags: [HelpTag.rescue.code],
+      );
+      expect(noAnimal.isValid, false);
+      expect(noAnimal.isAnimalTypeUnset, true);
+
       final valid = NewSignalFormState(
         title: 'Title',
         description: 'Desc',
         urgency: SignalUrgency.amber.code,
+        helpTags: [HelpTag.rescue.code],
+        animalType: AnimalType.dog.code,
       );
       expect(valid.isValid, true);
     });

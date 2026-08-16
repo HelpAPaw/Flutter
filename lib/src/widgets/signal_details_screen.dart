@@ -27,6 +27,8 @@ import 'escape_leading.dart';
 import '../models/signal.dart';
 import '../models/signal_doc_state.dart';
 import '../models/signal_status.dart';
+import '../models/animal_type.dart';
+import '../models/help_tag.dart';
 import '../models/signal_urgency.dart';
 import 'urgency_picker.dart';
 import '../services/app_preferences_service.dart';
@@ -688,6 +690,43 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                     child: UrgencyChip(urgency: signal.urgency),
                                   ),
                           ),
+                          // What the case needs, read-only. Editing lives on the
+                          // edit screen with the rest of the reporter's fields.
+                          // Signals from before tags existed have none, so the
+                          // whole block is omitted rather than showing an empty
+                          // heading.
+                          if (signal.helpNeededTags.isNotEmpty ||
+                              signal.animalType != null) ...[
+                            const SizedBox(height: 8),
+                            Text(' ${l10n.helpNeeded}'),
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
+                              child: Wrap(
+                                spacing: 6,
+                                runSpacing: 4,
+                                children: [
+                                  if (AnimalType.fromCode(signal.animalType)
+                                      case final species?)
+                                    Chip(
+                                      avatar: Icon(species.icon, size: 16),
+                                      label: Text(species.label(l10n)),
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                  // Unknown codes are dropped: one means the
+                                  // signal came from a newer build, and there is
+                                  // no label for it here.
+                                  for (final tag in HelpTag.fromCodes(
+                                      signal.helpNeededTags))
+                                    Chip(
+                                      avatar: Icon(tag.icon, size: 16),
+                                      label: Text(tag.label(l10n)),
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 8),
                           Text(' ${l10n.status}'),
                           DropdownButton<int>(

@@ -131,6 +131,130 @@ class AppLocalizationsBg extends AppLocalizations {
   String get signalTypeOther => 'Друго';
 
   @override
+  String get helpTagRescue => 'Спасяване';
+
+  @override
+  String get helpTagFoster => 'Временен дом';
+
+  @override
+  String get helpTagTransport => 'Транспорт';
+
+  @override
+  String get helpTagVetCare => 'Ветеринарна помощ';
+
+  @override
+  String get helpTagFood => 'Храна и материали';
+
+  @override
+  String get helpTagTrapping => 'Улавяне';
+
+  @override
+  String get helpTagFundraising => 'Набиране на средства';
+
+  @override
+  String get helpTagAdoption => 'Осиновяване';
+
+  @override
+  String get helpTagBabyCare => 'Грижа за новородени';
+
+  @override
+  String get helpTagRescueHelper => 'Мога да отида при животно в нужда';
+
+  @override
+  String get helpTagFosterHelper => 'Мога да приютя животно за известно време';
+
+  @override
+  String get helpTagTransportHelper => 'Мога да превозя животно';
+
+  @override
+  String get helpTagVetCareHelper =>
+      'Мога да помогна с ветеринарен преглед или лечение';
+
+  @override
+  String get helpTagFoodHelper => 'Мога да донеса храна или материали';
+
+  @override
+  String get helpTagTrappingHelper => 'Мога да уловя животно или имам клетка';
+
+  @override
+  String get helpTagFundraisingHelper =>
+      'Мога да помогна със или да споделя набиране на средства';
+
+  @override
+  String get helpTagAdoptionHelper =>
+      'Търся да осиновя или мога да помогна с намиране на дом';
+
+  @override
+  String get helpTagBabyCareHelper =>
+      'Мога да храня с биберон или да се грижа за новородени';
+
+  @override
+  String get animalTypeCat => 'Котка';
+
+  @override
+  String get animalTypeDog => 'Куче';
+
+  @override
+  String get animalTypeOther => 'Друго животно';
+
+  @override
+  String get helpNeeded => 'Нужна помощ';
+
+  @override
+  String get animalType => 'Животно';
+
+  @override
+  String get animalTypes => 'Животни';
+
+  @override
+  String get helperTags => 'Как мога да помогна';
+
+  @override
+  String get pleaseSelectHelpTag => 'Моля, изберете поне един вид нужна помощ';
+
+  @override
+  String get pleaseSelectAnimalType =>
+      'Моля, изберете за какво животно се отнася сигналът';
+
+  @override
+  String helpTagLimitReached(int count) {
+    return 'Можете да изберете до $count вида помощ';
+  }
+
+  @override
+  String get helperTagsOnboardingTitle => 'Как можете да помогнете?';
+
+  @override
+  String get helperTagsOnboardingIntro =>
+      'Изберете какво реално можете да направите и на кои животни можете да помогнете. Използваме това, за да ви изпращаме случаите, по които наистина можете да действате — можете да го промените по всяко време в настройките.';
+
+  @override
+  String get helperTagsOnboardingHelpSection => 'С какво можете да помогнете?';
+
+  @override
+  String get helperTagsOnboardingAnimalSection =>
+      'На кои животни можете да помогнете?';
+
+  @override
+  String get helperTagsOnboardingContinue => 'Продължи';
+
+  @override
+  String get helperTagsSaveFailed =>
+      'Изборът не можа да бъде запазен. Моля, опитайте отново.';
+
+  @override
+  String get selectAtLeastOneSignalType =>
+      'Изберете поне един вид сигнал или изключете известията';
+
+  @override
+  String get selectAtLeastOneAnimalType =>
+      'Изберете поне едно животно или изключете известията';
+
+  @override
+  String get selectAtLeastOneHelperTag =>
+      'Изберете поне един начин, по който можете да помогнете';
+
+  @override
   String get filterSignals => 'Филтриране на сигнали';
 
   @override
@@ -141,9 +265,6 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get clearAll => 'Изчисти всички';
-
-  @override
-  String get deselectAll => 'Премахни всички';
 
   @override
   String get status => 'Статус';

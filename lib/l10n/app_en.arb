@@ -50,11 +50,58 @@
   "signalTypeWildAnimals": "Wild animals",
   "signalTypeOther": "Other",
 
+  "helpTagRescue": "Rescue",
+  "helpTagFoster": "Fostering",
+  "helpTagTransport": "Transport",
+  "helpTagVetCare": "Vet care",
+  "helpTagFood": "Food & supplies",
+  "helpTagTrapping": "Trapping",
+  "helpTagFundraising": "Fundraising",
+  "helpTagAdoption": "Adoption",
+  "helpTagBabyCare": "Newborn care",
+
+  "helpTagRescueHelper": "I can go to an animal in need",
+  "helpTagFosterHelper": "I can take an animal into my home for a while",
+  "helpTagTransportHelper": "I can drive an animal somewhere",
+  "helpTagVetCareHelper": "I can help with a vet visit or treatment",
+  "helpTagFoodHelper": "I can bring food or supplies",
+  "helpTagTrappingHelper": "I can trap an animal, or I have a trap or cage",
+  "helpTagFundraisingHelper": "I can help raise or share funds",
+  "helpTagAdoptionHelper": "I am looking to adopt, or can help find a home",
+  "helpTagBabyCareHelper": "I can bottle-feed or care for newborns",
+
+  "animalTypeCat": "Cat",
+  "animalTypeDog": "Dog",
+  "animalTypeOther": "Other animal",
+
+  "helpNeeded": "Help needed",
+  "animalType": "Animal",
+  "animalTypes": "Animals",
+  "helperTags": "How I can help",
+  "pleaseSelectHelpTag": "Please choose at least one kind of help needed",
+  "pleaseSelectAnimalType": "Please choose which animal this is about",
+  "helpTagLimitReached": "You can choose up to {count} kinds of help",
+  "@helpTagLimitReached": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+
+  "helperTagsOnboardingTitle": "How can you help?",
+  "helperTagsOnboardingIntro": "Pick what you can realistically do, and which animals you can help. We use this to send you the cases you can actually act on — you can change it any time in settings.",
+  "helperTagsOnboardingHelpSection": "What can you help with?",
+  "helperTagsOnboardingAnimalSection": "Which animals can you help?",
+  "helperTagsOnboardingContinue": "Continue",
+  "helperTagsSaveFailed": "Could not save your choices. Please try again.",
+
+  "selectAtLeastOneSignalType": "Choose at least one signal type, or turn notifications off",
+  "selectAtLeastOneAnimalType": "Choose at least one animal, or turn notifications off",
+  "selectAtLeastOneHelperTag": "Choose at least one way you can help",
+
   "filterSignals": "Filter Signals",
   "toggleVetClinics": "Toggle veterinary clinics",
   "selectAll": "Select All",
   "clearAll": "Clear All",
-  "deselectAll": "Deselect All",
   "status": "Status",
   "signalType": "Signal Type",
   "timeRange": "Time Range",

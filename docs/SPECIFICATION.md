@@ -157,6 +157,8 @@ allow-listed in the console or anonymous sign-in fails.
 | `signalType` | int | 0–6, see §4.4 |
 | `status` | int | stable code, see §4.5 |
 | `urgency` | int | stable code, see §4.6. Optional on the wire — pre-urgency documents omit it and readers derive one |
+| `helpNeededTags` | string[] | 1–3 codes, see §4.7. Array order = priority. Optional on the wire — pre-tag documents omit it and the fan-out substitutes `rescue` |
+| `animalType` | string | one code, see §4.7. Optional on the wire — when absent the signal matches every species filter |
 | `location` | map | `{ geopoint: GeoPoint, geohash: string }`, geohash precision 9 |
 | `reporter` | DocumentReference | → `users/{uid}`; pinned to the caller by rules |
 | `contactPhone` | string | shown/dialled on the details screen |
@@ -263,10 +265,26 @@ Typed on both sides: `NotificationPreferences` (Dart) and `UserNotificationPrefs
 | `locationTrackingEnabled` | `false` | consent to store the user's position |
 | `locationRadiusKm` | `10.0` | UI range 1–50 |
 | `signalTypes` | *absent* | **absent ≠ empty**: absent = "never chose" = all types; empty = deliberate "Deselect all" = none |
+| `animalTypes` | *absent* | species filter, same absent/empty rule as `signalTypes` |
+| `helperTags` | *absent* | kinds of help the user can offer, see §4.7. **absent = empty** here — the opposite rule |
 | `regionOfInterest` | *absent* | `{ center: GeoPoint, radiusKm: 1–100, geohash }` |
 
 The absent/empty distinction is load-bearing on both client and server; collapsing it
 made "Deselect all" behave as "select all".
+
+**Two opposite conventions live in this one map, deliberately.** `signalTypes` and
+`animalTypes` are *filters*, where empty is a real choice to receive nothing.
+`helperTags` is a *matching input* and not an opt-out mechanism — `enabled` is how a
+user turns notifications off — so absent and empty both resolve to `rescue`. Both
+sides go through one resolver each (`effectiveHelperTags`, in Dart and TS) rather
+than reading the field directly. Unifying the two rules is the mistake to avoid:
+collapsing helper tags into filter semantics would make every un-onboarded user match
+nothing and silently stop being notified.
+
+Since the tag system shipped, the settings screen requires at least one signal type,
+one animal type and one helper tag **while `enabled` is true**, and the "Deselect all"
+button is gone. A stored empty `signalTypes` from before that change still means
+"none" server-side and is never migrated — rewriting it would opt those users back in.
 
 ### 4.3 Firebase Storage layout
 
@@ -356,6 +374,51 @@ Not yet implemented from master spec §5: the Red Alert staleness lifecycle
 (§5.3) — both need moderator/admin roles.
 
 ---
+
+### 4.7 Help tags and animal type (`models/help_tag.dart`, `models/animal_type.dart`)
+
+Master spec §3.2 (helper tags), §4.2/§4.3 (help-needed tags), §16.2 (matching).
+
+**One vocabulary, both sides.** A signal's `helpNeededTags` and a user's
+`helperTags` draw from the same nine codes, so matching is a plain set
+intersection with no mapping table to drift:
+
+```
+rescue   foster   transport   vetCare   food
+trapping   fundraising   adoption   babyCare
+```
+
+Codes are stable opaque strings — never rename or reuse one; they are stored on both
+signal documents and user profiles.
+
+**Species is a separate axis, not a tag.** Master spec §3.2 needs 27 helper tags
+because it spells out the cross-product ("Can help with cats", "Can bottle-feed
+kittens"). Keeping the axes independent gives 9 tags × 3 species instead, and either
+can grow without touching the other (§1.6 starts with cats and dogs). `animalType` is
+`cat` / `dog` / `other`: one per signal, many per user preference.
+
+Rules, mirrored by `functions/src/tags.ts`:
+
+- **Required at creation**, like urgency: 1–3 tags plus a species, gated by
+  `NewSignalFormState.isValid`. The 1–3 cap is the spec's three priority slots and
+  doubles as a reach limit — a signal tagged with the whole vocabulary matches
+  everyone.
+- **Array order is priority** and is preserved on write; matching ignores it.
+- **`rescue` is the fallback** for a signal or user that has none. This is what makes
+  the server deployable ahead of the app: legacy signals and un-onboarded users both
+  resolve to `rescue`, so everything matches everything and the recipient set is
+  unchanged until real tags arrive.
+- **Unknown codes are kept, not dropped**, server-side — one means a *newer* client
+  wrote it, and users on that build will have it too. The UI drops them from display
+  only, since it has no label.
+- **Absent `animalType` matches every species filter.** Filtering legacy signals out
+  would silently hide them from anyone who has chosen species.
+- The Dart↔TS copies are guarded by `test/help_tag_vocabulary_guard_test.dart`, which
+  parses `tags.ts`. The drift it prevents is silent: a code on one side only is never
+  matched, and nothing logs an error.
+
+Selection is required in a **non-skippable full-screen gate** (§7.15), so the
+vocabulary is only useful once that has shipped to the installed base.
 
 ## 5. Security model (`firestore.rules`, `storage.rules`)
 
@@ -1004,7 +1067,16 @@ Behaviour:
 - **Query:** geo-query on the active collection within the user's radius, with
   `createdAt >= now - 7 days` and `status whereIn openCodes` pushed into Firestore,
   `strictMode: true` to clip the rectangular geohash bounds to the real radius.
-- **Post-filters:** signal type preference, and exclude the user's own signals.
+- **Post-filters:** signal type preference, species preference, help-tag match, and
+  exclude the user's own signals.
+
+  **Tag matching here is deliberately stricter than the server's.** The fan-out tops
+  its recipient list up to a floor, pulling in people whose tags don't match when too
+  few do; this check runs on one device and cannot know whether *this* user would have
+  won a backfill slot — that depends on everyone else who was nearby at the time. So
+  catch-up notifies on a genuine match only (tier A semantics). Erring the other way
+  would ping a user whose tags match nothing every time they travel, which is exactly
+  the noise tags exist to remove.
 - **Dedupe:** `NotifiedSignalsStore` — a JSON map `{signalId: createdAtMillis}` in
   SharedPreferences, namespaced per mode, pruned by the signal's own creation time
   against the 7-day window (so a daily commuter is never re-notified). **FCM-delivered
@@ -1189,6 +1261,45 @@ uses `async let` patterns that trip a Swift runtime memory-corruption bug in **r
 builds (`swift_task_dealloc` SIGABRT); debug builds are unaffected because they skip
 optimization. Revert once the Swift runtime fix ships.
 
+### 7.15 Helper-tag onboarding gate (`helper_tags_gate.dart`)
+
+A full-screen, non-skippable picker for helper tags and animal types (§4.7), shown when
+the signed-in user has no `helperTags`. It applies to **existing** accounts too — without
+that, the installed base would sit on the `rescue` default forever and tag matching would
+stay inert.
+
+**A widget wrapper on the map route, not a GoRouter redirect.** The route builder is
+`HelperTagsGate(child: HomeRoute())`. A redirect runs on every navigation and must answer
+*synchronously*, so it would need a shared_preferences mirror of Firestore state — kept
+per-uid and re-derived on sign-out, account switch and the anonymous→registered upgrade —
+and it would have to interleave with the email-verification redirect in `main.dart`.
+Router bootstrap here is known-fragile (the "Bad state: No element" crash came from
+exactly this area). As a widget it can simply render a loading state, and it composes
+with the router instead of fighting it.
+
+**Deep links are exempt for free.** `/signal/:id` is a different route and never builds
+the gate, so a notification tap or a shared link opens the signal — the app must not
+stand between someone and an animal in danger to collect a preference. Navigating back
+to the map is what triggers the gate.
+
+Fallbacks, in order of how badly they matter:
+
+- **A failed or pending preferences read renders the app, never the gate.**
+  `getNotificationPreferences` catches its own errors and returns **null**, so the
+  offline case arrives as `data(null)`, *not* as an error — that branch must stay
+  distinct from "chose nothing". Gating on it would lock an offline user out of
+  reporting. Covered by `test/widgets/helper_tags_gate_test.dart`, which caught exactly
+  this bug during implementation.
+- The gate waits for a session rather than assuming one, and calls
+  `ensureAnonymousSession` before writing.
+- It requests **no** OS permissions — tag selection is not a permission prompt, and the
+  two-phase init pattern (§7.6) exists so those never fire at startup.
+- It is a route-level widget, not a startup blocker: nothing new is awaited before
+  `runApp()`.
+
+Anonymous users hit the gate on every fresh install. That is accepted, and it is why the
+deep-link exemption matters.
+
 ---
 
 ## 8. Localization
@@ -1227,18 +1338,61 @@ page is bilingual with a client-side language switch.
      `notificationPreferences.regionOfInterest.geohash`, within
      `MAX_REGION_RADIUS_KM = 100`.
    These caps must stay ≥ the UI caps (50 / 100) or far-edge matches are missed.
-2. Per candidate, skip: wrong `testMode`, the reporter, `enabled != true`, and — **only
-   when `signalTypes` is present** — a type the user excluded.
-3. Notify if the Haversine distance to their tracked location ≤ `locationRadiusKm`
-   (default 10) **or** to their region centre ≤ region `radiusKm`.
-4. Split the survivors: `inboxRecipients` gets everyone, `userTokens ⊆ inboxRecipients`
+2. Per candidate, apply the **hard gates** — the preferences the recipient floor below
+   is never allowed to override: wrong `testMode`, the reporter, `enabled != true`,
+   a `signalTypes` the user excluded (**only when present**), and a species they
+   excluded (`animalTypes`, same absent/empty rule).
+3. Rank the survivors into four tiers by tag match (§4.7) and by whether the signal
+   falls inside the radius they actually configured — Haversine to their tracked
+   location vs `locationRadiusKm` (default 10), **or** to their region centre vs
+   region `radiusKm`. Distance for ordering is the nearer of the two.
+
+   | rank | tier | condition | behaviour |
+   |---|---|---|---|
+   | 1 | A | tag match, in radius | **always notified** |
+   | 2 | C | tag match, out of radius | backfill first |
+   | 3 | B | no match, in radius | backfill next |
+   | 4 | D | no match, out of radius | last resort |
+
+   Take all of A, then walk C → B → D nearest-first until `MIN_RECIPIENTS = 50` is
+   met or candidates run out. **The floor is a floor, never a ceiling** — if 500
+   people match, all 500 are notified.
+
+   **C outranks B deliberately.** A tag declares *ability to help*; proximity only
+   declares presence. The accepted cost is that a matching helper who set a 10 km
+   radius can be told about something 40 km away, which is why the push carries a
+   per-recipient `distanceKm`. Radius is the last preference to yield, and an
+   explicit type/species choice never yields at all.
+
+   The reporter is excluded **and does not count toward the floor** — otherwise a
+   signal in an empty area quietly reaches 49.
+
+   Ranking lives in `functions/src/recipientSelection.ts` as a pure function, unit
+   tested — its failure modes are all silent (too few looks like a quiet day, too
+   many looks like spam, neither throws).
+4. **One widened re-scan** when fewer than `MIN_RECIPIENTS` candidates survive step 2:
+   both geohash queries run again at `WIDEN_RADIUS_KM = 250` (enough to cover Bulgaria
+   from any point) and the tiers are rebuilt. Cost is self-limiting — it only fires
+   when few users were found, and Firestore bills per document returned. The one case
+   that is *not* self-limiting is a dense area where most users have push off, so it
+   is skipped entirely once the raw scan exceeds `WIDEN_MAX_CANDIDATES = 500`.
+5. Split the survivors: `inboxRecipients` gets everyone, `userTokens ⊆ inboxRecipients`
    only those with an FCM token. **Missing tokens rule out the push, not the inbox
    entry** — a user who turned push off still wants the comment on their own signal.
-5. `writeInboxEntries` (§7.13), then `sendEach` in chunks of 500;
+6. `writeInboxEntries` (§7.13), then `sendEach` in chunks of 500;
    unregistered/invalid tokens are `arrayRemove`d from their owner's doc.
 
-Payloads carry `{ signalId, type, signalTitle, signalType|statusCode,
-click_action: FLUTTER_NOTIFICATION_CLICK }`, Android channel `help_a_paw_signals`, APNs
+Every fan-out logs one structured line: candidates scanned, eligible count, whether
+widening fired, the four tier sizes, and how many recipients were backfilled. **This is
+not optional instrumentation** — with a 9-tag vocabulary and a one-tag minimum, tier A
+is often small outside dense areas, so backfill does most of the work early on, and
+`MIN_RECIPIENTS` / `WIDEN_RADIUS_KM` cannot be tuned against anything but these numbers.
+Both are plain module constants; changing them is a function redeploy, which is
+accepted.
+
+Payloads carry `{ signalId, type, signalTitle, signalType|statusCode, helpNeededTags,
+animalType, distanceKm, click_action: FLUTTER_NOTIFICATION_CLICK }`, Android channel
+`help_a_paw_signals`, APNs
 `sound: default, badge: 1`. The FCM 4KB limit covers `notification` and `data` together,
 so payload strings are bounded by `truncateForPayload`.
 
@@ -1307,7 +1461,18 @@ Things that live in more than one place and fail **silently** when they drift.
 3. **Status codes (×2).** `SignalStatus` (Dart, source of truth) and `SIGNAL_STATUSES`
    (functions, keyed by *code*, not array position).
 4. **`signalTypes` absent vs empty.** Absent = all types; empty = none. Enforced in
-   `NotificationPreferences.wantsSignalType` and in the fan-out's guard.
+   `NotificationPreferences.wantsSignalType` and in the fan-out's guard. `animalTypes`
+   follows the same rule via `wantsAnimalType`.
+4a. **`helperTags` absent = empty — the OPPOSITE rule, in the same map.** Filters treat
+   empty as a real "notify me about nothing"; helper tags are a matching input and
+   `enabled` is the off switch, so both resolve to `rescue` via `effectiveHelperTags`
+   (Dart and TS). Unifying the two conventions makes every un-onboarded user match
+   nothing and silently stop being notified. See §4.2.
+4b. **Help-tag and animal-type vocabularies (×2).** `HelpTag` / `AnimalType` (Dart) and
+   `HELP_TAGS` / `ANIMAL_TYPES` (`functions/src/tags.ts`), plus the fallback tag and the
+   per-signal cap. Guarded by `test/help_tag_vocabulary_guard_test.dart`, which parses
+   the TypeScript. A code on one side only is never matched by the fan-out and nothing
+   logs an error.
 5. **Field-length limits (×2).** Firestore rules vs `LengthLimitingTextInputFormatter`:
    title 300, description 10 000, comment 2000, profile name 100, feedback message 1000,
    email 254.
@@ -1408,3 +1573,4 @@ silently breaks Auth/Firestore/FCM in release builds only.
 | 2026-08-01 | Investigated `/my_notifications`. It is a deliberate deferral (owner decision 2026-05-30, keep the code); verified the previously-assumed gap list — no writer has ever existed, the subcollection is denied because rules don't cascade into subcollections, and the page's `type` vocabulary doesn't match the functions'. Documented the schema and the iOS-badge link. §5.1, §7.13, §14. |
 | 2026-08-04 | **Built the in-app inbox.** Server writer (`writeInboxEntries`) alongside every push; `users/{uid}/notifications` + `userCounters` rules with 15 new emulator tests; drawer entry with unread badge; client-side localized rendering from structured fields; `nearby_signal` entries from the arrival catch-up (incl. the headless isolate); `userCounters` + native badge channel + resume reconciliation for F-008. Recipients now include users with no FCM token. Adjacent fix: the fan-out's un-chunked `sendEachForMulticast` silently lost every notification past 500 tokens — now `sendEach` chunked at 500. §4, §5.1, §7.13, §9, §14. |
 | 2026-08-04 | Enabled real `badge: N` in the fan-out (F-008 closed). Owner accepted the known consequence that pre-release iOS builds have no reset path, so their badge climbs monotonically. §7.13, §14. |
+| 2026-08-12 | **Built the help-tag system.** One nine-code vocabulary shared by signals (`helpNeededTags`, 1–3, mandatory) and users (`helperTags`, ≥1), plus `animalType` as an independent axis rather than species-crossed tags. The fan-out is now prioritise-then-backfill: all tag matches in radius are notified, then C→B→D nearest-first up to `MIN_RECIPIENTS = 50`, with one widened re-scan at 250 km when the pool is thin — ranking extracted to `recipientSelection.ts` with 20 unit tests (the first tests `functions/` has had). Non-skippable onboarding gate implemented as a widget wrapper on the map route, not a router redirect; a failed preferences read renders the app rather than locking the user out. Settings now require ≥1 signal type / animal type / helper tag while enabled, and "Deselect all" is gone (stored empty `signalTypes` still means none and is never migrated). Rules validate the new fields but do **not** require them — tightening is a later, separate deploy. §4.1, §4.2, §4.7, §5.1, §7.4, §7.5, §7.6, §7.15, §9, §12. |

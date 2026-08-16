@@ -53,6 +53,8 @@ class MockSignalRepository implements SignalRepository {
     required double longitude,
     required String reporterUserId,
     required int urgency,
+    required List<String> helpNeededTags,
+    required String animalType,
   }) async {
     createdSignals.add({
       'title': title,
@@ -63,6 +65,8 @@ class MockSignalRepository implements SignalRepository {
       'longitude': longitude,
       'reporterUserId': reporterUserId,
       'urgency': urgency,
+      'helpNeededTags': helpNeededTags,
+      'animalType': animalType,
     });
 
     if (shouldCreateSucceed) {

@@ -5,8 +5,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../models/help_tag.dart';
 import '../../models/signal.dart';
 import '../../viewmodels/map_view_model.dart';
+import '../help_tag_selector.dart';
 import '../urgency_picker.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 
@@ -154,16 +156,7 @@ class _NewSignalFormState extends ConsumerState<NewSignalForm> {
                             },
                           ),
                           const SizedBox(height: 8),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              l10n.urgency,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
+                          _buildSectionLabel(l10n.urgency),
                           UrgencyPicker(
                             value: formState.urgency,
                             // The form is a short scrollable strip, so the
@@ -174,6 +167,35 @@ class _NewSignalFormState extends ConsumerState<NewSignalForm> {
                             onChanged: (urgency) => ref
                                 .read(mapViewModelProvider.notifier)
                                 .setFormUrgency(urgency),
+                          ),
+                          const SizedBox(height: 8),
+                          _buildSectionLabel(l10n.animalType),
+                          AnimalTypeSelector(
+                            selected: [
+                              if (formState.animalType != null)
+                                formState.animalType!,
+                            ],
+                            singleSelect: true,
+                            onToggle: (code) => ref
+                                .read(mapViewModelProvider.notifier)
+                                .setFormAnimalType(code),
+                          ),
+                          const SizedBox(height: 8),
+                          _buildSectionLabel(
+                            l10n.helpNeeded,
+                            // The cap is the reach limit as much as a priority
+                            // limit, so say what it is instead of letting chips
+                            // silently go dead at three.
+                            hint: l10n.helpTagLimitReached(
+                              HelpTag.maxPerSignal,
+                            ),
+                          ),
+                          HelpTagSelector(
+                            selected: formState.helpTags,
+                            maxSelection: HelpTag.maxPerSignal,
+                            onToggle: (code) => ref
+                                .read(mapViewModelProvider.notifier)
+                                .toggleFormHelpTag(code),
                           ),
                           if (formState.selectedImage != null)
                             _buildImagePreview(context, formState.selectedImage!),
@@ -207,6 +229,35 @@ class _NewSignalFormState extends ConsumerState<NewSignalForm> {
           ),
         );
       },
+    );
+  }
+
+  /// Left-aligned heading for one of the form's picker sections, with an
+  /// optional grey hint beside it.
+  Widget _buildSectionLabel(String text, {String? hint}) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Row(
+        children: [
+          Text(
+            text,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (hint != null) ...[
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                hint,
+                style: const TextStyle(fontSize: 11, color: Colors.grey),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -386,6 +437,12 @@ class _NewSignalFormState extends ConsumerState<NewSignalForm> {
         break;
       case 'urgency_unset':
         errorMessage = l10n.pleaseSelectUrgency;
+        break;
+      case 'help_tags_empty':
+        errorMessage = l10n.pleaseSelectHelpTag;
+        break;
+      case 'animal_type_unset':
+        errorMessage = l10n.pleaseSelectAnimalType;
         break;
       case 'not_authenticated':
         errorMessage = l10n.authenticationError;

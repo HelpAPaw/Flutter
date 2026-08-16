@@ -14,6 +14,16 @@ import * as nodemailer from "nodemailer";
 // scripts/backfill_urgency.js can share them instead of keeping a third copy
 // of the derivation — see the note in ./urgency.
 import { SIGNAL_URGENCIES, URGENCY_RED, urgencyOf } from "./urgency";
+import {
+  effectiveHelperTags,
+  helpNeededTagsOf,
+  matchesHelpTags,
+  wantsAnimalType,
+} from "./tags";
+import {
+  RecipientCandidate,
+  selectRecipients,
+} from "./recipientSelection";
 
 admin.initializeApp();
 
@@ -62,6 +72,53 @@ const SIGNAL_STATUSES: Record<number, string> = {
 const MAX_LOCATION_RADIUS_KM = 50;
 const MAX_REGION_RADIUS_KM = 100;
 
+// How many people a single signal should reach when that many are available.
+//
+// A FLOOR, never a ceiling: everyone whose helper tags match is notified even
+// if that is hundreds. It only matters when tag matching would otherwise leave
+// a signal seen by almost nobody — a thin area, or a need few people cover.
+//
+// **10 is a deliberate choice to over-reach during the mixed-version period.**
+// While old and new builds coexist, tag matching is lopsided in both
+// directions: a user on an old build has no tags, so only `rescue` signals
+// match them; and a signal from an old build is treated as `rescue`, so only
+// users who picked `rescue` match it. Both cases demote someone to backfill
+// who would previously have been notified outright — and the floor is what
+// stops that demotion turning into silence. With the enabled-user base still
+// under ten, it means everyone eligible hears about everything, which is the
+// intended trade while the population is this thin.
+//
+// The cost is real and worth naming: recipients can be outside the radius they
+// configured, and the app does not yet display the distance that would explain
+// it. Lower this to 0 if that becomes the complaint — 0 reproduces the pre-tag
+// behaviour exactly, including the empty set when nobody is in range, which a
+// floor of 1 does not. Pinned by the MIN_RECIPIENTS = 0 tests in
+// recipientSelection.test.ts, which stay as the description of that baseline.
+const MIN_RECIPIENTS = 10;
+
+// Radius (km) for the single widened re-scan used when the normal scan turns up
+// fewer than MIN_RECIPIENTS eligible people. Wide enough to cover Bulgaria from
+// any point in it, so a signal in a sparsely-covered region still reaches help.
+//
+// Cost is self-limiting: it only runs when few users were found, and Firestore
+// bills per document returned. WIDEN_MAX_CANDIDATES is the backstop for the one
+// case that is not self-limiting — a dense area where most users have
+// notifications off, where the raw scan is large but the eligible set is small.
+const WIDEN_RADIUS_KM = 250;
+const WIDEN_MAX_CANDIDATES = 500;
+
+// Documents the widened pass may read per geohash range. At 250 km the bounds
+// cover most of the country, so without this the "exceptional" pass is the
+// largest read in the whole fan-out — and while it *fires* only when few users
+// are eligible, "few eligible" is not "few documents": a region where most
+// users have push off has exactly that shape. geohashQueryBounds returns a
+// handful of ranges, so the real ceiling is a small multiple of this.
+//
+// Ordering is by geohash, not by distance, so the cap can drop someone nearer
+// than someone it keeps. That is acceptable for a last-resort backfill and is
+// the reason it is not applied to the narrow pass, which must stay exact.
+const WIDEN_PER_RANGE_LIMIT = 200;
+
 // How long cached Places API results stay fresh (vet clinics rarely change).
 const PLACES_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
@@ -74,6 +131,15 @@ interface UserNotificationPrefs {
   enabled: boolean;
   /** Absent means "never chose" — all types. Empty means none. */
   signalTypes?: number[];
+  /** Species filter. Same absent/empty rule as signalTypes. */
+  animalTypes?: string[];
+  /**
+   * Kinds of help this user can offer. **Absent and empty both mean "hasn't
+   * chosen"** and resolve to the fallback tag — the opposite of the two filters
+   * above, because this is a matching input, not an opt-out. See
+   * `effectiveHelperTags` in ./tags.
+   */
+  helperTags?: string[];
   locationTrackingEnabled: boolean;
   locationRadiusKm: number;
   regionOfInterest?: {
@@ -255,17 +321,23 @@ async function writeInboxEntries(
   }
 
   const { docId, ...content } = entry;
-  const now = admin.firestore.Timestamp.now();
-  const expiresAt = admin.firestore.Timestamp.fromMillis(
-    now.toMillis() + INBOX_RETENTION_DAYS * 24 * 60 * 60 * 1000
-  );
 
-  // Firestore rejects `undefined` values, and the per-type fields are optional.
-  const fields = Object.fromEntries(
-    Object.entries(content).filter(([, value]) => value !== undefined)
-  );
-
+  // Everything below is inside the try, including the timestamp arithmetic and
+  // the field filtering. It reads like setup that cannot fail, which is exactly
+  // why it was outside — and a throw there escaped this function and killed the
+  // push, the one thing the catch below says must never happen. Nothing between
+  // here and the return is allowed to reach the caller.
   try {
+    const now = admin.firestore.Timestamp.now();
+    const expiresAt = admin.firestore.Timestamp.fromMillis(
+      now.toMillis() + INBOX_RETENTION_DAYS * 24 * 60 * 60 * 1000
+    );
+
+    // Firestore rejects `undefined` values, and the per-type fields are optional.
+    const fields = Object.fromEntries(
+      Object.entries(content).filter(([, value]) => value !== undefined)
+    );
+
     // Read the counters *before* incrementing so the badge can be computed in
     // one batched RPC rather than a round trip per recipient after the fact.
     // `getAll` chunked at 300 mirrors the candidate load in handleSignalCreated.
@@ -391,7 +463,8 @@ async function sendNotificationsToUsers(
   userTokens: Map<string, string[]>,
   notification: { title: string; body: string },
   data: Record<string, string>,
-  badgeByUid?: Map<string, number>
+  badgeByUid?: Map<string, number>,
+  distanceByUid?: Map<string, number>
 ): Promise<void> {
   // Flattened to (token, uid) pairs: the uid selects the badge, and
   // cleanupInvalidTokens needs the tokens in the same order as the responses.
@@ -417,6 +490,20 @@ async function sendNotificationsToUsers(
     notification,
     data: {
       ...data,
+      // Per-recipient, unlike everything else here. Tag matching can reach a
+      // helper further away than the radius they configured, and a notification
+      // that does not say how far just reads as the radius setting being broken.
+      //
+      // **Nothing in the app reads this yet.** It is carried so the client can
+      // start showing it without a second server deploy, but until it does, the
+      // explanation it is supposed to provide does not reach anyone. That is a
+      // reason the client-side display is the next thing to land: with
+      // MIN_RECIPIENTS at 10 and a small user base, most recipients of most
+      // signals are reached by the backfill, so "why am I being told about
+      // something 40 km away" is a question the app currently cannot answer.
+      ...(distanceByUid?.has(uid)
+        ? { distanceKm: distanceByUid.get(uid)!.toFixed(1) }
+        : {}),
       click_action: "FLUTTER_NOTIFICATION_CLICK",
     },
     android: {
@@ -471,6 +558,106 @@ async function sendNotificationsToUsers(
 }
 
 /**
+ * Gather candidate recipients near `center` into the supplied maps.
+ *
+ * Two independent paths, because a user can be "near" a signal in two different
+ * senses and the data lives in two places:
+ *  - their tracked live position, in `userLocations/{uid}` (no preferences
+ *    there, so their user doc has to be loaded afterwards);
+ *  - a fixed region of interest, whose geohash is on the user doc itself, so
+ *    those queries can filter on `enabled` and return the doc in one go.
+ *
+ * Additive: results are merged into the maps rather than replacing them, so the
+ * widened second pass can reuse everything the first pass already paid for.
+ */
+async function collectCandidates(
+  center: [number, number],
+  locationRadiusKm: number,
+  regionRadiusKm: number,
+  usersById: Map<string, UserData>,
+  currentLocationByUid: Map<string, admin.firestore.GeoPoint>,
+  // Per-range read cap. The narrow pass leaves this off; the widened pass sets
+  // it, because at 250 km the bounds cover most of the country and nothing else
+  // limits what comes back. `WIDEN_MAX_CANDIDATES` only gates whether to widen
+  // at all, judged on the narrow pass — it says nothing about the size of the
+  // wide one, which is where the reads actually are.
+  perRangeLimit?: number
+): Promise<void> {
+  const capped = <T extends admin.firestore.Query>(q: T) =>
+    perRangeLimit ? q.limit(perRangeLimit) : q;
+
+  // Path 1: users whose tracked location is near the signal.
+  // Path 2: users whose region-of-interest covers the signal.
+  //
+  // Issued together. They read different collections and populate different
+  // maps, so there is no ordering between them — awaiting one before starting
+  // the other just added a round trip, and the widened pass pays it twice.
+  const locBounds = geohashQueryBounds(center, locationRadiusKm * 1000);
+  const regBounds = geohashQueryBounds(center, regionRadiusKm * 1000);
+  const [locSnaps, regSnaps] = await Promise.all([
+    Promise.all(
+      locBounds.map(([start, end]) =>
+        capped(
+          db
+            .collection("userLocations")
+            .orderBy("geohash")
+            .startAt(start)
+            .endAt(end)
+        ).get()
+      )
+    ),
+    Promise.all(
+      regBounds.map(([start, end]) =>
+        capped(
+          db
+            .collection("users")
+            .where("notificationPreferences.enabled", "==", true)
+            .orderBy("notificationPreferences.regionOfInterest.geohash")
+            .startAt(start)
+            .endAt(end)
+        ).get()
+      )
+    ),
+  ]);
+
+  for (const snap of locSnaps) {
+    for (const doc of snap.docs) {
+      const geopoint = doc.data().geopoint as
+        | admin.firestore.GeoPoint
+        | undefined;
+      if (geopoint) {
+        currentLocationByUid.set(doc.id, geopoint);
+      }
+    }
+  }
+
+  for (const snap of regSnaps) {
+    for (const doc of snap.docs) {
+      usersById.set(doc.id, doc.data() as UserData);
+    }
+  }
+
+  // Load user docs for location-path candidates not already fetched above.
+  const missingUids = [...currentLocationByUid.keys()].filter(
+    (uid) => !usersById.has(uid)
+  );
+  const chunks: Promise<admin.firestore.DocumentSnapshot[]>[] = [];
+  for (let i = 0; i < missingUids.length; i += 300) {
+    const refs = missingUids
+      .slice(i, i + 300)
+      .map((uid) => db.collection("users").doc(uid));
+    chunks.push(db.getAll(...refs));
+  }
+  for (const userDocs of await Promise.all(chunks)) {
+    for (const doc of userDocs) {
+      if (doc.exists) {
+        usersById.set(doc.id, doc.data() as UserData);
+      }
+    }
+  }
+}
+
+/**
  * Shared handler for signal creation (used by both prod and test triggers)
  */
 async function handleSignalCreated(
@@ -508,148 +695,168 @@ async function handleSignalCreated(
     signalGeopoint.longitude,
   ];
 
+  const signalTags = helpNeededTagsOf(signalData);
+  const animalType = signalData.animalType as string | undefined;
+
   // Candidate user docs keyed by uid, plus each candidate's live location (if any).
   const usersById = new Map<string, UserData>();
   const currentLocationByUid = new Map<string, admin.firestore.GeoPoint>();
 
-  // Path 1: users whose tracked location is near the signal. Their location
-  // lives in `userLocations/{uid}`; collect uids + geopoints, then load the
-  // matching user docs for preferences/tokens.
-  const locBounds = geohashQueryBounds(center, MAX_LOCATION_RADIUS_KM * 1000);
-  const locSnaps = await Promise.all(
-    locBounds.map(([start, end]) =>
-      db
-        .collection("userLocations")
-        .orderBy("geohash")
-        .startAt(start)
-        .endAt(end)
-        .get()
-    )
+  await collectCandidates(
+    center,
+    MAX_LOCATION_RADIUS_KM,
+    MAX_REGION_RADIUS_KM,
+    usersById,
+    currentLocationByUid
   );
-  for (const snap of locSnaps) {
-    for (const doc of snap.docs) {
-      const geopoint = doc.data().geopoint as
-        | admin.firestore.GeoPoint
-        | undefined;
-      if (geopoint) {
-        currentLocationByUid.set(doc.id, geopoint);
+
+  /**
+   * Turn the raw candidate docs into the shape the ranking works on, dropping
+   * anyone who fails a gate the floor is never allowed to override.
+   */
+  const buildCandidates = (): RecipientCandidate[] => {
+    const out: RecipientCandidate[] = [];
+
+    for (const [userId, userData] of usersById.entries()) {
+      // Skip users in the wrong mode
+      const userTestMode = userData.testMode === true;
+      if (userTestMode !== isTestMode) continue;
+
+      // Skip the signal reporter. They must also not count toward the floor —
+      // otherwise a signal in an empty area quietly reaches MIN_RECIPIENTS - 1.
+      if (reporterRef && reporterRef.id === userId) {
+        continue;
       }
-    }
-  }
 
-  // Path 2: users whose region-of-interest covers the signal. The region
-  // geohash is stored on the user doc, so these queries return full user docs.
-  const regBounds = geohashQueryBounds(center, MAX_REGION_RADIUS_KM * 1000);
-  const regSnaps = await Promise.all(
-    regBounds.map(([start, end]) =>
-      db
-        .collection("users")
-        .where("notificationPreferences.enabled", "==", true)
-        .orderBy("notificationPreferences.regionOfInterest.geohash")
-        .startAt(start)
-        .endAt(end)
-        .get()
-    )
-  );
-  for (const snap of regSnaps) {
-    for (const doc of snap.docs) {
-      usersById.set(doc.id, doc.data() as UserData);
-    }
-  }
-
-  // Load user docs for location-path candidates not already fetched above.
-  const missingUids = [...currentLocationByUid.keys()].filter(
-    (uid) => !usersById.has(uid)
-  );
-  for (let i = 0; i < missingUids.length; i += 300) {
-    const refs = missingUids
-      .slice(i, i + 300)
-      .map((uid) => db.collection("users").doc(uid));
-    const userDocs = await db.getAll(...refs);
-    for (const doc of userDocs) {
-      if (doc.exists) {
-        usersById.set(doc.id, doc.data() as UserData);
+      const prefs = userData.notificationPreferences;
+      if (!prefs || !prefs.enabled) {
+        continue;
       }
+
+      // Check signal type preference.
+      //
+      // Absent and empty mean opposite things. Absent is "never chose" and means
+      // all types: the onboarding sheet writes notificationPreferences as merged
+      // partial updates and never sets signalTypes, so every user who onboarded
+      // without opening the notification settings screen has no stored list.
+      // Empty is a deliberate "Deselect all" and means no types.
+      //
+      // The previous `length > 0` guard collapsed the two, so deselecting every
+      // type notified the user about everything.
+      if (prefs.signalTypes && !prefs.signalTypes.includes(signalType)) {
+        continue;
+      }
+
+      // Species filter — a hard gate for the same reason as signal type. The
+      // floor may stretch someone's radius, but never their explicit choice
+      // about what they want to hear about.
+      if (!wantsAnimalType(prefs, animalType)) {
+        continue;
+      }
+
+      // Nearest known position, and whether the signal is inside the radius the
+      // user actually configured. Both paths are measured so a user who is out
+      // of range on both still gets an ordering distance for the backfill.
+      let distanceKm = Infinity;
+      let withinOwnRadius = false;
+
+      const currentGeo = currentLocationByUid.get(userId);
+      if (prefs.locationTrackingEnabled && currentGeo) {
+        const distance = calculateDistanceKm(
+          signalGeopoint.latitude,
+          signalGeopoint.longitude,
+          currentGeo.latitude,
+          currentGeo.longitude
+        );
+        distanceKm = Math.min(distanceKm, distance);
+        if (distance <= (prefs.locationRadiusKm || 10)) {
+          withinOwnRadius = true;
+        }
+      }
+
+      if (prefs.regionOfInterest) {
+        const regionCenter = prefs.regionOfInterest.center;
+        const distance = calculateDistanceKm(
+          signalGeopoint.latitude,
+          signalGeopoint.longitude,
+          regionCenter.latitude,
+          regionCenter.longitude
+        );
+        distanceKm = Math.min(distanceKm, distance);
+        if (distance <= prefs.regionOfInterest.radiusKm) {
+          withinOwnRadius = true;
+        }
+      }
+
+      out.push({
+        uid: userId,
+        matchesTags: matchesHelpTags(signalTags, effectiveHelperTags(prefs)),
+        withinOwnRadius,
+        distanceKm,
+      });
     }
+
+    return out;
+  };
+
+  let candidates = buildCandidates();
+
+  // One widened re-scan when the normal bounds turned up too few people to hit
+  // the floor. Skipped when the raw scan was already large: that means a dense
+  // area where most users have push off, and widening would read a lot to find
+  // very little.
+  let widened = false;
+  if (
+    candidates.length < MIN_RECIPIENTS &&
+    usersById.size < WIDEN_MAX_CANDIDATES
+  ) {
+    widened = true;
+    await collectCandidates(
+      center,
+      WIDEN_RADIUS_KM,
+      WIDEN_RADIUS_KM,
+      usersById,
+      currentLocationByUid,
+      WIDEN_PER_RANGE_LIMIT
+    );
+    candidates = buildCandidates();
   }
 
+  const selection = selectRecipients(candidates, {
+    minRecipients: MIN_RECIPIENTS,
+  });
+
+  console.log(
+    `Fan-out ${signalId}: scanned=${usersById.size} eligible=${candidates.length} ` +
+      `widened=${widened} tiers A=${selection.tierCounts.a} C=${selection.tierCounts.c} ` +
+      `B=${selection.tierCounts.b} D=${selection.tierCounts.d} ` +
+      `selected=${selection.uids.length} backfilled=${selection.backfilled} ` +
+      `tags=[${signalTags.join(",")}] animal=${animalType ?? "-"}`
+  );
+
+  // Everyone selected gets the in-app inbox entry, whether or not they can be
+  // pushed to. A user with push disabled still wants to find this in the app.
+  const inboxRecipients = selection.uids;
   const userTokens: Map<string, string[]> = new Map();
-  // Everyone who passes the filters below, whether or not they can be pushed to.
-  // A user with push disabled still gets the in-app inbox entry.
-  const inboxRecipients: string[] = [];
+  // Built from the selected set only, not from every candidate. No finiteness
+  // re-check either: selectRecipients drops non-finite distances before tiering,
+  // so nothing it returns can have one.
+  const selected = new Set(inboxRecipients);
+  const distanceByUid = new Map(
+    candidates
+      .filter((c) => selected.has(c.uid))
+      .map((c) => [c.uid, c.distanceKm] as const)
+  );
 
-  for (const [userId, userData] of usersById.entries()) {
-    // Skip users in the wrong mode
-    const userTestMode = userData.testMode === true;
-    if (userTestMode !== isTestMode) continue;
-
-    // Skip the signal reporter
-    if (reporterRef && reporterRef.id === userId) {
-      continue;
-    }
-
-    const prefs = userData.notificationPreferences;
-    if (!prefs || !prefs.enabled) {
-      continue;
-    }
-
-    // Check signal type preference.
-    //
-    // Absent and empty mean opposite things. Absent is "never chose" and means
-    // all types: the onboarding sheet writes notificationPreferences as merged
-    // partial updates and never sets signalTypes, so every user who onboarded
-    // without opening the notification settings screen has no stored list.
-    // Empty is a deliberate "Deselect all" and means no types.
-    //
-    // The previous `length > 0` guard collapsed the two, so deselecting every
-    // type notified the user about everything.
-    if (prefs.signalTypes && !prefs.signalTypes.includes(signalType)) {
-      continue;
-    }
-
-    let shouldNotify = false;
-
-    // Check 1: User's current location (from userLocations/{uid})
-    const currentGeo = currentLocationByUid.get(userId);
-    if (prefs.locationTrackingEnabled && currentGeo) {
-      const distance = calculateDistanceKm(
-        signalGeopoint.latitude,
-        signalGeopoint.longitude,
-        currentGeo.latitude,
-        currentGeo.longitude
-      );
-
-      const radius = prefs.locationRadiusKm || 10;
-      if (distance <= radius) {
-        shouldNotify = true;
-      }
-    }
-
-    // Check 2: User's region of interest
-    if (!shouldNotify && prefs.regionOfInterest) {
-      const regionCenter = prefs.regionOfInterest.center;
-      const regionRadius = prefs.regionOfInterest.radiusKm;
-      const distance = calculateDistanceKm(
-        signalGeopoint.latitude,
-        signalGeopoint.longitude,
-        regionCenter.latitude,
-        regionCenter.longitude
-      );
-
-      if (distance <= regionRadius) {
-        shouldNotify = true;
-      }
-    }
-
-    if (shouldNotify) {
-      inboxRecipients.push(userId);
-      if (userData.fcmTokens && userData.fcmTokens.length > 0) {
-        userTokens.set(userId, userData.fcmTokens);
-      }
+  for (const uid of inboxRecipients) {
+    const tokens = usersById.get(uid)?.fcmTokens;
+    if (tokens && tokens.length > 0) {
+      userTokens.set(uid, tokens);
     }
   }
 
   if (inboxRecipients.length === 0) {
+    console.log(`Fan-out ${signalId}: no recipients`);
     return;
   }
 
@@ -687,8 +894,11 @@ async function handleSignalCreated(
       signalTitle: truncateForPayload(signalTitle),
       signalType: String(signalType),
       urgency: String(urgency),
+      helpNeededTags: signalTags.join(","),
+      ...(animalType ? { animalType } : {}),
     },
-    badgeByUid
+    badgeByUid,
+    distanceByUid
   );
 }
 

@@ -50,11 +50,58 @@
   "signalTypeWildAnimals": "Диви животни",
   "signalTypeOther": "Друго",
 
+  "helpTagRescue": "Спасяване",
+  "helpTagFoster": "Временен дом",
+  "helpTagTransport": "Транспорт",
+  "helpTagVetCare": "Ветеринарна помощ",
+  "helpTagFood": "Храна и материали",
+  "helpTagTrapping": "Улавяне",
+  "helpTagFundraising": "Набиране на средства",
+  "helpTagAdoption": "Осиновяване",
+  "helpTagBabyCare": "Грижа за новородени",
+
+  "helpTagRescueHelper": "Мога да отида при животно в нужда",
+  "helpTagFosterHelper": "Мога да приютя животно за известно време",
+  "helpTagTransportHelper": "Мога да превозя животно",
+  "helpTagVetCareHelper": "Мога да помогна с ветеринарен преглед или лечение",
+  "helpTagFoodHelper": "Мога да донеса храна или материали",
+  "helpTagTrappingHelper": "Мога да уловя животно или имам клетка",
+  "helpTagFundraisingHelper": "Мога да помогна със или да споделя набиране на средства",
+  "helpTagAdoptionHelper": "Търся да осиновя или мога да помогна с намиране на дом",
+  "helpTagBabyCareHelper": "Мога да храня с биберон или да се грижа за новородени",
+
+  "animalTypeCat": "Котка",
+  "animalTypeDog": "Куче",
+  "animalTypeOther": "Друго животно",
+
+  "helpNeeded": "Нужна помощ",
+  "animalType": "Животно",
+  "animalTypes": "Животни",
+  "helperTags": "Как мога да помогна",
+  "pleaseSelectHelpTag": "Моля, изберете поне един вид нужна помощ",
+  "pleaseSelectAnimalType": "Моля, изберете за какво животно се отнася сигналът",
+  "helpTagLimitReached": "Можете да изберете до {count} вида помощ",
+  "@helpTagLimitReached": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+
+  "helperTagsOnboardingTitle": "Как можете да помогнете?",
+  "helperTagsOnboardingIntro": "Изберете какво реално можете да направите и на кои животни можете да помогнете. Използваме това, за да ви изпращаме случаите, по които наистина можете да действате — можете да го промените по всяко време в настройките.",
+  "helperTagsOnboardingHelpSection": "С какво можете да помогнете?",
+  "helperTagsOnboardingAnimalSection": "На кои животни можете да помогнете?",
+  "helperTagsOnboardingContinue": "Продължи",
+  "helperTagsSaveFailed": "Изборът не можа да бъде запазен. Моля, опитайте отново.",
+
+  "selectAtLeastOneSignalType": "Изберете поне един вид сигнал или изключете известията",
+  "selectAtLeastOneAnimalType": "Изберете поне едно животно или изключете известията",
+  "selectAtLeastOneHelperTag": "Изберете поне един начин, по който можете да помогнете",
+
   "filterSignals": "Филтриране на сигнали",
   "toggleVetClinics": "Покажи/скрий ветеринарни клиники",
   "selectAll": "Избери всички",
   "clearAll": "Изчисти всички",
-  "deselectAll": "Премахни всички",
   "status": "Статус",
   "signalType": "Тип сигнал",
   "timeRange": "Времеви обхват",

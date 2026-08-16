@@ -131,6 +131,129 @@ class AppLocalizationsEn extends AppLocalizations {
   String get signalTypeOther => 'Other';
 
   @override
+  String get helpTagRescue => 'Rescue';
+
+  @override
+  String get helpTagFoster => 'Fostering';
+
+  @override
+  String get helpTagTransport => 'Transport';
+
+  @override
+  String get helpTagVetCare => 'Vet care';
+
+  @override
+  String get helpTagFood => 'Food & supplies';
+
+  @override
+  String get helpTagTrapping => 'Trapping';
+
+  @override
+  String get helpTagFundraising => 'Fundraising';
+
+  @override
+  String get helpTagAdoption => 'Adoption';
+
+  @override
+  String get helpTagBabyCare => 'Newborn care';
+
+  @override
+  String get helpTagRescueHelper => 'I can go to an animal in need';
+
+  @override
+  String get helpTagFosterHelper =>
+      'I can take an animal into my home for a while';
+
+  @override
+  String get helpTagTransportHelper => 'I can drive an animal somewhere';
+
+  @override
+  String get helpTagVetCareHelper => 'I can help with a vet visit or treatment';
+
+  @override
+  String get helpTagFoodHelper => 'I can bring food or supplies';
+
+  @override
+  String get helpTagTrappingHelper =>
+      'I can trap an animal, or I have a trap or cage';
+
+  @override
+  String get helpTagFundraisingHelper => 'I can help raise or share funds';
+
+  @override
+  String get helpTagAdoptionHelper =>
+      'I am looking to adopt, or can help find a home';
+
+  @override
+  String get helpTagBabyCareHelper => 'I can bottle-feed or care for newborns';
+
+  @override
+  String get animalTypeCat => 'Cat';
+
+  @override
+  String get animalTypeDog => 'Dog';
+
+  @override
+  String get animalTypeOther => 'Other animal';
+
+  @override
+  String get helpNeeded => 'Help needed';
+
+  @override
+  String get animalType => 'Animal';
+
+  @override
+  String get animalTypes => 'Animals';
+
+  @override
+  String get helperTags => 'How I can help';
+
+  @override
+  String get pleaseSelectHelpTag =>
+      'Please choose at least one kind of help needed';
+
+  @override
+  String get pleaseSelectAnimalType =>
+      'Please choose which animal this is about';
+
+  @override
+  String helpTagLimitReached(int count) {
+    return 'You can choose up to $count kinds of help';
+  }
+
+  @override
+  String get helperTagsOnboardingTitle => 'How can you help?';
+
+  @override
+  String get helperTagsOnboardingIntro =>
+      'Pick what you can realistically do, and which animals you can help. We use this to send you the cases you can actually act on — you can change it any time in settings.';
+
+  @override
+  String get helperTagsOnboardingHelpSection => 'What can you help with?';
+
+  @override
+  String get helperTagsOnboardingAnimalSection => 'Which animals can you help?';
+
+  @override
+  String get helperTagsOnboardingContinue => 'Continue';
+
+  @override
+  String get helperTagsSaveFailed =>
+      'Could not save your choices. Please try again.';
+
+  @override
+  String get selectAtLeastOneSignalType =>
+      'Choose at least one signal type, or turn notifications off';
+
+  @override
+  String get selectAtLeastOneAnimalType =>
+      'Choose at least one animal, or turn notifications off';
+
+  @override
+  String get selectAtLeastOneHelperTag =>
+      'Choose at least one way you can help';
+
+  @override
   String get filterSignals => 'Filter Signals';
 
   @override
@@ -141,9 +264,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get clearAll => 'Clear All';
-
-  @override
-  String get deselectAll => 'Deselect All';
 
   @override
   String get status => 'Status';

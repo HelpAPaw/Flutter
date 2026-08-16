@@ -41,7 +41,39 @@ service cloud.firestore {
              && request.resource.data.signalType is int
              && request.resource.data.signalType >= 0
              && request.resource.data.signalType <= 6
-             && isValidUrgency();
+             && isValidUrgency()
+             && isValidHelpNeededTags()
+             && isValidAnimalType();
+    }
+
+    // Bounds the help tags, but does NOT require the field — same reasoning as
+    // isValidUrgency. Builds released before the tag system are still in the
+    // wild and create signals with none; the fan-out defaults those to the
+    // fallback tag, so they still reach people. Requiring it here would break
+    // signal creation for everyone who has not updated.
+    //
+    // Tighten to mandatory only once adoption of the tagged build is high
+    // enough — that is step 3 of the rollout, and it is a production deploy.
+    //
+    // The size cap is a reach limit as much as a priority limit: tagging a
+    // signal with the whole vocabulary would make it match every user. The
+    // codes themselves are NOT validated against an allow-list, deliberately —
+    // a newer client may introduce a code this deployed ruleset has never heard
+    // of, and rejecting it would break the new build instead of the old one.
+    function isValidHelpNeededTags() {
+      return !('helpNeededTags' in request.resource.data)
+             || (request.resource.data.helpNeededTags is list
+                 && request.resource.data.helpNeededTags.size() > 0
+                 && request.resource.data.helpNeededTags.size() <= 3);
+    }
+
+    // Optional for the same reason, and left unconstrained beyond being a
+    // string so a future species cannot be rejected by an old ruleset.
+    function isValidAnimalType() {
+      return !('animalType' in request.resource.data)
+             || (request.resource.data.animalType is string
+                 && request.resource.data.animalType.size() > 0
+                 && request.resource.data.animalType.size() <= 32);
     }
 
     // Bounds the urgency level, but does NOT require the field.
@@ -113,7 +145,44 @@ service cloud.firestore {
     // document only — `users/{uid}/notifications/{id}` needs its own match below,
     // and so would any future subcollection.
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && request.auth.uid == userId;
+
+      // create/update and delete are split on purpose. `isValidHelperPrefs`
+      // dereferences `request.resource.data`, which is **null on a delete** — a
+      // combined `allow write` therefore errors and denies every delete,
+      // including the owner's own. That breaks `detachAnonymousData`, which
+      // deletes this doc and `userLocations/{uid}` in one try block: the first
+      // delete throws, the second never runs, and the abandoned uid keeps a live
+      // location doc that the fan-out still treats as a candidate.
+      allow create, update: if request.auth != null
+                            && request.auth.uid == userId
+                            && isValidHelperPrefs();
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Size caps on the tag/species preference lists.
+    //
+    // Only the owner can write here, so this is not an authorization boundary —
+    // it is a bound on how far one account can inflate the fan-out's work.
+    // Those lists are read for every candidate on every signal, and nothing
+    // else stops a client writing ten thousand entries into one.
+    //
+    // Codes are not checked against an allow-list, for the same reason as
+    // isValidHelpNeededTags: a newer app build must not be rejected by an older
+    // deployed ruleset. An unrecognised code simply never matches.
+    function isValidHelperPrefs() {
+      return isBoundedCodeList('helperTags', 32)
+             && isBoundedCodeList('animalTypes', 32);
+    }
+
+    // `field` under notificationPreferences is absent, or a list of at most
+    // `max` entries. Absent is always allowed: every writer of this document
+    // uses a merged partial write, so most updates touch none of these.
+    function isBoundedCodeList(field, max) {
+      return !('notificationPreferences' in request.resource.data)
+             || !(field in request.resource.data.notificationPreferences)
+             || (request.resource.data.notificationPreferences[field] is list
+                 && request.resource.data.notificationPreferences[field].size() <= max);
     }
 
     // In-app notification inbox, one document per notification per recipient.
@@ -237,8 +306,17 @@ service cloud.firestore {
       // is not a client-side cosmetic problem: the server reads it raw, so
       // `urgency: 42` makes every write look like an escalation
       // (`42 > 2`) and wakes every subscriber with a "Updated" push.
+      //
+      // The tag/species validators apply to both branches for the same reason,
+      // and the cap especially: `helpNeededTags` is a *reach* limit, so leaving
+      // update unvalidated means a reporter can create a compliant signal and
+      // then widen it to the whole vocabulary, matching every user in the
+      // fan-out's set intersection. The edit screen writes both fields on
+      // update, so this is the path that field actually travels.
       allow update: if request.auth != null
                     && isValidUrgency()
+                    && isValidHelpNeededTags()
+                    && isValidAnimalType()
                     && (isSignalReporter() || isStatusOnlyUpdate());
       // Only the signal's reporter may delete it
       allow delete: if request.auth != null && isSignalReporter();
@@ -260,6 +338,8 @@ service cloud.firestore {
       // Same rules as prod signals (see helpers above).
       allow update: if request.auth != null
                     && isValidUrgency()
+                    && isValidHelpNeededTags()
+                    && isValidAnimalType()
                     && (isSignalReporter() || isStatusOnlyUpdate());
       allow delete: if request.auth != null && isSignalReporter();
 

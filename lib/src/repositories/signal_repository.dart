@@ -58,6 +58,13 @@ class SignalWithId {
   /// Reads the already-parsed value rather than re-deriving from [rawData]:
   /// marker building calls this twice per signal per rebuild.
   int get urgency => signal.urgency;
+
+  /// What this case needs — [HelpTag.code] values. Empty for signals written
+  /// before the field existed.
+  List<String> get helpNeededTags => signal.helpNeededTags;
+
+  /// Which animal this is about, or null on pre-field signals.
+  String? get animalType => signal.animalType;
 }
 
 /// Abstract interface for signal CRUD operations and geo-queries
@@ -83,6 +90,8 @@ abstract class SignalRepository {
     required double longitude,
     required String reporterUserId,
     required int urgency,
+    required List<String> helpNeededTags,
+    required String animalType,
   });
 
   /// Update signal status
