@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:help_a_paw/l10n/app_localizations_en.dart';
 import 'package:help_a_paw/src/models/animal_type.dart';
 import 'package:help_a_paw/src/models/help_tag.dart';
 
@@ -79,6 +80,74 @@ void main() {
     );
   });
 
+  // The suffix rule is checked against *rendered output*, not against a second
+  // copy of the list. An earlier version compared two hand-written lists while
+  // the Dart labels came from ARB strings that neither list touched — so the
+  // guard passed even when the two runtimes disagreed. `HelpTag.isNeed` now
+  // drives `neededLabel`, and this compares that result to what the server
+  // would build.
+  test('both runtimes phrase the notification headline the same way', () {
+    final text = source.readAsStringSync();
+    final exempt =
+        _stringArray(text, 'HELP_TAGS_WITHOUT_NEEDED_SUFFIX').toSet();
+    final names = _stringRecord(text, 'HELP_TAG_NAMES');
+    final l10n = AppLocalizationsEn();
+
+    for (final tag in HelpTag.values) {
+      expect(
+        names.containsKey(tag.code),
+        isTrue,
+        reason: 'No HELP_TAG_NAMES entry for ${tag.code}: the push would fall '
+            'back to the raw code and read "${tag.code} needed".',
+      );
+
+      final serverHeadline =
+          exempt.contains(tag.code) ? names[tag.code]! : '${names[tag.code]!} needed';
+
+      expect(
+        tag.neededLabel(l10n),
+        serverHeadline,
+        reason: 'The push and the in-app inbox row would announce ${tag.code} '
+            'differently. The server builds English by suffixing " needed" '
+            'unless the code is in HELP_TAGS_WITHOUT_NEEDED_SUFFIX; the app '
+            'resolves a localized string per tag, gated on HelpTag.isNeed. '
+            'Nothing errors when these disagree.',
+      );
+    }
+  });
+
+  test('the server exempts exactly the tags Dart marks as not-a-need', () {
+    expect(
+      _stringArray(source.readAsStringSync(), 'HELP_TAGS_WITHOUT_NEEDED_SUFFIX'),
+      HelpTag.codesWithoutNeededSuffix,
+      reason: 'HELP_TAGS_WITHOUT_NEEDED_SUFFIX has drifted from the tags whose '
+          'HelpTag.isNeed is false.',
+    );
+  });
+
+  test('the share page has a Bulgarian name for every tag', () {
+    // The public share page is the one thing people see before installing, and
+    // it is the only bilingual part of the functions. A missing `bg` entry
+    // silently renders that tag in English for Bulgarian visitors.
+    final index = File('functions/src/index.ts').readAsStringSync();
+    final block = RegExp(r'bg:\s*\{(.*?)\n  \},', dotAll: true)
+        .firstMatch(index.substring(index.indexOf('HELP_TAG_NAMES_BY_LANG')));
+    expect(block, isNotNull,
+        reason: 'HELP_TAG_NAMES_BY_LANG.bg not found in functions/src/index.ts');
+
+    final named = RegExp(r'(\w+):\s*"')
+        .allMatches(block!.group(1)!)
+        .map((m) => m.group(1)!)
+        .toSet();
+
+    expect(
+      HelpTag.values.map((t) => t.code).where((c) => !named.contains(c)),
+      isEmpty,
+      reason: 'A tag missing from HELP_TAG_NAMES_BY_LANG.bg shows in English on '
+          'the public share page.',
+    );
+  });
+
   test('both sides agree on the per-signal tag cap', () {
     final text = source.readAsStringSync();
     final match =
@@ -92,6 +161,18 @@ void main() {
           'the server constant must describe the same limit.',
     );
   });
+}
+
+/// The `key: "value"` pairs of a `NAME: ... = { ... };` object literal.
+Map<String, String> _stringRecord(String source, String name) {
+  final match = RegExp('$name[^=]*=\\s*\\{(.*?)\\n\\};', dotAll: true)
+      .firstMatch(source);
+  expect(match, isNotNull, reason: '$name not found in functions/src/tags.ts');
+
+  return {
+    for (final m in RegExp(r'(\w+):\s*"([^"]*)"').allMatches(match!.group(1)!))
+      m.group(1)!: m.group(2)!,
+  };
 }
 
 /// The string literals of a `export const NAME = [...] as const;` array.

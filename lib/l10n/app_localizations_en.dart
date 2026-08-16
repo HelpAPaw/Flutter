@@ -110,37 +110,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get redAlertConfirmAction => 'Confirm Red Alert';
 
   @override
-  String get signalTypeEmergency => 'Emergency';
-
-  @override
-  String get signalTypeLostOrFound => 'Lost or Found';
-
-  @override
-  String get signalTypeBloodDonation => 'Blood donation';
-
-  @override
-  String get signalTypeHomeless => 'Homeless';
-
-  @override
-  String get signalTypeUnneuteredAnimals => 'Unneutered animals';
-
-  @override
-  String get signalTypeWildAnimals => 'Wild animals';
-
-  @override
-  String get signalTypeOther => 'Other';
-
-  @override
   String get helpTagRescue => 'Rescue';
+
+  @override
+  String get helpTagVetCare => 'Vet care';
+
+  @override
+  String get helpTagBloodDonation => 'Blood donation';
 
   @override
   String get helpTagFoster => 'Fostering';
 
   @override
-  String get helpTagTransport => 'Transport';
+  String get helpTagAdoption => 'Adoption';
 
   @override
-  String get helpTagVetCare => 'Vet care';
+  String get helpTagTransport => 'Transport';
 
   @override
   String get helpTagFood => 'Food & supplies';
@@ -149,26 +134,40 @@ class AppLocalizationsEn extends AppLocalizations {
   String get helpTagTrapping => 'Trapping';
 
   @override
-  String get helpTagFundraising => 'Fundraising';
-
-  @override
-  String get helpTagAdoption => 'Adoption';
+  String get helpTagNeutering => 'Neutering';
 
   @override
   String get helpTagBabyCare => 'Newborn care';
 
   @override
+  String get helpTagFundraising => 'Fundraising';
+
+  @override
+  String get helpTagLostFound => 'Lost / found';
+
+  @override
+  String get helpTagDangerWarning => 'Local danger';
+
+  @override
   String get helpTagRescueHelper => 'I can go to an animal in need';
+
+  @override
+  String get helpTagVetCareHelper => 'I can help with a vet visit or treatment';
+
+  @override
+  String get helpTagBloodDonationHelper =>
+      'My pet can donate blood, or I can help arrange a donor';
 
   @override
   String get helpTagFosterHelper =>
       'I can take an animal into my home for a while';
 
   @override
-  String get helpTagTransportHelper => 'I can drive an animal somewhere';
+  String get helpTagAdoptionHelper =>
+      'I am looking to adopt, or can help find a home';
 
   @override
-  String get helpTagVetCareHelper => 'I can help with a vet visit or treatment';
+  String get helpTagTransportHelper => 'I can drive an animal somewhere';
 
   @override
   String get helpTagFoodHelper => 'I can bring food or supplies';
@@ -178,14 +177,55 @@ class AppLocalizationsEn extends AppLocalizations {
       'I can trap an animal, or I have a trap or cage';
 
   @override
-  String get helpTagFundraisingHelper => 'I can help raise or share funds';
-
-  @override
-  String get helpTagAdoptionHelper =>
-      'I am looking to adopt, or can help find a home';
+  String get helpTagNeuteringHelper =>
+      'I can help get animals neutered or spayed';
 
   @override
   String get helpTagBabyCareHelper => 'I can bottle-feed or care for newborns';
+
+  @override
+  String get helpTagFundraisingHelper => 'I can help raise or share funds';
+
+  @override
+  String get helpTagLostFoundHelper =>
+      'Tell me about lost and found pets near me — I will keep an eye out';
+
+  @override
+  String get helpTagDangerWarningHelper =>
+      'Tell me about hazards in my area, such as poison bait or traps';
+
+  @override
+  String get helpTagRescueNeeded => 'Rescue needed';
+
+  @override
+  String get helpTagVetCareNeeded => 'Vet care needed';
+
+  @override
+  String get helpTagBloodDonationNeeded => 'Blood donation needed';
+
+  @override
+  String get helpTagFosterNeeded => 'Foster needed';
+
+  @override
+  String get helpTagAdoptionNeeded => 'Adoption needed';
+
+  @override
+  String get helpTagTransportNeeded => 'Transport needed';
+
+  @override
+  String get helpTagFoodNeeded => 'Food & supplies needed';
+
+  @override
+  String get helpTagTrappingNeeded => 'Trapping needed';
+
+  @override
+  String get helpTagNeuteringNeeded => 'Neutering needed';
+
+  @override
+  String get helpTagBabyCareNeeded => 'Newborn care needed';
+
+  @override
+  String get helpTagFundraisingNeeded => 'Fundraising needed';
 
   @override
   String get animalTypeCat => 'Cat';
@@ -242,8 +282,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'Could not save your choices. Please try again.';
 
   @override
-  String get selectAtLeastOneSignalType =>
-      'Choose at least one signal type, or turn notifications off';
+  String get settingsLoadFailed =>
+      'Your settings could not be loaded. Check your connection and try again — nothing has been changed.';
 
   @override
   String get selectAtLeastOneAnimalType =>
@@ -267,9 +307,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get status => 'Status';
-
-  @override
-  String get signalType => 'Signal Type';
 
   @override
   String get timeRange => 'Time Range';
@@ -417,11 +454,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get failedToLoadImage => 'Failed to load image';
-
-  @override
-  String signalTypeLabel(String type) {
-    return 'Signal type: $type';
-  }
 
   @override
   String get navigateMe => 'Navigate Me';
@@ -661,9 +693,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get clearRegion => 'Clear Region';
-
-  @override
-  String get signalTypes => 'Signal Types';
 
   @override
   String get settingsSaved => 'Settings saved';
@@ -1028,8 +1057,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationNewRedAlertTitle => 'Red Alert nearby';
 
   @override
-  String notificationNewSignalBody(String signalType, String signalTitle) {
-    return '$signalType: $signalTitle';
+  String notificationNewSignalBody(String headline, String signalTitle) {
+    return '$headline — $signalTitle';
+  }
+
+  @override
+  String notificationNewSignalBodyUrgent(String headline, String signalTitle) {
+    return 'Urgent · $headline — $signalTitle';
   }
 
   @override
@@ -1054,11 +1088,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String notificationNewCommentTitle(String signalTitle) {
     return 'New comment on: $signalTitle';
-  }
-
-  @override
-  String notificationNearbySignalBody(String signalType, String signalTitle) {
-    return '$signalType · $signalTitle';
   }
 
   @override

@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../models/help_tag.dart';
-import '../../models/signal.dart';
 import '../../viewmodels/map_view_model.dart';
 import '../help_tag_selector.dart';
 import '../urgency_picker.dart';
@@ -133,26 +132,6 @@ class _NewSignalFormState extends ConsumerState<NewSignalForm> {
                               ref
                                   .read(mapViewModelProvider.notifier)
                                   .updateFormPhoneNumber(value);
-                            },
-                          ),
-                          DropdownButton<String>(
-                            isExpanded: true,
-                            value: Signal.signalTypes[formState.signalType],
-                            items: Signal.signalTypes
-                                .map<DropdownMenuItem<String>>((String value) {
-                              return DropdownMenuItem<String>(
-                                value: value,
-                                child: Text(value),
-                              );
-                            }).toList(),
-                            onChanged: (String? newValue) {
-                              if (newValue != null) {
-                                final index =
-                                    Signal.signalTypes.indexOf(newValue);
-                                ref
-                                    .read(mapViewModelProvider.notifier)
-                                    .setFormSignalType(index);
-                              }
                             },
                           ),
                           const SizedBox(height: 8),

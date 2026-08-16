@@ -42,33 +42,46 @@
   "redAlertConfirmCheckbox": "I understand and confirm this is an immediate critical case",
   "redAlertConfirmAction": "Confirm Red Alert",
 
-  "signalTypeEmergency": "Emergency",
-  "signalTypeLostOrFound": "Lost or Found",
-  "signalTypeBloodDonation": "Blood donation",
-  "signalTypeHomeless": "Homeless",
-  "signalTypeUnneuteredAnimals": "Unneutered animals",
-  "signalTypeWildAnimals": "Wild animals",
-  "signalTypeOther": "Other",
 
   "helpTagRescue": "Rescue",
-  "helpTagFoster": "Fostering",
-  "helpTagTransport": "Transport",
   "helpTagVetCare": "Vet care",
+  "helpTagBloodDonation": "Blood donation",
+  "helpTagFoster": "Fostering",
+  "helpTagAdoption": "Adoption",
+  "helpTagTransport": "Transport",
   "helpTagFood": "Food & supplies",
   "helpTagTrapping": "Trapping",
-  "helpTagFundraising": "Fundraising",
-  "helpTagAdoption": "Adoption",
+  "helpTagNeutering": "Neutering",
   "helpTagBabyCare": "Newborn care",
+  "helpTagFundraising": "Fundraising",
+  "helpTagLostFound": "Lost / found",
+  "helpTagDangerWarning": "Local danger",
 
   "helpTagRescueHelper": "I can go to an animal in need",
-  "helpTagFosterHelper": "I can take an animal into my home for a while",
-  "helpTagTransportHelper": "I can drive an animal somewhere",
   "helpTagVetCareHelper": "I can help with a vet visit or treatment",
+  "helpTagBloodDonationHelper": "My pet can donate blood, or I can help arrange a donor",
+  "helpTagFosterHelper": "I can take an animal into my home for a while",
+  "helpTagAdoptionHelper": "I am looking to adopt, or can help find a home",
+  "helpTagTransportHelper": "I can drive an animal somewhere",
   "helpTagFoodHelper": "I can bring food or supplies",
   "helpTagTrappingHelper": "I can trap an animal, or I have a trap or cage",
-  "helpTagFundraisingHelper": "I can help raise or share funds",
-  "helpTagAdoptionHelper": "I am looking to adopt, or can help find a home",
+  "helpTagNeuteringHelper": "I can help get animals neutered or spayed",
   "helpTagBabyCareHelper": "I can bottle-feed or care for newborns",
+  "helpTagFundraisingHelper": "I can help raise or share funds",
+  "helpTagLostFoundHelper": "Tell me about lost and found pets near me — I will keep an eye out",
+  "helpTagDangerWarningHelper": "Tell me about hazards in my area, such as poison bait or traps",
+
+  "helpTagRescueNeeded": "Rescue needed",
+  "helpTagVetCareNeeded": "Vet care needed",
+  "helpTagBloodDonationNeeded": "Blood donation needed",
+  "helpTagFosterNeeded": "Foster needed",
+  "helpTagAdoptionNeeded": "Adoption needed",
+  "helpTagTransportNeeded": "Transport needed",
+  "helpTagFoodNeeded": "Food & supplies needed",
+  "helpTagTrappingNeeded": "Trapping needed",
+  "helpTagNeuteringNeeded": "Neutering needed",
+  "helpTagBabyCareNeeded": "Newborn care needed",
+  "helpTagFundraisingNeeded": "Fundraising needed",
 
   "animalTypeCat": "Cat",
   "animalTypeDog": "Dog",
@@ -93,8 +106,8 @@
   "helperTagsOnboardingAnimalSection": "Which animals can you help?",
   "helperTagsOnboardingContinue": "Continue",
   "helperTagsSaveFailed": "Could not save your choices. Please try again.",
+  "settingsLoadFailed": "Your settings could not be loaded. Check your connection and try again — nothing has been changed.",
 
-  "selectAtLeastOneSignalType": "Choose at least one signal type, or turn notifications off",
   "selectAtLeastOneAnimalType": "Choose at least one animal, or turn notifications off",
   "selectAtLeastOneHelperTag": "Choose at least one way you can help",
 
@@ -103,7 +116,6 @@
   "selectAll": "Select All",
   "clearAll": "Clear All",
   "status": "Status",
-  "signalType": "Signal Type",
   "timeRange": "Time Range",
   "last24Hours": "Last 24 hours",
   "last7Days": "Last 7 days",
@@ -169,12 +181,6 @@
     }
   },
   "failedToLoadImage": "Failed to load image",
-  "signalTypeLabel": "Signal type: {type}",
-  "@signalTypeLabel": {
-    "placeholders": {
-      "type": {"type": "String"}
-    }
-  },
   "navigateMe": "Navigate Me",
   "chooseNavigationApp": "Choose Navigation App",
   "cannotNavigate": "No navigation apps found on this device.",
@@ -306,7 +312,6 @@
   },
   "tapToSelectArea": "Tap to select an area on the map",
   "clearRegion": "Clear Region",
-  "signalTypes": "Signal Types",
   "settingsSaved": "Settings saved",
   "failedToSaveSettings": "Failed to save settings",
   "locationPermissionRequired": "Location permission is required for this feature",
@@ -489,10 +494,17 @@
   "@notificationNewSignalTitle": {
     "description": "Inbox row title for a signal reported near the user. The stored push text is English-only, so the inbox row is rendered from these keys instead."
   },
-  "notificationNewSignalBody": "{signalType}: {signalTitle}",
+  "notificationNewSignalBody": "{headline} — {signalTitle}",
   "@notificationNewSignalBody": {
     "placeholders": {
-      "signalType": {"type": "String"},
+      "headline": {"type": "String"},
+      "signalTitle": {"type": "String"}
+    }
+  },
+  "notificationNewSignalBodyUrgent": "Urgent · {headline} — {signalTitle}",
+  "@notificationNewSignalBodyUrgent": {
+    "placeholders": {
+      "headline": {"type": "String"},
       "signalTitle": {"type": "String"}
     }
   },
@@ -516,13 +528,6 @@
   "notificationNewCommentTitle": "New comment on: {signalTitle}",
   "@notificationNewCommentTitle": {
     "placeholders": {
-      "signalTitle": {"type": "String"}
-    }
-  },
-  "notificationNearbySignalBody": "{signalType} · {signalTitle}",
-  "@notificationNearbySignalBody": {
-    "placeholders": {
-      "signalType": {"type": "String"},
       "signalTitle": {"type": "String"}
     }
   },

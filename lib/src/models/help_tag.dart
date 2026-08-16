@@ -34,10 +34,27 @@ List<String> toggledCode(List<String> current, String code, {int? max}) {
 /// between them drift, and the drift is silent — a helper simply stops being
 /// notified, with no error anywhere.
 ///
+/// **This is also the signal's category.** There used to be a separate
+/// `signalType` (0–6: Emergency, Lost or Found, Blood donation, Homeless,
+/// Unneutered animals, Wild animals, Other), but four of its seven values were
+/// restatements of fields that now exist in their own right — Emergency is
+/// `urgency == red`, Blood donation and Unneutered animals are tags, Wild
+/// animals is `animalType == other`. The deciding case was an injured animal:
+/// master spec §5 uses it as *the* worked example of Red urgency and gives it no
+/// category at all, because an injured animal simply *is* red + `[rescue,
+/// vetCare]`. Master spec §4.2 makes the main category the top-priority need, so
+/// `helpNeededTags[0]` is that category and no second axis is needed.
+///
 /// Species is deliberately **not** encoded here. "Can help with cats" crossed
-/// with nine needs is the cross-product the spec's 27-tag list spells out by
+/// with every need is the cross-product the spec's 27-tag list spells out by
 /// hand; the app keeps the two axes independent and matches [AnimalType]
 /// separately. See `lib/src/models/animal_type.dart`.
+///
+/// Two of the codes — [lostFound] and [dangerWarning] — are honestly a strain on
+/// "both sides": they describe an *interest* rather than an ability. That is
+/// modelled as [isNeed], which drives both their "tell me about…" wording and
+/// their plain [neededLabel]. **If a third such code ever appears, that is the
+/// signal this model really does want a second axis after all.**
 ///
 /// [code] is the value persisted in Firestore. It is a **stable, opaque
 /// identifier** — never rename or reuse one once it has shipped, because both
@@ -45,22 +62,45 @@ List<String> toggledCode(List<String> current, String code, {int? max}) {
 /// the display order.
 enum HelpTag {
   rescue(code: 'rescue', icon: Icons.support),
-  foster(code: 'foster', icon: Icons.house),
-  transport(code: 'transport', icon: Icons.directions_car),
   vetCare(code: 'vetCare', icon: Icons.medical_services),
+  bloodDonation(code: 'bloodDonation', icon: Icons.bloodtype),
+  foster(code: 'foster', icon: Icons.house),
+  adoption(code: 'adoption', icon: Icons.favorite),
+  transport(code: 'transport', icon: Icons.directions_car),
   food(code: 'food', icon: Icons.restaurant),
   trapping(code: 'trapping', icon: Icons.grid_on),
+  neutering(code: 'neutering', icon: Icons.healing),
+  babyCare(code: 'babyCare', icon: Icons.child_care),
   fundraising(code: 'fundraising', icon: Icons.volunteer_activism),
-  adoption(code: 'adoption', icon: Icons.favorite),
-  babyCare(code: 'babyCare', icon: Icons.child_care);
+  lostFound(code: 'lostFound', icon: Icons.search, isNeed: false),
+  dangerWarning(code: 'dangerWarning', icon: Icons.warning_amber, isNeed: false);
 
-  const HelpTag({required this.code, required this.icon});
+  const HelpTag({
+    required this.code,
+    required this.icon,
+    this.isNeed = true,
+  });
 
   /// Stable identifier persisted in Firestore. Never change or reuse.
   final String code;
 
   /// Icon shown on the selector chips and on signal details.
   final IconData icon;
+
+  /// Whether this tag names something a case *asks for*.
+  ///
+  /// True for eleven of the thirteen. [lostFound] and [dangerWarning] describe a
+  /// situation instead — a lost dog is not "lost / found needed" — so
+  /// [neededLabel] leaves them as their plain [label], and their
+  /// [helperDescription] is worded "tell me about…" rather than "I can…".
+  ///
+  /// **This flag is the behaviour, not a note about it.** It drives
+  /// [neededLabel] and derives [codesWithoutNeededSuffix], which is what the
+  /// cross-runtime guard compares against `HELP_TAGS_WITHOUT_NEEDED_SUFFIX`. An
+  /// earlier version kept the exemption as a hand-written list beside an
+  /// exhaustive switch that ignored it, so the guard passed while the two
+  /// runtimes disagreed.
+  final bool isNeed;
 
   /// The tag every user and signal falls back to.
   ///
@@ -81,6 +121,47 @@ enum HelpTag {
   /// Every code, for validation and for building selector UIs.
   static final List<String> allCodes =
       List.unmodifiable(values.map((t) => t.code));
+
+  /// Codes whose [neededLabel] is **not** the "X needed" phrasing.
+  ///
+  /// Derived from [isNeed] rather than hand-written, so it cannot disagree with
+  /// the labels it describes. Mirrored by `HELP_TAGS_WITHOUT_NEEDED_SUFFIX` in
+  /// `functions/src/tags.ts`, which builds English push text by suffixing
+  /// `" needed"` to everything else, and compared against it by
+  /// `test/help_tag_vocabulary_guard_test.dart`. A divergence is silent — it
+  /// shows up only as one runtime emitting "Lost / found needed" and the other
+  /// not.
+  static final List<String> codesWithoutNeededSuffix = List.unmodifiable(
+    values.where((t) => !t.isNeed).map((t) => t.code),
+  );
+
+  /// The headline tag for [codes] — the case's category.
+  ///
+  /// Element 0 is the category (master spec §4.2), so this takes it verbatim
+  /// rather than scanning for the first code it recognises. **Matching the
+  /// server matters more than rendering something prettier**: `helpTagHeadline`
+  /// in `functions/src/tags.ts` uses `[0]` too, so a signal from a newer client
+  /// tagged `['newCode', 'foster']` must not headline as "newCode needed" in the
+  /// push and "Foster needed" in the inbox row for the same document.
+  ///
+  /// Falls back to [fallback] for an empty list or an unrecognised code — the
+  /// app has no label for the latter, and the server's raw-code rendering is not
+  /// available to it.
+  static HelpTag primaryOf(Iterable<String> codes) {
+    final first = codes.isEmpty ? null : codes.first;
+    return (first == null ? null : fromCode(first)) ?? fallback;
+  }
+
+  /// [codes] as the matching layer sees them — never empty.
+  ///
+  /// The Dart mirror of `helpNeededTagsOf` in `functions/src/tags.ts`: a signal
+  /// written before tags existed asks for [fallback], so it still reaches the
+  /// people who default to it. Every Dart caller that needs "what is this signal
+  /// asking for" goes through here rather than open-coding the substitution,
+  /// which is how the map, the catch-up and the fan-out stay in agreement about
+  /// what an untagged signal is.
+  static List<String> effectiveCodes(List<String> codes) =>
+      codes.isEmpty ? [fallback.code] : codes;
 
   /// Resolve a persisted [code], or null if it is unknown.
   ///
@@ -105,22 +186,74 @@ enum HelpTag {
     switch (this) {
       case HelpTag.rescue:
         return l10n.helpTagRescue;
-      case HelpTag.foster:
-        return l10n.helpTagFoster;
-      case HelpTag.transport:
-        return l10n.helpTagTransport;
       case HelpTag.vetCare:
         return l10n.helpTagVetCare;
+      case HelpTag.bloodDonation:
+        return l10n.helpTagBloodDonation;
+      case HelpTag.foster:
+        return l10n.helpTagFoster;
+      case HelpTag.adoption:
+        return l10n.helpTagAdoption;
+      case HelpTag.transport:
+        return l10n.helpTagTransport;
       case HelpTag.food:
         return l10n.helpTagFood;
       case HelpTag.trapping:
         return l10n.helpTagTrapping;
-      case HelpTag.fundraising:
-        return l10n.helpTagFundraising;
-      case HelpTag.adoption:
-        return l10n.helpTagAdoption;
+      case HelpTag.neutering:
+        return l10n.helpTagNeutering;
       case HelpTag.babyCare:
         return l10n.helpTagBabyCare;
+      case HelpTag.fundraising:
+        return l10n.helpTagFundraising;
+      case HelpTag.lostFound:
+        return l10n.helpTagLostFound;
+      case HelpTag.dangerWarning:
+        return l10n.helpTagDangerWarning;
+    }
+  }
+
+  /// Headline form for a notification — "Rescue needed", not "Rescue".
+  ///
+  /// A **separate localized string, deliberately not `label` + " needed"**. The
+  /// suffix works in English, which is all the server emits, but the notification
+  /// inbox is localized on the client and Bulgarian does not build this by
+  /// suffixing: "Rescue needed" is "Търси се спасяване", not "Спасяване needed".
+  ///
+  /// Tags with [isNeed] false return their plain [label] — a lost dog is not
+  /// "lost / found needed". That branch is taken before the switch, so those two
+  /// need no ARB key of their own and cannot drift from their plain label.
+  String neededLabel(AppLocalizations l10n) {
+    if (!isNeed) return label(l10n);
+
+    switch (this) {
+      case HelpTag.rescue:
+        return l10n.helpTagRescueNeeded;
+      case HelpTag.vetCare:
+        return l10n.helpTagVetCareNeeded;
+      case HelpTag.bloodDonation:
+        return l10n.helpTagBloodDonationNeeded;
+      case HelpTag.foster:
+        return l10n.helpTagFosterNeeded;
+      case HelpTag.adoption:
+        return l10n.helpTagAdoptionNeeded;
+      case HelpTag.transport:
+        return l10n.helpTagTransportNeeded;
+      case HelpTag.food:
+        return l10n.helpTagFoodNeeded;
+      case HelpTag.trapping:
+        return l10n.helpTagTrappingNeeded;
+      case HelpTag.neutering:
+        return l10n.helpTagNeuteringNeeded;
+      case HelpTag.babyCare:
+        return l10n.helpTagBabyCareNeeded;
+      case HelpTag.fundraising:
+        return l10n.helpTagFundraisingNeeded;
+      // Handled by the `!isNeed` branch above, but still listed so that adding
+      // a tag stays a compile error here.
+      case HelpTag.lostFound:
+      case HelpTag.dangerWarning:
+        return label(l10n);
     }
   }
 
@@ -134,22 +267,30 @@ enum HelpTag {
     switch (this) {
       case HelpTag.rescue:
         return l10n.helpTagRescueHelper;
-      case HelpTag.foster:
-        return l10n.helpTagFosterHelper;
-      case HelpTag.transport:
-        return l10n.helpTagTransportHelper;
       case HelpTag.vetCare:
         return l10n.helpTagVetCareHelper;
+      case HelpTag.bloodDonation:
+        return l10n.helpTagBloodDonationHelper;
+      case HelpTag.foster:
+        return l10n.helpTagFosterHelper;
+      case HelpTag.adoption:
+        return l10n.helpTagAdoptionHelper;
+      case HelpTag.transport:
+        return l10n.helpTagTransportHelper;
       case HelpTag.food:
         return l10n.helpTagFoodHelper;
       case HelpTag.trapping:
         return l10n.helpTagTrappingHelper;
-      case HelpTag.fundraising:
-        return l10n.helpTagFundraisingHelper;
-      case HelpTag.adoption:
-        return l10n.helpTagAdoptionHelper;
+      case HelpTag.neutering:
+        return l10n.helpTagNeuteringHelper;
       case HelpTag.babyCare:
         return l10n.helpTagBabyCareHelper;
+      case HelpTag.fundraising:
+        return l10n.helpTagFundraisingHelper;
+      case HelpTag.lostFound:
+        return l10n.helpTagLostFoundHelper;
+      case HelpTag.dangerWarning:
+        return l10n.helpTagDangerWarningHelper;
     }
   }
 }

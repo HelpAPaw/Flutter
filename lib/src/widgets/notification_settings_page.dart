@@ -9,7 +9,6 @@ import '../services/auth_service.dart';
 import '../models/animal_type.dart';
 import '../models/help_tag.dart';
 import '../models/notification_preferences.dart';
-import '../models/signal.dart';
 import '../services/location_service.dart';
 import '../services/notification_service.dart';
 import 'help_tag_selector.dart';
@@ -25,11 +24,21 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   bool _notificationsEnabled = false;
   bool _locationTrackingEnabled = false;
   double _locationRadiusKm = 10.0;
-  late List<int> _selectedSignalTypes;
   late List<String> _selectedAnimalTypes;
   List<String> _selectedHelperTags = const [];
   Map<String, dynamic>? _regionOfInterest;
   bool _isLoading = true;
+
+  /// Whether the stored preferences were actually read.
+  ///
+  /// False after a read that threw (offline, App Check, timeout) **or** after a
+  /// session that never materialised. Either way the screen would be showing its
+  /// *defaults* — notifications off, no helper tags — which look exactly like a
+  /// real configuration but are not one, and writing them back would destroy
+  /// whatever the user actually had. So the screen renders an error with a Retry
+  /// instead of an editor: refusing at the write would accept every tap and then
+  /// reject it, which reads as the app being broken rather than offline.
+  bool _loaded = false;
 
   @override
   void initState() {
@@ -38,18 +47,19 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   }
 
   Future<void> _loadPreferences() async {
-    // "Never chose" means every type, so the unselected-yet screen shows all
-    // types ticked — matching what the fan-out actually does for these users.
-    // A *stored* empty list is different and must survive as empty: it can only
-    // have come from the old "Deselect all" button, and those users deliberately
-    // receive nothing. Overwriting it here would silently opt them back in.
-    _selectedSignalTypes = List.generate(Signal.signalTypes.length, (i) => i);
+    // "Never chose" means every species, so the unselected-yet screen shows all
+    // of them ticked — matching what the fan-out actually does for these users.
+    // A *stored* empty list is different and must survive as empty: those users
+    // deliberately receive nothing, and overwriting it here would silently opt
+    // them back in.
     _selectedAnimalTypes = List.of(AnimalType.allCodes);
 
     // Preferences hang off a uid, so an anonymous session will do — but there
     // has to be one.
     final user = await AuthService().ensureAnonymousSession();
     if (user == null) {
+      // Not loaded: a session appearing later must not let the defaults on
+      // screen be written over real stored preferences.
       setState(() => _isLoading = false);
       return;
     }
@@ -72,8 +82,6 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
             _notificationsEnabled = typed.enabled;
             _locationTrackingEnabled = typed.locationTrackingEnabled;
             _locationRadiusKm = typed.locationRadiusKm;
-            _selectedSignalTypes = typed.signalTypes ??
-                List.generate(Signal.signalTypes.length, (i) => i);
             _selectedAnimalTypes =
                 typed.animalTypes ?? List.of(AnimalType.allCodes);
             _selectedHelperTags = typed.helperTags ?? const [];
@@ -81,8 +89,9 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
           });
         }
       }
+      _loaded = true;
     } catch (_) {
-      // Ignore errors loading preferences
+      // Left false: see [_loaded].
     }
 
     setState(() => _isLoading = false);
@@ -102,7 +111,6 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
     // `notificationsEnabled` overrides the current field so the master toggle
     // can ask "would this be valid once I turn it on?" before doing anything.
     if (!(notificationsEnabled ?? _notificationsEnabled)) return null;
-    if (_selectedSignalTypes.isEmpty) return l10n.selectAtLeastOneSignalType;
     if (_selectedAnimalTypes.isEmpty) return l10n.selectAtLeastOneAnimalType;
     if (_selectedHelperTags.isEmpty) return l10n.selectAtLeastOneHelperTag;
     return null;
@@ -127,7 +135,6 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
             'enabled': _notificationsEnabled,
             'locationTrackingEnabled': _locationTrackingEnabled,
             'locationRadiusKm': _locationRadiusKm,
-            'signalTypes': _selectedSignalTypes,
             'animalTypes': _selectedAnimalTypes,
             'helperTags': _selectedHelperTags,
             if (_regionOfInterest != null) 'regionOfInterest': _regionOfInterest,
@@ -236,35 +243,28 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   /// One applier for all three lists because the rule is one rule; the three
   /// sites previously repeated build-check-set-save verbatim, so a fourth
   /// filter meant a fourth copy.
+  /// [alwaysRequired] lists may never be emptied even with notifications off.
+  ///
+  /// That is the difference between a *filter* and the *gate's input*.
+  /// `animalTypes` is a filter: empty means "no species", which only matters
+  /// while notifications are on. `helperTags` is what `HelperTagsGate` keys off
+  /// — emptying it makes `hasChosenHelperTags` false, so the next launch
+  /// replaces the map with the non-skippable onboarding page. Someone who
+  /// turned notifications off and then tidied their tags would be dragged back
+  /// through mandatory onboarding for it.
   void _applySelection<T>(
     List<T> next,
     String emptyMessage,
-    void Function(List<T>) assign,
-  ) {
-    if (_notificationsEnabled && next.isEmpty) {
+    void Function(List<T>) assign, {
+    bool alwaysRequired = false,
+  }) {
+    if ((alwaysRequired || _notificationsEnabled) && next.isEmpty) {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(emptyMessage)));
       return;
     }
 
     setState(() => assign(next));
-    _savePreferences();
-  }
-
-  void _toggleSignalType(int type, bool selected) {
-    _applySelection(
-      selected
-          ? [..._selectedSignalTypes, type]
-          : _selectedSignalTypes.where((t) => t != type).toList(),
-      AppLocalizations.of(context).selectAtLeastOneSignalType,
-      (v) => _selectedSignalTypes = v,
-    );
-  }
-
-  void _selectAllSignalTypes() {
-    setState(() {
-      _selectedSignalTypes = List.generate(Signal.signalTypes.length, (i) => i);
-    });
     _savePreferences();
   }
 
@@ -277,7 +277,34 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _buildSettingsContent(),
+          : _loaded
+              ? _buildSettingsContent()
+              : _buildLoadFailed(l10n),
+    );
+  }
+
+  /// Shown when the preferences could not be read. See [_loaded].
+  Widget _buildLoadFailed(AppLocalizations l10n) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.cloud_off, size: 48, color: Colors.grey),
+            const SizedBox(height: 16),
+            Text(l10n.settingsLoadFailed, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                setState(() => _isLoading = true);
+                _loadPreferences();
+              },
+              child: Text(l10n.retry),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -425,6 +452,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
               toggledCode(_selectedHelperTags, code),
               l10n.selectAtLeastOneHelperTag,
               (v) => _selectedHelperTags = v,
+              alwaysRequired: true,
             ),
           ),
         ),
@@ -444,34 +472,10 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
             ),
           ),
         ),
-        const Divider(),
+        // No signal-type section: the preference stopped being read by the
+        // fan-out (SPECIFICATION §4.4), and a toggle nothing honours is worse
+        // than no toggle.
 
-        // Signal types
-        _buildSectionHeader(l10n.signalTypes),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              TextButton(
-                onPressed: _notificationsEnabled ? _selectAllSignalTypes : null,
-                child: Text(l10n.selectAll),
-              ),
-              // No "Deselect all". It was the only way to produce an empty
-              // list, which the fan-out reads as "notify me about nothing" —
-              // indistinguishable from the app being broken. Turning
-              // notifications off is the supported way to receive nothing.
-            ],
-          ),
-        ),
-        ...List.generate(Signal.signalTypes.length, (index) {
-          return CheckboxListTile(
-            title: Text(Signal.getLocalizedSignalTypeName(context, index)),
-            value: _selectedSignalTypes.contains(index),
-            onChanged: _notificationsEnabled
-                ? (value) => _toggleSignalType(index, value ?? false)
-                : null,
-          );
-        }),
         const SizedBox(height: 32),
       ],
     );

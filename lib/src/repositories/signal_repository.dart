@@ -50,7 +50,6 @@ class SignalWithId {
 
   GeoPoint get location => rawData['location']['geopoint'] as GeoPoint;
   int get status => rawData['status'] ?? 0;
-  int get signalType => rawData['signalType'] ?? 0;
 
   /// Urgency code, falling back to the status-derived value for documents
   /// written before the urgency system. See [Signal.urgencyFrom].
@@ -85,7 +84,6 @@ abstract class SignalRepository {
     required String title,
     required String description,
     required String phoneNumber,
-    required int signalType,
     required double latitude,
     required double longitude,
     required String reporterUserId,

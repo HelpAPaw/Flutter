@@ -139,7 +139,6 @@ before(async () => {
     const signal = (uid) => ({
       title: 'Injured dog near the park',
       description: 'Limping, seems friendly.',
-      signalType: 0,
       status: 0,
       location: {
         geopoint: { latitude: 42.6977, longitude: 23.3219 },

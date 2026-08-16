@@ -38,9 +38,11 @@ service cloud.firestore {
              && request.resource.data.title.size() <= 300
              && request.resource.data.description is string
              && request.resource.data.description.size() <= 10000
-             && request.resource.data.signalType is int
-             && request.resource.data.signalType >= 0
-             && request.resource.data.signalType <= 6
+             // `signalType` is deliberately NOT required, and not bounded
+             // either. Signal types were folded into the help-tag vocabulary
+             // and nothing writes the field any more, but builds released
+             // before that still send it — mandating or range-checking a
+             // retired field would only ever break an old client.
              && isValidUrgency()
              && isValidHelpNeededTags()
              && isValidAnimalType();
@@ -54,6 +56,10 @@ service cloud.firestore {
     //
     // Tighten to mandatory only once adoption of the tagged build is high
     // enough — that is step 3 of the rollout, and it is a production deploy.
+    // This did NOT change when signal types were retired: tags are now the only
+    // thing describing what a signal needs, which makes requiring them more
+    // tempting and no less breaking. An old build that cannot create a signal
+    // at all is a worse outcome than one whose signals default to `rescue`.
     //
     // The size cap is a reach limit as much as a priority limit: tagging a
     // signal with the whole vocabulary would make it match every user. The
@@ -202,7 +208,7 @@ service cloud.firestore {
                     && request.auth.uid == userId
                     && request.resource.data.keys().hasOnly([
                          'type', 'title', 'body', 'read', 'signalId',
-                         'signalTitle', 'signalType', 'testMode',
+                         'signalTitle', 'helpNeededTags', 'testMode',
                          'createdAt', 'expiresAt'
                        ])
                     && request.resource.data.type == 'nearby_signal'
@@ -215,7 +221,12 @@ service cloud.firestore {
                     && request.resource.data.body.size() <= 1000
                     && request.resource.data.signalTitle is string
                     && request.resource.data.signalTitle.size() <= 300
-                    && request.resource.data.signalType is int
+                    // Bounded, not allow-listed: a newer client may know a tag
+                    // code this deployed ruleset does not, and rejecting it
+                    // would break the new build rather than the old one. Same
+                    // reasoning as isValidHelpNeededTags.
+                    && request.resource.data.helpNeededTags is list
+                    && request.resource.data.helpNeededTags.size() <= 3
                     && request.resource.data.testMode is bool
                     && request.resource.data.createdAt is timestamp
                     && request.resource.data.expiresAt is timestamp;

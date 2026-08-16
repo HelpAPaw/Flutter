@@ -17,6 +17,8 @@ import { SIGNAL_URGENCIES, URGENCY_RED, urgencyOf } from "./urgency";
 import {
   effectiveHelperTags,
   helpNeededTagsOf,
+  helpTagHeadline,
+  HELP_TAG_NAMES,
   matchesHelpTags,
   wantsAnimalType,
 } from "./tags";
@@ -39,17 +41,6 @@ const smtpUser = defineSecret("SMTP_USER");
 const smtpPass = defineSecret("SMTP_PASS");
 const feedbackRecipient = defineSecret("FEEDBACK_RECIPIENT");
 const messaging = admin.messaging();
-
-// Signal type names for notification messages
-const SIGNAL_TYPES = [
-  "Emergency",
-  "Lost or Found",
-  "Blood donation",
-  "Homeless",
-  "Unneutered animals",
-  "Wild animals",
-  "Other",
-];
 
 // Signal status names, keyed by the stable Firestore status `code` (NOT array
 // position). Source of truth is the app's SignalStatus enum
@@ -129,13 +120,14 @@ interface GeoPoint {
 
 interface UserNotificationPrefs {
   enabled: boolean;
-  /** Absent means "never chose" — all types. Empty means none. */
-  signalTypes?: number[];
-  /** Species filter. Same absent/empty rule as signalTypes. */
+  /**
+   * Species filter. Absent means "never chose" — all species. Empty means none.
+   * (`signalTypes` sat here until it was retired; see SPECIFICATION §4.4.)
+   */
   animalTypes?: string[];
   /**
    * Kinds of help this user can offer. **Absent and empty both mean "hasn't
-   * chosen"** and resolve to the fallback tag — the opposite of the two filters
+   * chosen"** and resolve to the fallback tag — the opposite of the filter
    * above, because this is a matching input, not an opt-out. See
    * `effectiveHelperTags` in ./tags.
    */
@@ -275,8 +267,8 @@ function truncateForPayload(value: string, max = 200): string {
  *
  * The English `title`/`body` are the same strings the push carries and exist
  * only as a fallback: the app renders the inbox row from the structured fields
- * (`signalType`, `statusCode`, …) through its own localizations, because this
- * function has no i18n and the app is bilingual.
+ * (`helpNeededTags`, `statusCode`, …) through its own localizations, because
+ * this function has no i18n and the app is bilingual.
  */
 interface InboxEntry {
   /**
@@ -291,7 +283,13 @@ interface InboxEntry {
   body: string;
   signalId: string;
   signalTitle: string;
-  signalType?: number;
+  /**
+   * What the signal asks for, priority order. Element 0 is the headline the app
+   * renders the row from. Rows written before signal types were folded into the
+   * tag vocabulary carry a `signalType` int instead and no longer resolve to a
+   * label — the app falls back to a generic one for those.
+   */
+  helpNeededTags?: string[];
   statusCode?: number;
   urgency?: number;
   commentExcerpt?: string;
@@ -676,7 +674,6 @@ async function handleSignalCreated(
     | admin.firestore.GeoPoint
     | undefined;
   const signalGeohash = signalLocation?.geohash as string | undefined;
-  const signalType = signalData.signalType as number;
   const signalTitle = signalData.title as string;
   const reporterRef = signalData.reporter as
     | admin.firestore.DocumentReference
@@ -733,23 +730,13 @@ async function handleSignalCreated(
         continue;
       }
 
-      // Check signal type preference.
+      // Species filter — a hard gate. The floor may stretch someone's radius,
+      // but never their explicit choice about what they want to hear about.
       //
-      // Absent and empty mean opposite things. Absent is "never chose" and means
-      // all types: the onboarding sheet writes notificationPreferences as merged
-      // partial updates and never sets signalTypes, so every user who onboarded
-      // without opening the notification settings screen has no stored list.
-      // Empty is a deliberate "Deselect all" and means no types.
-      //
-      // The previous `length > 0` guard collapsed the two, so deselecting every
-      // type notified the user about everything.
-      if (prefs.signalTypes && !prefs.signalTypes.includes(signalType)) {
-        continue;
-      }
-
-      // Species filter — a hard gate for the same reason as signal type. The
-      // floor may stretch someone's radius, but never their explicit choice
-      // about what they want to hear about.
+      // This is now the *only* negative filter a user has: help tags rank
+      // rather than gate, and the floor deliberately backfills people whose
+      // tags do not match. That is an accepted trade (see SPECIFICATION §4.2),
+      // taken because MIN_RECIPIENTS does most of the work at current scale.
       if (!wantsAnimalType(prefs, animalType)) {
         continue;
       }
@@ -860,15 +847,21 @@ async function handleSignalCreated(
     return;
   }
 
-  const signalTypeName =
-    SIGNAL_TYPES[signalType] || SIGNAL_TYPES[SIGNAL_TYPES.length - 1];
   const urgency = urgencyOf(signalData);
   // A Red Alert has to be distinguishable at a glance on a lock screen —
   // that is the entire point of the level. Green/Amber keep the plain title so
   // the prefix stays rare enough to still mean something.
   const title =
     urgency === URGENCY_RED ? "🔴 RED ALERT nearby!" : "New signal nearby!";
-  const body = `${signalTypeName}: ${signalTitle}`;
+  // The headline is the signal's top-priority need — its category, now that
+  // signal types are gone (see ./tags). `helpNeededTagsOf` never returns empty,
+  // so [0] is always safe. Red repeats the urgency in the body because the body
+  // is all some surfaces show (the inbox row, a collapsed notification).
+  const headline = helpTagHeadline(signalTags[0]);
+  const body =
+    urgency === URGENCY_RED ?
+      `Urgent · ${headline} — ${signalTitle}` :
+      `${headline} — ${signalTitle}`;
 
   const badgeByUid = await writeInboxEntries(
     inboxRecipients,
@@ -879,7 +872,7 @@ async function handleSignalCreated(
       body,
       signalId,
       signalTitle,
-      signalType,
+      helpNeededTags: signalTags,
       urgency,
     },
     isTestMode
@@ -892,7 +885,6 @@ async function handleSignalCreated(
       signalId,
       type: "new_signal",
       signalTitle: truncateForPayload(signalTitle),
-      signalType: String(signalType),
       urgency: String(urgency),
       helpNeededTags: signalTags.join(","),
       ...(animalType ? { animalType } : {}),
@@ -1889,21 +1881,32 @@ const WEBSITE_URL = "https://www.helpapaw.org";
 const LINK_HOST = "https://link.helpapaw.org";
 const APPLE_APP_ID = "1234893764";
 
-// Localized signal type names (mirrors lib/src/models/signal.dart ordering).
-// `en` reuses SIGNAL_TYPES above rather than restating it: the list already
-// exists twice (here and in the Dart model) and a third copy drifting silently
-// would mislabel every signal of a newly added type on the public share page.
-const SIGNAL_TYPE_NAMES: Record<"en" | "bg", string[]> = {
-  en: SIGNAL_TYPES,
-  bg: [
-    "Спешен случай",
-    "Изгубено или намерено",
-    "Кръводаряване",
-    "Бездомно",
-    "Некастрирани животни",
-    "Диви животни",
-    "Друго",
-  ],
+// Localized help-tag names for the public share page, keyed by tag code.
+//
+// Keyed by code rather than by array position on purpose: the client-side
+// language switcher below carries the key in the DOM, and an index would break
+// silently the moment the vocabulary gains a tag anywhere but the end.
+//
+// `en` reuses HELP_TAG_NAMES from ./tags rather than restating it — a third
+// copy drifting would mislabel signals on the one page people see before they
+// have the app. `bg` mirrors the `helpTag*` keys in lib/l10n/app_bg.arb.
+const HELP_TAG_NAMES_BY_LANG: Record<"en" | "bg", Record<string, string>> = {
+  en: HELP_TAG_NAMES,
+  bg: {
+    rescue: "Спасяване",
+    vetCare: "Ветеринарна помощ",
+    bloodDonation: "Кръводаряване",
+    foster: "Временен дом",
+    adoption: "Осиновяване",
+    transport: "Транспорт",
+    food: "Храна и материали",
+    trapping: "Улавяне",
+    neutering: "Кастрация",
+    babyCare: "Грижа за новородени",
+    fundraising: "Набиране на средства",
+    lostFound: "Изгубено / намерено",
+    dangerWarning: "Местна опасност",
+  },
 };
 
 const PAGE_TEXT = {
@@ -1934,7 +1937,7 @@ const PAGE_TEXT = {
 // Serialized once at module load: these tables are constants embedded in every
 // rendered page, so re-stringifying them per request is pure waste.
 const PAGE_TEXT_JSON = JSON.stringify(PAGE_TEXT);
-const SIGNAL_TYPE_NAMES_JSON = JSON.stringify(SIGNAL_TYPE_NAMES);
+const HELP_TAG_NAMES_BY_LANG_JSON = JSON.stringify(HELP_TAG_NAMES_BY_LANG);
 
 /**
  * Play Store URL carrying the signal id through the install.
@@ -1997,7 +2000,8 @@ function escapeHtml(value: string): string {
 interface SignalPreview {
   title: string;
   description: string;
-  typeIndex: number;
+  /** Tag code, carried into the DOM for the client-side language switcher. */
+  tagCode: string;
   typeName: string;
   photoUrl: string | null;
 }
@@ -2011,19 +2015,18 @@ async function loadSignalPreview(
     const doc = await db.collection(collection).doc(signalId).get();
     if (!doc.exists) continue;
     const data = doc.data() as Record<string, any>;
-    const rawType =
-      typeof data.signalType === "number" ? data.signalType : 6;
-    const names = SIGNAL_TYPE_NAMES[lang];
-    // Clamp unknown types onto "Other" so the index is safe to hand to the
-    // client-side language switcher too.
-    const typeIndex =
-      rawType >= 0 && rawType < names.length ? rawType : names.length - 1;
+    // The headline need. `helpNeededTagsOf` substitutes the fallback tag for
+    // documents written before tags existed, so this is never empty.
+    const tagCode = helpNeededTagsOf(data)[0];
+    const names = HELP_TAG_NAMES_BY_LANG[lang];
     const photos = Array.isArray(data.photoUrls) ? data.photoUrls : [];
     return {
       title: (data.title as string) || PAGE_TEXT[lang].needsHelp,
       description: (data.description as string) || "",
-      typeIndex,
-      typeName: names[typeIndex],
+      tagCode,
+      // An unknown code came from a newer client than this deploy; showing the
+      // raw code beats showing a wrong label.
+      typeName: names[tagCode] ?? tagCode,
       photoUrl: photos.length > 0 ? (photos[0] as string) : null,
     };
   }
@@ -2057,7 +2060,7 @@ function renderHtml(opts: {
             ? `<img class="photo" src="${escapeHtml(preview.photoUrl)}" alt="">`
             : ""
         }
-        <span class="badge" data-i18n-type="${preview.typeIndex}">${escapeHtml(preview.typeName)}</span>
+        <span class="badge" data-i18n-tag="${escapeHtml(preview.tagCode)}">${escapeHtml(preview.typeName)}</span>
         <h1>${escapeHtml(preview.title)}</h1>
         <p>${escapeHtml(preview.description)}</p>
       </div>`
@@ -2127,7 +2130,7 @@ ${ogImage ? `  <meta property="og:image" content="${escapeHtml(ogImage)}">\n` : 
       // the cached copy's language for everyone else. An explicit ?lang= query
       // stays server-side because it is part of the cache key.
       var STRINGS = ${PAGE_TEXT_JSON};
-      var TYPES = ${SIGNAL_TYPE_NAMES_JSON};
+      var TAG_NAMES = ${HELP_TAG_NAMES_BY_LANG_JSON};
       var rendered = ${JSON.stringify(opts.lang)};
       var pinned = ${JSON.stringify(opts.pinnedLang)};
       var lang = pinned ||
@@ -2140,10 +2143,10 @@ ${ogImage ? `  <meta property="og:image" content="${escapeHtml(ogImage)}">\n` : 
           var key = nodes[i].getAttribute("data-i18n");
           if (STRINGS[lang][key]) nodes[i].textContent = STRINGS[lang][key];
         }
-        var badge = document.querySelector("[data-i18n-type]");
+        var badge = document.querySelector("[data-i18n-tag]");
         if (badge) {
-          var idx = parseInt(badge.getAttribute("data-i18n-type"), 10);
-          if (TYPES[lang][idx]) badge.textContent = TYPES[lang][idx];
+          var code = badge.getAttribute("data-i18n-tag");
+          if (TAG_NAMES[lang][code]) badge.textContent = TAG_NAMES[lang][code];
         }
       }
 

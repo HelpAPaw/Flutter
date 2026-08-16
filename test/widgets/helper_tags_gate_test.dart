@@ -18,11 +18,13 @@ void main() {
 
   Future<void> pump(
     WidgetTester tester,
-    AsyncValue<NotificationPreferences?> prefs,
-  ) async {
+    AsyncValue<NotificationPreferences?> prefs, {
+    bool bypassed = false,
+  }) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          if (bypassed) gateBypassedProvider.overrideWith(_AlwaysBypassed.new),
           helperTagsPreferencesProvider.overrideWith((ref) async {
             return prefs.when(
               data: (value) => value,
@@ -41,6 +43,22 @@ void main() {
     );
     await tester.pump();
   }
+
+  testWidgets('lets the user through once onboarding has given up saving',
+      (tester) async {
+    // The escape hatch. Offline is already safe — that write is durable in the
+    // local cache and the re-read sees it. This covers the failures that repeat
+    // identically forever (rules, App Check, no session), where the onboarding
+    // page has no skip, no back button and no drawer, so retrying is not a way
+    // out of an unusable app.
+    await pump(
+      tester,
+      const AsyncValue.data(NotificationPreferences()),
+      bypassed: true,
+    );
+
+    expect(find.byKey(mapMarker), findsOneWidget);
+  });
 
   testWidgets('shows the app while preferences are still loading',
       (tester) async {
@@ -133,4 +151,12 @@ void _toggleCodeTests() {
       expect(toggledCode(full, 'a', max: 3), ['b', 'c']);
     });
   });
+}
+
+
+/// A [GateBypassNotifier] that starts already bypassed, standing in for a
+/// session where the onboarding save has failed its budget of attempts.
+class _AlwaysBypassed extends GateBypassNotifier {
+  @override
+  bool build() => true;
 }

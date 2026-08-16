@@ -114,7 +114,14 @@ void main() {
     });
 
     test('has all filters selected by default', () {
-      expect(viewModel.state.filterState.selectedSignalTypes.length, 7);
+      expect(
+        viewModel.state.filterState.selectedHelpTags.length,
+        HelpTag.values.length,
+      );
+      expect(
+        viewModel.state.filterState.selectedAnimalTypes.length,
+        AnimalType.values.length,
+      );
       expect(viewModel.state.filterState.selectedStatuses.length, 3);
       expect(viewModel.state.filterState.hasActiveFilters, false);
     });
@@ -135,20 +142,45 @@ void main() {
   });
 
   group('Filter management', () {
-    test('toggleSignalType removes a type', () {
-      viewModel.toggleSignalType(0);
+    test('toggleHelpTag removes a tag', () {
+      viewModel.toggleHelpTag(HelpTag.rescue.code);
 
-      expect(viewModel.state.filterState.selectedSignalTypes.contains(0), false);
-      expect(viewModel.state.filterState.selectedSignalTypes.length, 6);
+      expect(
+        viewModel.state.filterState.selectedHelpTags
+            .contains(HelpTag.rescue.code),
+        false,
+      );
+      expect(
+        viewModel.state.filterState.selectedHelpTags.length,
+        HelpTag.values.length - 1,
+      );
       expect(viewModel.state.filterState.hasActiveFilters, true);
     });
 
-    test('toggleSignalType adds a type back', () {
-      viewModel.toggleSignalType(0); // remove
-      viewModel.toggleSignalType(0); // add back
+    test('toggleHelpTag adds a tag back', () {
+      viewModel.toggleHelpTag(HelpTag.rescue.code); // remove
+      viewModel.toggleHelpTag(HelpTag.rescue.code); // add back
 
-      expect(viewModel.state.filterState.selectedSignalTypes.contains(0), true);
-      expect(viewModel.state.filterState.selectedSignalTypes.length, 7);
+      expect(
+        viewModel.state.filterState.selectedHelpTags
+            .contains(HelpTag.rescue.code),
+        true,
+      );
+      expect(
+        viewModel.state.filterState.selectedHelpTags.length,
+        HelpTag.values.length,
+      );
+    });
+
+    test('toggleAnimalType filters species', () {
+      viewModel.toggleAnimalType(AnimalType.cat.code);
+
+      expect(
+        viewModel.state.filterState.selectedAnimalTypes
+            .contains(AnimalType.cat.code),
+        false,
+      );
+      expect(viewModel.state.filterState.hasActiveFilters, true);
     });
 
     test('toggleStatus removes a status', () {
@@ -180,7 +212,8 @@ void main() {
     test('clearAllFilters clears all', () {
       viewModel.clearAllFilters();
 
-      expect(viewModel.state.filterState.selectedSignalTypes, isEmpty);
+      expect(viewModel.state.filterState.selectedHelpTags, isEmpty);
+      expect(viewModel.state.filterState.selectedAnimalTypes, isEmpty);
       expect(viewModel.state.filterState.selectedStatuses, isEmpty);
       expect(viewModel.state.filterState.selectedUrgencies, isEmpty);
       expect(viewModel.state.filterState.hasActiveFilters, true);
@@ -190,33 +223,19 @@ void main() {
       viewModel.clearAllFilters();
       viewModel.selectAllFilters();
 
-      expect(viewModel.state.filterState.selectedSignalTypes.length, 7);
+      expect(
+        viewModel.state.filterState.selectedHelpTags.length,
+        HelpTag.values.length,
+      );
+      expect(
+        viewModel.state.filterState.selectedAnimalTypes.length,
+        AnimalType.values.length,
+      );
       expect(viewModel.state.filterState.selectedStatuses.length, 3);
       expect(viewModel.state.filterState.selectedUrgencies.length, 3);
       expect(viewModel.state.filterState.hasActiveFilters, false);
     });
 
-    test('signalPassesFilter checks type, status and urgency', () {
-      // All filters selected - everything passes
-      expect(viewModel.signalPassesFilter(0, 0, 0), true);
-      expect(viewModel.signalPassesFilter(3, 2, 2), true);
-
-      // Remove type 0
-      viewModel.toggleSignalType(0);
-      expect(viewModel.signalPassesFilter(0, 0, 0), false);
-      expect(viewModel.signalPassesFilter(1, 0, 0), true);
-
-      // Remove status 2
-      viewModel.toggleStatus(2);
-      expect(viewModel.signalPassesFilter(1, 2, 0), false);
-      expect(viewModel.signalPassesFilter(1, 1, 0), true);
-
-      // Remove urgency 2 (Red). Urgency filters independently of status: a
-      // signal can be In progress AND Red.
-      viewModel.toggleUrgency(2);
-      expect(viewModel.signalPassesFilter(1, 1, 2), false);
-      expect(viewModel.signalPassesFilter(1, 1, 1), true);
-    });
   });
 
   group('New signal form', () {
@@ -258,12 +277,6 @@ void main() {
       viewModel.updateFormPhoneNumber('0888123456');
 
       expect(viewModel.state.formState.phoneNumber, '0888123456');
-    });
-
-    test('setFormSignalType updates type', () {
-      viewModel.setFormSignalType(3);
-
-      expect(viewModel.state.formState.signalType, 3);
     });
 
     test('clearFormImage clears image', () {
@@ -641,7 +654,6 @@ void main() {
         title: 'Title',
         description: 'Desc',
         phoneNumber: '123',
-        signalType: 2,
         urgency: 2,
         isSubmitting: true,
       );
@@ -651,7 +663,6 @@ void main() {
       expect(reset.title, '');
       expect(reset.description, '');
       expect(reset.phoneNumber, '');
-      expect(reset.signalType, 0);
       // Back to "unchosen", not to a level the next reporter never picked.
       expect(reset.urgency, isNull);
       expect(reset.isSubmitting, false);

@@ -58,13 +58,12 @@ class MapMarkerBuilder {
   /// via [Marker.onTap] so the caller can overlay an invisible tap target.
   Set<Marker> buildSignalMarkers({
     required List<SignalWithId> signals,
-    required bool Function(int signalType, int status, int urgency)
-        filterPredicate,
+    required bool Function(SignalWithId signal) filterPredicate,
     required void Function(SignalWithId signal) onMarkerTap,
     ClusterManagerId? clusterManagerId,
   }) {
     return signals.where((signal) {
-      return filterPredicate(signal.signalType, signal.status, signal.urgency);
+      return filterPredicate(signal);
     }).map((signal) {
       final GeoPoint location = signal.location;
 

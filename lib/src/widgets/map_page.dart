@@ -589,8 +589,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
     signalsAsync.whenData((signals) {
       signalMarkers = _markerBuilder.buildSignalMarkers(
         signals: signals,
-        filterPredicate: (signalType, status, urgency) => mapState.filterState
-            .signalPassesFilter(signalType, status, urgency),
+        filterPredicate: mapState.filterState.passes,
         onMarkerTap: _showSignalOverlay,
         clusterManagerId: _signalClusterManagerId,
       );

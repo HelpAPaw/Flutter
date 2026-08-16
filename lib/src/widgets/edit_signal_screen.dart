@@ -27,7 +27,6 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _phoneController = TextEditingController();
-  int _signalType = 0;
   int _urgency = SignalUrgency.amber.code;
 
   List<String> _helpTags = const [];
@@ -64,7 +63,6 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
         _titleController.text = signal.title;
         _descriptionController.text = signal.description;
         _phoneController.text = signal.contactPhone;
-        _signalType = signal.signalType;
         _urgency = signal.urgency;
         _originalUrgency = signal.urgency;
         // Signals created before tags existed load with none. The picker then
@@ -128,7 +126,6 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
       'title': _titleController.text.trim(),
       'description': _descriptionController.text.trim(),
       'contactPhone': _phoneController.text.trim(),
-      'signalType': _signalType,
       'urgency': _urgency,
       'helpNeededTags': _helpTags,
       'animalType': _animalType,
@@ -252,28 +249,6 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
                           return l10n.pleaseEnterDescription;
                         }
                         return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<int>(
-                      initialValue: _signalType,
-                      decoration: InputDecoration(
-                        labelText: l10n.signalType,
-                        border: const OutlineInputBorder(),
-                      ),
-                      items: List.generate(
-                        Signal.signalTypes.length,
-                        (index) => DropdownMenuItem(
-                          value: index,
-                          child: Text(
-                            Signal.getLocalizedSignalTypeName(context, index),
-                          ),
-                        ),
-                      ),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => _signalType = value);
-                        }
                       },
                     ),
                     const SizedBox(height: 16),

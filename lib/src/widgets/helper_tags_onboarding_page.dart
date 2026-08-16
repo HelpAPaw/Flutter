@@ -20,11 +20,25 @@ import 'help_tag_selector.dart';
 /// shape arrives days later, so there is no moment where the user feels the
 /// cost of having skipped.
 class HelperTagsOnboardingPage extends StatefulWidget {
-  const HelperTagsOnboardingPage({super.key, required this.onSaved});
+  const HelperTagsOnboardingPage({
+    super.key,
+    required this.onSaved,
+    required this.onSaveFailed,
+  });
 
   /// Called after the choices are persisted, so the gate can re-read and hand
   /// the user through to the map.
   final VoidCallback onSaved;
+
+  /// Called on a save that failed outright, so the gate can count it and decide
+  /// when to stop blocking the app.
+  ///
+  /// The offline path never reaches this — that write is durable in the local
+  /// cache and is treated as success. This is for the failures that repeat
+  /// identically forever (rules, App Check, no session), where retrying is not
+  /// a route out of a screen that has no skip, no back button and no drawer.
+  /// The threshold lives in `GateBypassNotifier`, which outlives this page.
+  final VoidCallback onSaveFailed;
 
   @override
   State<HelperTagsOnboardingPage> createState() =>
@@ -32,6 +46,7 @@ class HelperTagsOnboardingPage extends StatefulWidget {
 }
 
 class _HelperTagsOnboardingPageState extends State<HelperTagsOnboardingPage> {
+
   List<String> _helperTags = const [];
   List<String> _animalTypes = const [];
   bool _isSaving = false;
@@ -106,6 +121,9 @@ class _HelperTagsOnboardingPageState extends State<HelperTagsOnboardingPage> {
       widget.onSaved();
     } catch (e) {
       if (!mounted) return;
+      // The gate counts these and decides when to let the user through; the
+      // tags stay unset either way, so the next launch asks again.
+      widget.onSaveFailed();
       setState(() {
         _isSaving = false;
         _error = l10n.helperTagsSaveFailed;

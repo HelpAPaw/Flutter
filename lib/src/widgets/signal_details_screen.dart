@@ -363,7 +363,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                         final GeoPoint? geopoint = signal.location['geopoint'] as GeoPoint?;
                         ShareService.shareSignal(
                           signalId: widget.signalId,
-                          signalType: Signal.getLocalizedSignalTypeName(context, signal.signalType),
+                          headline: signal.primaryTag.neededLabel(l10n),
                           description: signal.description,
                           latitude: geopoint?.latitude,
                           longitude: geopoint?.longitude,
@@ -585,7 +585,9 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                             ),
                           Text(signal.title, style: const TextStyle(fontSize: 30), textAlign: TextAlign.center,),
                           Text(signal.description, style: const TextStyle(fontSize: 20), textAlign: TextAlign.center,),
-                          Text(l10n.signalTypeLabel(Signal.getLocalizedSignalTypeName(context, signal.signalType))),
+                          // No type line: what the signal needs is shown as the
+                          // help-tag chips below, which carry the same
+                          // information with more precision.
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -698,7 +700,12 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                           if (signal.helpNeededTags.isNotEmpty ||
                               signal.animalType != null) ...[
                             const SizedBox(height: 8),
-                            Text(' ${l10n.helpNeeded}'),
+                            // Only when there is actually a need to head. A
+                            // signal with a species and no tags (legacy, or
+                            // edited by an older build) would otherwise read
+                            // "Help needed" above a lone Cat chip.
+                            if (signal.helpNeededTags.isNotEmpty)
+                              Text(' ${l10n.helpNeeded}'),
                             Padding(
                               padding:
                                   const EdgeInsets.symmetric(horizontal: 8),

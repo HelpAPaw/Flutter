@@ -110,37 +110,22 @@ class AppLocalizationsBg extends AppLocalizations {
   String get redAlertConfirmAction => 'Потвърди червен сигнал';
 
   @override
-  String get signalTypeEmergency => 'Спешен случай';
-
-  @override
-  String get signalTypeLostOrFound => 'Изгубено или намерено';
-
-  @override
-  String get signalTypeBloodDonation => 'Кръводаряване';
-
-  @override
-  String get signalTypeHomeless => 'Бездомно';
-
-  @override
-  String get signalTypeUnneuteredAnimals => 'Некастрирани животни';
-
-  @override
-  String get signalTypeWildAnimals => 'Диви животни';
-
-  @override
-  String get signalTypeOther => 'Друго';
-
-  @override
   String get helpTagRescue => 'Спасяване';
+
+  @override
+  String get helpTagVetCare => 'Ветеринарна помощ';
+
+  @override
+  String get helpTagBloodDonation => 'Кръводаряване';
 
   @override
   String get helpTagFoster => 'Временен дом';
 
   @override
-  String get helpTagTransport => 'Транспорт';
+  String get helpTagAdoption => 'Осиновяване';
 
   @override
-  String get helpTagVetCare => 'Ветеринарна помощ';
+  String get helpTagTransport => 'Транспорт';
 
   @override
   String get helpTagFood => 'Храна и материали';
@@ -149,26 +134,40 @@ class AppLocalizationsBg extends AppLocalizations {
   String get helpTagTrapping => 'Улавяне';
 
   @override
-  String get helpTagFundraising => 'Набиране на средства';
-
-  @override
-  String get helpTagAdoption => 'Осиновяване';
+  String get helpTagNeutering => 'Кастрация';
 
   @override
   String get helpTagBabyCare => 'Грижа за новородени';
 
   @override
+  String get helpTagFundraising => 'Набиране на средства';
+
+  @override
+  String get helpTagLostFound => 'Изгубено / намерено';
+
+  @override
+  String get helpTagDangerWarning => 'Местна опасност';
+
+  @override
   String get helpTagRescueHelper => 'Мога да отида при животно в нужда';
+
+  @override
+  String get helpTagVetCareHelper =>
+      'Мога да помогна с ветеринарен преглед или лечение';
+
+  @override
+  String get helpTagBloodDonationHelper =>
+      'Моето животно може да дари кръв или мога да помогна с намиране на донор';
 
   @override
   String get helpTagFosterHelper => 'Мога да приютя животно за известно време';
 
   @override
-  String get helpTagTransportHelper => 'Мога да превозя животно';
+  String get helpTagAdoptionHelper =>
+      'Търся да осиновя или мога да помогна с намиране на дом';
 
   @override
-  String get helpTagVetCareHelper =>
-      'Мога да помогна с ветеринарен преглед или лечение';
+  String get helpTagTransportHelper => 'Мога да превозя животно';
 
   @override
   String get helpTagFoodHelper => 'Мога да донеса храна или материали';
@@ -177,16 +176,56 @@ class AppLocalizationsBg extends AppLocalizations {
   String get helpTagTrappingHelper => 'Мога да уловя животно или имам клетка';
 
   @override
-  String get helpTagFundraisingHelper =>
-      'Мога да помогна със или да споделя набиране на средства';
-
-  @override
-  String get helpTagAdoptionHelper =>
-      'Търся да осиновя или мога да помогна с намиране на дом';
+  String get helpTagNeuteringHelper => 'Мога да помогна с кастрация на животни';
 
   @override
   String get helpTagBabyCareHelper =>
       'Мога да храня с биберон или да се грижа за новородени';
+
+  @override
+  String get helpTagFundraisingHelper =>
+      'Мога да помогна със или да споделя набиране на средства';
+
+  @override
+  String get helpTagLostFoundHelper =>
+      'Известявайте ме за изгубени и намерени животни наблизо — ще внимавам';
+
+  @override
+  String get helpTagDangerWarningHelper =>
+      'Известявайте ме за опасности в района, като отровни примамки или капани';
+
+  @override
+  String get helpTagRescueNeeded => 'Търси се спасяване';
+
+  @override
+  String get helpTagVetCareNeeded => 'Търси се ветеринарна помощ';
+
+  @override
+  String get helpTagBloodDonationNeeded => 'Търси се кръводаряване';
+
+  @override
+  String get helpTagFosterNeeded => 'Търси се временен дом';
+
+  @override
+  String get helpTagAdoptionNeeded => 'Търси се осиновяване';
+
+  @override
+  String get helpTagTransportNeeded => 'Търси се транспорт';
+
+  @override
+  String get helpTagFoodNeeded => 'Търсят се храна и материали';
+
+  @override
+  String get helpTagTrappingNeeded => 'Търси се улавяне';
+
+  @override
+  String get helpTagNeuteringNeeded => 'Търси се кастрация';
+
+  @override
+  String get helpTagBabyCareNeeded => 'Търси се грижа за новородени';
+
+  @override
+  String get helpTagFundraisingNeeded => 'Търси се набиране на средства';
 
   @override
   String get animalTypeCat => 'Котка';
@@ -243,8 +282,8 @@ class AppLocalizationsBg extends AppLocalizations {
       'Изборът не можа да бъде запазен. Моля, опитайте отново.';
 
   @override
-  String get selectAtLeastOneSignalType =>
-      'Изберете поне един вид сигнал или изключете известията';
+  String get settingsLoadFailed =>
+      'Настройките ви не можаха да бъдат заредени. Проверете връзката си и опитайте отново — нищо не е променено.';
 
   @override
   String get selectAtLeastOneAnimalType =>
@@ -268,9 +307,6 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get status => 'Статус';
-
-  @override
-  String get signalType => 'Тип сигнал';
 
   @override
   String get timeRange => 'Времеви обхват';
@@ -423,11 +459,6 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get failedToLoadImage => 'Неуспешно зареждане на изображение';
-
-  @override
-  String signalTypeLabel(String type) {
-    return 'Тип сигнал: $type';
-  }
 
   @override
   String get navigateMe => 'Навигирай ме';
@@ -670,9 +701,6 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get clearRegion => 'Изчисти региона';
-
-  @override
-  String get signalTypes => 'Типове сигнали';
 
   @override
   String get settingsSaved => 'Настройките са запазени';
@@ -1040,8 +1068,13 @@ class AppLocalizationsBg extends AppLocalizations {
   String get notificationNewRedAlertTitle => 'Червен сигнал наблизо';
 
   @override
-  String notificationNewSignalBody(String signalType, String signalTitle) {
-    return '$signalType: $signalTitle';
+  String notificationNewSignalBody(String headline, String signalTitle) {
+    return '$headline — $signalTitle';
+  }
+
+  @override
+  String notificationNewSignalBodyUrgent(String headline, String signalTitle) {
+    return 'Спешно · $headline — $signalTitle';
   }
 
   @override
@@ -1067,11 +1100,6 @@ class AppLocalizationsBg extends AppLocalizations {
   @override
   String notificationNewCommentTitle(String signalTitle) {
     return 'Нов коментар по: $signalTitle';
-  }
-
-  @override
-  String notificationNearbySignalBody(String signalType, String signalTitle) {
-    return '$signalType · $signalTitle';
   }
 
   @override

@@ -40,7 +40,6 @@ function signalDoc(db, uid, overrides = {}) {
     title: 'Injured dog near the park',
     description: 'Limping, seems friendly.',
     phoneNumber: '+359888123456',
-    signalType: 0,
     location: { geopoint: { latitude: 42.6977, longitude: 23.3219 }, geohash: 'sx8dfr1u2' },
     reporter: doc(db, 'users', uid),
     contactPhone: '+359888123456',
@@ -124,19 +123,28 @@ for (const coll of ['signals', 'signals_test']) {
       );
     });
 
-    it('accepts every real signalType (0-6) and rejects out-of-range or non-int', async () => {
+    // Signal types were folded into the help-tag vocabulary. Nothing writes the
+    // field any more, but builds released before that still do — and an old
+    // build that cannot create a signal at all is a far worse outcome than one
+    // whose signals default to `rescue`. So the rules neither require it nor
+    // range-check it: a retired field must not be able to reject a write.
+    it('accepts a signal with no signalType at all', async () => {
       const db = testEnv.authenticatedContext(REPORTER).firestore();
-      for (const signalType of [0, 1, 2, 3, 4, 5, 6]) {
-        await assertSucceeds(addDoc(collection(db, coll), signalDoc(db, REPORTER, { signalType })));
-      }
-      for (const signalType of [-1, 7, '0', 1.5]) {
-        await assertFails(addDoc(collection(db, coll), signalDoc(db, REPORTER, { signalType })));
+      await assertSucceeds(addDoc(collection(db, coll), signalDoc(db, REPORTER)));
+    });
+
+    it('still accepts a signalType from an older build, whatever its value', async () => {
+      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      for (const signalType of [0, 6, 99, 'anything']) {
+        await assertSucceeds(
+          addDoc(collection(db, coll), signalDoc(db, REPORTER, { signalType })),
+        );
       }
     });
 
-    it('rejects a missing title/description/signalType', async () => {
+    it('rejects a missing title/description', async () => {
       const db = testEnv.authenticatedContext(REPORTER).firestore();
-      for (const field of ['title', 'description', 'signalType']) {
+      for (const field of ['title', 'description']) {
         const data = signalDoc(db, REPORTER);
         delete data[field];
         await assertFails(addDoc(collection(db, coll), data));
@@ -627,11 +635,11 @@ describe('users/{uid}/notifications', () => {
     return {
       type: 'nearby_signal',
       title: 'An animal needs help nearby',
-      body: 'Emergency · Injured dog near the park',
+      body: 'Rescue needed — Injured dog near the park',
       read: false,
       signalId: 'signal-1',
       signalTitle: 'Injured dog near the park',
-      signalType: 0,
+      helpNeededTags: ['rescue', 'vetCare'],
       testMode: false,
       createdAt: new Date(),
       expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
@@ -673,6 +681,39 @@ describe('users/{uid}/notifications', () => {
     const db = testEnv.authenticatedContext(OWNER).firestore();
     await assertSucceeds(
       setDoc(doc(db, 'users', OWNER, 'notifications', 'nb_signal-1'), nearbyNotification())
+    );
+  });
+
+  // The `hasOnly` allow-list is the easiest thing in these rules to break from
+  // the app side: adding a field to the catch-up's write without adding it here
+  // fails the whole batch with PERMISSION_DENIED, and the catch-up swallows it —
+  // the inbox entry just never appears. That is exactly what happened when
+  // `signalType` became `helpNeededTags`.
+  it('accepts the tag field the catch-up actually writes', async () => {
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    for (const helpNeededTags of [['rescue'], ['foster', 'transport', 'food']]) {
+      await assertSucceeds(
+        setDoc(
+          doc(db, 'users', OWNER, 'notifications', `nb_${helpNeededTags[0]}`),
+          nearbyNotification({ helpNeededTags })
+        )
+      );
+    }
+  });
+
+  it('rejects an unknown field, and an over-long tag list', async () => {
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    await assertFails(
+      setDoc(
+        doc(db, 'users', OWNER, 'notifications', 'nb_extra'),
+        nearbyNotification({ signalType: 0 })
+      )
+    );
+    await assertFails(
+      setDoc(
+        doc(db, 'users', OWNER, 'notifications', 'nb_toomany'),
+        nearbyNotification({ helpNeededTags: ['a', 'b', 'c', 'd'] })
+      )
     );
   });
 

@@ -5,6 +5,9 @@ import {
 import {
   effectiveHelperTags,
   helpNeededTagsOf,
+  helpTagHeadline,
+  HELP_TAGS,
+  HELP_TAGS_WITHOUT_NEEDED_SUFFIX,
   matchesHelpTags,
   wantsAnimalType,
 } from "../tags";
@@ -246,5 +249,43 @@ describe("wantsAnimalType", () => {
   it("filters on the user's chosen species", () => {
     expect(wantsAnimalType({ animalTypes: ["cat"] }, "dog")).toBe(false);
     expect(wantsAnimalType({ animalTypes: ["cat"] }, "cat")).toBe(true);
+  });
+});
+
+describe("helpTagHeadline", () => {
+  it("asks for what is needed", () => {
+    expect(helpTagHeadline("rescue")).toBe("Rescue needed");
+    expect(helpTagHeadline("bloodDonation")).toBe("Blood donation needed");
+    expect(helpTagHeadline("babyCare")).toBe("Newborn care needed");
+  });
+
+  it("does not say 'needed' for the two non-needs", () => {
+    // A lost dog is not "Lost / found needed". These describe a situation, not
+    // a request for a service, which is the whole reason the exemption list
+    // exists.
+    expect(helpTagHeadline("lostFound")).toBe("Lost / found");
+    expect(helpTagHeadline("dangerWarning")).toBe("Local danger");
+  });
+
+  it("covers every tag with a real name", () => {
+    // A missing HELP_TAG_NAMES entry falls back to the raw code, so the push
+    // would read "babyCare needed". Nothing throws — this is the only place it
+    // would ever be noticed.
+    for (const code of HELP_TAGS) {
+      expect(helpTagHeadline(code)).not.toContain(code);
+    }
+  });
+
+  it("falls back to the raw code for a tag from a newer client", () => {
+    // Unknown codes are deliberately kept rather than dropped (see
+    // helpNeededTagsOf), so the headline has to render *something*. The raw
+    // code is honest; a wrong label is not.
+    expect(helpTagHeadline("teleportation")).toBe("teleportation needed");
+  });
+
+  it("exempts only codes that exist", () => {
+    for (const code of HELP_TAGS_WITHOUT_NEEDED_SUFFIX) {
+      expect(HELP_TAGS).toContain(code);
+    }
   });
 });

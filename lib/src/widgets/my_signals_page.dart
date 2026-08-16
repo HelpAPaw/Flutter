@@ -24,25 +24,6 @@ class MySignalsPage extends StatelessWidget {
   String _getStatusText(int status, AppLocalizations l10n) =>
       SignalStatus.fromCode(status).label(l10n);
 
-  IconData _getSignalTypeIcon(int type) {
-    switch (type) {
-      case 0:
-        return Icons.emergency;
-      case 1:
-        return Icons.search;
-      case 2:
-        return Icons.bloodtype;
-      case 3:
-        return Icons.home_outlined;
-      case 4:
-        return Icons.pets;
-      case 5:
-        return Icons.forest;
-      default:
-        return Icons.help_outline;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -158,12 +139,16 @@ class MySignalsPage extends StatelessWidget {
                         leading: CircleAvatar(
                           backgroundColor: _getUrgencyColor(signal.urgency).withAlpha(51),
                           child: Icon(
-                            _getSignalTypeIcon(signal.signalType),
+                            // The tag already carries an icon, so the row and
+                            // the chips on the details screen cannot drift.
+                            signal.primaryTag.icon,
                             color: _getUrgencyColor(signal.urgency),
                           ),
                         ),
                         title: Text(
-                          signal.title.isNotEmpty ? signal.title : Signal.getLocalizedSignalTypeName(context, signal.signalType),
+                          signal.title.isNotEmpty
+                              ? signal.title
+                              : signal.primaryTag.neededLabel(l10n),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
