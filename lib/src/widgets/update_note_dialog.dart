@@ -22,21 +22,21 @@ import '../models/signal_event.dart';
 Future<String?> showUpdateNoteDialog(
   BuildContext context, {
   required String levelLabel,
-  Widget? levelIcon,
+  required Widget levelBadge,
 }) =>
     showDialog<String>(
       context: context,
       builder: (context) => _UpdateNoteDialog(
         levelLabel: levelLabel,
-        levelIcon: levelIcon,
+        levelBadge: levelBadge,
       ),
     );
 
 class _UpdateNoteDialog extends StatefulWidget {
-  const _UpdateNoteDialog({required this.levelLabel, this.levelIcon});
+  const _UpdateNoteDialog({required this.levelLabel, required this.levelBadge});
 
   final String levelLabel;
-  final Widget? levelIcon;
+  final Widget levelBadge;
 
   @override
   State<_UpdateNoteDialog> createState() => _UpdateNoteDialogState();
@@ -76,10 +76,8 @@ class _UpdateNoteDialogState extends State<_UpdateNoteDialog> {
         children: [
           Row(
             children: [
-              if (widget.levelIcon != null) ...[
-                widget.levelIcon!,
-                const SizedBox(width: 8),
-              ],
+              widget.levelBadge,
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   l10n.updateNoteChangingTo(widget.levelLabel),
@@ -89,57 +87,47 @@ class _UpdateNoteDialogState extends State<_UpdateNoteDialog> {
             ],
           ),
           const SizedBox(height: 16),
-          Semantics(
-            label: l10n.updateNoteHint,
-            textField: true,
-            child: TextField(
-              controller: _controller,
-              autofocus: true,
-              maxLines: 3,
-              minLines: 2,
-              textCapitalization: TextCapitalization.sentences,
-              // Mirrors the 500-char bound in firestore.rules. The two are
-              // guarded together — see signal_event_vocabulary_guard_test.dart.
-              inputFormatters: [
-                LengthLimitingTextInputFormatter(SignalEventType.maxNoteLength),
-              ],
-              decoration: InputDecoration(
-                hintText: l10n.updateNoteHint,
-                border: const OutlineInputBorder(),
-                // Shown from the start rather than only after a failed submit:
-                // the Confirm button is disabled until the note is written, so
-                // without this the dialog would look broken rather than
-                // unfinished.
-                //
-                // Always present, never conditional on `canSubmit`. Removing it
-                // on the first keystroke shrank the field and jumped the whole
-                // dialog upward under the user's finger — and put it back if
-                // they deleted down to empty again.
-                helperText: l10n.updateNoteRequired,
-                helperMaxLines: 2,
-              ),
+          // No Semantics wrapper: the field's hint and the buttons' labels
+          // already expose exactly those strings. The project's Semantics
+          // convention is for controls with no text of their own — icons, map
+          // pins, chips — not for restating a label a control already has.
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            maxLines: 3,
+            minLines: 2,
+            textCapitalization: TextCapitalization.sentences,
+            // Mirrors the 500-char bound in firestore.rules. The two are
+            // guarded together — see signal_event_vocabulary_guard_test.dart.
+            inputFormatters: [
+              LengthLimitingTextInputFormatter(SignalEventType.maxNoteLength),
+            ],
+            decoration: InputDecoration(
+              hintText: l10n.updateNoteHint,
+              border: const OutlineInputBorder(),
+              // Shown from the start rather than only after a failed submit:
+              // the Confirm button is disabled until the note is written, so
+              // without this the dialog would look broken rather than
+              // unfinished.
+              //
+              // Always present, never conditional on `canSubmit`. Removing it
+              // on the first keystroke shrank the field and jumped the whole
+              // dialog upward under the user's finger — and put it back if they
+              // deleted down to empty again.
+              helperText: l10n.updateNoteRequired,
+              helperMaxLines: 2,
             ),
           ),
         ],
       ),
       actions: [
-        Semantics(
-          label: l10n.cancel,
-          button: true,
-          child: TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(l10n.cancel),
-          ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l10n.cancel),
         ),
-        Semantics(
-          label: l10n.confirm,
-          button: true,
-          enabled: canSubmit,
-          child: FilledButton(
-            onPressed:
-                canSubmit ? () => Navigator.of(context).pop(_note) : null,
-            child: Text(l10n.confirm),
-          ),
+        FilledButton(
+          onPressed: canSubmit ? () => Navigator.of(context).pop(_note) : null,
+          child: Text(l10n.confirm),
         ),
       ],
     );

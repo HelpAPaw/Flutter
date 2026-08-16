@@ -1,3 +1,7 @@
+// A test double has to implement DocumentReference to stand in for one; the
+// decoder only ever reads `.id` off it.
+// ignore_for_file: subtype_of_sealed_class
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:help_a_paw/src/models/signal_event.dart';
@@ -137,6 +141,47 @@ void main() {
     });
   });
 
+  group('eventData', () {
+    // The round trip is the point of having the encoder: before it existed the
+    // field names were string literals in two widgets, and nothing could check
+    // that what one writes is what the decoder reads.
+    for (final type in SignalEventType.values) {
+      test('${type.code} survives a round trip through fromDocument', () {
+        final written = type.eventData(
+          oldValue: 0,
+          newValue: 2,
+          note: 'Adopted by the finder',
+          actor: actor,
+        );
+
+        final entry = SignalHistoryEntry.fromDocument('e0', written)!;
+
+        expect(entry.level, 2);
+        expect(entry.note, 'Adopted by the finder');
+        expect(entry.actorId, 'u1');
+        expect(entry.isEvent, isTrue);
+        expect(entry.createdAt, isNotNull);
+      });
+    }
+
+    test('names the fields the rules validate', () {
+      final written = SignalEventType.statusChange.eventData(
+        oldValue: 0,
+        newValue: 1,
+        note: 'n',
+        actor: actor,
+      );
+
+      // firestore.rules checks these keys by name; a rename here is a denied
+      // write, and the guard test only covers `type` and `note`.
+      expect(written.keys, containsAll(<String>['type', 'note', 'createdAt', 'actor']));
+      expect(written['oldStatus'], 0);
+      expect(written['newStatus'], 1);
+      expect(written.containsKey('author'), isFalse);
+      expect(written.containsKey('text'), isFalse);
+    });
+  });
+
   group('mergeSignalHistory', () {
     SignalHistoryEntry at(String id, DateTime? time,
             {SignalHistoryKind kind = SignalHistoryKind.comment}) =>
@@ -226,7 +271,7 @@ void main() {
 }
 
 /// Stands in for the `users/{uid}` reference an event carries. Only `.id` is
-/// ever read.
+/// ever read, and building a real one needs a live Firestore.
 class _FakeRef implements DocumentReference<Map<String, dynamic>> {
   _FakeRef(this.id);
 

@@ -24,10 +24,25 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 /// `comments` home could not offer, because there the discriminator had to
 /// compete with "is this a user comment at all?".
 enum SignalEventType {
-  statusChange(code: 'status_change'),
-  urgencyChange(code: 'urgency_change');
+  statusChange(
+    code: 'status_change',
+    signalField: 'status',
+    oldKey: 'oldStatus',
+    newKey: 'newStatus',
+  ),
+  urgencyChange(
+    code: 'urgency_change',
+    signalField: 'urgency',
+    oldKey: 'oldUrgency',
+    newKey: 'newUrgency',
+  );
 
-  const SignalEventType({required this.code});
+  const SignalEventType({
+    required this.code,
+    required this.signalField,
+    required this.oldKey,
+    required this.newKey,
+  });
 
   /// Stable identifier persisted in Firestore. Never rename or reuse — stored
   /// events reference it, and the value is mirrored in `firestore.rules`
@@ -38,7 +53,19 @@ enum SignalEventType {
   /// writes an event — see `docs/SPECIFICATION.md` §12.5a.
   final String code;
 
-  /// Every code, for validation and for the Dart↔TypeScript drift guard.
+  /// The field this event changes on the signal document itself.
+  final String signalField;
+
+  /// Field names this event stores its before/after values under.
+  ///
+  /// They live here rather than at the write sites because the read side
+  /// already derives them from [code] — leaving them as string literals in the
+  /// two widgets that write events put the same mapping in three places, where
+  /// only one of them was under a guard test.
+  final String oldKey;
+  final String newKey;
+
+  /// Every code, for the Dart↔rules drift guard.
   static final List<String> allCodes =
       List.unmodifiable(values.map((t) => t.code));
 
@@ -50,16 +77,39 @@ enum SignalEventType {
 
   /// Resolve a persisted [code], or null if it is unknown.
   ///
-  /// Nullable rather than falling back, for the same reason as [HelpTag]: an
+  /// Nullable rather than falling back, for the same reason as `HelpTag`: an
   /// unrecognised code means the document was written by a *newer* client, and
-  /// guessing at what it meant would put a wrong sentence in the signal's history.
-  /// Callers skip what they cannot read and render the rest.
+  /// guessing at what it meant would put a wrong sentence in the signal's
+  /// history. Callers skip what they cannot read and render the rest.
   static SignalEventType? fromCode(String? code) {
     for (final type in values) {
       if (type.code == code) return type;
     }
     return null;
   }
+
+  /// The document to write into `signals/{id}/events`.
+  ///
+  /// The encoder lives beside the decoder so the wire shape has exactly one
+  /// definition. Before it did, `'note'`, `'actor'`, `'createdAt'` and the
+  /// level field names were string literals inside two different widgets, and
+  /// nothing could test that what one writes is what the other reads.
+  Map<String, dynamic> eventData({
+    required int oldValue,
+    required int newValue,
+    required String note,
+    required DocumentReference actor,
+  }) =>
+      {
+        'type': code,
+        oldKey: oldValue,
+        newKey: newValue,
+        'note': note,
+        // Client-set, not a server sentinel: the history sorts on this and a
+        // pending write with no timestamp would have nowhere to go.
+        'createdAt': DateTime.now(),
+        'actor': actor,
+      };
 }
 
 /// What a single row of the signal's history is.
@@ -88,7 +138,7 @@ class SignalHistoryEntry {
     required this.kind,
     required this.actorId,
     this.createdAt,
-    this.level = -1,
+    this.level,
     this.note,
     this.text,
   });
@@ -107,8 +157,11 @@ class SignalHistoryEntry {
   /// echo is briefly null. Such a row still renders; it just has no date yet.
   final DateTime? createdAt;
 
-  /// `newStatus` or `newUrgency`, by [kind]. `-1` when not applicable.
-  final int level;
+  /// `newStatus` or `newUrgency`, by [kind]. Null on the kinds that have no
+  /// level — `int?` rather than a `-1` sentinel, which `SignalStatus.fromCode`
+  /// would silently resolve to a real value for any caller that forgot to check
+  /// [kind] first.
+  final int? level;
 
   /// The mandatory update note (spec §4.6). Null on entries written before the
   /// note existed — those are legacy rows in `comments` and must keep rendering.
@@ -153,7 +206,7 @@ class SignalHistoryEntry {
     final actor = (data['actor'] ?? data['author']) as DocumentReference?;
     if (actor == null) return null;
 
-    final createdAt = _dateOf(data['createdAt']);
+    final createdAt = dateFrom(data['createdAt']);
     final rawType = data['type'] as String?;
 
     if (rawType == null) {
@@ -171,26 +224,32 @@ class SignalHistoryEntry {
     final type = SignalEventType.fromCode(rawType);
     if (type == null) return null;
 
-    final level = switch (type) {
-      SignalEventType.statusChange => data['newStatus'],
-      SignalEventType.urgencyChange => data['newUrgency'],
+    // One switch, not two: the kind and the level field are the same decision,
+    // and splitting them meant a new event type had to be added in two places.
+    final (kind, rawLevel) = switch (type) {
+      SignalEventType.statusChange =>
+        (SignalHistoryKind.statusChange, data[type.newKey]),
+      SignalEventType.urgencyChange =>
+        (SignalHistoryKind.urgencyChange, data[type.newKey]),
     };
-    if (level is! int) return null;
+    if (rawLevel is! int) return null;
 
     return SignalHistoryEntry(
       id: id,
-      kind: switch (type) {
-        SignalEventType.statusChange => SignalHistoryKind.statusChange,
-        SignalEventType.urgencyChange => SignalHistoryKind.urgencyChange,
-      },
+      kind: kind,
       actorId: actor.id,
       createdAt: createdAt,
-      level: level,
+      level: rawLevel,
       note: data['note'] as String?,
     );
   }
 
-  static DateTime? _dateOf(dynamic value) => switch (value) {
+  /// Decodes a Firestore timestamp field defensively.
+  ///
+  /// Public because `Signal.createdAt` is `dynamic` and the details screen needs
+  /// the same decode for the synthetic opening row — one definition beats two
+  /// that can disagree about what an unexpected type means.
+  static DateTime? dateFrom(dynamic value) => switch (value) {
         Timestamp() => value.toDate(),
         DateTime() => value,
         _ => null,
@@ -224,7 +283,7 @@ List<SignalHistoryEntry> mergeSignalHistory({
   return [if (created != null) created, ...rest];
 }
 
-/// Apply the All / History chips.
+/// Apply the All / Events chips.
 List<SignalHistoryEntry> filterSignalHistory(
   List<SignalHistoryEntry> entries,
   SignalHistoryFilter filter,

@@ -23,6 +23,7 @@ void main() {
               result.note = await showUpdateNoteDialog(
                 context,
                 levelLabel: 'Resolved',
+                levelBadge: const SizedBox.shrink(),
               );
               result.returned = true;
             },

@@ -199,6 +199,12 @@ named **`actor`, not `author`**, so that query can never pick events up again.
 Adding an event type is a new `SignalEventType` plus a rules clause — nothing already
 stored is reshaped.
 
+Both writers build the document through **one encoder**, `SignalEventType.eventData`
+(`models/signal_event.dart`), which also owns the `status`/`urgency` field name and the
+`old*`/`new*` key names. Before it existed those were string literals inside two widgets
+and a switch in the decoder — three copies of one mapping, one of them guarded. The
+encoder/decoder round trip is unit-tested.
+
 **The `note` is mandatory** (master spec §4.6: "every status change requires an update
 note"), enforced in the rules and by the note dialog. `text` on a comment is optional
 only because the legacy shapes above carry none; `note` must never pick up the same
@@ -939,7 +945,8 @@ that has regressed repeatedly (R5-004, R6-001, R6-002), which is why it lives ou
   backfill, correct for every signal ever created). Two explicit `StreamSubscription`s
   rather than `StreamBuilder`s, because the lists have to be sorted together before
   anything can render; null means "not delivered yet" and is distinct from empty. The
-  spinner shows only while *both* are silent, and **errors are tracked per collection**:
+  spinner shows only while *both* are silent, and **errors are tracked per source**
+  (each is a `_HistorySource`, so a third source would not mean three more fields):
   the history gives up only when neither can be read, and when exactly one fails it renders
   what it has above an inline "part of this history could not be loaded" row with a Retry.
   One shared error slot blanked a perfectly readable comment thread the moment the `events`

@@ -9,6 +9,7 @@ import 'package:help_a_paw/src/models/signal_urgency.dart';
 import 'package:help_a_paw/src/services/app_preferences_service.dart';
 import 'package:help_a_paw/src/models/help_tag.dart';
 import 'package:help_a_paw/src/widgets/help_tag_selector.dart';
+import 'package:help_a_paw/src/widgets/level_badge.dart';
 import 'package:help_a_paw/src/widgets/update_note_dialog.dart';
 import 'package:help_a_paw/src/widgets/urgency_picker.dart';
 
@@ -125,7 +126,7 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
       note = await showUpdateNoteDialog(
         context,
         levelLabel: urgency.label(l10n),
-        levelIcon: Image.asset(urgency.pinAsset, width: 24, height: 24),
+        levelBadge: urgencyBadge(urgency),
       );
       // Backing out of the note abandons the whole save, including the title,
       // description, phone and tag edits made alongside it. That is the right
@@ -172,18 +173,24 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
     });
 
     // Same timeline entry the details screen writes. Without it, escalating
-    // to Red from this screen would push every subscriber while the case
+    // to Red from this screen would push every subscriber while the signal
     // history showed nothing changed — and the spec's Red-Alert-misuse
     // handling has nothing to review.
     if (urgencyChanged) {
-      batch.set(signalRef.collection('events').doc(), {
-        'type': SignalEventType.urgencyChange.code,
-        'oldUrgency': _originalUrgency,
-        'newUrgency': _urgency,
-        'note': note,
-        'createdAt': DateTime.now(),
-        'actor': userRef,
-      });
+      batch.set(
+        signalRef.collection('events').doc(),
+        // Built by the same encoder the details screen uses, so the two writers
+        // cannot drift on field names — the spec's standing warning that these
+        // must stay in step is now a shared function rather than a comment.
+        SignalEventType.urgencyChange.eventData(
+          oldValue: _originalUrgency,
+          newValue: _urgency,
+          // Non-null under the same `urgencyChanged` guard that produced it:
+          // the block above returns when the dialog is cancelled.
+          note: note!,
+          actor: userRef,
+        ),
+      );
     }
 
     try {

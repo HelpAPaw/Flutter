@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:help_a_paw/src/models/signal_event.dart';
+import 'package:help_a_paw/src/models/signal_status.dart';
+import 'package:help_a_paw/src/models/signal_urgency.dart';
 
 /// Guards the copy of the case-event vocabulary that lives in `firestore.rules`.
 ///
@@ -63,6 +65,29 @@ void main() {
           'SignalEventType.maxNoteLength. If the rules bound is lower, people can '
           'type a note that the write then rejects with an opaque '
           'PERMISSION_DENIED.',
+    );
+  });
+
+  test('the rules accept every level code the app can produce', () {
+    final validator = _function(rules.readAsStringSync(), 'isValidLevel');
+
+    final match = RegExp(r'value <= (\d+)').firstMatch(validator);
+    expect(match, isNotNull,
+        reason: 'isValidLevel no longer bounds the level');
+
+    final highestCode = [
+      ...SignalStatus.values.map((s) => s.code),
+      ...SignalUrgency.values.map((u) => u.code),
+    ].reduce((a, b) => a > b ? a : b);
+
+    expect(
+      int.parse(match!.group(1)!),
+      greaterThanOrEqualTo(highestCode),
+      reason: 'firestore.rules bounds an event level at a value below the '
+          'highest SignalStatus/SignalUrgency code. docs/SPECIFICATION.md §4.5 '
+          'documents adding a status as appending the next free code — do that '
+          'without widening this bound and every status_change event write is '
+          'denied, which takes the status dropdown with it.',
     );
   });
 

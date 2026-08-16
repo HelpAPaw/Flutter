@@ -154,9 +154,8 @@ service cloud.firestore {
     // `get` with an out-of-range default so an absent field fails the bound
     // rather than needing a separate `in` check.
     function isValidLevel(field) {
-      return request.resource.data.get(field, -1) is int
-             && request.resource.data.get(field, -1) >= 0
-             && request.resource.data.get(field, -1) <= 2;
+      let value = request.resource.data.get(field, -1);
+      return value is int && value >= 0 && value <= 2;
     }
 
     // Validates the display name on a publicProfiles write (L-2). Bounds the
