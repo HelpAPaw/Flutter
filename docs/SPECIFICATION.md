@@ -1678,7 +1678,15 @@ denied and the whole batch fails — the status dropdown and the urgency picker 
 working entirely, showing only `errorUpdatingStatus`. The reverse order is harmless: the
 rules grant access to a subcollection no released build writes to. Reads degrade
 gracefully (§7.5 renders the half it can and offers a retry); **writes do not**, because
-atomicity is exactly what makes them all-or-nothing. Deployed 2026-08-15.
+atomicity is exactly what makes them all-or-nothing.
+
+⚠️ **Deployed 2026-08-15 and reverted the next day.** A later `firebase deploy
+--only firestore:rules` from a branch without the `events` block overwrote it —
+rules deploys replace the whole ruleset, so deploying an older file silently drops
+newer blocks. The symptom on a build of this branch is the §7.5 partial-history
+notice on *every* signal (the `events` listen is denied while `comments` still
+works) and status/urgency changes failing outright. **Re-deploy before this branch
+ships, and deploy rules from the merged branch, never from an older checkout.**
 
 ### 13.4 API key restrictions
 
