@@ -25,6 +25,7 @@ import 'package:help_a_paw/src/widgets/feedback_page.dart';
 import 'package:help_a_paw/src/widgets/helper_tags_gate.dart';
 import 'package:help_a_paw/src/widgets/home_route.dart';
 import 'package:help_a_paw/src/widgets/my_notifications_page.dart';
+import 'package:help_a_paw/src/widgets/new_signal/new_signal_wizard_page.dart';
 import 'package:help_a_paw/src/widgets/my_signals_page.dart';
 import 'package:help_a_paw/src/widgets/privacy_policy_page.dart';
 import 'package:help_a_paw/src/widgets/profile_completion_page.dart';
@@ -381,6 +382,11 @@ final GoRouter _router = GoRouter(
       name: 'clinic_details',
       path: Routes.clinicDetailsPath,
       builder: (BuildContext context, GoRouterState state) => ClinicDetailsScreen(clinicId: state.pathParameters['clinicId']!),
+    ),
+    GoRoute(
+      name: 'new_signal',
+      path: Routes.newSignal,
+      builder: (BuildContext context, GoRouterState state) => const NewSignalWizardPage(),
     ),
     GoRoute(
       name: 'verify_email',
