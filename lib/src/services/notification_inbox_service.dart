@@ -182,7 +182,7 @@ class NotificationInboxService {
             'read': false,
             'signalId': entry.signalId,
             'signalTitle': entry.signalTitle,
-            'signalType': entry.signalType,
+            'helpNeededTags': entry.helpNeededTags,
             'testMode': testMode,
             'createdAt': now,
             'expiresAt': expiresAt,
@@ -253,12 +253,15 @@ class NearbyInboxEntry {
     required this.title,
     required this.body,
     required this.signalTitle,
-    required this.signalType,
+    required this.helpNeededTags,
   });
 
   final String signalId;
   final String title;
   final String body;
   final String signalTitle;
-  final int signalType;
+
+  /// What the signal asks for, priority order. Element 0 is the headline the
+  /// inbox row is rendered from.
+  final List<String> helpNeededTags;
 }

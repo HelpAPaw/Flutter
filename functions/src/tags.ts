@@ -23,15 +23,125 @@
  */
 export const HELP_TAGS = [
   "rescue",
-  "foster",
-  "transport",
   "vetCare",
+  "bloodDonation",
+  "foster",
+  "adoption",
+  "transport",
   "food",
   "trapping",
-  "fundraising",
-  "adoption",
+  "neutering",
   "babyCare",
+  "fundraising",
+  "lostFound",
+  "dangerWarning",
 ] as const;
+
+/**
+ * Human-readable English names, keyed by code.
+ *
+ * The functions have no i18n, so push text is English-only — the client
+ * re-localizes from the structured fields in the inbox entry. Mirrors the
+ * `helpTag*` ARB keys.
+ */
+export const HELP_TAG_NAMES: Record<string, string> = {
+  rescue: "Rescue",
+  vetCare: "Vet care",
+  bloodDonation: "Blood donation",
+  foster: "Foster",
+  adoption: "Adoption",
+  transport: "Transport",
+  food: "Food & supplies",
+  trapping: "Trapping",
+  neutering: "Neutering",
+  babyCare: "Newborn care",
+  fundraising: "Fundraising",
+  lostFound: "Lost / found",
+  dangerWarning: "Local danger",
+};
+
+/**
+ * Codes that do **not** take the `" needed"` suffix in notification headlines.
+ *
+ * A lost dog is not "Lost / found needed", and a poison-bait warning is not
+ * "Local danger needed". These two describe a situation rather than a request
+ * for a service.
+ *
+ * Mirrored by `HelpTag.codesWithoutNeededSuffix` in
+ * `lib/src/models/help_tag.dart`, which resolves a whole separate localized
+ * string per tag rather than suffixing (Bulgarian does not build this phrase by
+ * suffixing). The two lists are compared by
+ * `test/help_tag_vocabulary_guard_test.dart`, because a divergence is silent —
+ * it surfaces only as one runtime saying "Lost / found needed" and the other
+ * not.
+ */
+export const HELP_TAGS_WITHOUT_NEEDED_SUFFIX = [
+  "lostFound",
+  "dangerWarning",
+] as const;
+
+/**
+ * Retired signal types, kept only to headline signals from an app build that
+ * still writes them.
+ *
+ * **This is a live path, not a migration.** Builds released before the tag
+ * vocabulary keep creating signals with a `signalType` and no tags for as long
+ * as they stay installed, and a phased release means that is months, not days.
+ * Without this a Blood-donation report from an old build would push as "Rescue
+ * needed", because `helpNeededTagsOf` substitutes the fallback for anything
+ * untagged — the server would be discarding a category the client still sends
+ * and still means.
+ *
+ * Index = the stored int. Delete this, and `legacyHeadline`, once the installed
+ * base has moved on; nothing else depends on it.
+ */
+const RETIRED_SIGNAL_TYPE_HEADLINES = [
+  "Rescue needed", // 0 Emergency — urgency carries the "emergency" part
+  "Lost / found", // 1
+  "Blood donation needed", // 2
+  "Foster needed", // 3 Homeless
+  "Neutering needed", // 4 Unneutered animals
+  "Rescue needed", // 5 Wild animals
+  "Rescue needed", // 6 Other
+];
+
+/**
+ * Push headline for a signal, honouring a legacy `signalType` when there are no
+ * tags to read.
+ *
+ * Prefers tags whenever the document has them, so a new-build signal is never
+ * routed through the retired table.
+ */
+export function signalHeadline(data: {
+  helpNeededTags?: unknown;
+  signalType?: unknown;
+}): string {
+  const raw = data.helpNeededTags;
+  const tagged = Array.isArray(raw) &&
+    raw.some((t) => typeof t === "string" && t.length > 0);
+  if (tagged) return helpTagHeadline(helpNeededTagsOf(data)[0]);
+
+  const type = data.signalType;
+  if (typeof type === "number" &&
+      type >= 0 &&
+      type < RETIRED_SIGNAL_TYPE_HEADLINES.length) {
+    return RETIRED_SIGNAL_TYPE_HEADLINES[type];
+  }
+  return helpTagHeadline(HELP_TAG_FALLBACK);
+}
+
+/**
+ * Headline form of a tag for push text — "Rescue needed", "Lost / found".
+ *
+ * Unknown codes (written by a newer client) fall back to the raw code rather
+ * than to a wrong label; see `helpNeededTagsOf` for why unknown codes are kept.
+ */
+export function helpTagHeadline(code: string): string {
+  const name = HELP_TAG_NAMES[code] ?? code;
+  return (HELP_TAGS_WITHOUT_NEEDED_SUFFIX as readonly string[]).includes(code) ?
+    name :
+    `${name} needed`;
+}
 
 /**
  * The tag a signal or user falls back to when it has none.
@@ -68,10 +178,10 @@ export function helpNeededTagsOf(data: { helpNeededTags?: unknown }): string[] {
  * The help tags a user matches on — never empty.
  *
  * **Absent and empty deliberately mean the same thing here**, which is the
- * opposite of how `signalTypes` and `animalTypes` behave in the same
- * preferences map. Those two are filters where empty is a real choice to
- * receive nothing; helper tags are a matching input, and `enabled` is how a
- * user turns notifications off. Mirrors Dart's
+ * opposite of how `animalTypes` behaves in the same preferences map. That one
+ * is a filter where empty is a real choice to receive nothing; helper tags are
+ * a matching input, and `enabled` is how a user turns notifications off.
+ * Mirrors Dart's
  * `NotificationPreferences.effectiveHelperTags` — change both together.
  */
 export function effectiveHelperTags(prefs: {
@@ -101,7 +211,8 @@ export function matchesHelpTags(
  * A null/absent `animalType` is a signal written before the field existed and
  * matches everyone — filtering those out would silently hide every legacy
  * signal from anyone who has chosen species. On the preferences side this is a
- * filter, so absent means all and empty means none, exactly like `signalTypes`.
+ * filter, so absent means all and empty means none. Since `signalTypes` was
+ * retired it is the only filter-semantics field left in the preferences map.
  */
 export function wantsAnimalType(
   prefs: { animalTypes?: string[] },

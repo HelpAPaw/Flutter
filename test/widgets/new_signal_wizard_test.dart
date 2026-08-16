@@ -110,7 +110,7 @@ void main() {
     await tester.tap(find.text(AnimalType.dog.label(l10n)));
     await tester.pumpAndSettle();
 
-    expect(currentStep(), NewSignalStep.signalType,
+    expect(currentStep(), NewSignalStep.urgency,
         reason: 'a first answer should carry the reporter forward');
 
     // Now go back and change it. This is the regression that matters: an
@@ -129,22 +129,6 @@ void main() {
       container.read(mapViewModelProvider).formState.animalType,
       AnimalType.cat.code,
     );
-  });
-
-  testWidgets('the category step does not advance itself', (tester) async {
-    // It arrives pre-selected on Emergency, and the wizard never auto-advances
-    // a step that already had an answer. Confirmed on device: picking a
-    // different category stays put and waits for Next.
-    viewModel.goToStep(NewSignalStep.signalType);
-    await pumpWizard(tester);
-
-    expect(nextIsEnabled(tester), true, reason: 'the default is a valid answer');
-
-    await tester.tap(find.text('Lost or Found'));
-    await tester.pumpAndSettle();
-
-    expect(currentStep(), NewSignalStep.signalType);
-    expect(container.read(mapViewModelProvider).formState.signalType, 1);
   });
 
   testWidgets('the multi-select help step never advances itself',

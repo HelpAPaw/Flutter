@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../models/signal.dart';
+import '../../models/animal_type.dart';
+import '../../models/help_tag.dart';
 import '../../models/signal_status.dart';
 import '../../models/signal_urgency.dart';
 import '../../state/map_state.dart';
 import '../../viewmodels/map_view_model.dart';
+import '../section_header.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 
-/// Shows the filter bottom sheet for signal types and statuses
+/// Shows the filter bottom sheet for help tags, species, urgency and status
 void showFilterBottomSheet(BuildContext context, WidgetRef ref) {
   final l10n = AppLocalizations.of(context);
   showModalBottomSheet(
@@ -81,13 +83,7 @@ class _FilterBottomSheetContent extends ConsumerWidget {
                       ],
                     ),
                     const Divider(),
-                    Text(
-                      l10n.timeRange,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    SectionHeader(l10n.timeRange),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
@@ -118,64 +114,63 @@ class _FilterBottomSheetContent extends ConsumerWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    const Divider(),
-                    Text(
+                    ..._section(
                       l10n.urgency,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                      SignalUrgency.values.map(
+                        (urgency) => _buildCheckbox(
+                          label: urgency.label(l10n),
+                          leading: Image.asset(
+                            urgency.pinAsset,
+                            width: 24,
+                            height: 24,
+                          ),
+                          isSelected: filterState.selectedUrgencies
+                              .contains(urgency.code),
+                          onToggle: () => viewModel.toggleUrgency(urgency.code),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    ...SignalUrgency.values.map(
-                      (urgency) => _buildIconCheckbox(
-                        label: urgency.label(l10n),
-                        iconPath: urgency.pinAsset,
-                        isSelected: filterState.selectedUrgencies
-                            .contains(urgency.code),
-                        onToggle: () => viewModel.toggleUrgency(urgency.code),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    const Divider(),
-                    Text(
+                    // Status rows deliberately carry no icon: the map pin means
+                    // urgency now, so showing one here would re-imply the old
+                    // status/colour link this change exists to break.
+                    ..._section(
                       l10n.status,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                      SignalStatus.values.map(
+                        (status) => _buildCheckbox(
+                          label: status.label(l10n),
+                          isSelected: filterState.selectedStatuses
+                              .contains(status.code),
+                          onToggle: () => viewModel.toggleStatus(status.code),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    // Status rows deliberately carry no pin icon: the map pin
-                    // means urgency now, so showing one here would re-imply the
-                    // old status/colour link this change exists to break.
-                    ...SignalStatus.values.map(
-                      (status) => _buildPlainCheckbox(
-                        label: status.label(l10n),
-                        isSelected:
-                            filterState.selectedStatuses.contains(status.code),
-                        onToggle: () => viewModel.toggleStatus(status.code),
+                    // A signal declares up to three needs and passes if *any*
+                    // of them is ticked — see MapFilterState.signalPassesFilter.
+                    ..._section(
+                      l10n.helpNeeded,
+                      HelpTag.values.map(
+                        (tag) => _buildCheckbox(
+                          label: tag.label(l10n),
+                          leading: Icon(tag.icon, size: 22),
+                          isSelected:
+                              filterState.selectedHelpTags.contains(tag.code),
+                          onToggle: () => viewModel.toggleHelpTag(tag.code),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    const Divider(),
-                    Text(
-                      l10n.signalType,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                    ..._section(
+                      l10n.animalTypes,
+                      AnimalType.values.map(
+                        (type) => _buildCheckbox(
+                          label: type.label(l10n),
+                          leading: Icon(type.icon, size: 22),
+                          isSelected: filterState.selectedAnimalTypes
+                              .contains(type.code),
+                          onToggle: () =>
+                              viewModel.toggleAnimalType(type.code),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    ...List.generate(Signal.signalTypes.length, (index) {
-                      return _buildPlainCheckbox(
-                        label: Signal.getLocalizedSignalTypeName(context, index),
-                        isSelected:
-                            filterState.selectedSignalTypes.contains(index),
-                        onToggle: () => viewModel.toggleSignalType(index),
-                      );
-                    }),
                     const SizedBox(height: 16),
                     SizedBox(
                       width: double.infinity,
@@ -207,42 +202,48 @@ class _FilterBottomSheetContent extends ConsumerWidget {
     );
   }
 
-  Widget _buildIconCheckbox({
+  /// One filter row. [leading] is the only thing that varied between the three
+  /// copies this replaced — a pin asset for urgency, a Material icon for tags
+  /// and species, nothing for status — and they had already drifted apart on
+  /// label wrapping and icon size.
+  Widget _buildCheckbox({
     required String label,
-    required String iconPath,
     required bool isSelected,
     required VoidCallback onToggle,
+    Widget? leading,
   }) {
     return CheckboxListTile(
       value: isSelected,
       onChanged: (_) => onToggle(),
-      title: Row(
-        children: [
-          Image.asset(iconPath, width: 24, height: 24),
-          const SizedBox(width: 12),
-          Text(label),
-        ],
-      ),
+      title: leading == null
+          ? Text(label)
+          : Row(
+              children: [
+                leading,
+                const SizedBox(width: 12),
+                Flexible(child: Text(label)),
+              ],
+            ),
       activeColor: Colors.orange,
       controlAffinity: ListTileControlAffinity.leading,
       contentPadding: EdgeInsets.zero,
     );
   }
 
-  Widget _buildPlainCheckbox({
-    required String label,
-    required bool isSelected,
-    required VoidCallback onToggle,
-  }) {
-    return CheckboxListTile(
-      value: isSelected,
-      onChanged: (_) => onToggle(),
-      title: Text(label),
-      activeColor: Colors.orange,
-      controlAffinity: ListTileControlAffinity.leading,
-      contentPadding: EdgeInsets.zero,
-    );
-  }
+  /// A divider, a heading and its rows — the four-line preamble each filter
+  /// section repeated verbatim.
+  ///
+  /// The heading is the shared [SectionHeader] rather than a local `Text`: this
+  /// sheet used a hardcoded `fontSize: 16`, which would have been a third size
+  /// for one heading style and, unlike `titleMedium`, does not scale with the
+  /// user's text-size setting.
+  List<Widget> _section(String title, Iterable<Widget> rows) => [
+        const SizedBox(height: 16),
+        const Divider(),
+        SectionHeader(title),
+        const SizedBox(height: 8),
+        ...rows,
+      ];
 
   Widget _buildTimeRangeChip({
     required String label,

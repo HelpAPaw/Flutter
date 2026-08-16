@@ -9,7 +9,6 @@ import '../../../l10n/app_localizations.dart';
 import '../../models/animal_type.dart';
 import '../../models/help_tag.dart';
 import '../../models/new_signal_step.dart';
-import '../../models/signal.dart';
 import '../../models/signal_urgency.dart';
 import '../../viewmodels/map_view_model.dart';
 import '../help_tag_selector.dart';
@@ -366,67 +365,7 @@ class NewSignalAnimalStep extends ConsumerWidget {
 }
 
 // ============================================================
-// Step 5 — Signal type
-// ============================================================
-
-/// The coarse category. Localized here — the old inline form rendered the raw
-/// English `Signal.signalTypes` constants, so Bulgarian reporters picked their
-/// category out of an English list.
-class NewSignalTypeStep extends ConsumerWidget {
-  const NewSignalTypeStep({super.key, required this.onAnswered});
-
-  final VoidCallback onAnswered;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final selected = ref.watch(
-      mapViewModelProvider.select((s) => s.formState.signalType),
-    );
-    final names = Signal.getLocalizedSignalTypes(context);
-
-    void select(int index) {
-      ref.read(mapViewModelProvider.notifier).setFormSignalType(index);
-      onAnswered();
-    }
-
-    return NewSignalStepBody(
-      step: NewSignalStep.signalType,
-      child: RadioGroup<int>(
-        groupValue: selected,
-        onChanged: (value) {
-          if (value != null) select(value);
-        },
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (var index = 0; index < names.length; index++)
-              Semantics(
-                identifier: 'wizardSignalType.$index',
-                selected: index == selected,
-                button: true,
-                child: InkWell(
-                  onTap: () => select(index),
-                  borderRadius: BorderRadius.circular(8),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: Row(
-                      children: [
-                        Radio<int>(value: index),
-                        Expanded(child: Text(names[index])),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ============================================================
-// Step 6 — Urgency
+// Step 5 — Urgency
 // ============================================================
 
 /// Late in the flow on purpose: asked cold it invites a reflexive "Red,
@@ -463,7 +402,7 @@ class NewSignalUrgencyStep extends ConsumerWidget {
 }
 
 // ============================================================
-// Step 7 — Help needed
+// Step 6 — Help needed
 // ============================================================
 
 /// The most derived question, and the last one asked: it decides who gets
@@ -496,7 +435,7 @@ class NewSignalHelpTagsStep extends ConsumerWidget {
 }
 
 // ============================================================
-// Step 8 — Review
+// Step 7 — Review
 // ============================================================
 
 /// Every answer on one screen, each with a way back to the step that set it.
@@ -582,15 +521,6 @@ class NewSignalReviewStep extends ConsumerWidget {
                 ? l10n.newSignalNotProvided
                 : (AnimalType.fromCode(animalType)?.label(l10n) ?? animalType),
             onChange: () => notifier.goToStep(NewSignalStep.animal),
-          ),
-          _ReviewRow(
-            field: 'signalType',
-            label: l10n.signalType,
-            value: Signal.getLocalizedSignalTypeName(
-              context,
-              formState.signalType,
-            ),
-            onChange: () => notifier.goToStep(NewSignalStep.signalType),
           ),
           _ReviewRow(
             field: 'urgency',

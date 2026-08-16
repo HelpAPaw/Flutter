@@ -23,9 +23,14 @@ Or visit: $_websiteUrl''';
     await SharePlus.instance.share(ShareParams(text: message, subject: 'Help a Paw - Help animals in need', sharePositionOrigin: sharePositionOrigin));
   }
 
+  /// Shares a signal.
+  ///
+  /// [headline] is the already-localized description of what the signal needs —
+  /// normally `HelpTag.neededLabel`, e.g. "Rescue needed". Resolved by the
+  /// caller, which has the `BuildContext` this service deliberately does not.
   static Future<void> shareSignal({
     required String signalId,
-    required String signalType,
+    required String headline,
     required String description,
     double? latitude,
     double? longitude,
@@ -41,7 +46,7 @@ Or visit: $_websiteUrl''';
     // animal's photo and title.
     var message = '''🐾 Animal needs help!
 
-Type: $signalType
+$headline
 $description
 
 View on Help a Paw: $deepLink''';

@@ -6,7 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../config/routes.dart';
-import '../models/signal.dart';
+import '../models/help_tag.dart';
 import '../models/signal_status.dart';
 import '../models/signal_urgency.dart';
 import '../services/app_badge_service.dart';
@@ -16,7 +16,7 @@ import '../utils/nav_extensions.dart';
 /// The in-app notification inbox.
 ///
 /// Rows are rendered from the structured fields on each document
-/// (`signalType`, `statusCode`, …) rather than from the stored `title`/`body`,
+/// (`helpNeededTags`, `statusCode`, …) rather than from the stored `title`/`body`,
 /// which are the English strings the push carried and exist only as a fallback.
 /// The Cloud Function has no i18n, and this app is bilingual.
 class MyNotificationsPage extends StatefulWidget {
@@ -127,23 +127,30 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
   /// Localized row body. Comment text is user content and is shown as stored.
   String _body(AppLocalizations l10n, Map<String, dynamic> data) {
     final signalTitle = data['signalTitle'] as String? ?? '';
-    final signalType = data['signalType'] as int?;
+    // Rows written before signal types were folded into the tag vocabulary
+    // carry a `signalType` int and no tags. They are not translated back — the
+    // stored English body is shown instead, which is what `fallback` is for.
+    // Keeping a retired 7-value bilingual type table alive purely to re-render
+    // notification history is not worth it.
+    final helpNeededTags =
+        (data['helpNeededTags'] as List<dynamic>?)?.cast<String>();
     final statusCode = data['statusCode'] as int?;
     final fallback = data['body'] as String? ?? '';
 
     switch (data['type']) {
+      // One format for both: a fan-out push and a catch-up announce the same
+      // thing about the same signal. Catch-up rows carry no `urgency`, so they
+      // simply always take the plain branch.
       case 'new_signal':
-        if (signalType == null) return fallback;
-        return l10n.notificationNewSignalBody(
-          Signal.signalTypeName(l10n, signalType),
-          signalTitle,
-        );
       case 'nearby_signal':
-        if (signalType == null) return fallback;
-        return l10n.notificationNearbySignalBody(
-          Signal.signalTypeName(l10n, signalType),
-          signalTitle,
-        );
+        if (helpNeededTags == null) return fallback;
+        final headline = HelpTag.primaryOf(helpNeededTags).neededLabel(l10n);
+        // Red repeats the urgency here because the row is often read without
+        // its title, and it is the whole point of the level. Mirrors the
+        // server's push body.
+        return (data['urgency'] as int?) == SignalUrgency.red.code
+            ? l10n.notificationNewSignalBodyUrgent(headline, signalTitle)
+            : l10n.notificationNewSignalBody(headline, signalTitle);
       case 'status_change':
         if (statusCode == null) return fallback;
         return l10n.notificationStatusChangeBody(

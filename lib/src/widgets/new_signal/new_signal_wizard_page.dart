@@ -139,8 +139,6 @@ class _NewSignalWizardPageState extends ConsumerState<NewSignalWizardPage> {
         NewSignalStep.photo => const NewSignalPhotoStep(),
         NewSignalStep.details => const NewSignalDetailsStep(),
         NewSignalStep.animal => NewSignalAnimalStep(onAnswered: _onAnswered),
-        NewSignalStep.signalType =>
-          NewSignalTypeStep(onAnswered: _onAnswered),
         NewSignalStep.urgency => NewSignalUrgencyStep(onAnswered: _onAnswered),
         NewSignalStep.helpTags => const NewSignalHelpTagsStep(),
         NewSignalStep.review =>

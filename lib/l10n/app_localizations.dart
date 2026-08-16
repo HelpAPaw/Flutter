@@ -284,53 +284,23 @@ abstract class AppLocalizations {
   /// **'Confirm Red Alert'**
   String get redAlertConfirmAction;
 
-  /// No description provided for @signalTypeEmergency.
-  ///
-  /// In en, this message translates to:
-  /// **'Emergency'**
-  String get signalTypeEmergency;
-
-  /// No description provided for @signalTypeLostOrFound.
-  ///
-  /// In en, this message translates to:
-  /// **'Lost or Found'**
-  String get signalTypeLostOrFound;
-
-  /// No description provided for @signalTypeBloodDonation.
-  ///
-  /// In en, this message translates to:
-  /// **'Blood donation'**
-  String get signalTypeBloodDonation;
-
-  /// No description provided for @signalTypeHomeless.
-  ///
-  /// In en, this message translates to:
-  /// **'Homeless'**
-  String get signalTypeHomeless;
-
-  /// No description provided for @signalTypeUnneuteredAnimals.
-  ///
-  /// In en, this message translates to:
-  /// **'Unneutered animals'**
-  String get signalTypeUnneuteredAnimals;
-
-  /// No description provided for @signalTypeWildAnimals.
-  ///
-  /// In en, this message translates to:
-  /// **'Wild animals'**
-  String get signalTypeWildAnimals;
-
-  /// No description provided for @signalTypeOther.
-  ///
-  /// In en, this message translates to:
-  /// **'Other'**
-  String get signalTypeOther;
-
   /// No description provided for @helpTagRescue.
   ///
   /// In en, this message translates to:
   /// **'Rescue'**
   String get helpTagRescue;
+
+  /// No description provided for @helpTagVetCare.
+  ///
+  /// In en, this message translates to:
+  /// **'Vet care'**
+  String get helpTagVetCare;
+
+  /// No description provided for @helpTagBloodDonation.
+  ///
+  /// In en, this message translates to:
+  /// **'Blood donation'**
+  String get helpTagBloodDonation;
 
   /// No description provided for @helpTagFoster.
   ///
@@ -338,17 +308,17 @@ abstract class AppLocalizations {
   /// **'Fostering'**
   String get helpTagFoster;
 
+  /// No description provided for @helpTagAdoption.
+  ///
+  /// In en, this message translates to:
+  /// **'Adoption'**
+  String get helpTagAdoption;
+
   /// No description provided for @helpTagTransport.
   ///
   /// In en, this message translates to:
   /// **'Transport'**
   String get helpTagTransport;
-
-  /// No description provided for @helpTagVetCare.
-  ///
-  /// In en, this message translates to:
-  /// **'Vet care'**
-  String get helpTagVetCare;
 
   /// No description provided for @helpTagFood.
   ///
@@ -362,17 +332,11 @@ abstract class AppLocalizations {
   /// **'Trapping'**
   String get helpTagTrapping;
 
-  /// No description provided for @helpTagFundraising.
+  /// No description provided for @helpTagNeutering.
   ///
   /// In en, this message translates to:
-  /// **'Fundraising'**
-  String get helpTagFundraising;
-
-  /// No description provided for @helpTagAdoption.
-  ///
-  /// In en, this message translates to:
-  /// **'Adoption'**
-  String get helpTagAdoption;
+  /// **'Neutering'**
+  String get helpTagNeutering;
 
   /// No description provided for @helpTagBabyCare.
   ///
@@ -380,11 +344,41 @@ abstract class AppLocalizations {
   /// **'Newborn care'**
   String get helpTagBabyCare;
 
+  /// No description provided for @helpTagFundraising.
+  ///
+  /// In en, this message translates to:
+  /// **'Fundraising'**
+  String get helpTagFundraising;
+
+  /// No description provided for @helpTagLostFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Lost / found'**
+  String get helpTagLostFound;
+
+  /// No description provided for @helpTagDangerWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Local danger'**
+  String get helpTagDangerWarning;
+
   /// No description provided for @helpTagRescueHelper.
   ///
   /// In en, this message translates to:
   /// **'I can go to an animal in need'**
   String get helpTagRescueHelper;
+
+  /// No description provided for @helpTagVetCareHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'I can help with a vet visit or treatment'**
+  String get helpTagVetCareHelper;
+
+  /// No description provided for @helpTagBloodDonationHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'My pet can donate blood, or I can help arrange a donor'**
+  String get helpTagBloodDonationHelper;
 
   /// No description provided for @helpTagFosterHelper.
   ///
@@ -392,17 +386,17 @@ abstract class AppLocalizations {
   /// **'I can take an animal into my home for a while'**
   String get helpTagFosterHelper;
 
+  /// No description provided for @helpTagAdoptionHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'I am looking to adopt, or can help find a home'**
+  String get helpTagAdoptionHelper;
+
   /// No description provided for @helpTagTransportHelper.
   ///
   /// In en, this message translates to:
   /// **'I can drive an animal somewhere'**
   String get helpTagTransportHelper;
-
-  /// No description provided for @helpTagVetCareHelper.
-  ///
-  /// In en, this message translates to:
-  /// **'I can help with a vet visit or treatment'**
-  String get helpTagVetCareHelper;
 
   /// No description provided for @helpTagFoodHelper.
   ///
@@ -416,23 +410,101 @@ abstract class AppLocalizations {
   /// **'I can trap an animal, or I have a trap or cage'**
   String get helpTagTrappingHelper;
 
-  /// No description provided for @helpTagFundraisingHelper.
+  /// No description provided for @helpTagNeuteringHelper.
   ///
   /// In en, this message translates to:
-  /// **'I can help raise or share funds'**
-  String get helpTagFundraisingHelper;
-
-  /// No description provided for @helpTagAdoptionHelper.
-  ///
-  /// In en, this message translates to:
-  /// **'I am looking to adopt, or can help find a home'**
-  String get helpTagAdoptionHelper;
+  /// **'I can help get animals neutered or spayed'**
+  String get helpTagNeuteringHelper;
 
   /// No description provided for @helpTagBabyCareHelper.
   ///
   /// In en, this message translates to:
   /// **'I can bottle-feed or care for newborns'**
   String get helpTagBabyCareHelper;
+
+  /// No description provided for @helpTagFundraisingHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'I can help raise or share funds'**
+  String get helpTagFundraisingHelper;
+
+  /// No description provided for @helpTagLostFoundHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Tell me about lost and found pets near me — I will keep an eye out'**
+  String get helpTagLostFoundHelper;
+
+  /// No description provided for @helpTagDangerWarningHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Tell me about hazards in my area, such as poison bait or traps'**
+  String get helpTagDangerWarningHelper;
+
+  /// No description provided for @helpTagRescueNeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Rescue needed'**
+  String get helpTagRescueNeeded;
+
+  /// No description provided for @helpTagVetCareNeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Vet care needed'**
+  String get helpTagVetCareNeeded;
+
+  /// No description provided for @helpTagBloodDonationNeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Blood donation needed'**
+  String get helpTagBloodDonationNeeded;
+
+  /// No description provided for @helpTagFosterNeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Foster needed'**
+  String get helpTagFosterNeeded;
+
+  /// No description provided for @helpTagAdoptionNeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Adoption needed'**
+  String get helpTagAdoptionNeeded;
+
+  /// No description provided for @helpTagTransportNeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport needed'**
+  String get helpTagTransportNeeded;
+
+  /// No description provided for @helpTagFoodNeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Food & supplies needed'**
+  String get helpTagFoodNeeded;
+
+  /// No description provided for @helpTagTrappingNeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Trapping needed'**
+  String get helpTagTrappingNeeded;
+
+  /// No description provided for @helpTagNeuteringNeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Neutering needed'**
+  String get helpTagNeuteringNeeded;
+
+  /// No description provided for @helpTagBabyCareNeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Newborn care needed'**
+  String get helpTagBabyCareNeeded;
+
+  /// No description provided for @helpTagFundraisingNeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Fundraising needed'**
+  String get helpTagFundraisingNeeded;
 
   /// No description provided for @animalTypeCat.
   ///
@@ -530,11 +602,11 @@ abstract class AppLocalizations {
   /// **'Could not save your choices. Please try again.'**
   String get helperTagsSaveFailed;
 
-  /// No description provided for @selectAtLeastOneSignalType.
+  /// No description provided for @settingsLoadFailed.
   ///
   /// In en, this message translates to:
-  /// **'Choose at least one signal type, or turn notifications off'**
-  String get selectAtLeastOneSignalType;
+  /// **'Your settings could not be loaded. Check your connection and try again — nothing has been changed.'**
+  String get settingsLoadFailed;
 
   /// No description provided for @selectAtLeastOneAnimalType.
   ///
@@ -577,12 +649,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Status'**
   String get status;
-
-  /// No description provided for @signalType.
-  ///
-  /// In en, this message translates to:
-  /// **'Signal Type'**
-  String get signalType;
 
   /// No description provided for @timeRange.
   ///
@@ -716,12 +782,6 @@ abstract class AppLocalizations {
   /// **'Animal'**
   String get newSignalStepAnimal;
 
-  /// No description provided for @newSignalStepType.
-  ///
-  /// In en, this message translates to:
-  /// **'Category'**
-  String get newSignalStepType;
-
   /// No description provided for @newSignalStepUrgency.
   ///
   /// In en, this message translates to:
@@ -763,12 +823,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'What animal is it?'**
   String get newSignalQuestionAnimal;
-
-  /// No description provided for @newSignalQuestionType.
-  ///
-  /// In en, this message translates to:
-  /// **'What kind of case is this?'**
-  String get newSignalQuestionType;
 
   /// No description provided for @newSignalQuestionUrgency.
   ///
@@ -1063,12 +1117,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Failed to load image'**
   String get failedToLoadImage;
-
-  /// No description provided for @signalTypeLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Signal type: {type}'**
-  String signalTypeLabel(String type);
 
   /// No description provided for @navigateMe.
   ///
@@ -1549,12 +1597,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Clear Region'**
   String get clearRegion;
-
-  /// No description provided for @signalTypes.
-  ///
-  /// In en, this message translates to:
-  /// **'Signal Types'**
-  String get signalTypes;
 
   /// No description provided for @settingsSaved.
   ///
@@ -2183,8 +2225,14 @@ abstract class AppLocalizations {
   /// No description provided for @notificationNewSignalBody.
   ///
   /// In en, this message translates to:
-  /// **'{signalType}: {signalTitle}'**
-  String notificationNewSignalBody(String signalType, String signalTitle);
+  /// **'{headline} — {signalTitle}'**
+  String notificationNewSignalBody(String headline, String signalTitle);
+
+  /// No description provided for @notificationNewSignalBodyUrgent.
+  ///
+  /// In en, this message translates to:
+  /// **'Urgent · {headline} — {signalTitle}'**
+  String notificationNewSignalBodyUrgent(String headline, String signalTitle);
 
   /// No description provided for @notificationStatusChangeTitle.
   ///
@@ -2221,12 +2269,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'New comment on: {signalTitle}'**
   String notificationNewCommentTitle(String signalTitle);
-
-  /// No description provided for @notificationNearbySignalBody.
-  ///
-  /// In en, this message translates to:
-  /// **'{signalType} · {signalTitle}'**
-  String notificationNearbySignalBody(String signalType, String signalTitle);
 
   /// No description provided for @completeYourProfile.
   ///

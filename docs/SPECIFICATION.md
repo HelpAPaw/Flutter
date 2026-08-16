@@ -154,10 +154,9 @@ allow-listed in the console or anonymous sign-in fails.
 |---|---|---|
 | `title` | string | 1–300 chars (enforced by rules and the input formatter) |
 | `description` | string | ≤10 000 chars |
-| `signalType` | int | 0–6, see §4.4 |
 | `status` | int | stable code, see §4.5 |
 | `urgency` | int | stable code, see §4.6. Optional on the wire — pre-urgency documents omit it and readers derive one |
-| `helpNeededTags` | string[] | 1–3 codes, see §4.7. Array order = priority. Optional on the wire — pre-tag documents omit it and the fan-out substitutes `rescue` |
+| `helpNeededTags` | string[] | 1–3 codes, see §4.7. Array order = priority, and **element 0 is the case's category** (§4.4). Optional on the wire — pre-tag documents omit it and readers substitute `rescue` |
 | `animalType` | string | one code, see §4.7. Optional on the wire — when absent the signal matches every species filter |
 | `location` | map | `{ geopoint: GeoPoint, geohash: string }`, geohash precision 9 |
 | `reporter` | DocumentReference | → `users/{uid}`; pinned to the caller by rules |
@@ -165,6 +164,7 @@ allow-listed in the console or anonymous sign-in fails.
 | `phoneNumber` | string | legacy duplicate of `contactPhone`, written with the same value |
 | `createdAt` | Timestamp | client-set at creation |
 | `photoUrls` | string[] | Storage download URLs, max 5 enforced in the UI |
+| ~~`signalType`~~ | int | **retired, see §4.4.** Present on documents written before the tag merge; nothing reads or writes it, and the rules neither require nor bound it |
 | `lastUpdatedBy` | DocumentReference | set on status **and** urgency change; rules require self-stamping on the status-only path |
 
 Subcollection **`comments/{commentId}`** — what people *said*:
@@ -232,7 +232,7 @@ Subcollection **`notifications/{id}`** — the in-app inbox, see §7.13.
 | `type` | string | `new_signal` \| `status_change` \| `urgency_change` \| `new_comment` \| `nearby_signal` — the same vocabulary as the FCM `data.type` |
 | `signalId` | string | deep-link target |
 | `signalTitle` | string | rendered client-side |
-| `signalType` | int? | `new_signal` / `nearby_signal` |
+| `helpNeededTags` | string[]? | `new_signal` / `nearby_signal` — element 0 is the headline the row is rendered from |
 | `statusCode` | int? | `status_change` |
 | `urgency` | int? | `urgency_change` (also set on `new_signal`) |
 | `commentExcerpt` | string? | `new_comment` |
@@ -299,27 +299,36 @@ Typed on both sides: `NotificationPreferences` (Dart) and `UserNotificationPrefs
 | `enabled` | `false` | master switch; everything else is inert while false |
 | `locationTrackingEnabled` | `false` | consent to store the user's position |
 | `locationRadiusKm` | `10.0` | UI range 1–50 |
-| `signalTypes` | *absent* | **absent ≠ empty**: absent = "never chose" = all types; empty = deliberate "Deselect all" = none |
-| `animalTypes` | *absent* | species filter, same absent/empty rule as `signalTypes` |
+| `animalTypes` | *absent* | species filter. **absent ≠ empty**: absent = "never chose" = all species; empty = a deliberate choice = none |
+| ~~`signalTypes`~~ | *absent* | **retired with §4.4.** Survives on the three user documents that ever set it (all with the full 0–6 list); never read, never rewritten — rewriting would opt someone back into something they chose against |
 | `helperTags` | *absent* | kinds of help the user can offer, see §4.7. **absent = empty** here — the opposite rule |
 | `regionOfInterest` | *absent* | `{ center: GeoPoint, radiusKm: 1–100, geohash }` |
 
 The absent/empty distinction is load-bearing on both client and server; collapsing it
 made "Deselect all" behave as "select all".
 
-**Two opposite conventions live in this one map, deliberately.** `signalTypes` and
-`animalTypes` are *filters*, where empty is a real choice to receive nothing.
-`helperTags` is a *matching input* and not an opt-out mechanism — `enabled` is how a
-user turns notifications off — so absent and empty both resolve to `rescue`. Both
-sides go through one resolver each (`effectiveHelperTags`, in Dart and TS) rather
-than reading the field directly. Unifying the two rules is the mistake to avoid:
+**Two opposite conventions live in this one map, deliberately.** `animalTypes` is a
+*filter*, where empty is a real choice to receive nothing. `helperTags` is a
+*matching input* and not an opt-out mechanism — `enabled` is how a user turns
+notifications off — so absent and empty both resolve to `rescue`. Both sides go
+through one resolver each (`effectiveHelperTags`, in Dart and TS) rather than
+reading the field directly. Unifying the two rules is the mistake to avoid:
 collapsing helper tags into filter semantics would make every un-onboarded user match
 nothing and silently stop being notified.
 
-Since the tag system shipped, the settings screen requires at least one signal type,
-one animal type and one helper tag **while `enabled` is true**, and the "Deselect all"
-button is gone. A stored empty `signalTypes` from before that change still means
-"none" server-side and is never migrated — rewriting it would opt those users back in.
+The settings screen requires at least one animal type and one helper tag **while
+`enabled` is true**, and there is no "Deselect all".
+
+> **The cost of retiring `signalTypes`: there is no negative notification filter
+> left.** It was the only way to say "never tell me about X". Help tags cannot
+> replace it — they *rank* rather than gate (tiers A/C vs B/D in
+> `recipientSelection.ts`), and the floor deliberately backfills people whose tags
+> do not match. So a user who says "I only do fundraising" can still be pulled into
+> a rescue signal when their area is thin. This is accepted while `MIN_RECIPIENTS`
+> is doing most of the work at current scale, and it cost nothing to adopt: no user
+> had ever excluded a type. Revisit when the tier logs (§9) show tier A regularly
+> meeting the floor on its own — at that point an explicit opt-out list becomes
+> affordable.
 
 ### 4.3 Firebase Storage layout
 
@@ -328,13 +337,58 @@ signals/{signalId}/photos/{millis}.jpg      # signal photos, public read
 profile_photos/{uid}.jpg                    # avatar
 ```
 
-### 4.4 Signal types (index = stored value)
+### 4.4 Signal types — **retired**
 
-`0` Emergency · `1` Lost or Found · `2` Blood donation · `3` Homeless ·
-`4` Unneutered animals · `5` Wild animals · `6` Other
+There used to be a `signalType` int (`0` Emergency · `1` Lost or Found ·
+`2` Blood donation · `3` Homeless · `4` Unneutered animals · `5` Wild animals ·
+`6` Other), chosen by the reporter alongside urgency, species and help tags. It
+is gone. **A case's category is now `helpNeededTags[0]`** (`Signal.primaryTag`),
+which is what master spec §4.2 means by a main category: the top-priority need,
+with the secondary needs ordered behind it.
 
-Defined in three places that must agree: `Signal.signalTypes` /
-`Signal.localizedSignalTypes` (Dart), `SIGNAL_TYPES` and `SIGNAL_TYPE_NAMES` (functions).
+**Why it went.** Four of the seven values restated a field that now exists in its
+own right — Emergency is `urgency == red`, Blood donation and Unneutered animals
+are tags (`bloodDonation`, `neutering`), Wild animals is `animalType == other` —
+so a reporter answered the same question twice and the two answers could
+contradict each other, unvalidated. The deciding case was an injured animal:
+master spec §5 uses it as *the* worked example of Red urgency and gives it no
+category at all, because an injured animal simply is red + `[rescue, vetCare]`.
+Keeping a mandatory situation-shaped type would have filed it under "Stray" or
+"Other" and degraded the push from *"Emergency: Dog hit by car"* to
+*"Stray / street animal: Dog hit by car"* — in the case the app most exists for.
+The two things a need vocabulary genuinely cannot say, Lost/Found and a local
+danger warning, became tags of their own (§4.7).
+
+**What survives — and this is a live path, not a migration.** The app release is
+phased, so builds that still write `signalType` and no tags stay installed for
+months after the server changes. Three things exist only for them, and all three
+come out together once the installed base has moved on:
+
+| where | what | why |
+|---|---|---|
+| `functions/src/tags.ts` | `signalHeadline` + `RETIRED_SIGNAL_TYPE_HEADLINES` | Without it `helpNeededTagsOf` substitutes the fallback for every untagged signal, so a Blood-donation report from a shipped build pushes as "Rescue needed" — the server discarding a category the client still sends and still means |
+| `functions/src/index.ts` | inbox entries mirror `signalType` when the signal has one | Shipped builds render the row from `signalType` and fall back to the stored **English** body without it, showing Bulgarian users English text |
+| `firestore.rules` | the inbox `create` allow-list accepts **both** shapes, requires neither | This is a *client* write path (the arrival catch-up), and `NearbySignalChecker` swallows a denial — rejecting the old shape makes inbox entries silently stop appearing |
+
+The earlier plan dropped all three, arguing that four legacy documents did not
+justify a migration mechanism. That was right about existing documents and wrong
+about ongoing writes: the old build keeps creating them. Pinned by
+`'accepts the shape the currently-shipped build writes'` in
+`firestore-tests/rules.test.js` and the `signalHeadline` suite in
+`functions/src/__tests__/`.
+
+> **Deploy order.** Rules and functions are safe to deploy ahead of the client
+> *only* with the three shims above. Firestore rules deploys replace the whole
+> ruleset, so deploy from a branch that has every block — a deploy from a branch
+> missing `match /events/` silently removed it on 2026-08-15.
+
+Documents created before the merge keep `signalType` and are simply not read;
+`firestore.rules` neither requires nor bounds it on signal create (a retired
+field must not be able to reject an old client's write).
+
+The four production signals that predated the merge were fixed by hand rather
+than by a derivation table or a backfill script; at four documents, two of them
+already resolved, a migration mechanism would have cost more than the data.
 
 ### 4.5 Signal status (`SignalStatus`, `models/signal_status.dart`)
 
@@ -415,13 +469,33 @@ Not yet implemented from master spec §5: the Red Alert staleness lifecycle
 Master spec §3.2 (helper tags), §4.2/§4.3 (help-needed tags), §16.2 (matching).
 
 **One vocabulary, both sides.** A signal's `helpNeededTags` and a user's
-`helperTags` draw from the same nine codes, so matching is a plain set
+`helperTags` draw from the same thirteen codes, so matching is a plain set
 intersection with no mapping table to drift:
 
 ```
-rescue   foster   transport   vetCare   food
-trapping   fundraising   adoption   babyCare
+rescue   vetCare   bloodDonation   foster   adoption   transport
+food   trapping   neutering   babyCare   fundraising
+lostFound   dangerWarning
 ```
+
+`helpNeededTags[0]` is also **the case's category** — see §4.4 for why the
+separate `signalType` field is gone.
+
+**`lostFound` and `dangerWarning` bend "both sides", knowingly.** The other
+eleven are abilities; these two are closer to interests. That is modelled as
+`HelpTag.isNeed`, a field on the enum — it *drives* `neededLabel` (a lost dog is
+not "lost / found needed") and derives `codesWithoutNeededSuffix`, rather than
+sitting beside them as a hand-written list the labels could disagree with.
+**If a third such code ever appears, that is the signal this model really does
+want a second axis after all.**
+
+`HelpTag.primaryOf(codes)` is the category: **element 0 verbatim**, matching
+`helpTagHeadline` server-side. Deliberately not "first code I recognise" — a
+signal from a newer client tagged `['newCode', 'foster']` must not headline as
+"newCode needed" in the push and "Foster needed" in the inbox row for the same
+document. `HelpTag.effectiveCodes` is the Dart mirror of `helpNeededTagsOf`, so
+the map, the catch-up and the fan-out share one definition of what an untagged
+signal asks for.
 
 Codes are stable opaque strings — never rename or reuse one; they are stored on both
 signal documents and user profiles.
@@ -641,7 +715,7 @@ Declarative `GoRouter` configured in `main.dart`; all paths are constants in
 | `/signal_details/:signalId` | `SignalDetailsScreen` | id validated in a route `redirect`; page keyed by id |
 | `/signal/:signalId` | — | public deep-link path; redirects to `/signal_details/:id` |
 | `/edit_signal/:signalId` | `EditSignalScreen` | |
-| `/new_signal` | `NewSignalWizardPage` | steps 2–8 of the create wizard (§7.4); pushed from the map once the pin is confirmed, and reads its draft from `mapViewModelProvider` |
+| `/new_signal` | `NewSignalWizardPage` | steps 2–7 of the create wizard (§7.4); pushed from the map once the pin is confirmed, and reads its draft from `mapViewModelProvider` |
 | `/clinic_details/:clinicId` | `ClinicDetailsScreen` | |
 | `/faqs`, `/feedback`, `/privacy_policy`, `/about` | static pages | |
 
@@ -842,15 +916,20 @@ anonymous session is re-established there and then, not at the next launch.
 ### 7.4 Creating a signal — the wizard
 
 FAB → if `!canModifyData`, a sign-in dialog; otherwise the map enters
-`isAddingNewSignal` mode. From there it is an **eight-step wizard, one question per
+`isAddingNewSignal` mode. From there it is a **seven-step wizard, one question per
 screen**, enumerated by `NewSignalStep` (`models/new_signal_step.dart`).
+
+It was eight until signal types were retired (§4.4). The `signalType` step sat
+between `animal` and `urgency`; its question is now answered by `urgency` and
+`helpTags` between them, so keeping it would have asked the reporter the same thing
+twice — the redundancy that retired the field in the first place.
 
 Step 1 stays on the live map — crosshair plus `NewSignalLocationBar`
 (`widgets/map/new_signal_location_bar.dart`) — so the pin is placed against the map
 the reporter is already looking at, with no second `GoogleMap` instance. The FAB is
 hidden while the bar is up, since the bar carries its own Cancel and they occupy the
 same corner. Confirming pushes `/new_signal` (`NewSignalWizardPage`), which renders
-steps 2–8.
+steps 2–7.
 
 | # | Step | Required | Notes |
 |---|---|---|---|
@@ -891,8 +970,9 @@ parks the step, `popOrHome()` returns to the map, and `confirmLocation` only adv
 when the step is still on the location question — so re-confirming lands back on
 review.
 
-Leaving the wizard with anything entered (`isDirty`, which ignores the defaulted
-category) prompts before discarding. The system back gesture is a step back, not an
+Leaving the wizard with anything entered (`isDirty`) prompts before discarding.
+`isDirty` used to carve out the pre-selected category; with that field gone every
+answer it tests is one somebody actively gave. The system back gesture is a step back, not an
 exit, until the first step.
 
 Length limits mirror the Firestore rules so over-long input is capped at the keyboard
@@ -1327,8 +1407,8 @@ verified rather than assumed before the work started:
 
 **Rows are localized client-side.** The stored `title`/`body` are the English strings the
 push carried and are a *fallback only*: `_title`/`_body` in `my_notifications_page.dart`
-build the display text from the structured fields (`signalType`, `statusCode`,
-`commentExcerpt`) through `AppLocalizations`, reusing `Signal.signalTypeName` and
+build the display text from the structured fields (`helpNeededTags`, `statusCode`,
+`commentExcerpt`) through `AppLocalizations`, reusing `HelpTag.neededLabel` and
 `SignalStatus.label`. The Cloud Function has no i18n and the app is bilingual, so
 persisting English would have meant a permanently English inbox.
 
@@ -1466,8 +1546,8 @@ page is bilingual with a client-side language switch.
    These caps must stay ≥ the UI caps (50 / 100) or far-edge matches are missed.
 2. Per candidate, apply the **hard gates** — the preferences the recipient floor below
    is never allowed to override: wrong `testMode`, the reporter, `enabled != true`,
-   a `signalTypes` the user excluded (**only when present**), and a species they
-   excluded (`animalTypes`, same absent/empty rule).
+   and a species they excluded (`animalTypes`, absent = all, empty = none). Species
+   is now the *only* hard preference gate — see the note in §4.2.
 3. Rank the survivors into four tiers by tag match (§4.7) and by whether the signal
    falls inside the radius they actually configured — Haversine to their tracked
    location vs `locationRadiusKm` (default 10), **or** to their region centre vs
@@ -1480,7 +1560,7 @@ page is bilingual with a client-side language switch.
    | 3 | B | no match, in radius | backfill next |
    | 4 | D | no match, out of radius | last resort |
 
-   Take all of A, then walk C → B → D nearest-first until `MIN_RECIPIENTS = 50` is
+   Take all of A, then walk C → B → D nearest-first until `MIN_RECIPIENTS = 10` is
    met or candidates run out. **The floor is a floor, never a ceiling** — if 500
    people match, all 500 are notified.
 
@@ -1516,7 +1596,7 @@ is often small outside dense areas, so backfill does most of the work early on, 
 Both are plain module constants; changing them is a function redeploy, which is
 accepted.
 
-Payloads carry `{ signalId, type, signalTitle, signalType|statusCode, helpNeededTags,
+Payloads carry `{ signalId, type, signalTitle, statusCode?, helpNeededTags, urgency,
 animalType, distanceKm, click_action: FLUTTER_NOTIFICATION_CLICK }`, Android channel
 `help_a_paw_signals`, APNs
 `sound: default, badge: 1`. The FCM 4KB limit covers `notification` and `data` together,
@@ -1582,23 +1662,38 @@ Things that live in more than one place and fail **silently** when they drift.
    `android/.../Geohash.kt` — base32, precision 9, byte-identical. Guarded by
    `GeohashTest.kt`. (`ios/Runner/Geohash.swift` is test-only since the iOS native
    Firestore write was removed — see §7.)
-2. **Signal type list (×3).** `Signal.signalTypes` (Dart), `SIGNAL_TYPES` and
-   `SIGNAL_TYPE_NAMES` (functions). A missed copy renders new types as "Other".
+2. **Help-tag and animal-type vocabularies (×2).** `HelpTag` / `AnimalType` (Dart) and
+   `HELP_TAGS` / `ANIMAL_TYPES` (`functions/src/tags.ts`), plus the fallback tag, the
+   per-signal cap, the suffix exemption, and an English name per code in
+   `HELP_TAG_NAMES` — with a Bulgarian one per code in `HELP_TAG_NAMES_BY_LANG.bg`
+   for the public share page. All guarded by
+   `test/help_tag_vocabulary_guard_test.dart`, which parses the TypeScript rather
+   than restating it.
+
+   **The headline guard compares rendered output, not two lists.** It asserts
+   `tag.neededLabel(en)` equals what the server would build from `HELP_TAG_NAMES` +
+   `HELP_TAGS_WITHOUT_NEEDED_SUFFIX`. An earlier version compared the two exemption
+   lists while the Dart wording came from ARB strings neither list touched — so it
+   passed even when the runtimes disagreed. Every failure here is silent: a one-sided
+   code is never matched by the fan-out, a divergent phrasing means the push and the
+   inbox row announce one signal two ways, and a missing name pushes a raw code
+   ("babyCare needed").
+   *(Replaces the old "signal type list ×3" invariant, retired with §4.4.)*
 3. **Status codes (×2).** `SignalStatus` (Dart, source of truth) and `SIGNAL_STATUSES`
    (functions, keyed by *code*, not array position).
-4. **`signalTypes` absent vs empty.** Absent = all types; empty = none. Enforced in
-   `NotificationPreferences.wantsSignalType` and in the fan-out's guard. `animalTypes`
-   follows the same rule via `wantsAnimalType`.
+4. **`animalTypes` absent vs empty.** Absent = all species; empty = none. Enforced in
+   `NotificationPreferences.wantsAnimalType` and in the fan-out's guard. Since
+   `signalTypes` was retired (§4.4) this is the only filter-semantics field left, so it
+   carries the distinction alone.
 4a. **`helperTags` absent = empty — the OPPOSITE rule, in the same map.** Filters treat
    empty as a real "notify me about nothing"; helper tags are a matching input and
    `enabled` is the off switch, so both resolve to `rescue` via `effectiveHelperTags`
    (Dart and TS). Unifying the two conventions makes every un-onboarded user match
    nothing and silently stop being notified. See §4.2.
-4b. **Help-tag and animal-type vocabularies (×2).** `HelpTag` / `AnimalType` (Dart) and
-   `HELP_TAGS` / `ANIMAL_TYPES` (`functions/src/tags.ts`), plus the fallback tag and the
-   per-signal cap. Guarded by `test/help_tag_vocabulary_guard_test.dart`, which parses
-   the TypeScript. A code on one side only is never matched by the fan-out and nothing
-   logs an error.
+4c. **`MapFilterState`'s "all selected" sets (×2).** They must stay `const` (default
+   arguments up to `MapScreenState`), so they cannot be derived from their enums.
+   `test/map_filter_state_test.dart` compares them; without it, appending a tag,
+   species, status or urgency leaves it filtered off the map from the moment it exists.
 5. **Field-length limits (×2).** Firestore rules vs `LengthLimitingTextInputFormatter`:
    title 300, description 10 000, comment 2000, **signal-event note 500**, profile name 100,
    feedback message 1000, email 254. The note pair is guarded by
@@ -1726,5 +1821,6 @@ silently breaks Auth/Firestore/FCM in release builds only.
 | 2026-08-01 | Investigated `/my_notifications`. It is a deliberate deferral (owner decision 2026-05-30, keep the code); verified the previously-assumed gap list — no writer has ever existed, the subcollection is denied because rules don't cascade into subcollections, and the page's `type` vocabulary doesn't match the functions'. Documented the schema and the iOS-badge link. §5.1, §7.13, §14. |
 | 2026-08-04 | **Built the in-app inbox.** Server writer (`writeInboxEntries`) alongside every push; `users/{uid}/notifications` + `userCounters` rules with 15 new emulator tests; drawer entry with unread badge; client-side localized rendering from structured fields; `nearby_signal` entries from the arrival catch-up (incl. the headless isolate); `userCounters` + native badge channel + resume reconciliation for F-008. Recipients now include users with no FCM token. Adjacent fix: the fan-out's un-chunked `sendEachForMulticast` silently lost every notification past 500 tokens — now `sendEach` chunked at 500. §4, §5.1, §7.13, §9, §14. |
 | 2026-08-04 | Enabled real `badge: N` in the fan-out (F-008 closed). Owner accepted the known consequence that pre-release iOS builds have no reset path, so their badge climbs monotonically. §7.13, §14. |
+| 2026-08-12 | **Built the help-tag system.** One nine-code vocabulary shared by signals (`helpNeededTags`, 1–3, mandatory) and users (`helperTags`, ≥1), plus `animalType` as an independent axis rather than species-crossed tags. The fan-out is now prioritise-then-backfill: all tag matches in radius are notified, then C→B→D nearest-first up to `MIN_RECIPIENTS` (lowered to 10 before release), with one widened re-scan at 250 km when the pool is thin — ranking extracted to `recipientSelection.ts` with 20 unit tests (the first tests `functions/` has had). Non-skippable onboarding gate implemented as a widget wrapper on the map route, not a router redirect; a failed preferences read renders the app rather than locking the user out. Settings now require ≥1 animal type and helper tag while enabled, and "Deselect all" is gone (stored empty `signalTypes` still means none and is never migrated). Rules validate the new fields but do **not** require them — tightening is a later, separate deploy. §4.1, §4.2, §4.7, §5.1, §7.4, §7.5, §7.6, §7.15, §9, §12. |
 | 2026-08-15 | **Built the signal timeline (master spec §4.6, "Case Timeline").** Status and urgency changes now require a mandatory update note and are written to a new `signals/{id}/events` subcollection instead of `comments` — the two differ in who may write them (later event types must be server-written) and who may delete them, and mixing them was also counting status changes as comments on the profile screen. The details screen merges both collections into one chronological history, opened by a synthetic "reported this signal" row derived from the signal document, with All/Events filter chips. Nothing is backfilled: legacy system entries stay in `comments` and keep rendering, and `handleCommentCreated`'s type guard stays with them. Rules validate a closed event vocabulary with a **required** 1–500 char note, deny updates, and (for now) still let the reporter delete events so the client-side delete cascade works — the tamper hole is recorded as a known gap, HelpAPaw/Flutter#68. No functions change. §4.1, §5.1, §7.5, §12, §14. |
-| 2026-08-12 | **Built the help-tag system.** One nine-code vocabulary shared by signals (`helpNeededTags`, 1–3, mandatory) and users (`helperTags`, ≥1), plus `animalType` as an independent axis rather than species-crossed tags. The fan-out is now prioritise-then-backfill: all tag matches in radius are notified, then C→B→D nearest-first up to `MIN_RECIPIENTS = 50`, with one widened re-scan at 250 km when the pool is thin — ranking extracted to `recipientSelection.ts` with 20 unit tests (the first tests `functions/` has had). Non-skippable onboarding gate implemented as a widget wrapper on the map route, not a router redirect; a failed preferences read renders the app rather than locking the user out. Settings now require ≥1 signal type / animal type / helper tag while enabled, and "Deselect all" is gone (stored empty `signalTypes` still means none and is never migrated). Rules validate the new fields but do **not** require them — tightening is a later, separate deploy. §4.1, §4.2, §4.7, §5.1, §7.4, §7.5, §7.6, §7.15, §9, §12. |
+| 2026-08-15 | **Folded `signalType` into the help-tag vocabulary.** Four of its seven values restated fields that now exist in their own right (Emergency = red urgency, Blood donation / Unneutered animals = tags, Wild animals = `animalType`), so reporters answered the same question twice and the answers could contradict. The deciding case was an injured animal, which master spec §5 makes the worked example of Red urgency and gives no category at all. `helpNeededTags[0]` is now the case's category (master spec §4.2); the vocabulary grew to 13 with `bloodDonation`, `neutering`, `lostFound` and `dangerWarning`. Push and inbox text is now urgency + the primary tag's "needed" form ("Urgent · Rescue needed — …"), as a second localized label per tag rather than a `+ " needed"` suffix, because Bulgarian does not build that phrase by suffixing. The `signalTypes` notification gate is gone — **removing the only negative filter users had** (§4.2), which cost nothing because no user had ever excluded a type. The map filter sheet swapped its type section for tag + species, closing the browse-vs-notify asymmetry. No migration: `signalType` is simply never read, and the four production signals predating tags were fixed by hand. §4.2, §4.4, §4.7, §5.1, §7.4, §7.13, §9, §12. |

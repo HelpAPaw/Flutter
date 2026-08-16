@@ -49,6 +49,47 @@ final helperTagsPreferencesProvider =
       .getNotificationPreferences(uid);
 });
 
+/// Set once the onboarding page has given up saving, for this session only.
+///
+/// Public for the same reason as [helperTagsPreferencesProvider]: the gate's
+/// failure modes are the part worth testing, and they need overriding.
+///
+/// The gate's whole premise is that nobody is ever locked out of reporting an
+/// animal. The offline case is already safe — the write lands in Firestore's
+/// cache and the re-read sees it — but a write that *rejects* (rules, App Check,
+/// a session that cannot be established) fails the same way every retry, on a
+/// screen with no skip, no back button and no drawer. Without an escape hatch
+/// that is a permanently unusable app.
+///
+/// Deliberately **not** persisted: the tags are still worth collecting, so the
+/// next launch tries again. This only guarantees the current session ends up
+/// somewhere usable.
+final gateBypassedProvider =
+    NotifierProvider<GateBypassNotifier, bool>(GateBypassNotifier.new);
+
+class GateBypassNotifier extends Notifier<bool> {
+  /// How many hard save failures before the gate stops blocking the app.
+  ///
+  /// Two, not one: a single failure is often a cold-start race worth retrying.
+  static const maxSaveAttempts = 2;
+
+  int _failures = 0;
+
+  @override
+  bool build() => false;
+
+  /// Records a save that failed outright, arming the bypass at the threshold.
+  ///
+  /// The counter lives here rather than in the onboarding page's `State`
+  /// because the gate disposes that page whenever it renders `child` — which
+  /// includes the momentarily-null-uid case this exists for, so the count could
+  /// silently reset in exactly the churn it was written to survive.
+  void recordSaveFailure() {
+    _failures++;
+    if (_failures >= maxSaveAttempts) state = true;
+  }
+}
+
 /// Shows the tag onboarding in place of [child] until the user has chosen at
 /// least one helper tag.
 ///
@@ -71,6 +112,10 @@ class HelperTagsGate extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Checked before the read so a user who already gave up is not shown the
+    // gate again on the next rebuild.
+    if (ref.watch(gateBypassedProvider)) return child;
+
     final prefs = ref.watch(helperTagsPreferencesProvider);
 
     return prefs.when(
@@ -93,6 +138,8 @@ class HelperTagsGate extends ConsumerWidget {
 
         return HelperTagsOnboardingPage(
           onSaved: () => ref.invalidate(helperTagsPreferencesProvider),
+          onSaveFailed: () =>
+              ref.read(gateBypassedProvider.notifier).recordSaveFailure(),
         );
       },
     );

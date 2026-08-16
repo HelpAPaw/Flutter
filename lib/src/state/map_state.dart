@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../models/help_tag.dart';
 import '../models/new_signal_step.dart';
+import '../repositories/signal_repository.dart';
 import '../models/vet_clinic.dart';
 
 /// Time range options for filtering signals by creation date
@@ -32,29 +33,49 @@ enum TimeRange {
 /// Default time range for the map
 const defaultTimeRange = TimeRange.last30Days;
 
-/// Immutable state for signal type, status and urgency filters
+/// Immutable state for the map's help-tag, species, status and urgency filters
 @immutable
 class MapFilterState {
-  final Set<int> selectedSignalTypes;
+  final Set<String> selectedHelpTags;
+  final Set<String> selectedAnimalTypes;
   final Set<int> selectedStatuses;
   final Set<int> selectedUrgencies;
   final TimeRange selectedTimeRange;
 
   const MapFilterState({
-    this.selectedSignalTypes = allSignalTypes,
+    this.selectedHelpTags = allHelpTags,
+    this.selectedAnimalTypes = allAnimalTypes,
     this.selectedStatuses = allStatuses,
     this.selectedUrgencies = allUrgencies,
     this.selectedTimeRange = defaultTimeRange,
   });
 
-  /// All signal types selected (no filter active).
+  /// Every help tag selected (no filter active).
   ///
-  /// These three sets have to stay `const` (they are default arguments all the
+  /// These four sets have to stay `const` (they are default arguments all the
   /// way up to `MapScreenState`), so they can't be derived from their enums
   /// here. `test/map_filter_state_test.dart` fails the build if one of them
-  /// drifts out of step — without that guard, appending a status or urgency
-  /// would silently leave it filtered off the map with no error anywhere.
-  static const allSignalTypes = {0, 1, 2, 3, 4, 5, 6};
+  /// drifts out of step — without that guard, appending a tag, species, status
+  /// or urgency would silently leave it filtered off the map with no error
+  /// anywhere.
+  static const allHelpTags = {
+    'rescue',
+    'vetCare',
+    'bloodDonation',
+    'foster',
+    'adoption',
+    'transport',
+    'food',
+    'trapping',
+    'neutering',
+    'babyCare',
+    'fundraising',
+    'lostFound',
+    'dangerWarning',
+  };
+
+  /// Every species selected (no filter active)
+  static const allAnimalTypes = {'cat', 'dog', 'other'};
 
   /// All statuses selected (no filter active)
   static const allStatuses = {0, 1, 2};
@@ -64,26 +85,68 @@ class MapFilterState {
 
   /// Check if any filter is active
   bool get hasActiveFilters =>
-      selectedSignalTypes.length < allSignalTypes.length ||
+      selectedHelpTags.length < allHelpTags.length ||
+      selectedAnimalTypes.length < allAnimalTypes.length ||
       selectedStatuses.length < allStatuses.length ||
       selectedUrgencies.length < allUrgencies.length ||
       selectedTimeRange != defaultTimeRange;
 
-  /// Check if a signal passes the current filter
-  bool signalPassesFilter(int signalType, int status, int urgency) {
-    return selectedSignalTypes.contains(signalType) &&
-        selectedStatuses.contains(status) &&
-        selectedUrgencies.contains(urgency);
+  /// Whether [signal] passes the current filter.
+  ///
+  /// The form the marker builder calls, so the four axes are destructured in one
+  /// place rather than threaded through every layer as positional arguments —
+  /// `status` and `urgency` are adjacent ints, and a swap at any call site would
+  /// compile and silently mis-filter.
+  bool passes(SignalWithId signal) => signalPassesFilter(
+        signal.helpNeededTags,
+        signal.animalType,
+        signal.status,
+        signal.urgency,
+      );
+
+  /// Check if a signal passes the current filter.
+  ///
+  /// A signal matches the tag filter if **any** of its needs is selected — it
+  /// declares up to three, and someone filtering for `foster` still wants to see
+  /// a case that needs rescue *and* fostering.
+  bool signalPassesFilter(
+    List<String> helpNeededTags,
+    String? animalType,
+    int status,
+    int urgency,
+  ) {
+    // Cheapest checks first: this runs once per signal on every map rebuild, and
+    // the tag scan is the only branch that can loop.
+    if (!selectedStatuses.contains(status)) return false;
+    if (!selectedUrgencies.contains(urgency)) return false;
+    // Absent species matches every filter: hiding legacy signals from anyone who
+    // has picked a species would be a silent disappearance.
+    if (animalType != null && !selectedAnimalTypes.contains(animalType)) {
+      return false;
+    }
+
+    // A signal written before tags existed asks for the fallback, matching what
+    // the fan-out substitutes — so the map and the notifications agree about
+    // what an untagged signal is.
+    if (helpNeededTags.isEmpty) {
+      return selectedHelpTags.contains(HelpTag.fallback.code);
+    }
+    for (final code in helpNeededTags) {
+      if (selectedHelpTags.contains(code)) return true;
+    }
+    return false;
   }
 
   MapFilterState copyWith({
-    Set<int>? selectedSignalTypes,
+    Set<String>? selectedHelpTags,
+    Set<String>? selectedAnimalTypes,
     Set<int>? selectedStatuses,
     Set<int>? selectedUrgencies,
     TimeRange? selectedTimeRange,
   }) {
     return MapFilterState(
-      selectedSignalTypes: selectedSignalTypes ?? this.selectedSignalTypes,
+      selectedHelpTags: selectedHelpTags ?? this.selectedHelpTags,
+      selectedAnimalTypes: selectedAnimalTypes ?? this.selectedAnimalTypes,
       selectedStatuses: selectedStatuses ?? this.selectedStatuses,
       selectedUrgencies: selectedUrgencies ?? this.selectedUrgencies,
       selectedTimeRange: selectedTimeRange ?? this.selectedTimeRange,
@@ -91,12 +154,16 @@ class MapFilterState {
   }
 
   /// [set] with [value] added if absent, removed if present.
-  static Set<int> _toggled(Set<int> set, int value) =>
+  static Set<T> _toggled<T>(Set<T> set, T value) =>
       set.contains(value) ? ({...set}..remove(value)) : {...set, value};
 
-  /// Toggle a signal type on/off
-  MapFilterState toggleSignalType(int type) =>
-      copyWith(selectedSignalTypes: _toggled(selectedSignalTypes, type));
+  /// Toggle a help tag on/off
+  MapFilterState toggleHelpTag(String code) =>
+      copyWith(selectedHelpTags: _toggled(selectedHelpTags, code));
+
+  /// Toggle a species on/off
+  MapFilterState toggleAnimalType(String code) =>
+      copyWith(selectedAnimalTypes: _toggled(selectedAnimalTypes, code));
 
   /// Toggle a status on/off
   MapFilterState toggleStatus(int status) =>
@@ -109,7 +176,8 @@ class MapFilterState {
   /// Select all filters
   MapFilterState selectAll() {
     return MapFilterState(
-      selectedSignalTypes: allSignalTypes,
+      selectedHelpTags: allHelpTags,
+      selectedAnimalTypes: allAnimalTypes,
       selectedStatuses: allStatuses,
       selectedUrgencies: allUrgencies,
       selectedTimeRange: selectedTimeRange,
@@ -119,7 +187,8 @@ class MapFilterState {
   /// Clear all filters
   MapFilterState clearAll() {
     return MapFilterState(
-      selectedSignalTypes: const {},
+      selectedHelpTags: const {},
+      selectedAnimalTypes: const {},
       selectedStatuses: const {},
       selectedUrgencies: const {},
       selectedTimeRange: selectedTimeRange,
@@ -130,7 +199,8 @@ class MapFilterState {
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
     return other is MapFilterState &&
-        setEquals(other.selectedSignalTypes, selectedSignalTypes) &&
+        setEquals(other.selectedHelpTags, selectedHelpTags) &&
+        setEquals(other.selectedAnimalTypes, selectedAnimalTypes) &&
         setEquals(other.selectedStatuses, selectedStatuses) &&
         setEquals(other.selectedUrgencies, selectedUrgencies) &&
         other.selectedTimeRange == selectedTimeRange;
@@ -138,7 +208,8 @@ class MapFilterState {
 
   @override
   int get hashCode => Object.hash(
-        Object.hashAll(selectedSignalTypes),
+        Object.hashAll(selectedHelpTags),
+        Object.hashAll(selectedAnimalTypes),
         Object.hashAll(selectedStatuses),
         Object.hashAll(selectedUrgencies),
         selectedTimeRange,
@@ -151,7 +222,6 @@ class NewSignalFormState {
   final String title;
   final String description;
   final String phoneNumber;
-  final int signalType;
 
   /// Chosen urgency, or null if the reporter has not picked one yet.
   ///
@@ -196,7 +266,6 @@ class NewSignalFormState {
     this.title = '',
     this.description = '',
     this.phoneNumber = '',
-    this.signalType = 0,
     this.urgency,
     this.helpTags = const [],
     this.animalType,
@@ -217,8 +286,12 @@ class NewSignalFormState {
       animalType != null;
 
   /// Whether the reporter has entered anything worth warning them about before
-  /// discarding. The signal type is excluded deliberately: it has a default, so
-  /// its presence says nothing about whether anyone typed or tapped.
+  /// discarding.
+  ///
+  /// Every field here is an answer somebody actively gave. There used to be a
+  /// carve-out for the signal type, which arrived pre-selected and so said
+  /// nothing about intent; with that field retired (see [HelpTag]) the list no
+  /// longer needs an exception — anything set means somebody set it.
   bool get isDirty =>
       title.trim().isNotEmpty ||
       description.trim().isNotEmpty ||
@@ -252,14 +325,12 @@ class NewSignalFormState {
   /// [isValid] — anything [isValid] rejects has to be caught by exactly one
   /// step here, or the reporter can reach the review screen and be refused at
   /// submit with no way to see which answer is missing. [NewSignalStep.photo]
-  /// and [NewSignalStep.signalType] are always complete: one is optional, the
-  /// other has a default.
+  /// is always complete — it is the one optional answer.
   bool isStepComplete(NewSignalStep step) => switch (step) {
         NewSignalStep.location => !isLocationUnset,
         NewSignalStep.photo => true,
         NewSignalStep.details => !isTitleEmpty && !isDescriptionEmpty,
         NewSignalStep.animal => !isAnimalTypeUnset,
-        NewSignalStep.signalType => true,
         NewSignalStep.urgency => !isUrgencyUnset,
         NewSignalStep.helpTags => !isHelpTagsEmpty,
         NewSignalStep.review => isValid,
@@ -276,7 +347,6 @@ class NewSignalFormState {
     String? title,
     String? description,
     String? phoneNumber,
-    int? signalType,
     int? urgency,
     List<String>? helpTags,
     String? animalType,
@@ -291,7 +361,6 @@ class NewSignalFormState {
       title: title ?? this.title,
       description: description ?? this.description,
       phoneNumber: phoneNumber ?? this.phoneNumber,
-      signalType: signalType ?? this.signalType,
       urgency: urgency ?? this.urgency,
       helpTags: helpTags ?? this.helpTags,
       animalType: animalType ?? this.animalType,
@@ -315,7 +384,6 @@ class NewSignalFormState {
         other.title == title &&
         other.description == description &&
         other.phoneNumber == phoneNumber &&
-        other.signalType == signalType &&
         other.urgency == urgency &&
         listEquals(other.helpTags, helpTags) &&
         other.animalType == animalType &&
@@ -331,7 +399,6 @@ class NewSignalFormState {
         title,
         description,
         phoneNumber,
-        signalType,
         urgency,
         Object.hashAll(helpTags),
         animalType,

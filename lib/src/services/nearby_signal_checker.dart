@@ -9,6 +9,7 @@ import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../models/help_tag.dart';
 import '../models/notification_preferences.dart';
 import '../models/signal.dart';
 import '../models/signal_status.dart';
@@ -286,11 +287,12 @@ class NearbySignalChecker {
 
   /// Applies the filters that can't be pushed into the query.
   ///
-  /// `signalType` stays here because a second `whereIn` would multiply
-  /// disjunction branches against the geohash ranges and need an index shape
-  /// that varies with the user's selection. `reporter` is a
-  /// `DocumentReference`, so excluding it server-side would mean a genuine
-  /// third inequality. By this point the result set is small anyway.
+  /// Species and help-tag matching stay here because pushing either into the
+  /// query would mean a second `whereIn`, multiplying disjunction branches
+  /// against the geohash ranges and needing an index shape that varies with the
+  /// user's selection. `reporter` is a `DocumentReference`, so excluding it
+  /// server-side would mean a genuine third inequality. By this point the
+  /// result set is small anyway.
   Future<List<_NotifiableSignal>> _selectNotifiable({
     required List<DocumentSnapshot<Map<String, dynamic>>> candidates,
     required String uid,
@@ -306,14 +308,8 @@ class NearbySignalChecker {
       final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
       if (createdAt == null) continue;
 
-      // A signal with no stored type still gets through: the filter exists to
-      // honour types the user opted out of, not to reject malformed data.
-      final signalType = data['signalType'] as int?;
-      if (signalType != null && !preferences.wantsSignalType(signalType)) {
-        continue;
-      }
-
-      // Species, same rule — a signal with none matches everyone.
+      // Species — a signal with none matches everyone, so a legacy document is
+      // never hidden from someone who has picked species.
       if (!preferences.wantsAnimalType(data['animalType'] as String?)) {
         continue;
       }
@@ -327,7 +323,8 @@ class NearbySignalChecker {
       // So catch-up notifies on a genuine match only. Erring the other way
       // would mean a user whose tags match nothing still gets pinged every time
       // they travel, which is exactly the noise the tags exist to remove.
-      if (!preferences.matchesSignalTags(Signal.helpNeededTagsFrom(data))) {
+      final helpNeededTags = Signal.helpNeededTagsFrom(data);
+      if (!preferences.matchesSignalTags(helpNeededTags)) {
         continue;
       }
 
@@ -338,7 +335,7 @@ class NearbySignalChecker {
       eligible.add(_NotifiableSignal(
         id: doc.id,
         title: (data['title'] as String?)?.trim() ?? '',
-        signalType: signalType ?? 0,
+        helpNeededTags: helpNeededTags,
         createdAt: createdAt,
       ));
     }
@@ -369,10 +366,15 @@ class NearbySignalChecker {
     final inboxEntries = <NearbyInboxEntry>[];
 
     for (final signal in signals) {
-      final typeName = Signal.signalTypeName(l10n, signal.signalType);
+      // The signal's headline need, in its "needed" form — the same wording the
+      // server push uses, so a catch-up and a fan-out for the same signal do
+      // not read as two different kinds of event.
+      final headline = HelpTag.primaryOf(signal.helpNeededTags).neededLabel(l10n);
+      // Through the ARB rather than a literal, so this and the inbox row it
+      // writes below cannot be formatted two different ways for one event.
       final body = signal.title.isNotEmpty
-          ? '$typeName · ${signal.title}'
-          : typeName;
+          ? l10n.notificationNewSignalBody(headline, signal.title)
+          : headline;
 
       await NotificationService().showSignalNotification(
         // Stable per signal, so a repeat post updates rather than stacks.
@@ -388,7 +390,7 @@ class NearbySignalChecker {
         title: l10n.signalNearbyNotificationTitle,
         body: body,
         signalTitle: signal.title,
-        signalType: signal.signalType,
+        helpNeededTags: signal.helpNeededTags,
       ));
     }
 
@@ -426,12 +428,16 @@ class _NotifiableSignal {
   const _NotifiableSignal({
     required this.id,
     required this.title,
-    required this.signalType,
+    required this.helpNeededTags,
     required this.createdAt,
   });
 
   final String id;
   final String title;
-  final int signalType;
+
+  /// What the signal asks for, in the reporter's priority order. Element 0 is
+  /// the headline; empty for a document written before tags existed, which
+  /// [HelpTag.primaryOf] resolves to the fallback.
+  final List<String> helpNeededTags;
   final DateTime createdAt;
 }

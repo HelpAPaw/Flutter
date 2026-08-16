@@ -128,10 +128,17 @@ class MapViewModel extends Notifier<MapScreenState> {
   // Filter Management
   // ============================================================
 
-  /// Toggle a signal type filter
-  void toggleSignalType(int type) {
+  /// Toggle a help-tag filter
+  void toggleHelpTag(String code) {
     state = state.copyWith(
-      filterState: state.filterState.toggleSignalType(type),
+      filterState: state.filterState.toggleHelpTag(code),
+    );
+  }
+
+  /// Toggle a species filter
+  void toggleAnimalType(String code) {
+    state = state.copyWith(
+      filterState: state.filterState.toggleAnimalType(code),
     );
   }
 
@@ -168,11 +175,6 @@ class MapViewModel extends Notifier<MapScreenState> {
     state = state.copyWith(
       filterState: state.filterState.clearAll(),
     );
-  }
-
-  /// Check if a signal passes the current filter
-  bool signalPassesFilter(int signalType, int status, int urgency) {
-    return state.filterState.signalPassesFilter(signalType, status, urgency);
   }
 
   // ============================================================
@@ -214,13 +216,6 @@ class MapViewModel extends Notifier<MapScreenState> {
   void updateFormPhoneNumber(String phoneNumber) {
     state = state.copyWith(
       formState: state.formState.copyWith(phoneNumber: phoneNumber),
-    );
-  }
-
-  /// Set form signal type
-  void setFormSignalType(int type) {
-    state = state.copyWith(
-      formState: state.formState.copyWith(signalType: type),
     );
   }
 
@@ -347,7 +342,7 @@ class MapViewModel extends Notifier<MapScreenState> {
     final latitude = state.formState.latitude!;
     final longitude = state.formState.longitude!;
 
-    FirebaseCrashlytics.instance.log('Signal: Submitting - type: ${state.formState.signalType}, urgency: ${state.formState.urgency}, location: $latitude/$longitude');
+    FirebaseCrashlytics.instance.log('Signal: Submitting - tags: ${state.formState.helpTags}, animal: ${state.formState.animalType}, urgency: ${state.formState.urgency}, location: $latitude/$longitude');
 
     state = state.copyWith(
       formState: state.formState.copyWith(isSubmitting: true),
@@ -369,7 +364,6 @@ class MapViewModel extends Notifier<MapScreenState> {
         title: state.formState.title.trim(),
         description: state.formState.description.trim(),
         phoneNumber: state.formState.phoneNumber.trim(),
-        signalType: state.formState.signalType,
         latitude: latitude,
         longitude: longitude,
         reporterUserId: userId,

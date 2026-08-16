@@ -17,7 +17,6 @@ class NotificationPreferences {
     this.enabled = false,
     this.locationTrackingEnabled = false,
     this.locationRadiusKm = defaultRadiusKm,
-    this.signalTypes,
     this.animalTypes,
     this.helperTags,
     this.regionOfInterest,
@@ -38,31 +37,20 @@ class NotificationPreferences {
   /// How far away a signal can be and still be worth notifying about.
   final double locationRadiusKm;
 
-  /// Signal types the user wants, or null if they have never chosen.
-  ///
-  /// **Null and empty mean opposite things, and the distinction is
-  /// load-bearing.** Null is "no preference expressed" and must be read as
-  /// *all types*: the onboarding sheet builds `notificationPreferences` with
-  /// merged partial writes and never sets this field, so every user who
-  /// onboarded without opening the notification settings screen has no stored
-  /// list. Empty is a deliberate "Deselect all" and must be read as *no types*
-  /// — it can only be produced by that button.
-  ///
-  /// These were previously collapsed (both here and in the fan-out's
-  /// `length > 0` check), which made "Deselect all" behave as "select all".
-  final List<int>? signalTypes;
-
   /// Animal species the user wants, or null if they have never chosen.
   ///
-  /// A **filter**, so it follows the same null-vs-empty rule as [signalTypes]:
-  /// null is "all species", empty is "no species". Codes are [AnimalType.code].
+  /// A **filter**, and the null-vs-empty distinction is load-bearing: null is
+  /// "no preference expressed" and reads as *all species*, empty is a
+  /// deliberate choice and reads as *no species*. Collapsing the two (here or
+  /// in the fan-out) is what once made "Deselect all" behave as "select all".
+  /// Codes are [AnimalType.code].
   final List<String>? animalTypes;
 
   /// Kinds of help the user says they can offer — [HelpTag.code] values.
   ///
-  /// **This field uses the opposite null/empty rule from [signalTypes] and
-  /// [animalTypes], and that is deliberate.** Those two are filters, where
-  /// "empty" is a meaningful choice to receive nothing. Helper tags are a
+  /// **This field uses the opposite null/empty rule from [animalTypes], and
+  /// that is deliberate.** That one is a filter, where "empty" is a
+  /// meaningful choice to receive nothing. Helper tags are a
   /// *matching input*, not an opt-out mechanism — [enabled] is how a user turns
   /// notifications off. So absent and empty both mean "hasn't chosen", and both
   /// resolve to [HelpTag.fallback] through [effectiveHelperTags]. Reading this
@@ -74,10 +62,6 @@ class NotificationPreferences {
   /// Left as a raw map: only the fan-out interprets it, and it does so in
   /// TypeScript.
   final Map<String, dynamic>? regionOfInterest;
-
-  /// Whether [signalType] passes the user's type filter.
-  bool wantsSignalType(int signalType) =>
-      signalTypes?.contains(signalType) ?? true;
 
   /// Whether a signal about [animalType] passes the user's species filter.
   ///
@@ -130,9 +114,12 @@ class NotificationPreferences {
       // so a radius saved as 10 would fail a straight `as double?` cast.
       locationRadiusKm:
           (map['locationRadiusKm'] as num?)?.toDouble() ?? defaultRadiusKm,
-      // Left null when the key is absent — see [signalTypes]. Do not add a
+      // Left null when the key is absent — see [animalTypes]. Do not add a
       // `?? const []` here; that is the bug this distinction exists to fix.
-      signalTypes: (map['signalTypes'] as List<dynamic>?)?.cast<int>(),
+      //
+      // `signalTypes` is deliberately not read — retired with SPECIFICATION
+      // §4.4. It survives on old user documents and is never rewritten, because
+      // that would opt people back into something they chose against.
       animalTypes: (map['animalTypes'] as List<dynamic>?)?.cast<String>(),
       helperTags: (map['helperTags'] as List<dynamic>?)?.cast<String>(),
       regionOfInterest: map['regionOfInterest'] as Map<String, dynamic>?,
