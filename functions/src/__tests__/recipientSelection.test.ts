@@ -3,6 +3,7 @@ import {
   selectRecipients,
 } from "../recipientSelection";
 import {
+  displayTagsOf,
   effectiveHelperTags,
   helpNeededTagsOf,
   helpTagHeadline,
@@ -325,6 +326,44 @@ describe("signalHeadline — the phased-release path", () => {
     // 0-6 were the whole vocabulary; a gap would silently become "Rescue".
     for (let type = 0; type <= 6; type++) {
       expect(signalHeadline({ signalType: type })).toBeTruthy();
+    }
+  });
+});
+
+describe("displayTagsOf — the inbox row must not contradict the push", () => {
+  // The bug this covers: the inbox entry was written with the MATCHED tags,
+  // which collapse an untagged legacy signal to `rescue`, while the push body
+  // beside it was built from signalHeadline and said "Blood donation needed".
+  // Same event, same document, two different categories.
+  it("agrees with the push headline for a legacy signal", () => {
+    expect(displayTagsOf({ signalType: 2 })).toEqual(["bloodDonation"]);
+    expect(helpTagHeadline(displayTagsOf({ signalType: 2 })[0]))
+      .toBe(signalHeadline({ signalType: 2 }));
+  });
+
+  it("is the identity for a tagged signal, extra tags and order intact", () => {
+    expect(displayTagsOf({ helpNeededTags: ["foster", "transport"] }))
+      .toEqual(["foster", "transport"]);
+    // A stray legacy type must not displace the tags the reporter chose.
+    expect(displayTagsOf({ helpNeededTags: ["adoption"], signalType: 2 }))
+      .toEqual(["adoption"]);
+  });
+
+  it("falls back exactly where the matched list does", () => {
+    expect(displayTagsOf({})).toEqual(["rescue"]);
+    expect(displayTagsOf({ helpNeededTags: [] })).toEqual(["rescue"]);
+    expect(displayTagsOf({ signalType: 99 })).toEqual(["rescue"]);
+  });
+
+  it("never widens the reach a signal was matched with", () => {
+    // This value is also written to the inbox doc, which firestore.rules caps
+    // at 3 entries — and it must never claim MORE tags than were matched on.
+    for (const data of [
+      {},
+      { signalType: 2 },
+      { helpNeededTags: ["foster", "transport", "vetCare"] },
+    ]) {
+      expect(displayTagsOf(data).length).toBe(helpNeededTagsOf(data).length);
     }
   });
 });

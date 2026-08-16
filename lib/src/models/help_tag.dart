@@ -152,6 +152,49 @@ enum HelpTag {
     return (first == null ? null : fromCode(first)) ?? fallback;
   }
 
+  /// Retired `signalType` values, by the int that was stored.
+  ///
+  /// The Dart mirror of `RETIRED_SIGNAL_TYPE_TAGS` in `functions/src/tags.ts`,
+  /// and guarded against it by `test/help_tag_vocabulary_guard_test.dart`.
+  ///
+  /// **A live path, not a migration.** Builds released before the vocabulary
+  /// keep creating signals with a `signalType` and no tags for as long as they
+  /// stay installed. Without this the app renders every one of them as
+  /// [fallback] while the server — which has always had this table — headlines
+  /// the push with the real category, so the same document reads "Blood
+  /// donation needed" on the lock screen and "Rescue" everywhere in the app.
+  ///
+  /// Delete alongside the server copy once the installed base has moved on.
+  /// Tracking: HelpAPaw/Flutter#70.
+  static const List<String> retiredSignalTypeCodes = [
+    'rescue', // 0 Emergency — urgency carries the "emergency" part
+    'lostFound', // 1 Lost or Found
+    'bloodDonation', // 2
+    'foster', // 3 Homeless
+    'neutering', // 4 Unneutered animals
+    'rescue', // 5 Wild animals — animalType carries the "wild" part
+    'rescue', // 6 Other
+  ];
+
+  /// The category of a signal that has [codes], or failing that a legacy
+  /// [signalType].
+  ///
+  /// The Dart mirror of `primarySignalTag`. Tags win whenever the document has
+  /// any, so a signal from a current build is never routed through the retired
+  /// table; [signalType] is consulted only for the untagged legacy documents it
+  /// was written by. Out-of-range and unknown values fall back, exactly as the
+  /// server does — an old client cannot be trusted to have written a code this
+  /// build knows.
+  static HelpTag primaryOfSignal(Iterable<String> codes, int? signalType) {
+    if (codes.isNotEmpty) return primaryOf(codes);
+    if (signalType == null ||
+        signalType < 0 ||
+        signalType >= retiredSignalTypeCodes.length) {
+      return fallback;
+    }
+    return fromCode(retiredSignalTypeCodes[signalType]) ?? fallback;
+  }
+
   /// [codes] as the matching layer sees them — never empty.
   ///
   /// The Dart mirror of `helpNeededTagsOf` in `functions/src/tags.ts`: a signal

@@ -342,6 +342,14 @@ class MapViewModel extends Notifier<MapScreenState> {
     final latitude = state.formState.latitude!;
     final longitude = state.formState.longitude!;
 
+    // Captured up front, like the location, because it is read *after* two
+    // awaits. `cancelAddingNewSignal` resets `formState` to a blank one, so a
+    // reporter who taps × → Discard mid-submit would otherwise leave this
+    // reading null by the time the upload block is reached: the photo would be
+    // skipped and the submit would still report full success. Every other field
+    // is read before the first await, which is why only this one could drift.
+    final selectedImage = state.formState.selectedImage;
+
     FirebaseCrashlytics.instance.log('Signal: Submitting - tags: ${state.formState.helpTags}, animal: ${state.formState.animalType}, urgency: ${state.formState.urgency}, location: $latitude/$longitude');
 
     state = state.copyWith(
@@ -387,12 +395,12 @@ class MapViewModel extends Notifier<MapScreenState> {
       );
 
       // Upload image if selected
-      if (state.formState.selectedImage != null) {
+      if (selectedImage != null) {
         try {
           final storageRepo = RepositoryProvider.instance.storageRepository;
           final uploadResult = await storageRepo.uploadSignalImage(
             signalId: result.signalId,
-            imageFile: File(state.formState.selectedImage!.path),
+            imageFile: File(selectedImage.path),
           );
 
           if (uploadResult.success && uploadResult.downloadUrl != null) {
