@@ -110,7 +110,12 @@ class _UpdateNoteDialogState extends State<_UpdateNoteDialog> {
                 // the Confirm button is disabled until the note is written, so
                 // without this the dialog would look broken rather than
                 // unfinished.
-                helperText: canSubmit ? null : l10n.updateNoteRequired,
+                //
+                // Always present, never conditional on `canSubmit`. Removing it
+                // on the first keystroke shrank the field and jumped the whole
+                // dialog upward under the user's finger — and put it back if
+                // they deleted down to empty again.
+                helperText: l10n.updateNoteRequired,
                 helperMaxLines: 2,
               ),
             ),
@@ -118,9 +123,13 @@ class _UpdateNoteDialogState extends State<_UpdateNoteDialog> {
         ],
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(l10n.cancel),
+        Semantics(
+          label: l10n.cancel,
+          button: true,
+          child: TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(l10n.cancel),
+          ),
         ),
         Semantics(
           label: l10n.confirm,

@@ -133,7 +133,17 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     // is absent, because nothing but the metadata differs between the two
     // events — and the screen waits for it forever (R6-001).
     _signalStream = _signalRef.snapshots(includeMetadataChanges: true);
+    _subscribeToHistory();
+  }
 
+  /// Replaces just the two history listeners, leaving `_signalStream` alone.
+  ///
+  /// Separate from [_subscribe] because the history has its own Retry, and
+  /// reassigning the signal stream to serve it would put the whole screen back
+  /// to `unknownYet` — a full-page spinner over the photos, description and
+  /// comment box, and a detached `_scrollController` that drops the reader back
+  /// at the top of a long signal. Reloading a sub-list must not cost the page.
+  void _subscribeToHistory() {
     _commentsSub?.cancel();
     _eventsSub?.cancel();
     _commentEntries = null;
@@ -193,6 +203,11 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       _resetServerConfirmationWait();
       _subscribe();
     });
+  }
+
+  /// Retries the history alone, from its own Retry button.
+  void _restartHistoryListeners() {
+    setState(_subscribeToHistory);
   }
 
   /// Leaves this screen the way the rest of the screen does: back if there is
@@ -919,8 +934,57 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     });
   }
 
-  /// The signal timeline (spec §4.6): what happened to this signal, and what people
-  /// said about it, in one chronological thread.
+  /// One All/Events chip.
+  ///
+  /// Labelled for the same reason as every other control on this screen:
+  /// element-based device automation finds a labelled control reliably, and
+  /// coordinate-tapping a small chip does not (see CLAUDE.md).
+  Widget _historyFilterChip(SignalHistoryFilter filter, AppLocalizations l10n) {
+    final label = switch (filter) {
+      SignalHistoryFilter.all => l10n.historyFilterAll,
+      SignalHistoryFilter.events => l10n.historyFilterEvents,
+    };
+    final selected = _historyFilter == filter;
+
+    return Semantics(
+      label: label,
+      button: true,
+      selected: selected,
+      child: ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        visualDensity: VisualDensity.compact,
+        onSelected: (_) => setState(() => _historyFilter = filter),
+      ),
+    );
+  }
+
+  /// A history read that failed, and the way back from it.
+  ///
+  /// Retries the history listeners only — see [_subscribeToHistory].
+  Widget _historyNotice(String message, AppLocalizations l10n) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline, size: 18),
+          const SizedBox(width: 8),
+          Expanded(child: Text(message)),
+          Semantics(
+            label: l10n.retry,
+            button: true,
+            child: TextButton(
+              onPressed: _restartHistoryListeners,
+              child: Text(l10n.retry),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The signal timeline (master spec §4.6): what happened to this signal, and
+  /// what people said about it, in one chronological thread.
   Widget _buildSignalHistory(
     Signal signal,
     AppLocalizations l10n,
@@ -928,13 +992,17 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   ) {
     // Only when BOTH sources are unreadable. If one still works the history is
     // incomplete rather than unavailable, and showing the half we have beats
-    // replacing the whole thread with a Firestore error string — which is what
-    // a device on rules that predate the `events` block would otherwise see.
+    // replacing the whole thread — which is what a device on rules that predate
+    // the `events` block would otherwise see.
+    //
+    // This branch gets the SAME retry as the one-sided failure. Both listeners
+    // failing is the *more* recoverable case, not the less: it is what a cold
+    // launch looks like when the auth or App Check token was not ready in time,
+    // and that passes on its own. Leaving it as a dead end — the state it was in
+    // when only the one-sided path had a Retry — stranded exactly the users
+    // whose problem a retry would have solved.
     if (_commentsError != null && _eventsError != null) {
-      return Text(
-        _commentsError.toString(),
-        style: const TextStyle(color: Colors.red),
-      );
+      return _historyNotice(l10n.somethingWentWrong, l10n);
     }
     // Likewise only while BOTH are still silent: rendering as soon as either
     // arrives means rows appear rather than a spinner sitting there, and the
@@ -966,20 +1034,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         // keeps getting bitten by. A Firestore listener ends on error and never
         // heals, so the retry is the only way back short of leaving the screen.
         if ((_commentsError == null) != (_eventsError == null))
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                const Icon(Icons.error_outline, size: 18),
-                const SizedBox(width: 8),
-                Expanded(child: Text(l10n.historyPartiallyUnavailable)),
-                TextButton(
-                  onPressed: _restartListeners,
-                  child: Text(l10n.retry),
-                ),
-              ],
-            ),
-          ),
+          _historyNotice(l10n.historyPartiallyUnavailable, l10n),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Wrap(
@@ -987,16 +1042,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
             alignment: WrapAlignment.center,
             children: [
               for (final filter in SignalHistoryFilter.values)
-                ChoiceChip(
-                  label: Text(switch (filter) {
-                    SignalHistoryFilter.all => l10n.historyFilterAll,
-                    SignalHistoryFilter.events => l10n.historyFilterEvents,
-                  }),
-                  selected: _historyFilter == filter,
-                  visualDensity: VisualDensity.compact,
-                  onSelected: (_) =>
-                      setState(() => _historyFilter = filter),
-                ),
+                _historyFilterChip(filter, l10n),
             ],
           ),
         ),
@@ -1214,6 +1260,14 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     return FutureBuilder<String?>(
       future: _nameFor(uid),
       builder: (context, snapshot) {
+        // Nothing while the lookup is in flight. `snapshot.data` is null until
+        // it completes, so rendering unconditionally paints the fallback first
+        // and then flips to the real name — and since the created row now opens
+        // every signal, that made "Unknown reported this signal" flash on every
+        // open. On completion it always renders, falling back to [fallback].
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const SizedBox.shrink();
+        }
         final name = (snapshot.data?.isNotEmpty ?? false)
             ? snapshot.data!
             : (fallback ?? l10n.unknown);
@@ -1406,6 +1460,16 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       levelIcon: levelIcon,
     );
     if (note == null || !mounted) return;
+    // Re-checked after the dialog, not just before it: writing the note can take
+    // a while, and the guard's whole job is to stop a second change landing on
+    // top of one already in flight.
+    //
+    // The `old*` value this event records is the one read when the dropdown was
+    // opened, so a change made by someone else meanwhile leaves it stale. That
+    // is cosmetic — nothing reads `old*`; the renderer, the rules and the push
+    // all key off the new value — and fixing it properly means re-reading the
+    // signal, which is a round trip to correct a field nobody consults.
+    if (_isApplyingLevelChange) return;
 
     final user = FirebaseAuth.instance.currentUser!;
     final userRef =

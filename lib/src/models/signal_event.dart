@@ -30,8 +30,12 @@ enum SignalEventType {
   const SignalEventType({required this.code});
 
   /// Stable identifier persisted in Firestore. Never rename or reuse — stored
-  /// events reference it, and the value is mirrored in `functions/src/events.ts`
-  /// and in `firestore.rules`.
+  /// events reference it, and the value is mirrored in `firestore.rules`
+  /// (guarded by `test/signal_event_vocabulary_guard_test.dart`).
+  ///
+  /// There is deliberately no TypeScript copy: no function reads or writes
+  /// `events`. One is owed, with a parity test, the first time the server
+  /// writes an event — see `docs/SPECIFICATION.md` §12.5a.
   final String code;
 
   /// Every code, for validation and for the Dart↔TypeScript drift guard.

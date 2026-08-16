@@ -465,6 +465,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get updateNoteTitle => 'What changed?';
 
   @override
+  String get nothingWasSaved => 'Nothing was saved.';
+
+  @override
   String updateNoteChangingTo(String level) {
     return 'Changing to: $level';
   }

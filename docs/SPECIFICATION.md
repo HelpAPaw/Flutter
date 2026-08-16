@@ -1613,6 +1613,15 @@ pushes/PRs to `main` plus a weekly cron. It does **not** run `flutter test`.
 the rules tests, confirm before deploying, and prefer test mode on-device for anything
 data-related.
 
+**Rules go out before the app build that needs them, never after.** The signal timeline
+is the worked example: `_applyLevelChange` commits the signal update and the `events`
+create in **one atomic batch**, so on rules without the `events` block the create is
+denied and the whole batch fails — the status dropdown and the urgency picker stop
+working entirely, showing only `errorUpdatingStatus`. The reverse order is harmless: the
+rules grant access to a subcollection no released build writes to. Reads degrade
+gracefully (§7.5 renders the half it can and offers a retry); **writes do not**, because
+atomicity is exactly what makes them all-or-nothing. Deployed 2026-08-15.
+
 ### 13.4 API key restrictions
 
 The release iOS API key must allow: Token Service, Firebase Installations, Firebase

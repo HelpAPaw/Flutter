@@ -127,7 +127,21 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
         levelLabel: urgency.label(l10n),
         levelIcon: Image.asset(urgency.pinAsset, width: 24, height: 24),
       );
-      if (note == null || !mounted) return;
+      // Backing out of the note abandons the whole save, including the title,
+      // description, phone and tag edits made alongside it. That is the right
+      // call — a half-applied save is worse — but it has to be SAID: the dialog
+      // is titled "What changed?", so Cancel reads as "cancel the note", and
+      // without this the Save button would simply un-press and every edit would
+      // be gone with no explanation.
+      if (note == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l10n.nothingWasSaved)),
+          );
+        }
+        return;
+      }
+      if (!mounted) return;
     }
 
     setState(() => _isSaving = true);

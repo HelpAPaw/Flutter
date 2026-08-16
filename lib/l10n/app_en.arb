@@ -197,6 +197,7 @@
     }
   },
   "updateNoteTitle": "What changed?",
+  "nothingWasSaved": "Nothing was saved.",
   "updateNoteChangingTo": "Changing to: {level}",
   "@updateNoteChangingTo": {
     "placeholders": {

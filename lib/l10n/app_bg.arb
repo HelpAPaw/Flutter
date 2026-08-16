@@ -166,6 +166,7 @@
   "historyFilterEvents": "Събития",
   "reportedThisSignal": "{name} подаде този сигнал",
   "updateNoteTitle": "Какво се промени?",
+  "nothingWasSaved": "Нищо не беше запазено.",
   "updateNoteChangingTo": "Промяна на: {level}",
   "updateNoteHint": "Добавете кратка бележка към историята на сигнала",
   "updateNoteRequired": "Моля, опишете какво се промени — всички, които следят сигнала, ще го видят.",

@@ -926,6 +926,12 @@ abstract class AppLocalizations {
   /// **'What changed?'**
   String get updateNoteTitle;
 
+  /// No description provided for @nothingWasSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing was saved.'**
+  String get nothingWasSaved;
+
   /// No description provided for @updateNoteChangingTo.
   ///
   /// In en, this message translates to:

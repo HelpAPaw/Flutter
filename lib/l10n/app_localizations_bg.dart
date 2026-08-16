@@ -472,6 +472,9 @@ class AppLocalizationsBg extends AppLocalizations {
   String get updateNoteTitle => 'Какво се промени?';
 
   @override
+  String get nothingWasSaved => 'Нищо не беше запазено.';
+
+  @override
   String updateNoteChangingTo(String level) {
     return 'Промяна на: $level';
   }

@@ -105,12 +105,12 @@ service cloud.firestore {
              );
     }
 
-    // Validates a case-timeline event create (spec 4.6).
+    // Validates a signal-timeline event create (master spec 4.6).
     //
     // Events live in their own subcollection rather than in `comments` because
     // they answer to different rules: a comment is user-authored and its text is
     // the payload, while an event is a record of something that happened to the
-    // case and its shape is fixed per `type`. Keeping them apart is what lets
+    // signal and its shape is fixed per `type`. Keeping them apart is what lets
     // this function validate a CLOSED vocabulary instead of accumulating another
     // "only when present" clause per event type, the way isCommentCreate() had
     // to for the two system shapes it still has to tolerate.
