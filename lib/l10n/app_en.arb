@@ -118,6 +118,58 @@
   "submitSignal": "Submit signal",
   "addNewSignal": "Add new signal",
 
+  "next": "Next",
+  "back": "Back",
+  "skip": "Skip",
+  "change": "Change",
+
+  "newSignalStepCounter": "Step {current} of {total}",
+  "@newSignalStepCounter": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "newSignalStepLocation": "Location",
+  "newSignalStepPhoto": "Photo",
+  "newSignalStepDetails": "Details",
+  "newSignalStepAnimal": "Animal",
+  "newSignalStepType": "Category",
+  "newSignalStepUrgency": "Urgency",
+  "newSignalStepHelp": "Help needed",
+  "newSignalStepReview": "Review",
+
+  "newSignalQuestionLocation": "Where is the animal?",
+  "newSignalQuestionPhoto": "Can you add a photo?",
+  "newSignalQuestionDetails": "What is happening?",
+  "newSignalQuestionAnimal": "What animal is it?",
+  "newSignalQuestionType": "What kind of case is this?",
+  "newSignalQuestionUrgency": "How urgent is it?",
+  "newSignalQuestionHelp": "What does it need?",
+  "newSignalQuestionReview": "Ready to send?",
+
+  "newSignalHintLocation": "Move the map so the pin sits where the animal is.",
+  "newSignalHintPhoto": "A photo helps volunteers recognise the animal. You can skip this.",
+  "newSignalHintDetails": "A short title and a few sentences are enough.",
+  "newSignalHintUrgency": "A red alert notifies every volunteer nearby, so keep it for real emergencies.",
+  "newSignalHintReview": "Check everything, then send it.",
+  "newSignalHintHelp": "Choose up to {count}, most important first.",
+  "@newSignalHintHelp": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+
+  "newSignalAddPhoto": "Add a photo",
+  "newSignalNoPhoto": "No photo",
+  "newSignalNotProvided": "Not provided",
+  "newSignalPinPlaced": "Pin placed",
+  "newSignalDiscardTitle": "Discard this report?",
+  "newSignalDiscardMessage": "Everything you have entered will be lost.",
+  "newSignalDiscardConfirm": "Discard",
+  "newSignalDiscardKeep": "Keep editing",
+
+  "pleaseSelectLocation": "Please place the pin where the animal is",
   "pleaseEnterTitle": "Please enter a title for the signal",
   "pleaseEnterDescription": "Please enter a description for the signal",
   "signalCreatedPhotoFailed": "Signal created, but photo upload failed. You can try again later.",
@@ -590,7 +642,6 @@
   "sendComment": "Send comment",
   "closePhotoViewer": "Close photo viewer",
   "uploadPhoto": "Upload photo",
-  "removePhoto": "Remove photo",
 
   "couldNotOpenUrl": "Could not open {url}",
   "@couldNotOpenUrl": {

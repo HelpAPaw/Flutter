@@ -118,6 +118,58 @@
   "submitSignal": "Изпрати сигнал",
   "addNewSignal": "Добави нов сигнал",
 
+  "next": "Напред",
+  "back": "Назад",
+  "skip": "Пропусни",
+  "change": "Промени",
+
+  "newSignalStepCounter": "Стъпка {current} от {total}",
+  "@newSignalStepCounter": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "newSignalStepLocation": "Местоположение",
+  "newSignalStepPhoto": "Снимка",
+  "newSignalStepDetails": "Подробности",
+  "newSignalStepAnimal": "Животно",
+  "newSignalStepType": "Категория",
+  "newSignalStepUrgency": "Спешност",
+  "newSignalStepHelp": "Нужна помощ",
+  "newSignalStepReview": "Преглед",
+
+  "newSignalQuestionLocation": "Къде е животното?",
+  "newSignalQuestionPhoto": "Може ли да добавите снимка?",
+  "newSignalQuestionDetails": "Какво се случва?",
+  "newSignalQuestionAnimal": "Какво е животното?",
+  "newSignalQuestionType": "Какъв е случаят?",
+  "newSignalQuestionUrgency": "Колко е спешно?",
+  "newSignalQuestionHelp": "От какво има нужда?",
+  "newSignalQuestionReview": "Готови ли сте да изпратите?",
+
+  "newSignalHintLocation": "Преместете картата така, че щифтът да е там, където е животното.",
+  "newSignalHintPhoto": "Снимката помага на доброволците да разпознаят животното. Можете да пропуснете тази стъпка.",
+  "newSignalHintDetails": "Кратко заглавие и няколко изречения са достатъчни.",
+  "newSignalHintUrgency": "Червената тревога известява всички доброволци наблизо, така че я пазете за истински спешни случаи.",
+  "newSignalHintReview": "Проверете всичко и изпратете.",
+  "newSignalHintHelp": "Изберете до {count}, като започнете с най-важното.",
+  "@newSignalHintHelp": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+
+  "newSignalAddPhoto": "Добави снимка",
+  "newSignalNoPhoto": "Без снимка",
+  "newSignalNotProvided": "Не е посочен",
+  "newSignalPinPlaced": "Щифтът е поставен",
+  "newSignalDiscardTitle": "Да отхвърлим ли сигнала?",
+  "newSignalDiscardMessage": "Всичко, което сте въвели, ще бъде загубено.",
+  "newSignalDiscardConfirm": "Отхвърли",
+  "newSignalDiscardKeep": "Продължи редактирането",
+
+  "pleaseSelectLocation": "Моля, поставете щифта там, където е животното",
   "pleaseEnterTitle": "Моля, въведете заглавие за сигнала",
   "pleaseEnterDescription": "Моля, въведете описание за сигнала",
   "signalCreatedPhotoFailed": "Сигналът е създаден, но качването на снимката се провали. Можете да опитате отново по-късно.",
@@ -414,7 +466,6 @@
   "sendComment": "Изпрати коментар",
   "closePhotoViewer": "Затвори снимката",
   "uploadPhoto": "Качи снимка",
-  "removePhoto": "Премахни снимка",
 
   "couldNotOpenUrl": "Не може да се отвори {url}",
   "completeNotificationSetup": "Завършете настройката на известията",

@@ -662,6 +662,222 @@ abstract class AppLocalizations {
   /// **'Add new signal'**
   String get addNewSignal;
 
+  /// No description provided for @next.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get next;
+
+  /// No description provided for @back.
+  ///
+  /// In en, this message translates to:
+  /// **'Back'**
+  String get back;
+
+  /// No description provided for @skip.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip'**
+  String get skip;
+
+  /// No description provided for @change.
+  ///
+  /// In en, this message translates to:
+  /// **'Change'**
+  String get change;
+
+  /// No description provided for @newSignalStepCounter.
+  ///
+  /// In en, this message translates to:
+  /// **'Step {current} of {total}'**
+  String newSignalStepCounter(int current, int total);
+
+  /// No description provided for @newSignalStepLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Location'**
+  String get newSignalStepLocation;
+
+  /// No description provided for @newSignalStepPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo'**
+  String get newSignalStepPhoto;
+
+  /// No description provided for @newSignalStepDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Details'**
+  String get newSignalStepDetails;
+
+  /// No description provided for @newSignalStepAnimal.
+  ///
+  /// In en, this message translates to:
+  /// **'Animal'**
+  String get newSignalStepAnimal;
+
+  /// No description provided for @newSignalStepType.
+  ///
+  /// In en, this message translates to:
+  /// **'Category'**
+  String get newSignalStepType;
+
+  /// No description provided for @newSignalStepUrgency.
+  ///
+  /// In en, this message translates to:
+  /// **'Urgency'**
+  String get newSignalStepUrgency;
+
+  /// No description provided for @newSignalStepHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Help needed'**
+  String get newSignalStepHelp;
+
+  /// No description provided for @newSignalStepReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Review'**
+  String get newSignalStepReview;
+
+  /// No description provided for @newSignalQuestionLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Where is the animal?'**
+  String get newSignalQuestionLocation;
+
+  /// No description provided for @newSignalQuestionPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Can you add a photo?'**
+  String get newSignalQuestionPhoto;
+
+  /// No description provided for @newSignalQuestionDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'What is happening?'**
+  String get newSignalQuestionDetails;
+
+  /// No description provided for @newSignalQuestionAnimal.
+  ///
+  /// In en, this message translates to:
+  /// **'What animal is it?'**
+  String get newSignalQuestionAnimal;
+
+  /// No description provided for @newSignalQuestionType.
+  ///
+  /// In en, this message translates to:
+  /// **'What kind of case is this?'**
+  String get newSignalQuestionType;
+
+  /// No description provided for @newSignalQuestionUrgency.
+  ///
+  /// In en, this message translates to:
+  /// **'How urgent is it?'**
+  String get newSignalQuestionUrgency;
+
+  /// No description provided for @newSignalQuestionHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'What does it need?'**
+  String get newSignalQuestionHelp;
+
+  /// No description provided for @newSignalQuestionReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready to send?'**
+  String get newSignalQuestionReview;
+
+  /// No description provided for @newSignalHintLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Move the map so the pin sits where the animal is.'**
+  String get newSignalHintLocation;
+
+  /// No description provided for @newSignalHintPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'A photo helps volunteers recognise the animal. You can skip this.'**
+  String get newSignalHintPhoto;
+
+  /// No description provided for @newSignalHintDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'A short title and a few sentences are enough.'**
+  String get newSignalHintDetails;
+
+  /// No description provided for @newSignalHintUrgency.
+  ///
+  /// In en, this message translates to:
+  /// **'A red alert notifies every volunteer nearby, so keep it for real emergencies.'**
+  String get newSignalHintUrgency;
+
+  /// No description provided for @newSignalHintReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Check everything, then send it.'**
+  String get newSignalHintReview;
+
+  /// No description provided for @newSignalHintHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose up to {count}, most important first.'**
+  String newSignalHintHelp(int count);
+
+  /// No description provided for @newSignalAddPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a photo'**
+  String get newSignalAddPhoto;
+
+  /// No description provided for @newSignalNoPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'No photo'**
+  String get newSignalNoPhoto;
+
+  /// No description provided for @newSignalNotProvided.
+  ///
+  /// In en, this message translates to:
+  /// **'Not provided'**
+  String get newSignalNotProvided;
+
+  /// No description provided for @newSignalPinPlaced.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin placed'**
+  String get newSignalPinPlaced;
+
+  /// No description provided for @newSignalDiscardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard this report?'**
+  String get newSignalDiscardTitle;
+
+  /// No description provided for @newSignalDiscardMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Everything you have entered will be lost.'**
+  String get newSignalDiscardMessage;
+
+  /// No description provided for @newSignalDiscardConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get newSignalDiscardConfirm;
+
+  /// No description provided for @newSignalDiscardKeep.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep editing'**
+  String get newSignalDiscardKeep;
+
+  /// No description provided for @pleaseSelectLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Please place the pin where the animal is'**
+  String get pleaseSelectLocation;
+
   /// No description provided for @pleaseEnterTitle.
   ///
   /// In en, this message translates to:
@@ -755,7 +971,7 @@ abstract class AppLocalizations {
   /// No description provided for @removePhoto.
   ///
   /// In en, this message translates to:
-  /// **'Remove photo'**
+  /// **'Remove Photo'**
   String get removePhoto;
 
   /// No description provided for @errorAccessingCamera.

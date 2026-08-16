@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart' show XFile;
 import 'package:help_a_paw/src/models/animal_type.dart';
 import 'package:help_a_paw/src/models/help_tag.dart';
+import 'package:help_a_paw/src/models/new_signal_step.dart';
 import 'package:help_a_paw/src/models/signal_urgency.dart';
 import 'package:help_a_paw/src/repositories/repository_provider.dart';
 import 'package:help_a_paw/src/state/map_state.dart';
@@ -275,10 +276,9 @@ void main() {
     test('submitSignal fails with empty title', () async {
       viewModel.updateFormDescription('Description');
 
-      final (success, errorMessage) = await viewModel.submitSignal(
-        latitude: 42.0,
-        longitude: 23.0,
-      );
+      viewModel.confirmLocation(42.0, 23.0);
+
+      final (success, errorMessage) = await viewModel.submitSignal();
 
       expect(success, false);
       expect(errorMessage, 'title_empty');
@@ -287,10 +287,9 @@ void main() {
     test('submitSignal fails with empty description', () async {
       viewModel.updateFormTitle('Title');
 
-      final (success, errorMessage) = await viewModel.submitSignal(
-        latitude: 42.0,
-        longitude: 23.0,
-      );
+      viewModel.confirmLocation(42.0, 23.0);
+
+      final (success, errorMessage) = await viewModel.submitSignal();
 
       expect(success, false);
       expect(errorMessage, 'description_empty');
@@ -303,10 +302,9 @@ void main() {
       viewModel.updateFormTitle('Title');
       viewModel.updateFormDescription('Description');
 
-      final (success, errorMessage) = await viewModel.submitSignal(
-        latitude: 42.0,
-        longitude: 23.0,
-      );
+      viewModel.confirmLocation(42.0, 23.0);
+
+      final (success, errorMessage) = await viewModel.submitSignal();
 
       expect(success, false);
       expect(errorMessage, 'urgency_unset');
@@ -322,10 +320,9 @@ void main() {
       viewModel.setFormUrgency(SignalUrgency.amber.code);
       viewModel.setFormAnimalType(AnimalType.cat.code);
 
-      final (success, errorMessage) = await viewModel.submitSignal(
-        latitude: 42.0,
-        longitude: 23.0,
-      );
+      viewModel.confirmLocation(42.0, 23.0);
+
+      final (success, errorMessage) = await viewModel.submitSignal();
 
       expect(success, false);
       expect(errorMessage, 'help_tags_empty');
@@ -338,10 +335,9 @@ void main() {
       viewModel.setFormUrgency(SignalUrgency.amber.code);
       viewModel.toggleFormHelpTag(HelpTag.foster.code);
 
-      final (success, errorMessage) = await viewModel.submitSignal(
-        latitude: 42.0,
-        longitude: 23.0,
-      );
+      viewModel.confirmLocation(42.0, 23.0);
+
+      final (success, errorMessage) = await viewModel.submitSignal();
 
       expect(success, false);
       expect(errorMessage, 'animal_type_unset');
@@ -356,10 +352,9 @@ void main() {
       viewModel.toggleFormHelpTag(HelpTag.foster.code);
       viewModel.setFormAnimalType(AnimalType.cat.code);
 
-      final (success, _) = await viewModel.submitSignal(
-        latitude: 42.0,
-        longitude: 23.0,
-      );
+      viewModel.confirmLocation(42.0, 23.0);
+
+      final (success, _) = await viewModel.submitSignal();
 
       expect(success, true);
       // Order is the priority the reporter gave and must survive the write.
@@ -398,10 +393,9 @@ void main() {
       viewModel.toggleFormHelpTag(HelpTag.rescue.code);
       viewModel.setFormAnimalType(AnimalType.dog.code);
 
-      final (success, _) = await viewModel.submitSignal(
-        latitude: 42.0,
-        longitude: 23.0,
-      );
+      viewModel.confirmLocation(42.0, 23.0);
+
+      final (success, _) = await viewModel.submitSignal();
 
       expect(success, true);
       expect(
@@ -418,10 +412,9 @@ void main() {
       viewModel.setFormAnimalType(AnimalType.dog.code);
       viewModel.updateFormPhoneNumber('0888123456');
 
-      final (success, errorMessage) = await viewModel.submitSignal(
-        latitude: 42.0,
-        longitude: 23.0,
-      );
+      viewModel.confirmLocation(42.0, 23.0);
+
+      final (success, errorMessage) = await viewModel.submitSignal();
 
       expect(errorMessage, isNull, reason: 'submitSignal error: $errorMessage');
       expect(success, true);
@@ -448,10 +441,9 @@ void main() {
       viewModel.setFormAnimalType(AnimalType.dog.code);
       viewModel.setFormImage(XFile('/tmp/mock-photo.jpg'));
 
-      final (success, errorMessage) = await viewModel.submitSignal(
-        latitude: 42.0,
-        longitude: 23.0,
-      );
+      viewModel.confirmLocation(42.0, 23.0);
+
+      final (success, errorMessage) = await viewModel.submitSignal();
 
       expect(success, true);
       expect(errorMessage, isNull);
@@ -477,10 +469,9 @@ void main() {
       viewModel.setFormAnimalType(AnimalType.dog.code);
       viewModel.setFormImage(XFile('/tmp/mock-photo.jpg'));
 
-      final (success, errorMessage) = await viewModel.submitSignal(
-        latitude: 42.0,
-        longitude: 23.0,
-      );
+      viewModel.confirmLocation(42.0, 23.0);
+
+      final (success, errorMessage) = await viewModel.submitSignal();
 
       // Partial success: the signal exists, so this is not a failure — but the
       // caller must be told, and no photo URL may be attached.
@@ -505,10 +496,9 @@ void main() {
       viewModel.toggleFormHelpTag(HelpTag.rescue.code);
       viewModel.setFormAnimalType(AnimalType.dog.code);
 
-      final (success, errorMessage) = await viewModel.submitSignal(
-        latitude: 42.0,
-        longitude: 23.0,
-      );
+      viewModel.confirmLocation(42.0, 23.0);
+
+      final (success, errorMessage) = await viewModel.submitSignal();
 
       expect(success, false);
       expect(errorMessage, 'permission-denied');
@@ -524,10 +514,9 @@ void main() {
       viewModel.toggleFormHelpTag(HelpTag.rescue.code);
       viewModel.setFormAnimalType(AnimalType.dog.code);
 
-      final (success, errorMessage) = await viewModel.submitSignal(
-        latitude: 42.0,
-        longitude: 23.0,
-      );
+      viewModel.confirmLocation(42.0, 23.0);
+
+      final (success, errorMessage) = await viewModel.submitSignal();
 
       expect(success, false);
       expect(errorMessage, 'not_authenticated');
@@ -540,8 +529,123 @@ void main() {
       viewModel.toggleFormHelpTag(HelpTag.rescue.code);
       viewModel.setFormAnimalType(AnimalType.dog.code);
 
-      await viewModel.submitSignal(latitude: 42.0, longitude: 23.0);
+      viewModel.confirmLocation(42.0, 23.0);
+
+      await viewModel.submitSignal();
       expect(viewModel.state.newlyCreatedSignalId, isNotNull);
+    });
+  });
+
+  group('Wizard step navigation', () {
+    /// Fills everything except the pin, so a test can isolate the location.
+    void fillEverythingButLocation() {
+      viewModel.updateFormTitle('Title');
+      viewModel.updateFormDescription('Description');
+      viewModel.setFormUrgency(SignalUrgency.amber.code);
+      viewModel.toggleFormHelpTag(HelpTag.rescue.code);
+      viewModel.setFormAnimalType(AnimalType.dog.code);
+    }
+
+    test('a new form starts on the location question', () {
+      expect(viewModel.state.formState.step, NewSignalStep.location);
+      expect(viewModel.state.formState.isLocationUnset, true);
+    });
+
+    test('submitSignal refuses a form with no pin', () async {
+      fillEverythingButLocation();
+
+      final (success, errorMessage) = await viewModel.submitSignal();
+
+      expect(success, false);
+      expect(errorMessage, 'location_unset');
+    });
+
+    test('confirmLocation stores the pin and opens the first question', () {
+      viewModel.confirmLocation(42.5, 23.5);
+
+      expect(viewModel.state.formState.latitude, 42.5);
+      expect(viewModel.state.formState.longitude, 23.5);
+      expect(viewModel.state.formState.step, NewSignalStep.photo);
+    });
+
+    test('confirmLocation from the review step returns there, not to the '
+        'start', () {
+      // Revising the pin is reached from review, so re-confirming must not
+      // march the reporter back through every question they already answered.
+      viewModel.confirmLocation(42.0, 23.0);
+      viewModel.goToStep(NewSignalStep.review);
+
+      viewModel.confirmLocation(43.0, 24.0);
+
+      expect(viewModel.state.formState.step, NewSignalStep.review);
+      expect(viewModel.state.formState.latitude, 43.0);
+    });
+
+    test('nextStep refuses to move past an unanswered question', () {
+      viewModel.confirmLocation(42.0, 23.0);
+      viewModel.goToStep(NewSignalStep.animal);
+
+      viewModel.nextStep();
+      expect(viewModel.state.formState.step, NewSignalStep.animal);
+
+      viewModel.setFormAnimalType(AnimalType.cat.code);
+      viewModel.nextStep();
+      expect(viewModel.state.formState.step, NewSignalStep.signalType);
+    });
+
+    test('the photo and category steps are complete without an answer', () {
+      // One is optional, the other has a default — neither may strand the
+      // reporter behind a disabled Next button.
+      final formState = viewModel.state.formState;
+      expect(formState.isStepComplete(NewSignalStep.photo), true);
+      expect(formState.isStepComplete(NewSignalStep.signalType), true);
+    });
+
+    test('previousStep reports when there is nowhere left to go', () {
+      viewModel.confirmLocation(42.0, 23.0);
+      expect(viewModel.state.formState.step, NewSignalStep.photo);
+
+      expect(viewModel.previousStep(), true);
+      expect(viewModel.state.formState.step, NewSignalStep.location);
+
+      expect(viewModel.previousStep(), false);
+      expect(viewModel.state.formState.step, NewSignalStep.location);
+    });
+
+    test('every field isValid requires is caught by exactly one step', () {
+      // The wizard disables Next on isStepComplete but submits on isValid. If
+      // the two ever disagree, the reporter reaches the review screen and is
+      // refused with no way to see which answer is missing.
+      viewModel.confirmLocation(42.0, 23.0);
+      fillEverythingButLocation();
+      expect(viewModel.state.formState.isValid, true);
+
+      for (final step in NewSignalStep.values) {
+        expect(viewModel.state.formState.isStepComplete(step), true,
+            reason: '$step should be complete on a fully valid form');
+      }
+    });
+
+    test('cancelAddingNewSignal clears the pin and the step', () {
+      viewModel.toggleAddingNewSignal();
+      viewModel.confirmLocation(42.0, 23.0);
+      viewModel.goToStep(NewSignalStep.urgency);
+
+      viewModel.cancelAddingNewSignal();
+
+      expect(viewModel.state.formState.isLocationUnset, true);
+      expect(viewModel.state.formState.step, NewSignalStep.location);
+    });
+
+    test('isDirty ignores the signal type, which has a default', () {
+      expect(viewModel.state.formState.isDirty, false);
+
+      viewModel.setFormSignalType(3);
+      expect(viewModel.state.formState.isDirty, false,
+          reason: 'a defaulted field says nothing about reporter intent');
+
+      viewModel.updateFormTitle('Title');
+      expect(viewModel.state.formState.isDirty, true);
     });
   });
 
@@ -626,12 +730,26 @@ void main() {
       expect(noAnimal.isValid, false);
       expect(noAnimal.isAnimalTypeUnset, true);
 
+      // The pin is a required answer like any other now, not a value read off
+      // the map camera at the moment of submit.
+      final noLocation = NewSignalFormState(
+        title: 'Title',
+        description: 'Desc',
+        urgency: SignalUrgency.amber.code,
+        helpTags: [HelpTag.rescue.code],
+        animalType: AnimalType.dog.code,
+      );
+      expect(noLocation.isValid, false);
+      expect(noLocation.isLocationUnset, true);
+
       final valid = NewSignalFormState(
         title: 'Title',
         description: 'Desc',
         urgency: SignalUrgency.amber.code,
         helpTags: [HelpTag.rescue.code],
         animalType: AnimalType.dog.code,
+        latitude: 42.0,
+        longitude: 23.0,
       );
       expect(valid.isValid, true);
     });

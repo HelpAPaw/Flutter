@@ -641,6 +641,7 @@ Declarative `GoRouter` configured in `main.dart`; all paths are constants in
 | `/signal_details/:signalId` | `SignalDetailsScreen` | id validated in a route `redirect`; page keyed by id |
 | `/signal/:signalId` | — | public deep-link path; redirects to `/signal_details/:id` |
 | `/edit_signal/:signalId` | `EditSignalScreen` | |
+| `/new_signal` | `NewSignalWizardPage` | steps 2–8 of the create wizard (§7.4); pushed from the map once the pin is confirmed, and reads its draft from `mapViewModelProvider` |
 | `/clinic_details/:clinicId` | `ClinicDetailsScreen` | |
 | `/faqs`, `/feedback`, `/privacy_policy`, `/about` | static pages | |
 
@@ -838,18 +839,68 @@ anonymous session is re-established there and then, not at the next launch.
   would pan away from the signal the user tapped through to. The onboarding sheet's
   fly-to-user is user-initiated and deliberately not gated.
 
-### 7.4 Creating a signal
+### 7.4 Creating a signal — the wizard
 
 FAB → if `!canModifyData`, a sign-in dialog; otherwise the map enters
-`isAddingNewSignal` mode: a crosshair marks the drop point and `NewSignalForm` slides in
-from the top. `PopScope` turns a back gesture into "cancel".
+`isAddingNewSignal` mode. From there it is an **eight-step wizard, one question per
+screen**, enumerated by `NewSignalStep` (`models/new_signal_step.dart`).
 
-Form fields: photo (camera/gallery, max 1920 px, quality 85), title (≤300), description
-(≤10 000), phone, type dropdown. Length limits mirror the Firestore rules so over-long
-input is capped at the keyboard rather than failing with an opaque `PERMISSION_DENIED`.
+Step 1 stays on the live map — crosshair plus `NewSignalLocationBar`
+(`widgets/map/new_signal_location_bar.dart`) — so the pin is placed against the map
+the reporter is already looking at, with no second `GoogleMap` instance. The FAB is
+hidden while the bar is up, since the bar carries its own Cancel and they occupy the
+same corner. Confirming pushes `/new_signal` (`NewSignalWizardPage`), which renders
+steps 2–8.
 
-`MapViewModel.submitSignal(lat, lng)`:
-1. Validate (`title_empty` / `description_empty` / `not_authenticated`).
+| # | Step | Required | Notes |
+|---|---|---|---|
+| 1 | Location | yes | map crosshair; `confirmLocation(lat, lng)` |
+| 2 | Photo | no | camera/gallery, max 1920 px, quality 85 |
+| 3 | Details | title + description | title ≤300, description ≤10 000, phone optional |
+| 4 | Animal | yes | `AnimalTypeSelector(singleSelect: true)` |
+| 5 | Category | defaults to 0 | **localized** `Signal.getLocalizedSignalTypes` |
+| 6 | Urgency | yes | `UrgencyPicker` **with** descriptions; owns the Red confirm |
+| 7 | Help needed | 1–3 | `HelpTagSelector(maxSelection: HelpTag.maxPerSignal)` |
+| 8 | Review | — | every answer, each linking back to its step; Submit |
+
+**The order is load-bearing and documented on the enum.** Location and photo lead
+because they are the only perishable answers — the reporter is in front of the animal
+now. The description precedes every classification because urgency, category and tags
+are all judgements *about the situation just narrated*. Help tags follow urgency and
+must not precede it: "what does this case need" is unanswerable before "how bad is
+this" is settled. Two properties fall out and should survive future edits — all
+keyboard input is on one step, and steps 4–6 are consecutive single-choice questions,
+which is what makes auto-advance viable.
+
+**Auto-advance** fires ~250 ms after an answer on the single-choice steps
+(`NewSignalStep.autoAdvances`) **only when the step was unanswered on arrival**, so
+returning to revise an answer does not fling the reporter forward again. The
+multi-select help step and the typing steps never auto-advance.
+
+**Validation is per step, not at submit.** `NewSignalFormState.isStepComplete(step)`
+disables Next until the current question is answered, so the reporter can never reach
+the review screen in a state submit will reject. It must stay in agreement with
+`isValid` — a gap means being refused at submit with no way to see which answer is
+missing, which is what the old single-screen form did one SnackBar at a time.
+`map_view_model_test.dart` asserts the agreement directly.
+
+Location is real form state (`NewSignalFormState.latitude/longitude`), not a value
+read off the map camera at the instant of submit. That is what lets the review screen
+show the pin and send the reporter back to the map to move it: `goToStep(location)`
+parks the step, `popOrHome()` returns to the map, and `confirmLocation` only advances
+when the step is still on the location question — so re-confirming lands back on
+review.
+
+Leaving the wizard with anything entered (`isDirty`, which ignores the defaulted
+category) prompts before discarding. The system back gesture is a step back, not an
+exit, until the first step.
+
+Length limits mirror the Firestore rules so over-long input is capped at the keyboard
+rather than failing with an opaque `PERMISSION_DENIED`.
+
+`MapViewModel.submitSignal()`:
+1. Validate (`location_unset` / `title_empty` / `description_empty` / `urgency_unset` /
+   `help_tags_empty` / `animal_type_unset` / `not_authenticated`).
 2. `createSignal` — writes the doc with `location = {geopoint, geohash}` (precision 9).
 3. `subscribeCreatorToSignal` — `arrayUnion` on `users/{uid}.signalSubscriptions`.
 4. If an image was picked: upload to Storage, then `arrayUnion` the URL onto `photoUrls`.
