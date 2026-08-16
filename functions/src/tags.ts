@@ -92,8 +92,9 @@ export const HELP_TAGS_WITHOUT_NEEDED_SUFFIX = [
  * untagged — the server would be discarding a category the client still sends
  * and still means.
  *
- * Index = the stored int. Delete this, and `legacyHeadline`, once the installed
- * base has moved on; nothing else depends on it.
+ * Index = the stored int. Delete this once the installed base has moved on;
+ * nothing else depends on it.
+ * Tracking: HelpAPaw/Flutter#70.
  */
 const RETIRED_SIGNAL_TYPE_TAGS = [
   "rescue", // 0 Emergency — urgency carries the "emergency" part

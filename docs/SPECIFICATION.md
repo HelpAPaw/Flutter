@@ -370,6 +370,8 @@ come out together once the installed base has moved on:
 | `functions/src/index.ts` | inbox entries mirror `signalType` when the signal has one | Shipped builds render the row from `signalType` and fall back to the stored **English** body without it, showing Bulgarian users English text |
 | `firestore.rules` | the inbox `create` allow-list accepts **both** shapes, requires neither | This is a *client* write path (the arrival catch-up), and `NearbySignalChecker` swallows a denial — rejecting the old shape makes inbox entries silently stop appearing |
 
+Removal is tracked by **HelpAPaw/Flutter#70**, which lists every site.
+
 The earlier plan dropped all three, arguing that four legacy documents did not
 justify a migration mechanism. That was right about existing documents and wrong
 about ongoing writes: the old build keeps creating them. Pinned by

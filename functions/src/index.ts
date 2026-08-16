@@ -294,6 +294,7 @@ interface InboxEntry {
    * one. Builds released before the tag vocabulary render the row from this and
    * show the stored English body without it. Drop it, and the write site in
    * `handleSignalCreated`, once those builds are gone.
+   * Tracking: HelpAPaw/Flutter#70.
    */
   signalType?: number;
   statusCode?: number;
