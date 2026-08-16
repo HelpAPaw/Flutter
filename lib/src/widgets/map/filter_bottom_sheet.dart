@@ -7,6 +7,7 @@ import '../../models/signal_status.dart';
 import '../../models/signal_urgency.dart';
 import '../../state/map_state.dart';
 import '../../viewmodels/map_view_model.dart';
+import '../section_header.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 
 /// Shows the filter bottom sheet for help tags, species, urgency and status
@@ -82,13 +83,7 @@ class _FilterBottomSheetContent extends ConsumerWidget {
                       ],
                     ),
                     const Divider(),
-                    Text(
-                      l10n.timeRange,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    SectionHeader(l10n.timeRange),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
@@ -237,13 +232,15 @@ class _FilterBottomSheetContent extends ConsumerWidget {
 
   /// A divider, a heading and its rows — the four-line preamble each filter
   /// section repeated verbatim.
+  ///
+  /// The heading is the shared [SectionHeader] rather than a local `Text`: this
+  /// sheet used a hardcoded `fontSize: 16`, which would have been a third size
+  /// for one heading style and, unlike `titleMedium`, does not scale with the
+  /// user's text-size setting.
   List<Widget> _section(String title, Iterable<Widget> rows) => [
         const SizedBox(height: 16),
         const Divider(),
-        Text(
-          title,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-        ),
+        SectionHeader(title),
         const SizedBox(height: 8),
         ...rows,
       ];

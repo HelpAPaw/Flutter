@@ -8,6 +8,7 @@ import '../../l10n/app_localizations.dart';
 import '../models/help_tag.dart';
 import '../services/auth_service.dart';
 import 'help_tag_selector.dart';
+import 'section_header.dart';
 
 /// Full-screen, non-skippable picker for helper tags and animal types.
 ///
@@ -159,15 +160,13 @@ class _HelperTagsOnboardingPageState extends State<HelperTagsOnboardingPage> {
                       style: TextStyle(color: Colors.grey.shade700),
                     ),
                     const SizedBox(height: 20),
-                    _sectionHeader(
-                        context, l10n.helperTagsOnboardingHelpSection),
+                    SectionHeader(l10n.helperTagsOnboardingHelpSection),
                     HelpTagChoiceList(
                       selected: _helperTags,
                       onToggle: _toggleHelperTag,
                     ),
                     const SizedBox(height: 20),
-                    _sectionHeader(
-                        context, l10n.helperTagsOnboardingAnimalSection),
+                    SectionHeader(l10n.helperTagsOnboardingAnimalSection),
                     const SizedBox(height: 8),
                     AnimalTypeSelector(
                       selected: _animalTypes,
@@ -214,11 +213,4 @@ class _HelperTagsOnboardingPageState extends State<HelperTagsOnboardingPage> {
     );
   }
 
-  Widget _sectionHeader(BuildContext context, String text) => Text(
-        text,
-        style: Theme.of(context)
-            .textTheme
-            .titleMedium
-            ?.copyWith(fontWeight: FontWeight.w600),
-      );
 }

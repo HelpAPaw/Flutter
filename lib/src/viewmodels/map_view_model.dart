@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../models/new_signal_step.dart';
 import '../models/vet_clinic.dart';
 import '../repositories/repository_provider.dart';
 import '../repositories/signal_repository.dart';
@@ -240,6 +241,55 @@ class MapViewModel extends Notifier<MapScreenState> {
     );
   }
 
+  /// Accept the pin the reporter placed on the map and open the first wizard
+  /// question.
+  ///
+  /// Jumping straight to [NewSignalStep.photo] rather than calling [nextStep]
+  /// keeps this correct when the reporter came *back* to the map from the
+  /// review step to revise the pin — in that case [step] is already
+  /// [NewSignalStep.review] and advancing by one would land them somewhere they
+  /// have been through. [goToStep] is what the review screen uses to arrange
+  /// that return, so this only ever needs to handle the forward case.
+  void confirmLocation(double latitude, double longitude) {
+    final formState = state.formState;
+    state = state.copyWith(
+      formState: formState.copyWith(
+        latitude: latitude,
+        longitude: longitude,
+        step: formState.step == NewSignalStep.location
+            ? NewSignalStep.photo
+            : formState.step,
+      ),
+    );
+  }
+
+  /// Jump to a specific question — the review screen's "Change" links.
+  void goToStep(NewSignalStep step) {
+    state = state.copyWith(formState: state.formState.copyWith(step: step));
+  }
+
+  /// Advance, but never past an unanswered question.
+  ///
+  /// The guard matters because auto-advance fires from a timer: a reporter who
+  /// taps a chip and immediately taps Back would otherwise be dragged forward
+  /// again by the callback that is already in flight.
+  void nextStep() {
+    final formState = state.formState;
+    if (!formState.isStepComplete(formState.step)) return;
+    final next = formState.step.next;
+    if (next == null) return;
+    state = state.copyWith(formState: formState.copyWith(step: next));
+  }
+
+  /// Go back one question. Returns false at the first step, where the caller
+  /// has to decide whether to leave the wizard entirely.
+  bool previousStep() {
+    final previous = state.formState.step.previous;
+    if (previous == null) return false;
+    state = state.copyWith(formState: state.formState.copyWith(step: previous));
+    return true;
+  }
+
   /// Set selected image
   void setFormImage(XFile? image) {
     state = state.copyWith(
@@ -258,12 +308,18 @@ class MapViewModel extends Notifier<MapScreenState> {
   }
 
   /// Submit a new signal
+  ///
+  /// The coordinates come from [NewSignalFormState.latitude]/[longitude], set
+  /// by [confirmLocation]. They used to be arguments read off the map camera at
+  /// this moment, which is why nothing upstream could show the reporter where
+  /// their pin was going.
+  ///
   /// Returns a tuple of (success, errorMessage)
-  Future<(bool success, String? errorMessage)> submitSignal({
-    required double latitude,
-    required double longitude,
-  }) async {
+  Future<(bool success, String? errorMessage)> submitSignal() async {
     if (!state.formState.isValid) {
+      if (state.formState.isLocationUnset) {
+        return (false, 'location_unset');
+      }
       if (state.formState.isTitleEmpty) {
         return (false, 'title_empty');
       }
@@ -281,6 +337,10 @@ class MapViewModel extends Notifier<MapScreenState> {
       }
       return (false, 'invalid_form');
     }
+
+    // Non-null: `isValid` gates submission on the location above.
+    final latitude = state.formState.latitude!;
+    final longitude = state.formState.longitude!;
 
     FirebaseCrashlytics.instance.log('Signal: Submitting - tags: ${state.formState.helpTags}, animal: ${state.formState.animalType}, urgency: ${state.formState.urgency}, location: $latitude/$longitude');
 

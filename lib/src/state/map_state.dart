@@ -3,6 +3,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../models/help_tag.dart';
+import '../models/new_signal_step.dart';
 import '../repositories/signal_repository.dart';
 import '../models/vet_clinic.dart';
 
@@ -243,6 +244,24 @@ class NewSignalFormState {
   final XFile? selectedImage;
   final bool isSubmitting;
 
+  /// Where the reporter placed the pin, or null until they confirm it on the
+  /// map.
+  ///
+  /// The location used to be read from the map camera at the instant of submit
+  /// and never stored, which is why nothing could show it back to the reporter
+  /// or let them revise it. It is a real answer like any other now, so the
+  /// review step can display it and the wizard can be reached from a route that
+  /// has no map of its own.
+  final double? latitude;
+  final double? longitude;
+
+  /// Which question the reporter is on.
+  ///
+  /// Lives in state rather than in the wizard widget so it survives the trip
+  /// back to the map for a location change — the wizard route is popped and
+  /// re-pushed, and resumes where it left off.
+  final NewSignalStep step;
+
   const NewSignalFormState({
     this.title = '',
     this.description = '',
@@ -252,15 +271,35 @@ class NewSignalFormState {
     this.animalType,
     this.selectedImage,
     this.isSubmitting = false,
+    this.latitude,
+    this.longitude,
+    this.step = NewSignalStep.location,
   });
 
   /// Check if the form is valid for submission
   bool get isValid =>
+      !isLocationUnset &&
       title.trim().isNotEmpty &&
       description.trim().isNotEmpty &&
       urgency != null &&
       helpTags.isNotEmpty &&
       animalType != null;
+
+  /// Whether the reporter has entered anything worth warning them about before
+  /// discarding.
+  ///
+  /// Every field here is an answer somebody actively gave. There used to be a
+  /// carve-out for the signal type, which arrived pre-selected and so said
+  /// nothing about intent; with that field retired (see [HelpTag]) the list no
+  /// longer needs an exception — anything set means somebody set it.
+  bool get isDirty =>
+      title.trim().isNotEmpty ||
+      description.trim().isNotEmpty ||
+      phoneNumber.trim().isNotEmpty ||
+      urgency != null ||
+      helpTags.isNotEmpty ||
+      animalType != null ||
+      selectedImage != null;
 
   /// Check if title is empty
   bool get isTitleEmpty => title.trim().isEmpty;
@@ -277,6 +316,25 @@ class NewSignalFormState {
   /// Check if no animal has been chosen
   bool get isAnimalTypeUnset => animalType == null;
 
+  /// Check if the pin has not been confirmed
+  bool get isLocationUnset => latitude == null || longitude == null;
+
+  /// Whether [step] has been answered well enough to move past it.
+  ///
+  /// This is what disables the wizard's Next button, so it must agree with
+  /// [isValid] — anything [isValid] rejects has to be caught by exactly one
+  /// step here, or the reporter can reach the review screen and be refused at
+  /// submit with no way to see which answer is missing. [NewSignalStep.photo]
+  /// is always complete — it is the one optional answer.
+  bool isStepComplete(NewSignalStep step) => switch (step) {
+        NewSignalStep.location => !isLocationUnset,
+        NewSignalStep.photo => true,
+        NewSignalStep.details => !isTitleEmpty && !isDescriptionEmpty,
+        NewSignalStep.animal => !isAnimalTypeUnset,
+        NewSignalStep.urgency => !isUrgencyUnset,
+        NewSignalStep.helpTags => !isHelpTagsEmpty,
+        NewSignalStep.review => isValid,
+      };
 
   /// [helpTags] with [code] added or removed.
   ///
@@ -295,6 +353,9 @@ class NewSignalFormState {
     XFile? selectedImage,
     bool? isSubmitting,
     bool clearImage = false,
+    double? latitude,
+    double? longitude,
+    NewSignalStep? step,
   }) {
     return NewSignalFormState(
       title: title ?? this.title,
@@ -305,6 +366,9 @@ class NewSignalFormState {
       animalType: animalType ?? this.animalType,
       selectedImage: clearImage ? null : (selectedImage ?? this.selectedImage),
       isSubmitting: isSubmitting ?? this.isSubmitting,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      step: step ?? this.step,
     );
   }
 
@@ -324,7 +388,10 @@ class NewSignalFormState {
         listEquals(other.helpTags, helpTags) &&
         other.animalType == animalType &&
         other.selectedImage?.path == selectedImage?.path &&
-        other.isSubmitting == isSubmitting;
+        other.isSubmitting == isSubmitting &&
+        other.latitude == latitude &&
+        other.longitude == longitude &&
+        other.step == step;
   }
 
   @override
@@ -337,6 +404,9 @@ class NewSignalFormState {
         animalType,
         selectedImage?.path,
         isSubmitting,
+        latitude,
+        longitude,
+        step,
       );
 }
 

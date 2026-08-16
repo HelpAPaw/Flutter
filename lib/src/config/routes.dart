@@ -15,6 +15,11 @@ class Routes {
   static const privacyPolicy = '/privacy_policy';
   static const about = '/about';
 
+  /// Steps 2-8 of the create-a-signal wizard. Step 1 (the pin) is answered on
+  /// the map itself, so this route is only ever reached by pushing from there
+  /// and reads its draft out of `mapViewModelProvider`.
+  static const newSignal = '/new_signal';
+
   static const signalDetailsPath = '/signal_details/:signalId';
   static const editSignalPath = '/edit_signal/:signalId';
   static const clinicDetailsPath = '/clinic_details/:clinicId';

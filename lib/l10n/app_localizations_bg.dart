@@ -348,6 +348,118 @@ class AppLocalizationsBg extends AppLocalizations {
   String get addNewSignal => 'Добави нов сигнал';
 
   @override
+  String get next => 'Напред';
+
+  @override
+  String get back => 'Назад';
+
+  @override
+  String get skip => 'Пропусни';
+
+  @override
+  String get change => 'Промени';
+
+  @override
+  String newSignalStepCounter(int current, int total) {
+    return 'Стъпка $current от $total';
+  }
+
+  @override
+  String get newSignalStepLocation => 'Местоположение';
+
+  @override
+  String get newSignalStepPhoto => 'Снимка';
+
+  @override
+  String get newSignalStepDetails => 'Подробности';
+
+  @override
+  String get newSignalStepAnimal => 'Животно';
+
+  @override
+  String get newSignalStepUrgency => 'Спешност';
+
+  @override
+  String get newSignalStepHelp => 'Нужна помощ';
+
+  @override
+  String get newSignalStepReview => 'Преглед';
+
+  @override
+  String get newSignalQuestionLocation => 'Къде е животното?';
+
+  @override
+  String get newSignalQuestionPhoto => 'Може ли да добавите снимка?';
+
+  @override
+  String get newSignalQuestionDetails => 'Какво се случва?';
+
+  @override
+  String get newSignalQuestionAnimal => 'Какво е животното?';
+
+  @override
+  String get newSignalQuestionUrgency => 'Колко е спешно?';
+
+  @override
+  String get newSignalQuestionHelp => 'От какво има нужда?';
+
+  @override
+  String get newSignalQuestionReview => 'Готови ли сте да изпратите?';
+
+  @override
+  String get newSignalHintLocation =>
+      'Преместете картата така, че щифтът да е там, където е животното.';
+
+  @override
+  String get newSignalHintPhoto =>
+      'Снимката помага на доброволците да разпознаят животното. Можете да пропуснете тази стъпка.';
+
+  @override
+  String get newSignalHintDetails =>
+      'Кратко заглавие и няколко изречения са достатъчни.';
+
+  @override
+  String get newSignalHintUrgency =>
+      'Червената тревога известява всички доброволци наблизо, така че я пазете за истински спешни случаи.';
+
+  @override
+  String get newSignalHintReview => 'Проверете всичко и изпратете.';
+
+  @override
+  String newSignalHintHelp(int count) {
+    return 'Изберете до $count, като започнете с най-важното.';
+  }
+
+  @override
+  String get newSignalAddPhoto => 'Добави снимка';
+
+  @override
+  String get newSignalNoPhoto => 'Без снимка';
+
+  @override
+  String get newSignalNotProvided => 'Не е посочен';
+
+  @override
+  String get newSignalPinPlaced => 'Щифтът е поставен';
+
+  @override
+  String get newSignalDiscardTitle => 'Да отхвърлим ли сигнала?';
+
+  @override
+  String get newSignalDiscardMessage =>
+      'Всичко, което сте въвели, ще бъде загубено.';
+
+  @override
+  String get newSignalDiscardConfirm => 'Отхвърли';
+
+  @override
+  String get newSignalDiscardKeep => 'Продължи редактирането';
+
+  @override
+  String get pleaseSelectLocation =>
+      'Моля, поставете щифта там, където е животното';
+
+  @override
   String get pleaseEnterTitle => 'Моля, въведете заглавие за сигнала';
 
   @override

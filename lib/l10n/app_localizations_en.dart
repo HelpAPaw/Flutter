@@ -348,6 +348,117 @@ class AppLocalizationsEn extends AppLocalizations {
   String get addNewSignal => 'Add new signal';
 
   @override
+  String get next => 'Next';
+
+  @override
+  String get back => 'Back';
+
+  @override
+  String get skip => 'Skip';
+
+  @override
+  String get change => 'Change';
+
+  @override
+  String newSignalStepCounter(int current, int total) {
+    return 'Step $current of $total';
+  }
+
+  @override
+  String get newSignalStepLocation => 'Location';
+
+  @override
+  String get newSignalStepPhoto => 'Photo';
+
+  @override
+  String get newSignalStepDetails => 'Details';
+
+  @override
+  String get newSignalStepAnimal => 'Animal';
+
+  @override
+  String get newSignalStepUrgency => 'Urgency';
+
+  @override
+  String get newSignalStepHelp => 'Help needed';
+
+  @override
+  String get newSignalStepReview => 'Review';
+
+  @override
+  String get newSignalQuestionLocation => 'Where is the animal?';
+
+  @override
+  String get newSignalQuestionPhoto => 'Can you add a photo?';
+
+  @override
+  String get newSignalQuestionDetails => 'What is happening?';
+
+  @override
+  String get newSignalQuestionAnimal => 'What animal is it?';
+
+  @override
+  String get newSignalQuestionUrgency => 'How urgent is it?';
+
+  @override
+  String get newSignalQuestionHelp => 'What does it need?';
+
+  @override
+  String get newSignalQuestionReview => 'Ready to send?';
+
+  @override
+  String get newSignalHintLocation =>
+      'Move the map so the pin sits where the animal is.';
+
+  @override
+  String get newSignalHintPhoto =>
+      'A photo helps volunteers recognise the animal. You can skip this.';
+
+  @override
+  String get newSignalHintDetails =>
+      'A short title and a few sentences are enough.';
+
+  @override
+  String get newSignalHintUrgency =>
+      'A red alert notifies every volunteer nearby, so keep it for real emergencies.';
+
+  @override
+  String get newSignalHintReview => 'Check everything, then send it.';
+
+  @override
+  String newSignalHintHelp(int count) {
+    return 'Choose up to $count, most important first.';
+  }
+
+  @override
+  String get newSignalAddPhoto => 'Add a photo';
+
+  @override
+  String get newSignalNoPhoto => 'No photo';
+
+  @override
+  String get newSignalNotProvided => 'Not provided';
+
+  @override
+  String get newSignalPinPlaced => 'Pin placed';
+
+  @override
+  String get newSignalDiscardTitle => 'Discard this report?';
+
+  @override
+  String get newSignalDiscardMessage =>
+      'Everything you have entered will be lost.';
+
+  @override
+  String get newSignalDiscardConfirm => 'Discard';
+
+  @override
+  String get newSignalDiscardKeep => 'Keep editing';
+
+  @override
+  String get pleaseSelectLocation => 'Please place the pin where the animal is';
+
+  @override
   String get pleaseEnterTitle => 'Please enter a title for the signal';
 
   @override
@@ -402,7 +513,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chooseFromGallery => 'Choose from Gallery';
 
   @override
-  String get removePhoto => 'Remove photo';
+  String get removePhoto => 'Remove Photo';
 
   @override
   String errorAccessingCamera(String error) {

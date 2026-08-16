@@ -21,7 +21,7 @@ import '../utils/map_marker_builder.dart';
 import '../viewmodels/map_view_model.dart';
 import 'home_route_drawer.dart';
 import 'map/filter_bottom_sheet.dart';
-import 'map/new_signal_form.dart';
+import 'map/new_signal_location_bar.dart';
 import 'notification_onboarding_button.dart';
 import 'helper_tags_gate.dart';
 import 'notification_onboarding_sheet.dart';
@@ -33,14 +33,12 @@ class MapScreen extends ConsumerStatefulWidget {
   ConsumerState<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends ConsumerState<MapScreen>
-    with SingleTickerProviderStateMixin {
+class _MapScreenState extends ConsumerState<MapScreen> {
   // Approximate native InfoWindow dimensions for invisible tap target
   static const _kInfoWindowWidth = 220.0;
   static const _kInfoWindowHeight = 80.0;
   static const _kPinHeight = 29.0;
 
-  late AnimationController _fabAnimationController;
   // Null until the platform view calls onMapCreated, and never null again.
   // Deliberately nullable rather than `late` + a separate readiness bool: the
   // flag was a convention the compiler didn't enforce, and forgetting it is
@@ -93,10 +91,6 @@ class _MapScreenState extends ConsumerState<MapScreen>
   @override
   void initState() {
     super.initState();
-    _fabAnimationController = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
     _markerBuilder.loadAllPins();
 
     // Initialize location in ViewModel, then animate camera to it — unless a
@@ -114,7 +108,6 @@ class _MapScreenState extends ConsumerState<MapScreen>
   @override
   void dispose() {
     _pendingInfoWindowSub?.close();
-    _fabAnimationController.dispose();
     super.dispose();
   }
 
@@ -249,8 +242,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
     );
   }
 
-  /// Precondition: the map exists — this is handed to [NewSignalForm], which
-  /// only calls it on submit, long after the map has been panned into place.
+  /// Precondition: the map exists — this is only reached from
+  /// [NewSignalLocationBar], which is rendered over an already-built map.
   Future<(double, double)> _getMapCenter() async {
     final visibleRegion = await _mapController!.getVisibleRegion();
     final centerLatitude = (visibleRegion.northeast.latitude +
@@ -260,6 +253,37 @@ class _MapScreenState extends ConsumerState<MapScreen>
             visibleRegion.southwest.longitude) /
         2;
     return (centerLatitude, centerLongitude);
+  }
+
+  void _cancelAddingNewSignal() {
+    ref.read(mapViewModelProvider.notifier).cancelAddingNewSignal();
+  }
+
+  /// Accept the pin under the crosshair and hand over to the wizard route.
+  ///
+  /// The draft lives in the view model, so pushing rather than replacing keeps
+  /// the map — and this state — alive underneath. The reporter can come back
+  /// here from the review step to move the pin and be returned to where they
+  /// were, because [MapViewModel.confirmLocation] only advances the step when
+  /// it is still on the location question.
+  Future<void> _confirmSignalLocation() async {
+    final (latitude, longitude) = await _getMapCenter();
+    if (!mounted) return;
+
+    // Compared rather than null-checked on return: `newlyCreatedSignalId`
+    // survives a cancel, so a reporter who submits one signal and then abandons
+    // the next would otherwise have the *first* signal's info window pop open
+    // at them.
+    final idBefore = ref.read(mapViewModelProvider).newlyCreatedSignalId;
+
+    ref.read(mapViewModelProvider.notifier).confirmLocation(latitude, longitude);
+    await context.push(Routes.newSignal);
+    if (!mounted) return;
+
+    final idAfter = ref.read(mapViewModelProvider).newlyCreatedSignalId;
+    if (idAfter != null && idAfter != idBefore) {
+      _showSignalInfoWindow(idAfter);
+    }
   }
 
   /// Monotonically increasing token so that stale [_onCameraIdle] callbacks
@@ -633,8 +657,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
       canPop: !mapState.isAddingNewSignal,
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop && mapState.isAddingNewSignal) {
-          ref.read(mapViewModelProvider.notifier).cancelAddingNewSignal();
-          _fabAnimationController.reverse();
+          _cancelAddingNewSignal();
         }
       },
       child: Scaffold(
@@ -715,23 +738,16 @@ class _MapScreenState extends ConsumerState<MapScreen>
                     child: Icon(Icons.gps_fixed, size: 50.0),
                   ),
                 ),
-              // New signal form
+              // Step 1 of the new-signal wizard. The remaining steps live on
+              // the /new_signal route, pushed once the pin is confirmed.
               if (mapState.isAddingNewSignal)
                 Positioned(
-                  top: 0,
+                  bottom: 0,
                   left: 0,
                   right: 0,
-                  child: NewSignalForm(
-                    getMapCenter: _getMapCenter,
-                    onSubmitSuccess: () {
-                      _fabAnimationController.reverse();
-                      final signalId = ref
-                          .read(mapViewModelProvider)
-                          .newlyCreatedSignalId;
-                      if (signalId != null) {
-                        _showSignalInfoWindow(signalId);
-                      }
-                    },
+                  child: NewSignalLocationBar(
+                    onCancel: _cancelAddingNewSignal,
+                    onContinue: _confirmSignalLocation,
                   ),
                 ),
               // Search this area button
@@ -868,41 +884,35 @@ class _MapScreenState extends ConsumerState<MapScreen>
           ],
         ),
         drawer: const HomeRouteDrawer(),
-        floatingActionButton: Semantics(
-          label: l10n.addNewSignal,
-          button: true,
-          enabled: true,
-          child: FloatingActionButton(
-            backgroundColor: Colors.orange,
-            foregroundColor: Colors.white,
-            elevation: 6,
-            enableFeedback: true,
-            shape: const CircleBorder(),
-            onPressed: () {
-              if (!RepositoryProvider.instance.userRepository.canModifyData) {
-                _showSignInDialog();
-              } else {
-                final viewModel = ref.read(mapViewModelProvider.notifier);
-                viewModel.toggleAddingNewSignal();
-                if (!mapState.isAddingNewSignal) {
-                  _fabAnimationController.forward();
-                } else {
-                  _fabAnimationController.reverse();
-                }
-              }
-            },
-            tooltip: l10n.addNewSignal,
-            child: AnimatedBuilder(
-              animation: _fabAnimationController,
-              builder: (context, child) {
-                return Transform.rotate(
-                  angle: _fabAnimationController.value * 0.785398,
+        // Hidden while the location bar is up: the bar sits in the same place
+        // and carries its own Cancel, so leaving the FAB there would put two
+        // competing ways out on top of each other.
+        floatingActionButton: mapState.isAddingNewSignal
+            ? null
+            : Semantics(
+                label: l10n.addNewSignal,
+                button: true,
+                enabled: true,
+                child: FloatingActionButton(
+                  backgroundColor: Colors.orange,
+                  foregroundColor: Colors.white,
+                  elevation: 6,
+                  enableFeedback: true,
+                  shape: const CircleBorder(),
+                  onPressed: () {
+                    if (!RepositoryProvider
+                        .instance.userRepository.canModifyData) {
+                      _showSignInDialog();
+                    } else {
+                      ref
+                          .read(mapViewModelProvider.notifier)
+                          .toggleAddingNewSignal();
+                    }
+                  },
+                  tooltip: l10n.addNewSignal,
                   child: const Icon(Icons.add),
-                );
-              },
-            ),
-          ),
-        ),
+                ),
+              ),
         floatingActionButtonLocation:
             FloatingActionButtonLocation.centerFloat,
       ),
