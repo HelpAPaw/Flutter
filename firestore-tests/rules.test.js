@@ -63,6 +63,37 @@ function commentDoc(db, uid, overrides = {}) {
   };
 }
 
+/**
+ * A case-timeline event as `_applyLevelChange` writes it (spec 4.6).
+ *
+ * Note the differences from a comment: the actor field is `actor`, not
+ * `author`, and the `note` is mandatory rather than optional.
+ */
+function eventDoc(db, uid, overrides = {}) {
+  return {
+    type: 'status_change',
+    oldStatus: 0,
+    newStatus: 1,
+    note: 'Heading over now.',
+    createdAt: new Date(),
+    actor: doc(db, 'users', uid),
+    ...overrides,
+  };
+}
+
+/**
+ * `obj` without `keys`.
+ *
+ * Setting a field to `undefined` would not do: the SDK rejects undefined values
+ * client-side, so the write never reaches the rules and `assertFails` would pass
+ * for the wrong reason.
+ */
+function omit(obj, ...keys) {
+  const copy = { ...obj };
+  for (const key of keys) delete copy[key];
+  return copy;
+}
+
 before(async () => {
   testEnv = await initializeTestEnvironment({
     projectId: 'help-a-paw-test',
@@ -78,7 +109,7 @@ after(async () => {
   await testEnv?.cleanup();
 });
 
-// Both signal collections get identical rules, so every case runs against both.
+// Both signal collections get identical rules, so every signal runs against both.
 for (const coll of ['signals', 'signals_test']) {
   describe(`${coll} — create`, () => {
     beforeEach(() => testEnv.clearFirestore());
@@ -317,6 +348,139 @@ for (const coll of ['signals', 'signals_test']) {
     });
   });
 
+  describe(`${coll} — events (signal timeline)`, () => {
+    const SIGNAL = 'signal-1';
+    const eventsPath = `${coll}/${SIGNAL}/events`;
+
+    beforeEach(async () => {
+      await testEnv.clearFirestore();
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, coll, SIGNAL), signalDoc(db, REPORTER));
+      });
+    });
+
+    it('accepts a status_change and an urgency_change from any signed-in user', async () => {
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+      await assertSucceeds(addDoc(collection(db, eventsPath), eventDoc(db, OTHER)));
+      await assertSucceeds(
+        addDoc(
+          collection(db, eventsPath),
+          omit(
+            eventDoc(db, OTHER, {
+              type: 'urgency_change',
+              oldUrgency: 1,
+              newUrgency: 2,
+            }),
+            'oldStatus',
+            'newStatus',
+          ),
+        ),
+      );
+    });
+
+    it('rejects an event attributed to someone else', async () => {
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+      await assertFails(addDoc(collection(db, eventsPath), eventDoc(db, REPORTER)));
+    });
+
+    it('rejects an anonymous write', async () => {
+      const db = testEnv.unauthenticatedContext().firestore();
+      await assertFails(addDoc(collection(db, eventsPath), eventDoc(db, OTHER)));
+    });
+
+    // Spec 4.6: "every status change requires an update note". Unlike `text` on
+    // a comment, the note is not optional — that is the whole behaviour change,
+    // and a rules regression to "only when present" would undo it invisibly.
+    it('requires a non-empty note', async () => {
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+      await assertFails(addDoc(collection(db, eventsPath), omit(eventDoc(db, OTHER), 'note')));
+      await assertFails(addDoc(collection(db, eventsPath), eventDoc(db, OTHER, { note: '' })));
+      await assertFails(addDoc(collection(db, eventsPath), eventDoc(db, OTHER, { note: 42 })));
+    });
+
+    it('bounds the note at 500 characters', async () => {
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+      await assertSucceeds(
+        addDoc(collection(db, eventsPath), eventDoc(db, OTHER, { note: 'a'.repeat(500) })),
+      );
+      await assertFails(
+        addDoc(collection(db, eventsPath), eventDoc(db, OTHER, { note: 'a'.repeat(501) })),
+      );
+    });
+
+    // A closed vocabulary is the reason events are not in `comments`. A type the
+    // rules accepted but the app could not render would be stored and then never
+    // appear in anyone's history.
+    it('rejects a type outside the vocabulary', async () => {
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+      await assertFails(
+        addDoc(collection(db, eventsPath), eventDoc(db, OTHER, { type: 'ownership_transfer' })),
+      );
+      await assertFails(addDoc(collection(db, eventsPath), omit(eventDoc(db, OTHER), 'type')));
+    });
+
+    it('rejects a level outside the range the signal itself can hold', async () => {
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+      await assertFails(
+        addDoc(collection(db, eventsPath), eventDoc(db, OTHER, { newStatus: 3 })),
+      );
+      await assertFails(
+        addDoc(collection(db, eventsPath), omit(eventDoc(db, OTHER), 'newStatus')),
+      );
+      await assertFails(
+        addDoc(collection(db, eventsPath), eventDoc(db, OTHER, { newStatus: 'resolved' })),
+      );
+    });
+
+    it('rejects an event with no timestamp', async () => {
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+      await assertFails(
+        addDoc(collection(db, eventsPath), omit(eventDoc(db, OTHER), 'createdAt')),
+      );
+    });
+
+    it('lets nobody edit history', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, eventsPath, 'e1'), eventDoc(db, OTHER));
+      });
+
+      for (const uid of [OTHER, REPORTER]) {
+        const db = testEnv.authenticatedContext(uid).firestore();
+        await assertFails(updateDoc(doc(db, eventsPath, 'e1'), { note: 'rewritten' }));
+      }
+    });
+
+    // KNOWN GAP, deliberately locked in: the reporter can delete events, which
+    // is what lets the client-side delete-signal cascade empty this
+    // subcollection. It also means the history is tamper-evident, not
+    // tamper-proof. Closing it means moving deletion server-side —
+    // HelpAPaw/Flutter#68.
+    it('lets only the parent signal reporter delete an event', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, eventsPath, 'e1'), eventDoc(db, OTHER));
+        await setDoc(doc(db, eventsPath, 'e2'), eventDoc(db, OTHER));
+      });
+
+      const author = testEnv.authenticatedContext(OTHER).firestore();
+      await assertFails(deleteDoc(doc(author, eventsPath, 'e1')));
+
+      const reporter = testEnv.authenticatedContext(REPORTER).firestore();
+      await assertSucceeds(deleteDoc(doc(reporter, eventsPath, 'e2')));
+    });
+
+    it('is publicly readable, like the signal it describes', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), eventsPath, 'e1'), eventDoc(ctx.firestore(), OTHER));
+      });
+
+      const db = testEnv.unauthenticatedContext().firestore();
+      await assertSucceeds(getDoc(doc(db, eventsPath, 'e1')));
+    });
+  });
+
   // H-1 is already deployed; these lock it in so an M-1 refactor of the shared
   // helpers can't silently regress signal takeover.
   describe(`${coll} — update/delete (H-1 regression guard)`, () => {
@@ -370,7 +534,7 @@ for (const coll of ['signals', 'signals_test']) {
       );
     });
 
-    // Spec 5.2: only the case holder (plus moderators/admins, which do not
+    // Spec 5.2: only the signal holder (plus moderators/admins, which do not
     // exist yet) may set urgency. `isStatusOnlyUpdate` enforces that by leaving
     // `urgency` out of its affectedKeys allowlist — these are the guards that
     // fail if someone "helpfully" adds it.

@@ -167,13 +167,48 @@ allow-listed in the console or anonymous sign-in fails.
 | ~~`signalType`~~ | int | **retired, see §4.4.** Present on documents written before the tag merge; nothing reads or writes it, and the rules neither require nor bound it |
 | `lastUpdatedBy` | DocumentReference | set on status **and** urgency change; rules require self-stamping on the status-only path |
 
-Subcollection **`comments/{commentId}`** — three shapes:
+Subcollection **`comments/{commentId}`** — what people *said*:
 
 - *User comment*: `{ text: string (1–2000), createdAt, author: Ref→users/{uid} }`
-- *Status change*: `{ type: 'status_change', oldStatus: int, newStatus: int, createdAt,
-  author: Ref }` — **no `text` field**; server handlers must guard on `type`.
-- *Urgency change*: `{ type: 'urgency_change', oldUrgency: int, newUrgency: int,
+- *Legacy status change*: `{ type: 'status_change', oldStatus: int, newStatus: int,
+  createdAt, author: Ref }` — **no `text` field**; server handlers must guard on `type`.
+- *Legacy urgency change*: `{ type: 'urgency_change', oldUrgency: int, newUrgency: int,
   createdAt, author: Ref }` — likewise **no `text` field**.
+
+The two `type`d shapes are **legacy**: since the signal timeline they are written to
+`events` instead. Nothing was backfilled and every already released build keeps writing
+them here, so both remain readable indefinitely and `handleCommentCreated`'s type guard
+stays.
+
+Subcollection **`events/{eventId}`** — what *happened* (master spec §4.6 "Case Timeline"; this app
+calls them signals, not cases):
+
+- *Status change*: `{ type: 'status_change', oldStatus: int, newStatus: int,
+  note: string (1–500), createdAt, actor: Ref→users/{uid} }`
+- *Urgency change*: `{ type: 'urgency_change', oldUrgency: int, newUrgency: int,
+  note: string (1–500), createdAt, actor: Ref }`
+
+**Not in `comments`, for three reasons.** Later event types — ownership transfer,
+closure by a moderator, vet and fundraising updates — have to be *server*-written, while
+a comment is user-authored by definition; the rules can validate a **closed** `type`
+vocabulary here instead of accumulating another "only when present" clause per type in
+`isCommentCreate()`; and `profile_page.dart` counts `collectionGroup('comments')` by
+`author`, which was counting status changes as someone's comments. The actor field is
+named **`actor`, not `author`**, so that query can never pick events up again.
+
+Adding an event type is a new `SignalEventType` plus a rules clause — nothing already
+stored is reshaped.
+
+Both writers build the document through **one encoder**, `SignalEventType.eventData`
+(`models/signal_event.dart`), which also owns the `status`/`urgency` field name and the
+`old*`/`new*` key names. Before it existed those were string literals inside two widgets
+and a switch in the decoder — three copies of one mapping, one of them guarded. The
+encoder/decoder round trip is unit-tested.
+
+**The `note` is mandatory** (master spec §4.6: "every status change requires an update
+note"), enforced in the rules and by the note dialog. `text` on a comment is optional
+only because the legacy shapes above carry none; `note` must never pick up the same
+escape hatch. Legacy entries have no note and render without one.
 
 #### `users/{uid}` — private, owner-only
 
@@ -487,12 +522,24 @@ vocabulary is only useful once that has shipped to the installed base.
 | `publicProfiles/{uid}` | `get` any signed-in; **`list` denied** | owner, `name` only, validated | owner, only `name` may change | owner |
 | `signals/{id}`, `signals_test/{id}` | **public** | signed-in, `reporter == self`, bounded fields, `urgency` 0–2 **if present** | reporter (anything) *or* any signed-in user changing **only** `status`+`lastUpdatedBy` (self-stamped, 0–2) — **never `urgency`** | reporter only |
 | `…/comments/{id}` | public | signed-in, `author == self`, `text` 1–2000 when present | — | parent signal's reporter (delete cascade) |
+| `…/events/{id}` | public | signed-in, `actor == self`, `type` in the closed vocabulary, `note` 1–500 **required**, levels 0–2, `createdAt` a timestamp | **denied** | parent signal's reporter (delete cascade) |
 | `{path=**}/comments/{id}` (group) | signed-in | — | — | — |
 | `feedback/{id}` | denied | signed-in, `userId == self`, bounded message/type/email | denied | denied |
 
 Helper functions: `userDoc()`, `isSignalReporter()`, `isParentSignalReporter()`,
-`isSignalCreate()`, `isCommentCreate()`, `isValidProfileName()`, `isStatusOnlyUpdate()`,
-`isValidUrgency()`.
+`isSignalCreate()`, `isCommentCreate()`, `isSignalEventCreate()`, `isValidEventNote()`,
+`isValidLevel()`, `isValidProfileName()`, `isStatusOnlyUpdate()`, `isValidUrgency()`.
+
+> **An event does not authorise the change it describes.** A `status_change` event
+> passes `isSignalEventCreate()`; the signal write next to it in the same batch still has
+> to pass `isStatusOnlyUpdate()` separately. The two are independent on purpose — a
+> client that writes only the event changes nothing.
+>
+> **The reporter can still delete events**, which is what lets the client-side
+> delete-signal cascade empty the subcollection — and what makes the history
+> tamper-*evident* rather than tamper-proof. Closing it means moving deletion
+> server-side (Admin SDK recursive delete, like `deleteAccount`), after which the rule
+> becomes `if false`. Tracked as HelpAPaw/Flutter#68.
 
 > **`isStatusOnlyUpdate` must never gain `urgency`.** Its `affectedKeys().hasOnly([...])`
 > list omitting `urgency` is the entire enforcement of the reporter-only rule in §4.6 —
@@ -981,23 +1028,51 @@ that has regressed repeatedly (R5-004, R6-001, R6-002), which is why it lives ou
 - **Actions:** Navigate (`map_launcher`, chooser sheet when several apps are installed),
   Call (`tel:` intent) when a contact phone exists, Share (§7.9), and — for the author —
   Edit and Delete.
-- **Status change:** dropdown over `SignalStatus.values`. Updates `status` +
-  `lastUpdatedBy`, appends a `status_change` comment, and subscribes the actor to the
-  signal. Any signed-in non-anonymous user may do this (rules allow status-only updates).
+- **Status change:** dropdown over `SignalStatus.values`. Asks for the mandatory update
+  note (below), then updates `status` + `lastUpdatedBy`, appends a `status_change`
+  **event**, and subscribes the actor to the signal. Any signed-in non-anonymous user may
+  do this (rules allow status-only updates).
 - **Urgency change:** `UrgencyPicker` for the **reporter only**; everyone else sees a
   read-only `UrgencyChip` (§4.6). Updates `urgency` + `lastUpdatedBy` and appends an
-  `urgency_change` comment. The picker is disabled while the write is in flight — a
+  `urgency_change` **event**. The picker is disabled while the write is in flight — a
   double-tap would otherwise post two timeline entries and two pushes. **The edit
-  screen must write the same `urgency_change` comment**, or escalating from there
-  notifies everyone while the case history shows nothing happened. `lastUpdatedBy` is stamped here even though the rules do not
+  screen must write the same `urgency_change` event, with a note**, or escalating from
+  there notifies everyone while the signal history shows nothing happened. `lastUpdatedBy` is stamped here even though the rules do not
   need it on the reporter path — `handleSignalUpdated` uses it to skip notifying the
   actor, and a stale value from an earlier status change would mute the wrong
   subscriber.
+- **Update note (master spec §4.6):** both level changes go through
+  `showUpdateNoteDialog` (`update_note_dialog.dart`) before anything is written. Confirm
+  stays disabled until the *trimmed* note is non-empty, and the field is capped at
+  `SignalEventType.maxNoteLength` (500) to match the rules. Returning null means the user
+  backed out and **nothing is written** — the dropdown and the picker both read their
+  value from the signal stream, so neither needs reverting. On the urgency path the note
+  dialog runs *after* the Red Alert confirmation: confirm the intent, then explain it.
+  The edit screen asks the same way on an urgency change, so the two ways to escalate a
+  signal cannot produce two different kinds of history.
+- **Signal history:** one chronological list merged from **two** collections — `events`
+  and `comments` — by `mergeSignalHistory` (`models/signal_event.dart`), plus a synthetic
+  "reported this signal" row derived from the signal document itself (no write, no
+  backfill, correct for every signal ever created). Two explicit `StreamSubscription`s
+  rather than `StreamBuilder`s, because the lists have to be sorted together before
+  anything can render; null means "not delivered yet" and is distinct from empty. The
+  spinner shows only while *both* are silent, and **errors are tracked per source**
+  (each is a `_HistorySource`, so a third source would not mean three more fields):
+  the history gives up only when neither can be read, and when exactly one fails it renders
+  what it has above an inline "part of this history could not be loaded" row with a Retry.
+  One shared error slot blanked a perfectly readable comment thread the moment the `events`
+  read was denied — which is every device until the rules are deployed, and any future
+  single-collection rules mistake. Ties break by document id — Dart's `sort`
+  is not stable, and the list would otherwise reshuffle between rebuilds. A document with
+  an unknown `type` is **skipped, not thrown on**: it came from a newer build.
+  *All* / *Events* chips filter in memory; both listeners stay subscribed either way.
 - **Comments:** text field capped at 2000 chars, whitespace-only input dropped
   client-side; posting also subscribes the author to the signal. Author names resolve
   through `publicProfiles`.
 - **Delete signal:** confirm → best-effort Storage photo deletes → batch-delete the
-  comments subcollection → delete the doc → pop.
+  `comments` **and `events`** subcollections → delete the doc → pop. Missing either one
+  orphans it: Firestore keeps subcollection documents when the parent document is deleted,
+  and nothing is left to reach them by.
 - **Leaving:** `_leaveScreen` is the single exit — it claims the exit
   (`_hasNavigatedAway`), `popUntil`s away anything this screen pushed (the imperative
   photo gallery, the edit route, sheets) so the pop targets *this* route and not
@@ -1600,8 +1675,16 @@ Things that live in more than one place and fail **silently** when they drift.
    `test/map_filter_state_test.dart` compares them; without it, appending a tag,
    species, status or urgency leaves it filtered off the map from the moment it exists.
 5. **Field-length limits (×2).** Firestore rules vs `LengthLimitingTextInputFormatter`:
-   title 300, description 10 000, comment 2000, profile name 100, feedback message 1000,
-   email 254.
+   title 300, description 10 000, comment 2000, **signal-event note 500**, profile name 100,
+   feedback message 1000, email 254. The note pair is guarded by
+   `test/signal_event_vocabulary_guard_test.dart`, which parses the rules.
+5a. **Signal-event type vocabulary (×2).** `SignalEventType` (`models/signal_event.dart`) and
+   the `type ==` list inside `isSignalEventCreate()` in `firestore.rules`. The two failure
+   modes are asymmetric: a type the app writes but the rules reject is denied *loudly*,
+   while a type the rules accept but the app cannot read is stored and then **never
+   appears in anyone's history**. Same guard test. There is deliberately no TypeScript
+   copy yet — no function reads or writes `events` — and one should be added, with a
+   parity test, the first time the server writes an event.
 6. **Fan-out radius caps ≥ UI caps.** `MAX_LOCATION_RADIUS_KM` (50) ≥ the slider max;
    `MAX_REGION_RADIUS_KM` (100) ≥ the region slider max.
 7. **`Routes.linkHost` ↔ `LINK_HOST`** (functions) ↔ the Android intent filter host ↔
@@ -1663,6 +1746,23 @@ pushes/PRs to `main` plus a weekly cron. It does **not** run `flutter test`.
 the rules tests, confirm before deploying, and prefer test mode on-device for anything
 data-related.
 
+**Rules go out before the app build that needs them, never after.** The signal timeline
+is the worked example: `_applyLevelChange` commits the signal update and the `events`
+create in **one atomic batch**, so on rules without the `events` block the create is
+denied and the whole batch fails — the status dropdown and the urgency picker stop
+working entirely, showing only `errorUpdatingStatus`. The reverse order is harmless: the
+rules grant access to a subcollection no released build writes to. Reads degrade
+gracefully (§7.5 renders the half it can and offers a retry); **writes do not**, because
+atomicity is exactly what makes them all-or-nothing.
+
+⚠️ **Deployed 2026-08-15 and reverted the next day.** A later `firebase deploy
+--only firestore:rules` from a branch without the `events` block overwrote it —
+rules deploys replace the whole ruleset, so deploying an older file silently drops
+newer blocks. The symptom on a build of this branch is the §7.5 partial-history
+notice on *every* signal (the `events` listen is denied while `comments` still
+works) and status/urgency changes failing outright. **Re-deploy before this branch
+ships, and deploy rules from the merged branch, never from an older checkout.**
+
 ### 13.4 API key restrictions
 
 The release iOS API key must allow: Token Service, Firebase Installations, Firebase
@@ -1682,6 +1782,8 @@ silently breaks Auth/Firestore/FCM in release builds only.
 | iOS deferred deep links | Deliberately not implemented (clipboard prompt cost) |
 | iOS unread badge count | **Fixed 2026-08-04** — real `badge: N` from `userCounters`, cleared on resume via the native badge channel. Accepted consequence: on pre-release builds the badge climbs and never clears (§7.13) |
 | In-app inbox retention | 90 days via a Firestore TTL policy on `expiresAt`; the policy is applied with `gcloud`, **not** by `firebase deploy` |
+| Signal history is client-written and reporter-deletable | Open — tamper-*evident*, not tamper-proof. The reporter can delete individual `events`, because the delete-signal cascade runs on the client. Fix is a `deleteSignal` callable (Admin SDK recursive delete), after which the rule becomes `if false`. Tracked as HelpAPaw/Flutter#68, which also covers hiding signals instead of deleting them |
+| Update note not in the push/inbox body | Open — a status-change push still reads `{signalTitle}: {status}` with no note. Needs `handleSignalUpdated` to query the newest event (safe: the batch is atomic) or a `lastStatusNote` field on the signal, which would widen `isStatusOnlyUpdate`'s allow-list |
 | Comment photos | Storage path reserved, no write rule, no UI |
 | `signalLink` push text / server notifications | English only |
 | `Signal.phoneNumber` vs `contactPhone` | Duplicated legacy field, both written with the same value |
@@ -1700,4 +1802,5 @@ silently breaks Auth/Firestore/FCM in release builds only.
 | 2026-08-04 | **Built the in-app inbox.** Server writer (`writeInboxEntries`) alongside every push; `users/{uid}/notifications` + `userCounters` rules with 15 new emulator tests; drawer entry with unread badge; client-side localized rendering from structured fields; `nearby_signal` entries from the arrival catch-up (incl. the headless isolate); `userCounters` + native badge channel + resume reconciliation for F-008. Recipients now include users with no FCM token. Adjacent fix: the fan-out's un-chunked `sendEachForMulticast` silently lost every notification past 500 tokens — now `sendEach` chunked at 500. §4, §5.1, §7.13, §9, §14. |
 | 2026-08-04 | Enabled real `badge: N` in the fan-out (F-008 closed). Owner accepted the known consequence that pre-release iOS builds have no reset path, so their badge climbs monotonically. §7.13, §14. |
 | 2026-08-12 | **Built the help-tag system.** One nine-code vocabulary shared by signals (`helpNeededTags`, 1–3, mandatory) and users (`helperTags`, ≥1), plus `animalType` as an independent axis rather than species-crossed tags. The fan-out is now prioritise-then-backfill: all tag matches in radius are notified, then C→B→D nearest-first up to `MIN_RECIPIENTS` (lowered to 10 before release), with one widened re-scan at 250 km when the pool is thin — ranking extracted to `recipientSelection.ts` with 20 unit tests (the first tests `functions/` has had). Non-skippable onboarding gate implemented as a widget wrapper on the map route, not a router redirect; a failed preferences read renders the app rather than locking the user out. Settings now require ≥1 animal type and helper tag while enabled, and "Deselect all" is gone (stored empty `signalTypes` still means none and is never migrated). Rules validate the new fields but do **not** require them — tightening is a later, separate deploy. §4.1, §4.2, §4.7, §5.1, §7.4, §7.5, §7.6, §7.15, §9, §12. |
+| 2026-08-15 | **Built the signal timeline (master spec §4.6, "Case Timeline").** Status and urgency changes now require a mandatory update note and are written to a new `signals/{id}/events` subcollection instead of `comments` — the two differ in who may write them (later event types must be server-written) and who may delete them, and mixing them was also counting status changes as comments on the profile screen. The details screen merges both collections into one chronological history, opened by a synthetic "reported this signal" row derived from the signal document, with All/Events filter chips. Nothing is backfilled: legacy system entries stay in `comments` and keep rendering, and `handleCommentCreated`'s type guard stays with them. Rules validate a closed event vocabulary with a **required** 1–500 char note, deny updates, and (for now) still let the reporter delete events so the client-side delete cascade works — the tamper hole is recorded as a known gap, HelpAPaw/Flutter#68. No functions change. §4.1, §5.1, §7.5, §12, §14. |
 | 2026-08-15 | **Folded `signalType` into the help-tag vocabulary.** Four of its seven values restated fields that now exist in their own right (Emergency = red urgency, Blood donation / Unneutered animals = tags, Wild animals = `animalType`), so reporters answered the same question twice and the answers could contradict. The deciding case was an injured animal, which master spec §5 makes the worked example of Red urgency and gives no category at all. `helpNeededTags[0]` is now the case's category (master spec §4.2); the vocabulary grew to 13 with `bloodDonation`, `neutering`, `lostFound` and `dangerWarning`. Push and inbox text is now urgency + the primary tag's "needed" form ("Urgent · Rescue needed — …"), as a second localized label per tag rather than a `+ " needed"` suffix, because Bulgarian does not build that phrase by suffixing. The `signalTypes` notification gate is gone — **removing the only negative filter users had** (§4.2), which cost nothing because no user had ever excluded a type. The map filter sheet swapped its type section for tag + species, closing the browse-vs-notify asymmetry. No migration: `signalType` is simply never read, and the four production signals predating tags were fixed by hand. §4.2, §4.4, §4.7, §5.1, §7.4, §7.13, §9, §12. |

@@ -1154,6 +1154,66 @@ abstract class AppLocalizations {
   /// **'Enter your comment'**
   String get enterYourComment;
 
+  /// No description provided for @signalHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Signal history'**
+  String get signalHistory;
+
+  /// No description provided for @historyPartiallyUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Part of this history could not be loaded.'**
+  String get historyPartiallyUnavailable;
+
+  /// No description provided for @historyFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get historyFilterAll;
+
+  /// No description provided for @historyFilterEvents.
+  ///
+  /// In en, this message translates to:
+  /// **'Events'**
+  String get historyFilterEvents;
+
+  /// No description provided for @reportedThisSignal.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} reported this signal'**
+  String reportedThisSignal(String name);
+
+  /// No description provided for @updateNoteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What changed?'**
+  String get updateNoteTitle;
+
+  /// No description provided for @nothingWasSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing was saved.'**
+  String get nothingWasSaved;
+
+  /// No description provided for @updateNoteChangingTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Changing to: {level}'**
+  String updateNoteChangingTo(String level);
+
+  /// No description provided for @updateNoteHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a short note for the signal history'**
+  String get updateNoteHint;
+
+  /// No description provided for @updateNoteRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please say what changed — everyone following this signal sees it.'**
+  String get updateNoteRequired;
+
   /// No description provided for @changedStatusTo.
   ///
   /// In en, this message translates to:

@@ -242,6 +242,26 @@
   },
   "comments": "Comments",
   "enterYourComment": "Enter your comment",
+  "signalHistory": "Signal history",
+  "historyPartiallyUnavailable": "Part of this history could not be loaded.",
+  "historyFilterAll": "All",
+  "historyFilterEvents": "Events",
+  "reportedThisSignal": "{name} reported this signal",
+  "@reportedThisSignal": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "updateNoteTitle": "What changed?",
+  "nothingWasSaved": "Nothing was saved.",
+  "updateNoteChangingTo": "Changing to: {level}",
+  "@updateNoteChangingTo": {
+    "placeholders": {
+      "level": {"type": "String"}
+    }
+  },
+  "updateNoteHint": "Add a short note for the signal history",
+  "updateNoteRequired": "Please say what changed — everyone following this signal sees it.",
   "changedStatusTo": "{name} changed the status to {status}",
   "@changedStatusTo": {
     "placeholders": {
@@ -279,7 +299,6 @@
   "displayName": "Display Name",
   "noNameSet": "No name set",
   "signals": "Signals",
-  "comments": "Comments",
   "email": "Email",
   "notSet": "Not set",
   "emailVerified": "Email Verified",
