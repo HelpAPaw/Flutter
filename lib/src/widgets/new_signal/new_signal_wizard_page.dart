@@ -67,9 +67,16 @@ class _NewSignalWizardPageState extends ConsumerState<NewSignalWizardPage> {
           leading: Semantics(
             identifier: 'newSignal.close',
             button: true,
+            // Disabled mid-submit for the same reason as Back and Next below:
+            // `cancelAddingNewSignal` clears the draft the in-flight submit is
+            // still reading from. `submitSignal` now captures what it needs up
+            // front, so this is the second lock on the same door rather than
+            // the only one — but leaving the reporter able to abandon a signal
+            // that is already being written is confusing whichever way the race
+            // lands.
             child: IconButton(
               icon: const Icon(Icons.close),
-              onPressed: _leave,
+              onPressed: formState.isSubmitting ? null : _leave,
             ),
           ),
           bottom: PreferredSize(

@@ -259,6 +259,45 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     ref.read(mapViewModelProvider.notifier).cancelAddingNewSignal();
   }
 
+  /// Abandon the draft from the map, confirming first if there is anything to
+  /// lose — the same contract as the wizard's `×`.
+  ///
+  /// Step 1 is on the map, so both exits from it (the back gesture and the
+  /// location bar's Cancel) land here. That used to discard unconditionally,
+  /// which was harmless only while the map could not be reached with a filled
+  /// draft. It can now: "Change" beside Location on the review step pops back
+  /// here with the whole draft still held in the view model, so an unguarded
+  /// back press threw away seven answered steps with no prompt — while the
+  /// wizard's own × asked about the very same draft.
+  ///
+  /// A fresh FAB tap leaves [NewSignalFormState.isDirty] false, so the common
+  /// case still exits in one press without a dialog.
+  Future<void> _cancelAddingNewSignalConfirmed() async {
+    if (ref.read(mapViewModelProvider).formState.isDirty) {
+      final l10n = AppLocalizations.of(context);
+      final discard = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(l10n.newSignalDiscardTitle),
+          content: Text(l10n.newSignalDiscardMessage),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(l10n.newSignalDiscardKeep),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: Text(l10n.newSignalDiscardConfirm),
+            ),
+          ],
+        ),
+      );
+      if (discard != true || !mounted) return;
+    }
+    _cancelAddingNewSignal();
+  }
+
   /// Accept the pin under the crosshair and hand over to the wizard route.
   ///
   /// The draft lives in the view model, so pushing rather than replacing keeps
@@ -657,7 +696,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       canPop: !mapState.isAddingNewSignal,
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop && mapState.isAddingNewSignal) {
-          _cancelAddingNewSignal();
+          _cancelAddingNewSignalConfirmed();
         }
       },
       child: Scaffold(
@@ -746,7 +785,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   left: 0,
                   right: 0,
                   child: NewSignalLocationBar(
-                    onCancel: _cancelAddingNewSignal,
+                    onCancel: _cancelAddingNewSignalConfirmed,
                     onContinue: _confirmSignalLocation,
                   ),
                 ),
