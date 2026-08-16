@@ -8,6 +8,7 @@ import 'package:help_a_paw/src/models/signal_urgency.dart';
 import 'package:help_a_paw/src/services/app_preferences_service.dart';
 import 'package:help_a_paw/src/models/help_tag.dart';
 import 'package:help_a_paw/src/widgets/help_tag_selector.dart';
+import 'package:help_a_paw/src/widgets/section_header.dart';
 import 'package:help_a_paw/src/widgets/urgency_picker.dart';
 
 class EditSignalScreen extends StatefulWidget {
@@ -286,13 +287,7 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
                       keyboardType: TextInputType.phone,
                     ),
                     const SizedBox(height: 16),
-                    Text(
-                      l10n.urgency,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    SectionHeader(l10n.urgency),
                     // Only the reporter can reach this screen at all
                     // (_loadSignal pops otherwise), so no extra gate is needed
                     // for the reporter-only urgency rule here.
@@ -302,13 +297,7 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
                       onChanged: (value) => setState(() => _urgency = value),
                     ),
                     const SizedBox(height: 16),
-                    Text(
-                      l10n.animalType,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    SectionHeader(l10n.animalType),
                     const SizedBox(height: 8),
                     AnimalTypeSelector(
                       selected: [if (_animalType != null) _animalType!],
@@ -317,13 +306,7 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
                       onToggle: (code) => setState(() => _animalType = code),
                     ),
                     const SizedBox(height: 16),
-                    Text(
-                      l10n.helpNeeded,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    SectionHeader(l10n.helpNeeded),
                     const SizedBox(height: 8),
                     HelpTagSelector(
                       selected: _helpTags,
