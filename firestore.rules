@@ -266,6 +266,8 @@ service cloud.firestore {
                     // rule is the *client* write path for the arrival catch-up
                     // — rejecting the old shape makes that inbox entry vanish
                     // silently, because NearbySignalChecker swallows the error.
+                    // Tighten to helpNeededTags-only once old builds are gone.
+                    // Tracking: HelpAPaw/Flutter#70.
                     && request.resource.data.keys().hasOnly([
                          'type', 'title', 'body', 'read', 'signalId',
                          'signalTitle', 'helpNeededTags', 'signalType',
