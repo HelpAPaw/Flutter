@@ -6,6 +6,7 @@ import {
   effectiveHelperTags,
   helpNeededTagsOf,
   helpTagHeadline,
+  primarySignalTag,
   signalHeadline,
   HELP_TAGS,
   HELP_TAGS_WITHOUT_NEEDED_SUFFIX,
@@ -324,6 +325,33 @@ describe("signalHeadline — the phased-release path", () => {
     // 0-6 were the whole vocabulary; a gap would silently become "Rescue".
     for (let type = 0; type <= 6; type++) {
       expect(signalHeadline({ signalType: type })).toBeTruthy();
+    }
+  });
+});
+
+describe("primarySignalTag", () => {
+  // The share page badge and the push headline both derive from this, so a
+  // legacy signal must not be badged "Rescue" on the one page people see
+  // before they have the app.
+  it("maps a retired type onto the tag that replaced it", () => {
+    expect(primarySignalTag({ signalType: 1 })).toBe("lostFound");
+    expect(primarySignalTag({ signalType: 2 })).toBe("bloodDonation");
+    expect(primarySignalTag({ signalType: 3 })).toBe("foster");
+    expect(primarySignalTag({ signalType: 4 })).toBe("neutering");
+  });
+
+  it("prefers tags, and falls back when there is nothing to read", () => {
+    expect(primarySignalTag({ helpNeededTags: ["adoption"], signalType: 0 }))
+      .toBe("adoption");
+    expect(primarySignalTag({})).toBe("rescue");
+    expect(primarySignalTag({ signalType: 42 })).toBe("rescue");
+  });
+
+  it("only ever yields a code the vocabulary knows", () => {
+    // An unknown code here would render as a raw string on the share page and
+    // in the push, since neither has a label for it.
+    for (let type = 0; type <= 6; type++) {
+      expect(HELP_TAGS).toContain(primarySignalTag({ signalType: type }));
     }
   });
 });

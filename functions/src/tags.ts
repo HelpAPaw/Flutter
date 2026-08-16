@@ -95,15 +95,40 @@ export const HELP_TAGS_WITHOUT_NEEDED_SUFFIX = [
  * Index = the stored int. Delete this, and `legacyHeadline`, once the installed
  * base has moved on; nothing else depends on it.
  */
-const RETIRED_SIGNAL_TYPE_HEADLINES = [
-  "Rescue needed", // 0 Emergency — urgency carries the "emergency" part
-  "Lost / found", // 1
-  "Blood donation needed", // 2
-  "Foster needed", // 3 Homeless
-  "Neutering needed", // 4 Unneutered animals
-  "Rescue needed", // 5 Wild animals
-  "Rescue needed", // 6 Other
+const RETIRED_SIGNAL_TYPE_TAGS = [
+  "rescue", // 0 Emergency — urgency carries the "emergency" part
+  "lostFound", // 1 Lost or Found
+  "bloodDonation", // 2
+  "foster", // 3 Homeless
+  "neutering", // 4 Unneutered animals
+  "rescue", // 5 Wild animals — animalType carries the "wild" part
+  "rescue", // 6 Other
 ];
+
+/**
+ * The tag code that names a signal's category.
+ *
+ * Prefers `helpNeededTags[0]`, falling back to the retired `signalType` so a
+ * signal from a build that predates the vocabulary keeps its real category
+ * everywhere it is shown — the push, and the public share page badge.
+ */
+export function primarySignalTag(data: {
+  helpNeededTags?: unknown;
+  signalType?: unknown;
+}): string {
+  const raw = data.helpNeededTags;
+  const tagged = Array.isArray(raw) &&
+    raw.some((t) => typeof t === "string" && t.length > 0);
+  if (tagged) return helpNeededTagsOf(data)[0];
+
+  const type = data.signalType;
+  if (typeof type === "number" &&
+      type >= 0 &&
+      type < RETIRED_SIGNAL_TYPE_TAGS.length) {
+    return RETIRED_SIGNAL_TYPE_TAGS[type];
+  }
+  return HELP_TAG_FALLBACK;
+}
 
 /**
  * Push headline for a signal, honouring a legacy `signalType` when there are no
@@ -116,18 +141,7 @@ export function signalHeadline(data: {
   helpNeededTags?: unknown;
   signalType?: unknown;
 }): string {
-  const raw = data.helpNeededTags;
-  const tagged = Array.isArray(raw) &&
-    raw.some((t) => typeof t === "string" && t.length > 0);
-  if (tagged) return helpTagHeadline(helpNeededTagsOf(data)[0]);
-
-  const type = data.signalType;
-  if (typeof type === "number" &&
-      type >= 0 &&
-      type < RETIRED_SIGNAL_TYPE_HEADLINES.length) {
-    return RETIRED_SIGNAL_TYPE_HEADLINES[type];
-  }
-  return helpTagHeadline(HELP_TAG_FALLBACK);
+  return helpTagHeadline(primarySignalTag(data));
 }
 
 /**
