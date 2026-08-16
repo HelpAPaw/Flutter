@@ -17,6 +17,7 @@ import { SIGNAL_URGENCIES, URGENCY_RED, urgencyOf } from "./urgency";
 import {
   effectiveHelperTags,
   helpNeededTagsOf,
+  primarySignalTag,
   signalHeadline,
   HELP_TAG_NAMES,
   matchesHelpTags,
@@ -2036,9 +2037,11 @@ async function loadSignalPreview(
     const doc = await db.collection(collection).doc(signalId).get();
     if (!doc.exists) continue;
     const data = doc.data() as Record<string, any>;
-    // The headline need. `helpNeededTagsOf` substitutes the fallback tag for
-    // documents written before tags existed, so this is never empty.
-    const tagCode = helpNeededTagsOf(data)[0];
+    // The headline need, honouring a legacy `signalType` so a signal from a
+    // build that predates the vocabulary is not badged "Rescue" regardless of
+    // what it actually is. This page is the one thing people see before they
+    // have the app.
+    const tagCode = primarySignalTag(data);
     const names = HELP_TAG_NAMES_BY_LANG[lang];
     const photos = Array.isArray(data.photoUrls) ? data.photoUrls : [];
     return {
