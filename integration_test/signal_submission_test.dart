@@ -4,6 +4,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:help_a_paw/main.dart' as app;
 import 'package:help_a_paw/src/models/animal_type.dart';
 import 'package:help_a_paw/src/models/help_tag.dart';
+import 'package:help_a_paw/src/services/app_preferences_service.dart';
 
 // Credentials are injected via --dart-define-from-file=integration_test/test_credentials.json
 // Never hardcode credentials here. See integration_test/test_credentials.json.example.
@@ -64,7 +65,21 @@ void main() {
     }
 
     /// Boot the app to a signed-in map with nothing in the way.
+    ///
+    /// Test mode is forced on **before** `app.main()`, because this test
+    /// submits a real signal and `help-a-paw-dev` is production despite its
+    /// name. Without it the run writes to the live `signals` collection and
+    /// the server fan-out pushes the test signal to every nearby volunteer.
+    /// Setting the preference directly is the only option here — the in-app
+    /// gesture is seven taps on the title within two seconds each, which no
+    /// driver can reliably hit.
     Future<void> launchToMap(WidgetTester tester) async {
+      final prefs = AppPreferencesService();
+      await prefs.initialize();
+      await prefs.setTestMode(true);
+      expect(prefs.isTestMode(), isTrue,
+          reason: 'refusing to run against the live signals collection');
+
       app.main();
       await tester.pumpAndSettle();
       await tester.pumpAndSettle(const Duration(seconds: 3));
