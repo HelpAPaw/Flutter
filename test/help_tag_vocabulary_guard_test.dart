@@ -148,6 +148,30 @@ void main() {
     );
   });
 
+  test('both sides map retired signal types onto the same tags', () {
+    expect(
+      _stringArray(source.readAsStringSync(), 'RETIRED_SIGNAL_TYPE_TAGS'),
+      HelpTag.retiredSignalTypeCodes,
+      reason: 'RETIRED_SIGNAL_TYPE_TAGS in functions/src/tags.ts has drifted '
+          'from HelpTag.retiredSignalTypeCodes. Index IS the stored int, so a '
+          'reordering silently remaps every legacy signal: the push would '
+          'headline one category and the app would render another for the same '
+          'document, which is the exact bug this table exists to prevent.',
+    );
+  });
+
+  test('every retired signal type maps onto a tag the app can render', () {
+    for (final code in HelpTag.retiredSignalTypeCodes) {
+      expect(
+        HelpTag.fromCode(code),
+        isNotNull,
+        reason: 'Retired signal type maps to "$code", which is not in the '
+            'vocabulary. HelpTag.primaryOfSignal would silently fall back to '
+            'rescue for every legacy signal of that type.',
+      );
+    }
+  });
+
   test('both sides agree on the per-signal tag cap', () {
     final text = source.readAsStringSync();
     final match =
@@ -176,13 +200,20 @@ Map<String, String> _stringRecord(String source, String name) {
 }
 
 /// The string literals of a `export const NAME = [...] as const;` array.
+///
+/// Line comments are stripped first: `RETIRED_SIGNAL_TYPE_TAGS` annotates each
+/// entry with the type it replaced, and two of those comments quote a word
+/// ("emergency", "wild"). Without this the extractor reads those as array
+/// entries and the guard fails on a table that is perfectly in sync.
 List<String> _stringArray(String source, String name) {
   final match = RegExp('$name\\s*=\\s*\\[(.*?)\\]', dotAll: true)
       .firstMatch(source);
   expect(match, isNotNull, reason: '$name not found in functions/src/tags.ts');
 
+  final body = match!.group(1)!.replaceAll(RegExp(r'//[^\n]*'), '');
+
   return RegExp(r'"([^"]+)"')
-      .allMatches(match!.group(1)!)
+      .allMatches(body)
       .map((m) => m.group(1)!)
       .toList();
 }

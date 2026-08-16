@@ -15,6 +15,7 @@ import * as nodemailer from "nodemailer";
 // of the derivation — see the note in ./urgency.
 import { SIGNAL_URGENCIES, URGENCY_RED, urgencyOf } from "./urgency";
 import {
+  displayTagsOf,
   effectiveHelperTags,
   helpNeededTagsOf,
   primarySignalTag,
@@ -872,6 +873,17 @@ async function handleSignalCreated(
       `Urgent · ${headline} — ${signalTitle}` :
       `${headline} — ${signalTitle}`;
 
+  // The tags as the RECIPIENT's app will render them — see `displayTagsOf`.
+  // `signalTags` is what the fan-out MATCHED on and collapses a legacy signal
+  // to the fallback; sending that would make the inbox row read "Rescue needed"
+  // under a push body that says "Blood donation needed", because
+  // `my_notifications_page` renders the row from this field and only falls back
+  // to `body` when the field is absent — which this write never lets happen.
+  //
+  // Deliberately NOT used at the matching site above: remapping a legacy
+  // signal's audience is a product decision, not a display fix.
+  const displayTags = displayTagsOf(signalData);
+
   const badgeByUid = await writeInboxEntries(
     inboxRecipients,
     {
@@ -881,7 +893,7 @@ async function handleSignalCreated(
       body,
       signalId,
       signalTitle,
-      helpNeededTags: signalTags,
+      helpNeededTags: displayTags,
       // Mirrored for builds that predate the tag vocabulary: they render the
       // inbox row from `signalType` and fall back to the stored English body
       // without it, which would show Bulgarian users English text. Written only
@@ -903,7 +915,7 @@ async function handleSignalCreated(
       type: "new_signal",
       signalTitle: truncateForPayload(signalTitle),
       urgency: String(urgency),
-      helpNeededTags: signalTags.join(","),
+      helpNeededTags: displayTags.join(","),
       ...(animalType ? { animalType } : {}),
     },
     badgeByUid,

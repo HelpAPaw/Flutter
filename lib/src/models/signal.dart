@@ -29,6 +29,20 @@ class Signal {
   /// written before the field existed. Null matches every species filter.
   final String? animalType;
 
+  /// The retired `signalType`, on documents old enough to still carry one.
+  ///
+  /// **Read-only, and deliberately absent from [toJson].** Nothing writes this
+  /// field any more; it is parsed purely so [primaryTag] can recover the
+  /// category of a signal created by a pre-tag build, the way the server's
+  /// `primarySignalTag` always has. Safe to omit from [toJson] because that is
+  /// only ever used to *create* a signal — edits go through targeted
+  /// `update({...})` maps, so a legacy document never has this field rewritten
+  /// (or dropped) by the app.
+  ///
+  /// Null once the installed base has moved on; see
+  /// [HelpTag.retiredSignalTypeCodes].
+  final int? legacySignalType;
+
   Signal({
     required this.title,
     required this.description,
@@ -40,6 +54,7 @@ class Signal {
     required this.urgency,
     this.helpNeededTags = const [],
     this.animalType,
+    this.legacySignalType,
     this.photoUrls = const [],
     this.status = 0,
   });
@@ -78,6 +93,7 @@ class Signal {
       urgency: urgencyFrom(json),
       helpNeededTags: helpNeededTagsFrom(json),
       animalType: json['animalType'] as String?,
+      legacySignalType: json['signalType'] as int?,
       photoUrls: (json['photoUrls'] as List<dynamic>?)
           ?.map((e) => e as String)
           .toList() ?? [],
@@ -114,6 +130,11 @@ class Signal {
       json['urgency'] ??
       SignalUrgency.fromLegacyStatus(json['status'] ?? 0).code;
 
-  /// This signal's headline need — its category. See [HelpTag.primaryOf].
-  HelpTag get primaryTag => HelpTag.primaryOf(helpNeededTags);
+  /// This signal's headline need — its category.
+  ///
+  /// Falls back to the retired [legacySignalType] when there are no tags, so a
+  /// signal from a pre-tag build keeps the category it was reported with
+  /// instead of collapsing to `rescue`. See [HelpTag.primaryOfSignal].
+  HelpTag get primaryTag =>
+      HelpTag.primaryOfSignal(helpNeededTags, legacySignalType);
 }

@@ -190,6 +190,29 @@ export function helpNeededTagsOf(data: { helpNeededTags?: unknown }): string[] {
 }
 
 /**
+ * The help tags to SHOW a recipient — which is not what the fan-out matched on.
+ *
+ * `helpNeededTagsOf` collapses an untagged signal to the fallback, so a legacy
+ * `signalType: 2` document matches as `rescue`. That is the right list to match
+ * with (see the note there) but the wrong one to display: the push body is
+ * built from `signalHeadline`, which honours the retired type, so sending the
+ * matched list makes the inbox row contradict the push that announced it.
+ *
+ * Only the primary is substituted — for a tagged signal `primarySignalTag` *is*
+ * `helpNeededTagsOf(data)[0]`, so this is the identity there and any extra tags
+ * survive in the order the reporter gave them.
+ *
+ * Mirrored in Dart by `HelpTag.primaryOfSignal`, which does the same
+ * substitution for the same reason when rendering a signal.
+ */
+export function displayTagsOf(data: {
+  helpNeededTags?: unknown;
+  signalType?: unknown;
+}): string[] {
+  return [primarySignalTag(data), ...helpNeededTagsOf(data).slice(1)];
+}
+
+/**
  * The help tags a user matches on — never empty.
  *
  * **Absent and empty deliberately mean the same thing here**, which is the
