@@ -39,8 +39,14 @@ flutter test integration_test/
 ```bash
 cd functions
 
+# Install dependencies — ALWAYS npm ci, never npm install (see npm supply chain below)
+npm ci
+
 # Build TypeScript
 npm run build
+
+# Supply-chain check — run before every deploy
+npm run audit
 
 # Deploy functions to Firebase
 npm run deploy
@@ -51,6 +57,47 @@ npm run serve
 # View function logs
 npm run logs
 ```
+
+### npm supply chain (IMPORTANT)
+
+npm is under sustained worm-style supply-chain attack (Shai-Hulud and successors;
+the Aug 2026 wave took `keyv`/`cacheable`/`flat-cache`/`file-entry-cache`). Both
+npm trees here — `functions/` and `firestore-tests/` — were audited clean on
+2026-08-17: 0 malware advisories across 559 distinct package versions and 804/804
+verified registry signatures. (Full IOC-level report is a local working note at
+`docs/ai/NPM_SUPPLY_CHAIN_AUDIT_2026-08.md`, which is gitignored.)
+
+Three rules, in order of importance:
+
+1. **`ignore-scripts=true`** is set in `functions/.npmrc` and
+   `firestore-tests/.npmrc`, and both are committed. Almost every one of these
+   worms executes from a `preinstall`/`postinstall` hook, and nothing in either
+   tree needs one. **If you add a dependency that genuinely needs an install
+   script, do not just delete this** — verify with
+   `rm -rf node_modules && npm ci && npm run build && npm test` first.
+
+   `functions/.npmrc` **is** uploaded with the source on deploy (verified
+   2026-08-17: inflating it grew the packaged payload from 183.05 KB to
+   495.1 KB), so it disables scripts in the Cloud Build install too. Therefore
+   **never put a registry token (`_auth`/`_authToken`) in it** — it would ship
+   to Cloud Build with the function source.
+2. **`npm ci`, never `npm install`**, unless you are deliberately changing
+   versions. `npm install` can rewrite the lockfile and float onto a freshly
+   published malicious release. Both lockfiles are committed; keep them that way.
+3. **Never adopt a version published less than ~7 days ago.** Malicious versions
+   are usually pulled from the registry within 24–72h. Check before bumping:
+   ```bash
+   npm view <pkg>@<version> time --json | tail -5
+   ```
+   `npm install --before=$(date -v-7d +%Y-%m-%d) <pkg>` enforces it mechanically.
+
+When choosing a *new* dependency, prefer one published with provenance (the npm
+provenance badge) — it proves the tarball was built by CI from a known commit
+rather than uploaded from a maintainer's laptop with a stolen token.
+
+Note that `.github/workflows/flutter.yml` runs `flutter pub upgrade` on a weekly
+cron, which deliberately ignores `pubspec.lock` — the same exposure class on the
+Dart side. Bump pub dependencies deliberately and locally instead.
 
 ### Firebase Emulators
 ```bash
