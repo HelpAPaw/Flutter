@@ -1748,8 +1748,13 @@ cd firestore-tests && npm test  # Firestore + Storage rules — before EVERY rul
 firebase emulators:start        # auth 9099 · functions 5001 · firestore 8080 · storage 9199 · hosting 5000
 ```
 
-CI (`.github/workflows/flutter.yml`) runs `flutter analyze lib` and `dart fix` on
-pushes/PRs to `main` plus a weekly cron. It does **not** run `flutter test`.
+There is **no CI**. `.github/workflows/flutter.yml` was deleted 2026-08-17: it had
+never run (0 runs, `disabled_inactivity`) because its triggers pointed at a
+non-existent `main` branch, and it ran `flutter pub upgrade` — which ignores
+`pubspec.lock` — before executing package code via `flutter test`, on a public
+repo whose `GITHUB_TOKEN` defaulted to write. That repo default is now `read`.
+All checks are run locally; see the npm supply chain and pub upgrade sections of
+`CLAUDE.md`.
 
 ### 13.2 Test suites
 
