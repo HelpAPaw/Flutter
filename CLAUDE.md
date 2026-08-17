@@ -95,9 +95,34 @@ When choosing a *new* dependency, prefer one published with provenance (the npm
 provenance badge) — it proves the tarball was built by CI from a known commit
 rather than uploaded from a maintainer's laptop with a stolen token.
 
-Note that `.github/workflows/flutter.yml` runs `flutter pub upgrade` on a weekly
-cron, which deliberately ignores `pubspec.lock` — the same exposure class on the
-Dart side. Bump pub dependencies deliberately and locally instead.
+### Upgrading pub (Dart/Flutter) dependencies
+
+Do it **manually, on a branch** — never from an automated job that also runs
+tests or builds. There is no CI workflow in this repo; the old one was deleted
+2026-08-17 because it had never run, pointed at a non-existent `main` branch,
+and ran `flutter pub upgrade` (which ignores `pubspec.lock`) before executing
+package code via `flutter test`.
+
+pub is structurally safer than npm here: **packages have no install scripts**,
+so `flutter pub get` fetches without executing anything, and `pubspec.lock`
+records a `sha256` per package against immutable pub.dev versions. Two caveats:
+
+- **Build hooks do execute.** `hook/build.dart` (native assets) runs package
+  code at *build* time, and this project uses that path — see
+  `.dart_tool/native_assets.yaml` (`package:objective_c`). Fetch is safe;
+  build is where execution happens.
+- **There is no `dart pub audit`.** `dart pub` offers only `outdated` and
+  `upgrade`. Nothing will warn you about a bad package.
+
+```bash
+flutter pub outdated           # read-only report, runs no package code
+flutter pub upgrade <package>  # one at a time, on a branch — not the whole tree
+flutter test                   # plus a device smoke test
+```
+
+Check the publish date and publisher on pub.dev before adopting anything new;
+there is no `--before` equivalent, so that check is eyeballs-only. Commit the
+updated `pubspec.lock`.
 
 ### Firebase Emulators
 ```bash
