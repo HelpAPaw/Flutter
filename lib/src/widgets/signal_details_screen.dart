@@ -32,8 +32,10 @@ import '../models/signal_status.dart';
 import '../models/animal_type.dart';
 import '../models/help_tag.dart';
 import '../models/signal_urgency.dart';
+import 'report_dialog.dart';
 import 'update_note_dialog.dart';
 import 'urgency_picker.dart';
+import '../models/report_reason.dart';
 import '../services/app_preferences_service.dart';
 import '../services/public_profile_service.dart';
 
@@ -435,6 +437,30 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                     );
                   }),
                 ),
+                // Report (master spec §18.1). Only for other people's signals —
+                // the author has edit and delete, and "report my own signal" is
+                // a support request, not a moderation one.
+                //
+                // This is the affordance `faqReportInappropriateAnswer` has been
+                // pointing users at since before it existed.
+                if (!isAuthor)
+                  Semantics(
+                    label: l10n.reportSignal,
+                    button: true,
+                    enabled: true,
+                    child: IconButton(
+                      icon: const Icon(Icons.flag_outlined),
+                      onPressed: () => showReportDialog(
+                        context,
+                        target: ReportTarget.signal(
+                          signalId: widget.signalId,
+                          collection:
+                              AppPreferencesService().signalsCollectionName,
+                          reportedUserId: signal.reporter.id,
+                        ),
+                      ),
+                    ),
+                  ),
               ]),
             body: Center(
               child: Padding(
@@ -447,6 +473,11 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.start,
                         children: <Widget>[
+                          // A moderator's warning label (§18.3). Above the
+                          // photos on purpose: the whole point of "possible
+                          // duplicate" or "disputed" is to be read *before* the
+                          // content it qualifies, not after scrolling past it.
+                          _moderationLabelBanner(signal, l10n),
                           if (signal.photoUrls.isNotEmpty || isAuthor)
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -854,7 +885,30 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                         ),
                         child: Padding(
                           padding: const EdgeInsets.all(8.0),
-                          child: Row(
+                          // A moderator has locked comments (§18.3). The
+                          // composer is replaced rather than merely disabled:
+                          // a greyed-out field invites people to keep tapping
+                          // it, while a sentence explains what happened. The
+                          // rules deny the write regardless — this is the
+                          // courtesy, not the enforcement.
+                          child: signal.commentsLocked
+                              ? Row(
+                                  children: [
+                                    const Icon(Icons.lock_outline,
+                                        size: 20, color: Colors.grey),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        l10n.moderationCommentsLocked,
+                                        style: const TextStyle(
+                                          color: Colors.grey,
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : Row(
                             children: [
                               Expanded(
                                 child: TextField(
@@ -888,7 +942,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                 ),
                               ),
                             ],
-                          ),
+                                ),
                         ),
                       ),
                     ),
@@ -1112,7 +1166,26 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
 
   Widget _buildCommentRow(SignalHistoryEntry entry, DateFormat dateFormat) {
     final l10n = AppLocalizations.of(context);
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    // Reporting your own comment is meaningless; deleting it is what you want,
+    // and that is the reporter's cascade or a moderator's job.
+    final canReport = currentUid != null && entry.actorId != currentUid;
     return ListTile(
+      // Long-press rather than a per-row menu button: a comment list with a
+      // trailing overflow icon on every row reads as an admin tool, and the
+      // rows are already dense. Long-press is the platform gesture for "more
+      // about this item" and costs no layout.
+      onLongPress: !canReport
+          ? null
+          : () => showReportDialog(
+                context,
+                target: ReportTarget.comment(
+                  commentId: entry.id,
+                  signalId: widget.signalId,
+                  collection: AppPreferencesService().signalsCollectionName,
+                  reportedUserId: entry.actorId,
+                ),
+              ),
       title: _historyCard(
         background: Colors.white,
         border: Colors.grey,
@@ -1138,6 +1211,48 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
               fallback: l10n.unknown,
               textAlign: TextAlign.end,
               maxLines: 1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The moderator's warning label, or nothing when there isn't one.
+  ///
+  /// An unrecognised label code renders as nothing rather than as raw text: the
+  /// codes are a closed vocabulary validated server-side, so an unknown one
+  /// means this build is older than the moderator's, and showing `disputedish`
+  /// to a user would be worse than showing nothing.
+  Widget _moderationLabelBanner(Signal signal, AppLocalizations l10n) {
+    final text = switch (signal.moderationLabel) {
+      'unverified' => l10n.moderationLabelUnverified,
+      'duplicate' => l10n.moderationLabelDuplicate,
+      'disputed' => l10n.moderationLabelDisputed,
+      _ => null,
+    };
+    if (text == null) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade100,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.amber.shade700),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline, size: 20, color: Colors.amber.shade900),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: Colors.amber.shade900,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],

@@ -31,6 +31,13 @@ import {
 
 admin.initializeApp();
 
+// Moderator actions (master spec 3.6.1, 18). Re-exported so `firebase deploy`
+// picks it up; the implementation lives in its own module because it is a
+// self-contained privileged surface with its own authorization rule, and
+// keeping it out of this file makes "what can a moderator do" one place to
+// read. It must be imported AFTER initializeApp() — see the lazy `db()` there.
+export { moderateAction } from "./moderation";
+
 const db = admin.firestore();
 
 // API keys
@@ -674,6 +681,21 @@ async function handleSignalCreated(
   const signalData = event.data?.data();
 
   if (!signalData) {
+    return;
+  }
+
+  // A signal coming back out of moderation quarantine is a CREATE, not an
+  // update: `moderateRestoreSignal` writes the document back to `signals/{id}`,
+  // which fires this trigger. Without this guard, un-hiding a months-old signal
+  // pushes it to everyone within 50 km all over again, as if it had just been
+  // reported. The marker is written by that function and by nothing else.
+  //
+  // Deliberately checked before anything else, and deliberately not a
+  // `createdAt` age heuristic — a restore preserves the original `createdAt`,
+  // so age cannot distinguish a restore from a backdated import, and guessing
+  // wrong here is a mass notification.
+  if ((signalData.moderation as Record<string, unknown> | undefined)?.restoredAt) {
+    console.log(`Skipping fan-out for restored signal ${signalId}`);
     return;
   }
 

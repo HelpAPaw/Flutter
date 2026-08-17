@@ -8,6 +8,7 @@ import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/src/config/routes.dart';
 import 'package:help_a_paw/src/services/auth_service.dart';
+import 'package:help_a_paw/src/services/moderation_service.dart';
 import 'package:help_a_paw/src/services/notification_inbox_service.dart';
 import 'package:help_a_paw/src/services/notification_service.dart';
 import 'package:help_a_paw/src/services/share_service.dart';
@@ -213,6 +214,38 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
               l10n.myNotifications,
               softWrap: true,
             ),
+          ),
+          // Moderator queue (master spec §18). Only drawn for moderators, and
+          // only ever an affordance — `firestore.rules` denies the queue's
+          // query to everyone else, so a stale `true` here costs nothing worse
+          // than an empty screen.
+          //
+          // A live stream rather than a one-shot read so a revoked moderator
+          // loses the entry without restarting the app. `initialData: false`
+          // keeps the drawer from flickering an entry in for the frame before
+          // the first snapshot arrives.
+          //
+          // Index 12: the tile indices are identity, not order (10 is the
+          // inbox, 11 is sign-out), so a new one needs no renumbering.
+          StreamBuilder<bool>(
+            stream: ModerationService.instance.watchIsModerator(),
+            initialData: false,
+            builder: (context, snapshot) {
+              if (snapshot.data != true) return const SizedBox.shrink();
+              return ListTile(
+                enableFeedback: true,
+                leading: const Icon(Icons.shield_outlined),
+                onTap: () => {
+                  context.push(Routes.moderation),
+                  homeRouteTile(12),
+                },
+                selected: _homeRouteTile == 12,
+                title: Text(
+                  l10n.moderationQueue,
+                  softWrap: true,
+                ),
+              );
+            },
           ),
           ListTile(
             enableFeedback: true,

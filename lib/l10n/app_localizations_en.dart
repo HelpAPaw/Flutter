@@ -1425,4 +1425,152 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get locationAlwaysPermissionRequired =>
       'To be notified while the app is closed, allow location access \"Always\" in Settings. With \"While Using the App\" we can only check when the app is open.';
+
+  @override
+  String get reportSignal => 'Report this signal';
+
+  @override
+  String get reportComment => 'Report this comment';
+
+  @override
+  String get reportTitle => 'Report';
+
+  @override
+  String get reportReasonPrompt => 'What is wrong with this?';
+
+  @override
+  String get reportDetailsLabel => 'Anything else we should know? (optional)';
+
+  @override
+  String get reportSubmit => 'Send report';
+
+  @override
+  String get reportSubmitted => 'Thank you. A moderator will review this.';
+
+  @override
+  String get reportAlreadySubmitted => 'You have already reported this.';
+
+  @override
+  String get reportFailed => 'Could not send the report. Please try again.';
+
+  @override
+  String get reportSignInRequired => 'Please sign in to report content.';
+
+  @override
+  String get reportReasonFraud => 'Fraud or scam';
+
+  @override
+  String get reportReasonAbuse => 'Animal abuse or neglect';
+
+  @override
+  String get reportReasonHarassment => 'Harassment';
+
+  @override
+  String get reportReasonFalseInformation => 'False information';
+
+  @override
+  String get reportReasonDangerousAdvice => 'Dangerous advice';
+
+  @override
+  String get reportReasonAnimalEndangerment => 'Puts an animal in danger';
+
+  @override
+  String get reportReasonGraphicContent => 'Graphic or distressing content';
+
+  @override
+  String get reportReasonSpam => 'Spam';
+
+  @override
+  String get reportReasonDoxxing => 'Shares private details';
+
+  @override
+  String get reportReasonDefamationRisk => 'Public accusation about a person';
+
+  @override
+  String get reportReasonDuplicateCase => 'Duplicate of another signal';
+
+  @override
+  String get reportReasonOther => 'Something else';
+
+  @override
+  String get moderation => 'Moderation';
+
+  @override
+  String get moderationQueue => 'Reports';
+
+  @override
+  String get moderationQueueEmpty => 'No open reports.';
+
+  @override
+  String get moderationNotAModerator => 'You do not have moderator access.';
+
+  @override
+  String moderationReportedBy(int count) {
+    return 'Reported $count times';
+  }
+
+  @override
+  String get moderationOpenTarget => 'Open';
+
+  @override
+  String get moderationNoteLabel => 'Why are you doing this? (required)';
+
+  @override
+  String get moderationNoteRequired => 'A note is required.';
+
+  @override
+  String get moderationActionApplied => 'Done.';
+
+  @override
+  String get moderationActionFailed => 'That did not work. Please try again.';
+
+  @override
+  String get moderationPermissionDenied =>
+      'You no longer have moderator access.';
+
+  @override
+  String get moderationHideSignal => 'Hide signal';
+
+  @override
+  String get moderationRestoreSignal => 'Restore signal';
+
+  @override
+  String get moderationLockComments => 'Lock comments';
+
+  @override
+  String get moderationUnlockComments => 'Unlock comments';
+
+  @override
+  String get moderationSetUrgency => 'Correct urgency';
+
+  @override
+  String get moderationDeleteComment => 'Delete comment';
+
+  @override
+  String get moderationSetLabel => 'Add warning label';
+
+  @override
+  String get moderationClearLabel => 'Remove warning label';
+
+  @override
+  String get moderationDismissReport => 'Dismiss report';
+
+  @override
+  String get moderationAddNote => 'Add internal note';
+
+  @override
+  String get moderationLabelUnverified => 'Unverified';
+
+  @override
+  String get moderationLabelDuplicate => 'Possible duplicate';
+
+  @override
+  String get moderationLabelDisputed => 'Disputed';
+
+  @override
+  String get moderationCommentsLocked =>
+      'A moderator has locked comments on this signal.';
+
+  @override
+  String get moderationBadge => 'Moderator';
 }

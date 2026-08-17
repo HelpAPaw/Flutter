@@ -2617,6 +2617,294 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'To be notified while the app is closed, allow location access \"Always\" in Settings. With \"While Using the App\" we can only check when the app is open.'**
   String get locationAlwaysPermissionRequired;
+
+  /// No description provided for @reportSignal.
+  ///
+  /// In en, this message translates to:
+  /// **'Report this signal'**
+  String get reportSignal;
+
+  /// No description provided for @reportComment.
+  ///
+  /// In en, this message translates to:
+  /// **'Report this comment'**
+  String get reportComment;
+
+  /// No description provided for @reportTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Report'**
+  String get reportTitle;
+
+  /// No description provided for @reportReasonPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'What is wrong with this?'**
+  String get reportReasonPrompt;
+
+  /// No description provided for @reportDetailsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Anything else we should know? (optional)'**
+  String get reportDetailsLabel;
+
+  /// No description provided for @reportSubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Send report'**
+  String get reportSubmit;
+
+  /// No description provided for @reportSubmitted.
+  ///
+  /// In en, this message translates to:
+  /// **'Thank you. A moderator will review this.'**
+  String get reportSubmitted;
+
+  /// No description provided for @reportAlreadySubmitted.
+  ///
+  /// In en, this message translates to:
+  /// **'You have already reported this.'**
+  String get reportAlreadySubmitted;
+
+  /// No description provided for @reportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not send the report. Please try again.'**
+  String get reportFailed;
+
+  /// No description provided for @reportSignInRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please sign in to report content.'**
+  String get reportSignInRequired;
+
+  /// No description provided for @reportReasonFraud.
+  ///
+  /// In en, this message translates to:
+  /// **'Fraud or scam'**
+  String get reportReasonFraud;
+
+  /// No description provided for @reportReasonAbuse.
+  ///
+  /// In en, this message translates to:
+  /// **'Animal abuse or neglect'**
+  String get reportReasonAbuse;
+
+  /// No description provided for @reportReasonHarassment.
+  ///
+  /// In en, this message translates to:
+  /// **'Harassment'**
+  String get reportReasonHarassment;
+
+  /// No description provided for @reportReasonFalseInformation.
+  ///
+  /// In en, this message translates to:
+  /// **'False information'**
+  String get reportReasonFalseInformation;
+
+  /// No description provided for @reportReasonDangerousAdvice.
+  ///
+  /// In en, this message translates to:
+  /// **'Dangerous advice'**
+  String get reportReasonDangerousAdvice;
+
+  /// No description provided for @reportReasonAnimalEndangerment.
+  ///
+  /// In en, this message translates to:
+  /// **'Puts an animal in danger'**
+  String get reportReasonAnimalEndangerment;
+
+  /// No description provided for @reportReasonGraphicContent.
+  ///
+  /// In en, this message translates to:
+  /// **'Graphic or distressing content'**
+  String get reportReasonGraphicContent;
+
+  /// No description provided for @reportReasonSpam.
+  ///
+  /// In en, this message translates to:
+  /// **'Spam'**
+  String get reportReasonSpam;
+
+  /// No description provided for @reportReasonDoxxing.
+  ///
+  /// In en, this message translates to:
+  /// **'Shares private details'**
+  String get reportReasonDoxxing;
+
+  /// No description provided for @reportReasonDefamationRisk.
+  ///
+  /// In en, this message translates to:
+  /// **'Public accusation about a person'**
+  String get reportReasonDefamationRisk;
+
+  /// No description provided for @reportReasonDuplicateCase.
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate of another signal'**
+  String get reportReasonDuplicateCase;
+
+  /// No description provided for @reportReasonOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Something else'**
+  String get reportReasonOther;
+
+  /// No description provided for @moderation.
+  ///
+  /// In en, this message translates to:
+  /// **'Moderation'**
+  String get moderation;
+
+  /// No description provided for @moderationQueue.
+  ///
+  /// In en, this message translates to:
+  /// **'Reports'**
+  String get moderationQueue;
+
+  /// No description provided for @moderationQueueEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No open reports.'**
+  String get moderationQueueEmpty;
+
+  /// No description provided for @moderationNotAModerator.
+  ///
+  /// In en, this message translates to:
+  /// **'You do not have moderator access.'**
+  String get moderationNotAModerator;
+
+  /// No description provided for @moderationReportedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Reported {count} times'**
+  String moderationReportedBy(int count);
+
+  /// No description provided for @moderationOpenTarget.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get moderationOpenTarget;
+
+  /// No description provided for @moderationNoteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Why are you doing this? (required)'**
+  String get moderationNoteLabel;
+
+  /// No description provided for @moderationNoteRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'A note is required.'**
+  String get moderationNoteRequired;
+
+  /// No description provided for @moderationActionApplied.
+  ///
+  /// In en, this message translates to:
+  /// **'Done.'**
+  String get moderationActionApplied;
+
+  /// No description provided for @moderationActionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'That did not work. Please try again.'**
+  String get moderationActionFailed;
+
+  /// No description provided for @moderationPermissionDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'You no longer have moderator access.'**
+  String get moderationPermissionDenied;
+
+  /// No description provided for @moderationHideSignal.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide signal'**
+  String get moderationHideSignal;
+
+  /// No description provided for @moderationRestoreSignal.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore signal'**
+  String get moderationRestoreSignal;
+
+  /// No description provided for @moderationLockComments.
+  ///
+  /// In en, this message translates to:
+  /// **'Lock comments'**
+  String get moderationLockComments;
+
+  /// No description provided for @moderationUnlockComments.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock comments'**
+  String get moderationUnlockComments;
+
+  /// No description provided for @moderationSetUrgency.
+  ///
+  /// In en, this message translates to:
+  /// **'Correct urgency'**
+  String get moderationSetUrgency;
+
+  /// No description provided for @moderationDeleteComment.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete comment'**
+  String get moderationDeleteComment;
+
+  /// No description provided for @moderationSetLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Add warning label'**
+  String get moderationSetLabel;
+
+  /// No description provided for @moderationClearLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove warning label'**
+  String get moderationClearLabel;
+
+  /// No description provided for @moderationDismissReport.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss report'**
+  String get moderationDismissReport;
+
+  /// No description provided for @moderationAddNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Add internal note'**
+  String get moderationAddNote;
+
+  /// No description provided for @moderationLabelUnverified.
+  ///
+  /// In en, this message translates to:
+  /// **'Unverified'**
+  String get moderationLabelUnverified;
+
+  /// No description provided for @moderationLabelDuplicate.
+  ///
+  /// In en, this message translates to:
+  /// **'Possible duplicate'**
+  String get moderationLabelDuplicate;
+
+  /// No description provided for @moderationLabelDisputed.
+  ///
+  /// In en, this message translates to:
+  /// **'Disputed'**
+  String get moderationLabelDisputed;
+
+  /// No description provided for @moderationCommentsLocked.
+  ///
+  /// In en, this message translates to:
+  /// **'A moderator has locked comments on this signal.'**
+  String get moderationCommentsLocked;
+
+  /// No description provided for @moderationBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Moderator'**
+  String get moderationBadge;
 }
 
 class _AppLocalizationsDelegate

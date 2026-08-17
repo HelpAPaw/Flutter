@@ -166,6 +166,7 @@ allow-listed in the console or anonymous sign-in fails.
 | `photoUrls` | string[] | Storage download URLs, max 5 enforced in the UI |
 | ~~`signalType`~~ | int | **retired, see §4.4.** Present on documents written before the tag merge; nothing reads or writes it, and the rules neither require nor bound it |
 | `lastUpdatedBy` | DocumentReference | set on status **and** urgency change; rules require self-stamping on the status-only path |
+| `moderation` | map | **server-owned**, see §7.16. `{ commentsLocked?: bool, label?: string, labelSetBy?, labelSetAt?, restoredAt?, restoredBy?, restoreNote? }`. Written only by the `moderateAction` callable; `firestore.rules` rejects any client write that touches it, and it is absent from `Signal.toJson()` |
 
 Subcollection **`comments/{commentId}`** — what people *said*:
 
@@ -282,6 +283,52 @@ dynamically. `list` is denied so the user base can't be enumerated.
 caller), email?: string, deviceInfo?: {platform, osVersion, appVersion, buildNumber},
 createdAt, status: 'new' }`
 
+#### `moderators/{uid}` — the moderator roster (master spec §3.6.1)
+
+`{ grantedAt: Timestamp, grantedBy: string, note?: string }`
+
+The **only** definition of the role. A user may `get` their own document (to decide
+whether to draw the moderation entry point); `list` is denied, and there is no client
+write path at all — appointment is `functions/scripts/grant_moderator.js` via the Admin
+SDK. Read by `isModerator()` in the rules and by the `moderateAction` callable.
+
+Deliberately **not** an Auth custom claim: a claim is baked into the ID token, so a
+revocation would not take effect until the token expired (up to an hour), and it would be
+a second copy of the value alongside anything the UI needed. See §7.16.
+
+#### `reports/{reporterUid}_{targetType}_{targetId}` — user reports (master spec §18.1)
+
+`{ targetType: 'signal'|'comment'|'user', targetId, signalId?, collection:
+'signals'|'signals_test', reason: string, details: string (≤1000), reporterId (pinned to
+caller), reportedUserId?, status: 'open'|'actioned'|'dismissed', testMode: bool,
+createdAt, resolvedBy?, resolvedAt? }`
+
+**The document id is the rate limit.** Rules allow `create` and deny `update`, so a second
+report of the same target by the same user collides and is refused — one report per user
+per target, with no throttle collection (contrast `feedbackThrottle`, which throttles an
+*email*, not a write). The rules reconstruct the id from the payload, so the format is
+load-bearing in two places; `test/models/report_reason_test.dart` pins the Dart side.
+
+Read is moderator-only. The reporter cannot read their own report back (spec §18.7:
+internal moderation records are not visible to users), which is why
+`ModerationService.report` infers "already reported" from `permission-denied` rather than
+checking.
+
+`reason` is bounded but **not** allow-listed in the rules — same reasoning as
+`isValidHelpNeededTags`: a newer client must never be rejected by an older deployed
+ruleset. The queue renders an unrecognised code verbatim.
+
+#### `moderationActions/{id}` — audit trail (master spec §18.7)
+
+`{ action, moderatorId, targetType, targetId, collection?, reportId?, before?, after?,
+note, createdAt }`
+
+Moderator-readable, **client-unwritable**. Written by the `moderateAction` callable and
+nothing else, which is the entire reason moderator powers are functions rather than a
+widened ruleset: a client-written audit log is a forgeable one. `before`/`after` are small
+summaries, never whole documents — the log must not become a permanently readable copy of
+content that was hidden precisely so it would not be read.
+
 #### Server-only collections (no client rule match ⇒ denied by default)
 
 | Collection | Purpose |
@@ -289,6 +336,7 @@ createdAt, status: 'new' }`
 | `feedbackThrottle/{uid}` | `{ windowStart, count, updatedAt }` — 5 emails/hour/user |
 | `vetClinicCache/{geohash5_radiusKm}` | `{ places[], cachedAt }`, 30-day TTL |
 | `vetClinicDetails/{placeId}` | `{ place, cachedAt }`, 30-day TTL |
+| `moderationQuarantine/{collection}__{signalId}` | `{ data, collection, signalId, hiddenBy, hiddenAt, note }` — where a hidden signal's document goes (§7.16) |
 
 ### 4.2 `notificationPreferences` map
 
@@ -589,6 +637,26 @@ constrain the on-device arrival catch-up. Pinning `type == 'nearby_signal'` stop
 fabricating an entry claiming the server sent it something; the size caps stop an
 owner-only collection becoming free storage.
 
+**Moderation (§7.16)** adds three helpers and three collection blocks:
+
+- `isModerator()` — `exists(/moderators/$(request.auth.uid))`. Costs one document read per
+  evaluation, so every call site places it **last** in an `||` chain; the owner check
+  short-circuits first and the ordinary path never pays for it.
+- `isCommentsLocked(coll, signalId)` — nested `get()` with defaults, so a signal with no
+  `moderation` map (which is nearly all of them) reads as *unlocked* rather than erroring
+  the rule and denying every comment. It also denies comments on a **quarantined** signal
+  for free: the parent document no longer exists, so the `get()` fails.
+- `isNotTouchingModeration()` — applied to both signal update branches. Load-bearing, not
+  defensive: the reporter branch accepts any field, so without it a reporter clears their
+  own comment lock from a patched client.
+
+`moderators` allows a self-`get` and nothing else — no client write path at all, which is
+what prevents self-promotion, and `list` is denied so the roster cannot be enumerated to
+find whom to target. `reports` is `create`-only (the id *is* the rate limit) with
+moderator-only reads. `moderationActions` is moderator-readable and client-unwritable.
+`moderationQuarantine` has **no match at all** and is denied by default — that absence is
+what makes hiding real rather than cosmetic.
+
 **Known open item (M-1, tracked as HelpAPaw/Flutter#67):** signal/comment creation is
 *not yet* blocked server-side for anonymous callers. The intended clause gates on
 `request.auth.token.email_verified`, which is baked in at token-mint time; the client
@@ -719,6 +787,7 @@ Declarative `GoRouter` configured in `main.dart`; all paths are constants in
 | `/edit_signal/:signalId` | `EditSignalScreen` | |
 | `/new_signal` | `NewSignalWizardPage` | steps 2–7 of the create wizard (§7.4); pushed from the map once the pin is confirmed, and reads its draft from `mapViewModelProvider` |
 | `/clinic_details/:clinicId` | `ClinicDetailsScreen` | |
+| `/moderation` | `ModerationQueuePage` | moderator report queue (§7.16); **no role redirect** — the screen gates itself |
 | `/faqs`, `/feedback`, `/privacy_policy`, `/about` | static pages | |
 
 **Redirect logic:** a signed-in user with a password provider and `emailVerified == false`
@@ -1508,6 +1577,79 @@ Fallbacks, in order of how badly they matter:
 Anonymous users hit the gate on every fresh install. That is accepted, and it is why the
 deep-link exemption matters.
 
+### 7.16 Moderation (master spec §3.6.1, §18)
+
+The first tier of the master spec's governance hierarchy. Scope is the frontline
+moderator: reporting, a queue, and the actions that map onto what this app actually has.
+Behaviour points (§18.4), restrictions/bans (§18.5), appeals (§18.6) and the admin tier
+(§21) are **not** built.
+
+**The role is a document, not a claim.** `moderators/{uid}` is read by `isModerator()` in
+the rules, by the `moderateAction` callable, and by the client for its own badge. An Auth
+custom claim was the obvious alternative and is the wrong one here: it lives in the ID
+token, so a *revocation* would not land until the token expired — up to an hour in which a
+removed moderator keeps every power. It would also be a second copy of the value, which is
+what §12 exists to warn about. Reading a document costs one read on paths that are rare by
+nature, and both grant and revoke take effect on the next request. `watchIsModerator()`
+is a live stream for the same reason: the drawer entry disappears without a restart.
+
+**Reporting.** `showReportDialog` writes a `reports` document directly — an ordinary user
+write with no privilege attached, so routing it through a function would buy nothing. A
+reason is required, free text is optional (a moderator triaging a queue needs the category
+far more than prose, and demanding an explanation is what stops people reporting at all).
+Entry points: a flag in the signal app bar for non-authors, and long-press on a comment.
+This is the affordance `faqReportInappropriateAnswer` had been pointing users at since
+before it existed.
+
+**Actions are Cloud Functions, not rules.** One callable, `moderateAction`, dispatching on
+an `action` field. Every action shares four steps that must never be skipped —
+authorization, note validation, the audit write, and resolving the originating report — so
+a single endpoint makes skipping one a compile error rather than a review question, and
+gives the Dart client one URL (which matters more than usual: see the plain-HTTPS
+transport quirk in §7.14, now shared via `services/callable_client.dart`). **The note is
+mandatory** on every action, for the same reason it is on a status change: the audit log's
+value is the reasoning.
+
+| Action | Effect |
+|---|---|
+| `hideSignal` | moves the signal document to `moderationQuarantine` |
+| `restoreSignal` | writes it back with `moderation.restoredAt` |
+| `setCommentsLocked` | `moderation.commentsLocked`; also enforced in the rules |
+| `setUrgency` | §5.3 urgency correction — **writes an `events` row** |
+| `deleteComment` | deletes one comment |
+| `setLabel` | `moderation.label` — `unverified` / `duplicate` / `disputed` |
+| `resolveReport` | closes a report as actioned/dismissed |
+| `addNote` | audit-only internal note |
+
+**Hiding moves the document; it does not set a flag.** Firestore keeps subcollections when
+a document is deleted, so `comments` and `events` stay where they are and a restore is
+lossless — no recursive copy, no partial-batch risk. The alternative, a `hidden: true`
+field the map query filters on, needed a backfill of every existing signal (a document
+*missing* the field does not match `== false`) plus a composite index — and would have
+hidden the signal from the app and from nobody else, since `signals` is world-readable. A
+document that is not in `signals` is not readable at all: `moderationQuarantine` has no
+client rule match.
+
+Two consequences:
+
+1. **Restoring re-fires the fan-out.** Writing back to `signals/{id}` is a *create*, so
+   `onSignalCreated` runs and would push a months-old signal to everyone in range again.
+   `handleSignalCreated` early-returns on `moderation.restoredAt`. Deliberately a marker
+   rather than a `createdAt` age heuristic — a restore preserves the original `createdAt`,
+   so age cannot tell a restore from a backdated import, and guessing wrong is a mass
+   notification.
+2. **A hidden signal's photos stay publicly readable by URL**, because `storage.rules`
+   grants signal photos `read: true` unconditionally. Recorded in §14.
+
+**The reporter cannot undo moderation.** `isNotTouchingModeration()` denies any client
+write that touches `moderation`, on both the reporter and the status-only branches. This
+is load-bearing, not defensive: the reporter branch accepts *any* field, so without it a
+patched client clears its own comment lock and the lock is decoration.
+
+**`moderateSetUrgency` is the first event the server has ever written**, which is why
+`functions/src/events.ts` now exists — see §12 invariant 5a, which called for exactly that
+along with a parity test.
+
 ---
 
 ## 8. Localization
@@ -1533,6 +1675,7 @@ page is bilingual with a client-side language switch.
 | `searchVetClinics` | callable (App Check) | Places `searchNearby`, key server-side, 30-day cache keyed by precision-5 geohash + km-rounded radius. Radius 0–50 000 m |
 | `getVetClinicDetails` | callable (App Check) | Places details (phone, rating, hours, Maps URI), 30-day cache per placeId |
 | `deleteAccount` | callable (App Check) | Anonymize + tombstone + delete (§7.2) |
+| `moderateAction` | callable (App Check) | **All eight moderator actions** (§7.16). Verifies `moderators/{uid}` server-side, acts, writes a `moderationActions` audit entry and resolves the originating report — implementation in `functions/src/moderation.ts` |
 | `cleanupAnonymousUsers` | schedule `0 3 * * 0` UTC | Deletes anonymous Auth users with no linked providers inactive > **90 days**, clearing Firestore data first so a failed cleanup retries next run. `ANON_CLEANUP_DRY_RUN` flag available |
 | `signalLink` | HTTPS (Hosting rewrite `/signal/**`) | Public share/fallback page (§7.9) |
 
@@ -1700,13 +1843,21 @@ Things that live in more than one place and fail **silently** when they drift.
    title 300, description 10 000, comment 2000, **signal-event note 500**, profile name 100,
    feedback message 1000, email 254. The note pair is guarded by
    `test/signal_event_vocabulary_guard_test.dart`, which parses the rules.
-5a. **Signal-event type vocabulary (×2).** `SignalEventType` (`models/signal_event.dart`) and
-   the `type ==` list inside `isSignalEventCreate()` in `firestore.rules`. The two failure
-   modes are asymmetric: a type the app writes but the rules reject is denied *loudly*,
-   while a type the rules accept but the app cannot read is stored and then **never
-   appears in anyone's history**. Same guard test. There is deliberately no TypeScript
-   copy yet — no function reads or writes `events` — and one should be added, with a
-   parity test, the first time the server writes an event.
+5a. **Signal-event type vocabulary (×3).** `SignalEventType` (`models/signal_event.dart`,
+   source of truth), the `type ==` list inside `isSignalEventCreate()` in
+   `firestore.rules`, and `SIGNAL_EVENT_TYPES` / `SIGNAL_EVENT_KEYS` /
+   `SIGNAL_EVENT_FIELDS` / `MAX_EVENT_NOTE_LENGTH` in `functions/src/events.ts`. The
+   failure modes are asymmetric: a type the app writes but the rules reject is denied
+   *loudly*, while a type the rules accept but the app cannot read is stored and then
+   **never appears in anyone's history**. All guarded by
+   `test/signal_event_vocabulary_guard_test.dart`, which parses both files.
+
+   **The TypeScript copy is the dangerous one**, and it arrived with `moderateSetUrgency`
+   (§7.16) — the first server-written event, which this invariant had been anticipating. A
+   server write goes through the Admin SDK and so **bypasses the rules entirely**: a wrong
+   `type` or a wrong `old*`/`new*` key name is accepted, stored, and then dropped by the
+   Dart decoder on read. The moderator's correction just never appears, and nothing logs
+   it.
 6. **Fan-out radius caps ≥ UI caps.** `MAX_LOCATION_RADIUS_KM` (50) ≥ the slider max;
    `MAX_REGION_RADIUS_KM` (100) ≥ the region slider max.
 7. **`Routes.linkHost` ↔ `LINK_HOST`** (functions) ↔ the Android intent filter host ↔
@@ -1814,6 +1965,11 @@ silently breaks Auth/Firestore/FCM in release builds only.
 | Comment photos | Storage path reserved, no write rule, no UI |
 | `signalLink` push text / server notifications | English only |
 | `Signal.phoneNumber` vs `contactPhone` | Duplicated legacy field, both written with the same value |
+| A hidden signal's photos stay readable by URL | Open — hiding moves the Firestore document to quarantine, but `storage.rules` grants `signals/{id}/photos/**` `read: true` unconditionally, so anyone holding a photo URL keeps it. Closing it means gating photo reads on the parent document existing, which costs a cross-service `firestore.get` on every photo load (§7.16) |
+| A hidden signal's comments and events stay readable | Open, and the flip side of what makes a restore lossless: subcollections survive the document's deletion, and `comments`/`events` are `read: if true`. Requires the signal id to exploit |
+| Moderator appointment is a terminal script | By design until the admin tier exists — spec §3.6 puts appointment above the moderator level. `functions/scripts/grant_moderator.js` |
+| No behaviour points, restrictions, bans or appeals | Deliberately out of scope for the first moderation slice (master spec §18.4–18.6) |
+| Moderator actions are not notified to the affected user | Open — master spec §18.7 says users are told when a behaviour flag is added. Nothing writes an inbox entry for a hide/lock/label yet |
 
 ---
 
@@ -1830,4 +1986,5 @@ silently breaks Auth/Firestore/FCM in release builds only.
 | 2026-08-04 | Enabled real `badge: N` in the fan-out (F-008 closed). Owner accepted the known consequence that pre-release iOS builds have no reset path, so their badge climbs monotonically. §7.13, §14. |
 | 2026-08-12 | **Built the help-tag system.** One nine-code vocabulary shared by signals (`helpNeededTags`, 1–3, mandatory) and users (`helperTags`, ≥1), plus `animalType` as an independent axis rather than species-crossed tags. The fan-out is now prioritise-then-backfill: all tag matches in radius are notified, then C→B→D nearest-first up to `MIN_RECIPIENTS` (lowered to 10 before release), with one widened re-scan at 250 km when the pool is thin — ranking extracted to `recipientSelection.ts` with 20 unit tests (the first tests `functions/` has had). Non-skippable onboarding gate implemented as a widget wrapper on the map route, not a router redirect; a failed preferences read renders the app rather than locking the user out. Settings now require ≥1 animal type and helper tag while enabled, and "Deselect all" is gone (stored empty `signalTypes` still means none and is never migrated). Rules validate the new fields but do **not** require them — tightening is a later, separate deploy. §4.1, §4.2, §4.7, §5.1, §7.4, §7.5, §7.6, §7.15, §9, §12. |
 | 2026-08-15 | **Built the signal timeline (master spec §4.6, "Case Timeline").** Status and urgency changes now require a mandatory update note and are written to a new `signals/{id}/events` subcollection instead of `comments` — the two differ in who may write them (later event types must be server-written) and who may delete them, and mixing them was also counting status changes as comments on the profile screen. The details screen merges both collections into one chronological history, opened by a synthetic "reported this signal" row derived from the signal document, with All/Events filter chips. Nothing is backfilled: legacy system entries stay in `comments` and keep rendering, and `handleCommentCreated`'s type guard stays with them. Rules validate a closed event vocabulary with a **required** 1–500 char note, deny updates, and (for now) still let the reporter delete events so the client-side delete cascade works — the tamper hole is recorded as a known gap, HelpAPaw/Flutter#68. No functions change. §4.1, §5.1, §7.5, §12, §14. |
+| 2026-08-17 | **Built the moderator role (master spec §3.6.1, §18)** — the first tier of the governance hierarchy, and the thing three separate code comments had been deferring to (`firestore.rules` on `isStatusOnlyUpdate`, the urgency picker, and §14 of this document). Role is a server-only `moderators/{uid}` **document, not an Auth custom claim**: a claim survives in the ID token until it expires, so a revoked moderator would keep every power for up to an hour, and it would be a second copy of the value. User reporting (`reports`, 12 reasons from §18.1) writes directly with a **deterministic document id as the rate limit** — `create` allowed, `update` denied, so one report per user per target needs no throttle collection. All eight moderator actions go through one `moderateAction` callable so the authorization check, the mandatory note, the unforgeable `moderationActions` audit entry and the report resolution cannot be skipped per-branch. **Hiding moves the signal document to `moderationQuarantine`** rather than setting a flag: subcollections survive a document delete, so a restore is lossless, and no client rule match means genuinely unreadable — where a `hidden: true` field would have needed a backfill of every signal plus an index, and hidden it from the app and nobody else. Two traps handled: restoring re-fires `onSignalCreated` (guarded on `moderation.restoredAt`), and the reporter could otherwise clear their own moderation (`isNotTouchingModeration` on both update branches). Invariant 5a came due — `moderateSetUrgency` is the first server-written event, so `functions/src/events.ts` and its parity test now exist. The plain-HTTPS callable transport (§7.14) was extracted to `services/callable_client.dart` on its third call site. 191 rules tests, 202 Dart tests, 48 functions tests. §4.1, §5.1, §6, §7.16, §9, §11, §12, §14. |
 | 2026-08-15 | **Folded `signalType` into the help-tag vocabulary.** Four of its seven values restated fields that now exist in their own right (Emergency = red urgency, Blood donation / Unneutered animals = tags, Wild animals = `animalType`), so reporters answered the same question twice and the answers could contradict. The deciding case was an injured animal, which master spec §5 makes the worked example of Red urgency and gives no category at all. `helpNeededTags[0]` is now the case's category (master spec §4.2); the vocabulary grew to 13 with `bloodDonation`, `neutering`, `lostFound` and `dangerWarning`. Push and inbox text is now urgency + the primary tag's "needed" form ("Urgent · Rescue needed — …"), as a second localized label per tag rather than a `+ " needed"` suffix, because Bulgarian does not build that phrase by suffixing. The `signalTypes` notification gate is gone — **removing the only negative filter users had** (§4.2), which cost nothing because no user had ever excluded a type. The map filter sheet swapped its type section for tag + species, closing the browse-vs-notify asymmetry. No migration: `signalType` is simply never read, and the four production signals predating tags were fixed by hand. §4.2, §4.4, §4.7, §5.1, §7.4, §7.13, §9, §12. |

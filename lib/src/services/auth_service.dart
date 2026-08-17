@@ -1,13 +1,10 @@
-import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 
+import 'callable_client.dart';
 import 'notification_service.dart';
 import 'public_profile_service.dart';
 
@@ -437,41 +434,21 @@ class AuthService {
       throw Exception('No current user');
     }
 
-    final projectId = Firebase.app().options.projectId;
-    final url =
-        'https://us-central1-$projectId.cloudfunctions.net/deleteAccount';
-
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-    };
-
-    final idToken = await user.getIdToken();
-    if (idToken != null) {
-      headers['Authorization'] = 'Bearer $idToken';
-    }
-
-    try {
-      final appCheckToken = await FirebaseAppCheck.instance.getToken();
-      if (appCheckToken != null) {
-        headers['X-Firebase-AppCheck'] = appCheckToken;
-      }
-    } catch (e) {
-      debugPrint('App Check token error: $e');
-    }
-
     FirebaseCrashlytics.instance.log('Auth: Deleting account');
 
-    final response = await http
-        .post(
-          Uri.parse(url),
-          headers: headers,
-          body: jsonEncode({'data': <String, dynamic>{}}),
-        )
-        .timeout(const Duration(seconds: 30));
-
-    if (response.statusCode != 200) {
-      debugPrint(
-          'Delete account failed: ${response.statusCode} ${response.body}');
+    try {
+      // 30s rather than the default 15: deleteAccount anonymizes every signal
+      // the user ever reported and walks three collections before it returns.
+      await CallableClient.call(
+        'deleteAccount',
+        <String, dynamic>{},
+        timeout: const Duration(seconds: 30),
+      );
+    } on CallableException catch (e) {
+      debugPrint('Delete account failed: ${e.code} ${e.message}');
+      // Rethrown as a plain Exception to keep this method's contract: callers
+      // catch broadly and show `l10n.deleteAccountError`, and the server's
+      // English text must not reach the user.
       throw Exception('Failed to delete account. Please try again.');
     }
   }

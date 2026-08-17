@@ -346,6 +346,52 @@ for (const coll of ['signals', 'signals_test']) {
       const reporter = testEnv.authenticatedContext(REPORTER).firestore();
       await assertSucceeds(deleteDoc(doc(reporter, commentsPath, 'c2')));
     });
+
+    // Moderation (spec 18.3, "Lock comments"). The lock lives on the parent
+    // signal's `moderation` map, so these exercise isCommentsLocked().
+    it('denies comments when a moderator has locked them — for everyone, reporter included', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, coll, SIGNAL), {
+          ...signalDoc(db, REPORTER),
+          moderation: { commentsLocked: true },
+        });
+      });
+
+      const bystander = testEnv.authenticatedContext(OTHER).firestore();
+      await assertFails(addDoc(collection(bystander, commentsPath), commentDoc(bystander, OTHER)));
+
+      const reporter = testEnv.authenticatedContext(REPORTER).firestore();
+      await assertFails(addDoc(collection(reporter, commentsPath), commentDoc(reporter, REPORTER)));
+    });
+
+    it('allows comments again once the lock is cleared', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, coll, SIGNAL), {
+          ...signalDoc(db, REPORTER),
+          moderation: { commentsLocked: false },
+        });
+      });
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+      await assertSucceeds(addDoc(collection(db, commentsPath), commentDoc(db, OTHER)));
+    });
+
+    // Every signal written before this feature has no `moderation` map at all.
+    // If the nested get() defaults were wrong, this would deny every comment in
+    // production — the loudest possible regression, so it gets its own test.
+    it('treats a signal with no moderation map as unlocked', async () => {
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+      await assertSucceeds(addDoc(collection(db, commentsPath), commentDoc(db, OTHER)));
+    });
+
+    it('denies comments on a quarantined signal (parent document gone)', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await deleteDoc(doc(ctx.firestore(), coll, SIGNAL));
+      });
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+      await assertFails(addDoc(collection(db, commentsPath), commentDoc(db, OTHER)));
+    });
   });
 
   describe(`${coll} — events (signal timeline)`, () => {
@@ -598,6 +644,63 @@ for (const coll of ['signals', 'signals_test']) {
 
       const reporter = testEnv.authenticatedContext(REPORTER).firestore();
       await assertSucceeds(deleteDoc(doc(reporter, coll, SIGNAL)));
+    });
+
+    // isNotTouchingModeration(). The reporter branch of the update rule accepts
+    // any field, so these are the whole of the guarantee that a moderator's
+    // decision survives contact with the reported user. Without them the
+    // comment lock and the warning label are decoration: the reporter clears
+    // them from a patched client and nothing anywhere records that it happened.
+    describe('moderation field is server-owned', () => {
+      beforeEach(async () => {
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+          const db = ctx.firestore();
+          await setDoc(doc(db, coll, SIGNAL), {
+            ...signalDoc(db, REPORTER),
+            moderation: { commentsLocked: true, label: 'disputed' },
+          });
+        });
+      });
+
+      it('stops the reporter clearing their own comment lock', async () => {
+        const db = testEnv.authenticatedContext(REPORTER).firestore();
+        await assertFails(
+          updateDoc(doc(db, coll, SIGNAL), { moderation: { commentsLocked: false } }),
+        );
+        await assertFails(updateDoc(doc(db, coll, SIGNAL), { 'moderation.commentsLocked': false }));
+      });
+
+      it('stops the reporter removing a warning label or the whole map', async () => {
+        const db = testEnv.authenticatedContext(REPORTER).firestore();
+        await assertFails(updateDoc(doc(db, coll, SIGNAL), { 'moderation.label': null }));
+        await assertFails(updateDoc(doc(db, coll, SIGNAL), { moderation: {} }));
+      });
+
+      it('stops the reporter smuggling it in alongside a legitimate edit', async () => {
+        const db = testEnv.authenticatedContext(REPORTER).firestore();
+        await assertFails(
+          updateDoc(doc(db, coll, SIGNAL), {
+            title: 'Updated',
+            moderation: { commentsLocked: false },
+          }),
+        );
+      });
+
+      it('stops a non-reporter inventing a moderation map alongside a status change', async () => {
+        const db = testEnv.authenticatedContext(OTHER).firestore();
+        await assertFails(
+          updateDoc(doc(db, coll, SIGNAL), {
+            status: 1,
+            lastUpdatedBy: doc(db, 'users', OTHER),
+            moderation: { commentsLocked: false },
+          }),
+        );
+      });
+
+      it('still lets the reporter edit everything else on a moderated signal', async () => {
+        const db = testEnv.authenticatedContext(REPORTER).firestore();
+        await assertSucceeds(updateDoc(doc(db, coll, SIGNAL), { title: 'Updated' }));
+      });
     });
   });
 }
@@ -1018,5 +1121,245 @@ describe('userCounters', () => {
     await assertFails(setDoc(ref, { unread: -1 }));
     await assertFails(setDoc(ref, { unread: 'many' }));
     await assertFails(setDoc(ref, { unread: 1, role: 'admin' }));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Moderation (master spec 3.6.1, 18)
+// ---------------------------------------------------------------------------
+
+const MOD = 'moderator-uid';
+
+/** Grants MOD the moderator role, bypassing the (deliberately absent) write rule. */
+async function seedModerator(uid = MOD) {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'moderators', uid), {
+      grantedAt: new Date(),
+      grantedBy: 'owner-uid',
+    });
+  });
+}
+
+/** A report as `ModerationService.report` writes it. */
+function reportDoc(uid, overrides = {}) {
+  return {
+    targetType: 'signal',
+    targetId: 'signal-1',
+    signalId: 'signal-1',
+    collection: 'signals',
+    reason: 'spam',
+    details: 'Posted the same thing four times.',
+    reporterId: uid,
+    reportedUserId: OTHER,
+    status: 'open',
+    testMode: false,
+    createdAt: new Date(),
+    ...overrides,
+  };
+}
+
+/** The deterministic id that enforces one report per user per target. */
+function reportId(uid, data) {
+  return `${uid}_${data.targetType}_${data.targetId}`;
+}
+
+describe('moderators roster', () => {
+  beforeEach(() => testEnv.clearFirestore());
+
+  it('lets a user read their own moderator document', async () => {
+    await seedModerator();
+    const db = testEnv.authenticatedContext(MOD).firestore();
+    await assertSucceeds(getDoc(doc(db, 'moderators', MOD)));
+  });
+
+  it("denies reading someone else's moderator document", async () => {
+    await seedModerator();
+    const db = testEnv.authenticatedContext(OTHER).firestore();
+    await assertFails(getDoc(doc(db, 'moderators', MOD)));
+  });
+
+  it('denies listing the roster, even to a moderator', async () => {
+    await seedModerator();
+    const db = testEnv.authenticatedContext(MOD).firestore();
+    await assertFails(getDocs(collection(db, 'moderators')));
+  });
+
+  it('denies self-promotion — nobody may write the roster', async () => {
+    const db = testEnv.authenticatedContext(OTHER).firestore();
+    await assertFails(setDoc(doc(db, 'moderators', OTHER), { grantedAt: new Date() }));
+  });
+
+  it('denies a moderator promoting someone else or revoking themselves', async () => {
+    await seedModerator();
+    const db = testEnv.authenticatedContext(MOD).firestore();
+    await assertFails(setDoc(doc(db, 'moderators', OTHER), { grantedAt: new Date() }));
+    await assertFails(deleteDoc(doc(db, 'moderators', MOD)));
+  });
+});
+
+describe('reports', () => {
+  beforeEach(() => testEnv.clearFirestore());
+
+  it('lets a signed-in user file a report at its deterministic id', async () => {
+    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const data = reportDoc(REPORTER);
+    await assertSucceeds(setDoc(doc(db, 'reports', reportId(REPORTER, data)), data));
+  });
+
+  it('rejects an unauthenticated report', async () => {
+    const db = testEnv.unauthenticatedContext().firestore();
+    const data = reportDoc(REPORTER);
+    await assertFails(setDoc(doc(db, 'reports', reportId(REPORTER, data)), data));
+  });
+
+  it('rejects a report attributed to someone else (no framing)', async () => {
+    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const data = reportDoc(OTHER);
+    await assertFails(setDoc(doc(db, 'reports', reportId(OTHER, data)), data));
+  });
+
+  it('rejects an id that does not match uid_targetType_targetId', async () => {
+    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const data = reportDoc(REPORTER);
+    await assertFails(setDoc(doc(db, 'reports', 'a-random-id'), data));
+    await assertFails(addDoc(collection(db, 'reports'), data));
+  });
+
+  it('rate-limits by id: a second report of the same target is denied', async () => {
+    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const data = reportDoc(REPORTER);
+    const ref = doc(db, 'reports', reportId(REPORTER, data));
+    await assertSucceeds(setDoc(ref, data));
+    await assertFails(setDoc(ref, { ...data, reason: 'fraud' }));
+    await assertFails(updateDoc(ref, { reason: 'fraud' }));
+  });
+
+  it('lets the same user report a different target, and another user report the same one', async () => {
+    const mine = testEnv.authenticatedContext(REPORTER).firestore();
+    const first = reportDoc(REPORTER);
+    await assertSucceeds(setDoc(doc(mine, 'reports', reportId(REPORTER, first)), first));
+
+    const second = reportDoc(REPORTER, { targetId: 'signal-2', signalId: 'signal-2' });
+    await assertSucceeds(setDoc(doc(mine, 'reports', reportId(REPORTER, second)), second));
+
+    const theirs = testEnv.authenticatedContext(OTHER).firestore();
+    const third = reportDoc(OTHER);
+    await assertSucceeds(setDoc(doc(theirs, 'reports', reportId(OTHER, third)), third));
+  });
+
+  it('rejects a report that opens in any status but "open"', async () => {
+    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const data = reportDoc(REPORTER, { status: 'dismissed' });
+    await assertFails(setDoc(doc(db, 'reports', reportId(REPORTER, data)), data));
+  });
+
+  it('rejects an unknown targetType or collection', async () => {
+    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const badType = reportDoc(REPORTER, { targetType: 'fundraiser' });
+    await assertFails(setDoc(doc(db, 'reports', reportId(REPORTER, badType)), badType));
+    const badColl = reportDoc(REPORTER, { collection: 'users' });
+    await assertFails(setDoc(doc(db, 'reports', reportId(REPORTER, badColl)), badColl));
+  });
+
+  it('accepts 1000-char details and rejects 1001', async () => {
+    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const ok = reportDoc(REPORTER, { details: 'a'.repeat(1000) });
+    await assertSucceeds(setDoc(doc(db, 'reports', reportId(REPORTER, ok)), ok));
+    const tooLong = reportDoc(REPORTER, { targetId: 'signal-9', details: 'a'.repeat(1001) });
+    await assertFails(setDoc(doc(db, 'reports', reportId(REPORTER, tooLong)), tooLong));
+  });
+
+  it('accepts a reason this ruleset has never heard of (newer client)', async () => {
+    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const data = reportDoc(REPORTER, { reason: 'someFutureReason' });
+    await assertSucceeds(setDoc(doc(db, 'reports', reportId(REPORTER, data)), data));
+  });
+
+  it('rejects unknown fields', async () => {
+    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const data = reportDoc(REPORTER, { moderatorNote: 'sneaky' });
+    await assertFails(setDoc(doc(db, 'reports', reportId(REPORTER, data)), data));
+  });
+
+  it('denies reads to the reporter and to any non-moderator', async () => {
+    const data = reportDoc(REPORTER);
+    const id = reportId(REPORTER, data);
+    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    await assertSucceeds(setDoc(doc(db, 'reports', id), data));
+    await assertFails(getDoc(doc(db, 'reports', id)));
+    await assertFails(getDocs(collection(db, 'reports')));
+  });
+
+  it('lets a moderator read and list reports', async () => {
+    await seedModerator();
+    const data = reportDoc(REPORTER);
+    const id = reportId(REPORTER, data);
+    const reporterDb = testEnv.authenticatedContext(REPORTER).firestore();
+    await assertSucceeds(setDoc(doc(reporterDb, 'reports', id), data));
+
+    const modDb = testEnv.authenticatedContext(MOD).firestore();
+    await assertSucceeds(getDoc(doc(modDb, 'reports', id)));
+    await assertSucceeds(getDocs(collection(modDb, 'reports')));
+  });
+
+  it('denies a moderator resolving a report directly — that must go through a callable', async () => {
+    await seedModerator();
+    const data = reportDoc(REPORTER);
+    const id = reportId(REPORTER, data);
+    const reporterDb = testEnv.authenticatedContext(REPORTER).firestore();
+    await assertSucceeds(setDoc(doc(reporterDb, 'reports', id), data));
+
+    const modDb = testEnv.authenticatedContext(MOD).firestore();
+    await assertFails(updateDoc(doc(modDb, 'reports', id), { status: 'dismissed' }));
+    await assertFails(deleteDoc(doc(modDb, 'reports', id)));
+  });
+});
+
+describe('moderationActions audit log', () => {
+  beforeEach(() => testEnv.clearFirestore());
+
+  it('lets a moderator read the log', async () => {
+    await seedModerator();
+    const db = testEnv.authenticatedContext(MOD).firestore();
+    await assertSucceeds(getDocs(collection(db, 'moderationActions')));
+  });
+
+  it('denies reads to everyone else', async () => {
+    const db = testEnv.authenticatedContext(OTHER).firestore();
+    await assertFails(getDocs(collection(db, 'moderationActions')));
+  });
+
+  it('is unforgeable — not even a moderator may write it', async () => {
+    await seedModerator();
+    const db = testEnv.authenticatedContext(MOD).firestore();
+    await assertFails(
+      addDoc(collection(db, 'moderationActions'), {
+        action: 'hideSignal',
+        moderatorId: MOD,
+        createdAt: new Date(),
+      }),
+    );
+  });
+});
+
+describe('moderationQuarantine', () => {
+  beforeEach(() => testEnv.clearFirestore());
+
+  it('is denied to every client, moderators included', async () => {
+    await seedModerator();
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'moderationQuarantine', 'signals__signal-1'), {
+        collection: 'signals',
+        signalId: 'signal-1',
+        hiddenAt: new Date(),
+      });
+    });
+
+    const modDb = testEnv.authenticatedContext(MOD).firestore();
+    await assertFails(getDoc(doc(modDb, 'moderationQuarantine', 'signals__signal-1')));
+    await assertFails(getDocs(collection(modDb, 'moderationQuarantine')));
+
+    const anyDb = testEnv.authenticatedContext(OTHER).firestore();
+    await assertFails(getDoc(doc(anyDb, 'moderationQuarantine', 'signals__signal-1')));
   });
 });

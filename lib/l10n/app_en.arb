@@ -683,5 +683,61 @@
   "locationAlwaysPermissionRequired": "To be notified while the app is closed, allow location access \"Always\" in Settings. With \"While Using the App\" we can only check when the app is open.",
   "@locationAlwaysPermissionRequired": {
     "description": "Shown when the user grants only while-in-use location permission but background monitoring needs always-on access"
-  }
+  },
+
+  "reportSignal": "Report this signal",
+  "reportComment": "Report this comment",
+  "reportTitle": "Report",
+  "reportReasonPrompt": "What is wrong with this?",
+  "reportDetailsLabel": "Anything else we should know? (optional)",
+  "reportSubmit": "Send report",
+  "reportSubmitted": "Thank you. A moderator will review this.",
+  "reportAlreadySubmitted": "You have already reported this.",
+  "reportFailed": "Could not send the report. Please try again.",
+  "reportSignInRequired": "Please sign in to report content.",
+
+  "reportReasonFraud": "Fraud or scam",
+  "reportReasonAbuse": "Animal abuse or neglect",
+  "reportReasonHarassment": "Harassment",
+  "reportReasonFalseInformation": "False information",
+  "reportReasonDangerousAdvice": "Dangerous advice",
+  "reportReasonAnimalEndangerment": "Puts an animal in danger",
+  "reportReasonGraphicContent": "Graphic or distressing content",
+  "reportReasonSpam": "Spam",
+  "reportReasonDoxxing": "Shares private details",
+  "reportReasonDefamationRisk": "Public accusation about a person",
+  "reportReasonDuplicateCase": "Duplicate of another signal",
+  "reportReasonOther": "Something else",
+
+  "moderation": "Moderation",
+  "moderationQueue": "Reports",
+  "moderationQueueEmpty": "No open reports.",
+  "moderationNotAModerator": "You do not have moderator access.",
+  "moderationReportedBy": "Reported {count} times",
+  "@moderationReportedBy": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "moderationOpenTarget": "Open",
+  "moderationNoteLabel": "Why are you doing this? (required)",
+  "moderationNoteRequired": "A note is required.",
+  "moderationActionApplied": "Done.",
+  "moderationActionFailed": "That did not work. Please try again.",
+  "moderationPermissionDenied": "You no longer have moderator access.",
+
+  "moderationHideSignal": "Hide signal",
+  "moderationRestoreSignal": "Restore signal",
+  "moderationLockComments": "Lock comments",
+  "moderationUnlockComments": "Unlock comments",
+  "moderationSetUrgency": "Correct urgency",
+  "moderationDeleteComment": "Delete comment",
+  "moderationSetLabel": "Add warning label",
+  "moderationClearLabel": "Remove warning label",
+  "moderationDismissReport": "Dismiss report",
+  "moderationAddNote": "Add internal note",
+
+  "moderationLabelUnverified": "Unverified",
+  "moderationLabelDuplicate": "Possible duplicate",
+  "moderationLabelDisputed": "Disputed",
+  "moderationCommentsLocked": "A moderator has locked comments on this signal.",
+  "moderationBadge": "Moderator"
 }
