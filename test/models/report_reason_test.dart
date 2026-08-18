@@ -29,20 +29,19 @@ void main() {
       expect(ReportReason.fromCode(''), isNull);
     });
 
-    test('contain no separator that would corrupt a report id', () {
-      // The id is `{uid}_{targetType}_{targetId}`. A code containing the
-      // separator is not itself a problem today (reason is not in the id), but
-      // targetType is — and these two vocabularies are edited together.
-      for (final type in ReportTargetType.values) {
-        expect(type.code.contains('_'), isFalse,
-            reason: 'A targetType containing "_" makes the report id '
-                'ambiguous, and firestore.rules reconstructs that id exactly.');
-      }
-    });
   });
 
   group('ReportTarget', () {
     const collection = 'signals';
+
+    test('target type codes contain no separator that would corrupt an id', () {
+      // The id is `{uid}_{targetType}_{targetId}`, and firestore.rules
+      // reconstructs it exactly. A targetType containing "_" makes that id
+      // ambiguous.
+      for (final type in ReportTargetType.values) {
+        expect(type.code.contains('_'), isFalse);
+      }
+    });
 
     test('a signal report points at itself', () {
       final target = ReportTarget.signal(

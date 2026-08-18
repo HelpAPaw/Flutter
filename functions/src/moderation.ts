@@ -27,7 +27,11 @@
 import * as admin from "firebase-admin";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 
-import { buildEventData, MAX_EVENT_NOTE_LENGTH } from "./events";
+import {
+  buildEventData,
+  MAX_EVENT_NOTE_LENGTH,
+  SIGNAL_EVENT_FIELDS,
+} from "./events";
 
 /**
  * Lazy handle on Firestore.
@@ -123,7 +127,7 @@ function requireSignalCollection(raw: unknown): SignalCollection {
   return raw as SignalCollection;
 }
 
-function requireId(raw: unknown, what: string): string {
+export function requireId(raw: unknown, what: string): string {
   if (typeof raw !== "string" || raw.length === 0 || raw.length > 200) {
     throw new HttpsError("invalid-argument", `Missing or invalid ${what}.`);
   }
@@ -141,6 +145,37 @@ function requireId(raw: unknown, what: string): string {
 /** Quarantine document id. Namespaced so both collections can share it. */
 function quarantineId(collection: SignalCollection, signalId: string): string {
   return `${collection}__${signalId}`;
+}
+
+/**
+ * Validates a signal-targeting action's arguments and loads the signal.
+ *
+ * Four branches used to repeat this preamble — validate collection, validate
+ * id, `get()`, throw `not-found` — each with its own copy of the message and
+ * its own chance to forget the existence check. One helper means a new signal
+ * action cannot skip it.
+ */
+async function loadSignal(data: Record<string, unknown>): Promise<{
+  collection: SignalCollection;
+  signalId: string;
+  ref: FirebaseFirestore.DocumentReference;
+  snapshot: FirebaseFirestore.DocumentSnapshot;
+}> {
+  const collection = requireSignalCollection(data.collection);
+  const signalId = requireId(data.signalId, "signal id");
+  const ref = db().collection(collection).doc(signalId);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) {
+    throw new HttpsError("not-found", "That signal no longer exists.");
+  }
+  return { collection, signalId, ref, snapshot };
+}
+
+/** The `moderation` map on a loaded signal, or an empty one. */
+function moderationOf(
+  snapshot: FirebaseFirestore.DocumentSnapshot
+): Record<string, unknown> {
+  return (snapshot.data()?.moderation ?? {}) as Record<string, unknown>;
 }
 
 /**
@@ -285,14 +320,7 @@ async function hideSignal(
   data: Record<string, unknown>,
   batch: FirebaseFirestore.WriteBatch
 ): Promise<ActionResult> {
-  const collection = requireSignalCollection(data.collection);
-  const signalId = requireId(data.signalId, "signal id");
-
-  const ref = db().collection(collection).doc(signalId);
-  const snapshot = await ref.get();
-  if (!snapshot.exists) {
-    throw new HttpsError("not-found", "That signal no longer exists.");
-  }
+  const { collection, signalId, ref, snapshot } = await loadSignal(data);
 
   batch.set(db().collection(QUARANTINE_COLLECTION).doc(quarantineId(collection, signalId)), {
     data: snapshot.data(),
@@ -305,10 +333,11 @@ async function hideSignal(
   batch.delete(ref);
 
   return {
+    // No before/after: `action: "hideSignal"` already says it, and a summary
+    // that restates the action name reads like observed prior state.
     targetType: "signal",
     targetId: signalId,
     collection,
-    after: { hidden: true },
   };
 }
 
@@ -371,7 +400,6 @@ async function restoreSignal(
     targetType: "signal",
     targetId: signalId,
     collection,
-    after: { hidden: false },
   };
 }
 
@@ -380,20 +408,11 @@ async function setCommentsLocked(
   data: Record<string, unknown>,
   batch: FirebaseFirestore.WriteBatch
 ): Promise<ActionResult> {
-  const collection = requireSignalCollection(data.collection);
-  const signalId = requireId(data.signalId, "signal id");
   if (typeof data.locked !== "boolean") {
     throw new HttpsError("invalid-argument", "`locked` must be a boolean.");
   }
-
-  const ref = db().collection(collection).doc(signalId);
-  const snapshot = await ref.get();
-  if (!snapshot.exists) {
-    throw new HttpsError("not-found", "That signal no longer exists.");
-  }
-  const before =
-    (snapshot.data()?.moderation as Record<string, unknown> | undefined)
-      ?.commentsLocked === true;
+  const { collection, signalId, ref, snapshot } = await loadSignal(data);
+  const before = moderationOf(snapshot).commentsLocked === true;
 
   batch.update(ref, { "moderation.commentsLocked": data.locked });
 
@@ -426,8 +445,6 @@ async function setUrgency(
   data: Record<string, unknown>,
   batch: FirebaseFirestore.WriteBatch
 ): Promise<ActionResult> {
-  const collection = requireSignalCollection(data.collection);
-  const signalId = requireId(data.signalId, "signal id");
   const urgency = data.urgency;
   if (
     typeof urgency !== "number" ||
@@ -441,16 +458,19 @@ async function setUrgency(
     );
   }
 
-  const ref = db().collection(collection).doc(signalId);
-  const snapshot = await ref.get();
-  if (!snapshot.exists) {
-    throw new HttpsError("not-found", "That signal no longer exists.");
-  }
+  const { collection, signalId, ref, snapshot } = await loadSignal(data);
   const previous = snapshot.data()?.urgency;
   const oldValue = typeof previous === "number" ? previous : MIN_URGENCY;
 
   const actor = db().collection("users").doc(uid);
-  batch.update(ref, { urgency, lastUpdatedBy: actor });
+  // Field name from the shared table rather than a literal, so the event and
+  // the field it describes can never disagree — that table is the guarded copy
+  // of the mapping (test/signal_event_vocabulary_guard_test.dart), and until
+  // now nothing in production actually read it.
+  batch.update(ref, {
+    [SIGNAL_EVENT_FIELDS.urgency_change]: urgency,
+    lastUpdatedBy: actor,
+  });
   batch.set(
     ref.collection("events").doc(),
     buildEventData("urgency_change", {
@@ -508,21 +528,13 @@ async function setLabel(
   data: Record<string, unknown>,
   batch: FirebaseFirestore.WriteBatch
 ): Promise<ActionResult> {
-  const collection = requireSignalCollection(data.collection);
-  const signalId = requireId(data.signalId, "signal id");
   const label = data.label ?? null;
   if (label !== null && !MODERATION_LABELS.includes(label as ModerationLabel)) {
     throw new HttpsError("invalid-argument", "Unknown moderation label.");
   }
 
-  const ref = db().collection(collection).doc(signalId);
-  const snapshot = await ref.get();
-  if (!snapshot.exists) {
-    throw new HttpsError("not-found", "That signal no longer exists.");
-  }
-  const before =
-    (snapshot.data()?.moderation as Record<string, unknown> | undefined)
-      ?.label ?? null;
+  const { collection, signalId, ref, snapshot } = await loadSignal(data);
+  const before = moderationOf(snapshot).label ?? null;
 
   batch.update(ref, {
     "moderation.label": label,

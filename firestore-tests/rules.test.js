@@ -1130,12 +1130,11 @@ describe('userCounters', () => {
 
 const MOD = 'moderator-uid';
 
-// These blocks sit outside the `for (const coll of …)` loop above because the
-// moderation collections are top-level and collection-independent. Where a
-// signal is still needed, the production collection stands in for both — the
-// rules under test here (ownership, the moderation field, the comment lock) are
-// byte-identical across the two, and the loop already covers that.
-const coll0 = 'signals';
+// The blocks below sit outside the `for (const coll of …)` loop because the
+// moderation collections are top-level. Where a signal is still needed they use
+// 'signals' directly: the rules under test there (ownership, the moderation
+// field, the comment lock) are byte-identical across both collections, and the
+// loop already covers that.
 
 /** Grants MOD the moderator role, bypassing the (deliberately absent) write rule. */
 async function seedModerator(uid = MOD) {
@@ -1342,7 +1341,7 @@ describe('a moderator is still an ordinary user', () => {
       const db = ctx.firestore();
       // A signal owned by someone else, carrying moderation the moderator
       // themselves might have applied.
-      await setDoc(doc(db, coll0, SIGNAL), {
+      await setDoc(doc(db, 'signals', SIGNAL), {
         ...signalDoc(db, REPORTER),
         moderation: { label: 'disputed' },
       });
@@ -1353,14 +1352,14 @@ describe('a moderator is still an ordinary user', () => {
     const db = testEnv.authenticatedContext(MOD).firestore();
 
     // Create a signal of their own.
-    await assertSucceeds(addDoc(collection(db, coll0), signalDoc(db, MOD)));
+    await assertSucceeds(addDoc(collection(db, 'signals'), signalDoc(db, MOD)));
     // Comment on someone else's.
     await assertSucceeds(
-      addDoc(collection(db, `${coll0}/${SIGNAL}/comments`), commentDoc(db, MOD)),
+      addDoc(collection(db, `${'signals'}/${SIGNAL}/comments`), commentDoc(db, MOD)),
     );
     // Advance status on someone else's, self-stamping like any volunteer.
     await assertSucceeds(
-      updateDoc(doc(db, coll0, SIGNAL), {
+      updateDoc(doc(db, 'signals', SIGNAL), {
         status: 1,
         lastUpdatedBy: doc(db, 'users', MOD),
       }),
@@ -1374,21 +1373,21 @@ describe('a moderator is still an ordinary user', () => {
     const db = testEnv.authenticatedContext(MOD).firestore();
 
     // Cannot rewrite a stranger's signal…
-    await assertFails(updateDoc(doc(db, coll0, SIGNAL), { title: 'Vandalised' }));
+    await assertFails(updateDoc(doc(db, 'signals', SIGNAL), { title: 'Vandalised' }));
     // …nor delete it…
-    await assertFails(deleteDoc(doc(db, coll0, SIGNAL)));
+    await assertFails(deleteDoc(doc(db, 'signals', SIGNAL)));
     // …nor set its urgency, which is exactly the power spec 5.3 grants them.
     // They have it ONLY through moderateAction, so that it is audit-logged.
-    await assertFails(updateDoc(doc(db, coll0, SIGNAL), { urgency: 0 }));
+    await assertFails(updateDoc(doc(db, 'signals', SIGNAL), { urgency: 0 }));
     // …nor delete a stranger's comment.
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       const admin = ctx.firestore();
       await setDoc(
-        doc(admin, `${coll0}/${SIGNAL}/comments`, 'c1'),
+        doc(admin, `${'signals'}/${SIGNAL}/comments`, 'c1'),
         commentDoc(admin, REPORTER),
       );
     });
-    await assertFails(deleteDoc(doc(db, `${coll0}/${SIGNAL}/comments`, 'c1')));
+    await assertFails(deleteDoc(doc(db, `${'signals'}/${SIGNAL}/comments`, 'c1')));
   });
 
   it('cannot edit the moderation field from the client, even their own', async () => {
@@ -1397,18 +1396,18 @@ describe('a moderator is still an ordinary user', () => {
     // the one thing routing actions through a callable exists to prevent.
     const db = testEnv.authenticatedContext(MOD).firestore();
     await assertFails(
-      updateDoc(doc(db, coll0, SIGNAL), { 'moderation.label': null }),
+      updateDoc(doc(db, 'signals', SIGNAL), { 'moderation.label': null }),
     );
 
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       const admin = ctx.firestore();
-      await setDoc(doc(admin, coll0, 'own-signal'), {
+      await setDoc(doc(admin, 'signals', 'own-signal'), {
         ...signalDoc(admin, MOD),
         moderation: { commentsLocked: true },
       });
     });
     await assertFails(
-      updateDoc(doc(db, coll0, 'own-signal'), {
+      updateDoc(doc(db, 'signals', 'own-signal'), {
         moderation: { commentsLocked: false },
       }),
     );
@@ -1417,14 +1416,14 @@ describe('a moderator is still an ordinary user', () => {
   it('is bound by a comment lock like anyone else', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       const admin = ctx.firestore();
-      await setDoc(doc(admin, coll0, SIGNAL), {
+      await setDoc(doc(admin, 'signals', SIGNAL), {
         ...signalDoc(admin, REPORTER),
         moderation: { commentsLocked: true },
       });
     });
     const db = testEnv.authenticatedContext(MOD).firestore();
     await assertFails(
-      addDoc(collection(db, `${coll0}/${SIGNAL}/comments`), commentDoc(db, MOD)),
+      addDoc(collection(db, `${'signals'}/${SIGNAL}/comments`), commentDoc(db, MOD)),
     );
   });
 });

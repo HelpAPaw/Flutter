@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'help_tag.dart';
+import 'moderation_label.dart';
 import 'signal_urgency.dart';
 
 class Signal {
@@ -62,9 +63,13 @@ class Signal {
   /// this getter only decides whether to draw the composer.
   bool get commentsLocked => moderation?['commentsLocked'] == true;
 
-  /// The warning label a moderator pinned to this signal, if any
-  /// (`unverified` / `duplicate` / `disputed`), else null.
-  String? get moderationLabel => moderation?['label'] as String?;
+  /// The warning label a moderator pinned to this signal, if any.
+  ///
+  /// Typed rather than a raw code so the vocabulary lives in one place and the
+  /// banner cannot render a string the server never validated — see
+  /// [ModerationLabel].
+  ModerationLabel? get moderationLabel =>
+      ModerationLabel.fromCode(moderation?['label'] as String?);
 
   Signal({
     required this.title,

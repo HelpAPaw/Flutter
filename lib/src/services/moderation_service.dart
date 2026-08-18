@@ -162,8 +162,7 @@ class ModerationService {
         'collection': collection,
         'signalId': signalId,
         'note': note,
-        if (reportId != null) 'reportId': reportId,
-      });
+      }, reportId: reportId);
 
   /// Puts a quarantined signal back.
   Future<void> restoreSignal({
@@ -190,8 +189,7 @@ class ModerationService {
         'signalId': signalId,
         'locked': locked,
         'note': note,
-        if (reportId != null) 'reportId': reportId,
-      });
+      }, reportId: reportId);
 
   /// Corrects a misused urgency label (spec 5.3). Writes a timeline event.
   Future<void> setUrgency({
@@ -206,8 +204,7 @@ class ModerationService {
         'signalId': signalId,
         'urgency': urgency,
         'note': note,
-        if (reportId != null) 'reportId': reportId,
-      });
+      }, reportId: reportId);
 
   /// Removes a single comment.
   Future<void> deleteComment({
@@ -222,8 +219,7 @@ class ModerationService {
         'signalId': signalId,
         'commentId': commentId,
         'note': note,
-        if (reportId != null) 'reportId': reportId,
-      });
+      }, reportId: reportId);
 
   /// Pins or clears a warning label (spec 18.3). Pass null to clear.
   Future<void> setLabel({
@@ -238,8 +234,7 @@ class ModerationService {
         'signalId': signalId,
         'label': label,
         'note': note,
-        if (reportId != null) 'reportId': reportId,
-      });
+      }, reportId: reportId);
 
   /// Closes a report without touching the content.
   Future<void> resolveReport({
@@ -255,24 +250,34 @@ class ModerationService {
 
   /// Records an internal note with no content change (spec 18.3).
   Future<void> addNote({
-    required String targetType,
+    required ReportTargetType targetType,
     required String targetId,
     required String note,
     String? collection,
     String? reportId,
   }) =>
       _act('addNote', {
-        'targetType': targetType,
+        'targetType': targetType.code,
         'targetId': targetId,
         'note': note,
         if (collection != null) 'collection': collection,
-        if (reportId != null) 'reportId': reportId,
-      });
+      }, reportId: reportId);
 
   /// One callable for every action — see the module comment in
   /// `functions/src/moderation.ts` for why it is one endpoint and not eight.
-  Future<void> _act(String action, Map<String, dynamic> params) async {
-    await CallableClient.call('moderateAction', {'action': action, ...params});
+  ///
+  /// [reportId] is threaded here rather than by each wrapper so the
+  /// omit-when-null idiom lives in one place instead of six.
+  Future<void> _act(
+    String action,
+    Map<String, dynamic> params, {
+    String? reportId,
+  }) async {
+    await CallableClient.call('moderateAction', {
+      'action': action,
+      ...params,
+      if (reportId != null) 'reportId': reportId,
+    });
   }
 }
 

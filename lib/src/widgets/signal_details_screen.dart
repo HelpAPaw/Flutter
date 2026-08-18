@@ -1220,17 +1220,10 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
 
   /// The moderator's warning label, or nothing when there isn't one.
   ///
-  /// An unrecognised label code renders as nothing rather than as raw text: the
-  /// codes are a closed vocabulary validated server-side, so an unknown one
-  /// means this build is older than the moderator's, and showing `disputedish`
-  /// to a user would be worse than showing nothing.
+  /// An unrecognised code renders as nothing rather than as raw text — see
+  /// [ModerationLabel.fromCode] for why that is the right failure.
   Widget _moderationLabelBanner(Signal signal, AppLocalizations l10n) {
-    final text = switch (signal.moderationLabel) {
-      'unverified' => l10n.moderationLabelUnverified,
-      'duplicate' => l10n.moderationLabelDuplicate,
-      'disputed' => l10n.moderationLabelDisputed,
-      _ => null,
-    };
+    final text = signal.moderationLabel?.label(l10n);
     if (text == null) return const SizedBox.shrink();
 
     return Container(

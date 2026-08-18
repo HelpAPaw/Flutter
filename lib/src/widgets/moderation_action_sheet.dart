@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../models/moderation_label.dart';
+import '../models/report_reason.dart';
 import '../models/signal_urgency.dart';
 import '../services/callable_client.dart';
 import '../services/moderation_service.dart';
@@ -64,7 +66,17 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
   bool get _commentsLocked => _moderation?['commentsLocked'] == true;
   bool get _hasLabel => _moderation?['label'] != null;
 
-  String get _targetType => widget.report['targetType'] as String? ?? '';
+  /// Whether an action row may fire: a note is written, nothing is in flight,
+  /// and the current moderation state is known so the toggles point the right
+  /// way. One definition used by the rows, their enabled state and `_run`.
+  bool get _canAct =>
+      !_busy && !_loadingModeration && _note.text.trim().isNotEmpty;
+
+  /// Decoded rather than compared as a raw string: the vocabulary already
+  /// exists as [ReportTargetType], and spelling `'signal'`/`'comment'` out
+  /// again here would be a second copy of it in Dart.
+  ReportTargetType? get _targetType =>
+      ReportTargetType.fromCode(widget.report['targetType'] as String? ?? '');
   String get _collection =>
       widget.report['collection'] as String? ?? 'signals';
   String? get _signalId => widget.report['signalId'] as String?;
@@ -118,7 +130,7 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
   /// the sheet was open, which is exactly the case a document-based role makes
   /// possible and a cached auth claim would have hidden until the token expired.
   Future<void> _run(Future<void> Function() action) async {
-    if (_busy || _note.text.trim().isEmpty) return;
+    if (!_canAct) return;
     setState(() => _busy = true);
 
     final l10n = AppLocalizations.of(context);
@@ -199,7 +211,7 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
                 ),
               ),
               const SizedBox(height: 8),
-              if (hasSignal && _targetType == 'signal') ...[
+              if (hasSignal && _targetType == ReportTargetType.signal) ...[
                 _action(
                   icon: Icons.visibility_off,
                   label: l10n.moderationHideSignal,
@@ -237,7 +249,7 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
                   onTap: () => _run(() => service.setLabel(
                         collection: _collection,
                         signalId: signalId,
-                        label: _hasLabel ? null : 'disputed',
+                        label: _hasLabel ? null : ModerationLabel.disputed.code,
                         note: note,
                         reportId: widget.reportId,
                       )),
@@ -256,7 +268,7 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
                       )),
                 ),
               ],
-              if (hasSignal && _targetType == 'comment')
+              if (hasSignal && _targetType == ReportTargetType.comment)
                 _action(
                   icon: Icons.delete_outline,
                   label: l10n.moderationDeleteComment,
@@ -268,17 +280,20 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
                         reportId: widget.reportId,
                       )),
                 ),
-              _action(
-                icon: Icons.sticky_note_2_outlined,
-                label: l10n.moderationAddNote,
-                onTap: () => _run(() => service.addNote(
-                      targetType: _targetType,
-                      targetId: _targetId,
-                      note: note,
-                      collection: _collection,
-                      reportId: widget.reportId,
-                    )),
-              ),
+              // Only offered once the target decodes — a report from a build
+              // newer than this one has nothing here to act on.
+              if (_targetType != null)
+                _action(
+                  icon: Icons.sticky_note_2_outlined,
+                  label: l10n.moderationAddNote,
+                  onTap: () => _run(() => service.addNote(
+                        targetType: _targetType!,
+                        targetId: _targetId,
+                        note: note,
+                        collection: _collection,
+                        reportId: widget.reportId,
+                      )),
+                ),
               _action(
                 icon: Icons.check_circle_outline,
                 label: l10n.moderationDismissReport,
@@ -302,9 +317,7 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
     required String label,
     required VoidCallback onTap,
   }) {
-    // Also gated on the moderation read, so a toggle can never fire while its
-    // label still points the wrong way.
-    final enabled = !_busy && !_loadingModeration && _note.text.trim().isNotEmpty;
+    final enabled = _canAct;
     return ListTile(
       enabled: enabled,
       leading: Icon(icon),

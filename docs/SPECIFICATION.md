@@ -1843,6 +1843,16 @@ Things that live in more than one place and fail **silently** when they drift.
    title 300, description 10 000, comment 2000, **signal-event note 500**, profile name 100,
    feedback message 1000, email 254. The note pair is guarded by
    `test/signal_event_vocabulary_guard_test.dart`, which parses the rules.
+5b. **Moderation-label vocabulary (×2).** `ModerationLabel`
+   (`models/moderation_label.dart`, source of truth for rendering) and
+   `MODERATION_LABELS` in `functions/src/moderation.ts` (source of truth for
+   validation — a label is only ever written by the callable). Guarded by
+   `test/moderation_label_vocabulary_guard_test.dart`, which parses the
+   TypeScript. A code only Dart knows is rejected loudly by the callable; a code
+   only the server knows is **silent** — it is stored, `fromCode` returns null
+   and the banner renders nothing, so the moderator believes the signal is
+   annotated and every reader sees an unannotated one.
+
 5a. **Signal-event type vocabulary (×3).** `SignalEventType` (`models/signal_event.dart`,
    source of truth), the `type ==` list inside `isSignalEventCreate()` in
    `firestore.rules`, and `SIGNAL_EVENT_TYPES` / `SIGNAL_EVENT_KEYS` /
