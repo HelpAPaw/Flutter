@@ -67,4 +67,46 @@ void main() {
       }
     });
   });
+
+  /// The stored half of the same problem.
+  ///
+  /// The arrival catch-up writes its own inbox rows, and `My Notifications`
+  /// re-renders a row's body from element 0 of what was stored. Storing the
+  /// list the fan-out *matched* on — which is empty for a legacy signal — makes
+  /// the row read "Rescue needed" under a notification that said "Blood
+  /// donation needed", for one document.
+  group('HelpTag.displayCodes', () {
+    test('substitutes the legacy category when there are no tags', () {
+      expect(HelpTag.displayCodes(const [], 2), ['bloodDonation']);
+      expect(HelpTag.displayCodes(const [], 1), ['lostFound']);
+    });
+
+    test('is the identity for a tagged signal', () {
+      // Including the extra tags, in the reporter's order — and including a
+      // code this build does not know, which must not be rewritten to the
+      // fallback: it came from a newer client that can render it.
+      expect(
+        HelpTag.displayCodes(const ['foster', 'transport'], 2),
+        ['foster', 'transport'],
+      );
+      expect(HelpTag.displayCodes(const ['brandNewCode'], 2), ['brandNewCode']);
+    });
+
+    test('falls back with nothing to read at all', () {
+      expect(HelpTag.displayCodes(const [], null), [HelpTag.fallback.code]);
+      expect(HelpTag.displayCodes(const [], 99), [HelpTag.fallback.code]);
+    });
+
+    test('always headlines the same tag the notification body used', () {
+      // The invariant the whole pair exists for: what gets stored and what gets
+      // announced must resolve to one tag.
+      for (var type = -1; type <= 7; type++) {
+        expect(
+          HelpTag.primaryOf(HelpTag.displayCodes(const [], type)),
+          HelpTag.primaryOfSignal(const [], type),
+          reason: 'signalType $type stores one category and announces another',
+        );
+      }
+    });
+  });
 }

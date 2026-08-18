@@ -1,50 +1,66 @@
 # Help A Paw — Comprehensive QA Functionality Checklist
 
-> ## 📦 Release scope — what changed since `v6.0.1+125`
+> ## 📦 Release scope — what changed since `v6.0.2+129`
 >
-> 59 commits. A shipping run should still cover the **whole** checklist, but these
-> areas changed and carry the release risk. Everything below has a dedicated
-> section; sections marked **NEW** did not exist for the last release.
+> **57 commits, ~19 500 lines. This is the largest functional change the app has had
+> in this checklist's lifetime**: the reporter is asked a different set of questions,
+> in a different shape, and the answers drive the map, the filters and who gets
+> notified. A shipping run must cover the **whole** checklist — but the risk is
+> concentrated below. Sections marked **NEW** did not exist for the last release.
 >
 > | Area | What changed | Where |
 > |---|---|---|
-> | **Google Sign-In** | Migrated to `google_sign_in` v7 with a native branded button; `firebase_ui_oauth_google` removed. Fixes the `SignInHubActivity` NPE crash and the iOS launch-screen hang (init moved off the boot path). | §1.3 |
-> | **ID token freshness** | Token force-refreshed after email verification and after an in-place anonymous→Google link. | §1.2, §1.4 |
-> | **Shareable signal links** | `https://link.helpapaw.org/signal/<id>` App Links / Universal Links, hosted fallback page (`signalLink` function), warm-start routing, Android deferred deep link via Play Install Referrer. | **§15 NEW** |
-> | **Background location** | Native significant-change monitoring (iOS `CLLocationManager`, Android `FusedLocationProvider` + `PendingIntent`), boot/app-update re-arm, 6-hour WorkManager reconcile. | §7.2 |
-> | **Arrival catch-up** | `NearbySignalChecker` notifies about signals you travel *into range of*; headless isolate on Android; cross-channel FCM dedupe. | §7.3 |
-> | **In-app inbox** | "My Notifications" page, server-side persistence, drawer unread badge, real iOS app-icon badge count. | §6.6 |
-> | **Fan-out efficiency** | Geohash-bucketed recipient selection instead of scanning every enabled user. | §6.7 |
-> | **Security rules** | Signal/comment creates bound to the caller + content bounds; reporter-only signal edits with a status-only volunteer path; `publicProfiles` non-enumerable + name validation; feedback anti-spoof + rate limit; Storage rules for avatars and test-mode photos. | **§11.5–§11.9 NEW** |
-> | **Photo uploads** | Avatar upload was *always* denied; test-mode signal photos were denied; a failed upload was reported as success. All three fixed. | §1.6, §3.1 |
-> | **Map** | Info window now survives the recluster after tapping a distant pin. | §2.2 |
-> | **Filters** | "Deselect all signal types" now means none, not all. | §4.5 |
-> | **Client-side input caps** | Title/description/comment/name fields now cap at the rules' limits as you type. | §3.1, §3.4, §1.5, §1.6 |
-> | **Account lifecycle** | Weekly `cleanupAnonymousUsers` reaper; `deleteAccount` also clears `userCounters` + notifications. | §1.8, §16.4 |
+> | **Urgency** | New Green/Amber/Red axis, separate from status, required at creation. **Map pin colour is now urgency, not status.** Red needs an explicit confirmation; escalation pushes to subscribers. | **§3.1b, §3.3b NEW**, §2.2 |
+> | **Help tags + species** | One 13-code vocabulary shared by signals (`helpNeededTags`, 1–3) and users (`helperTags`), plus `animalType` as its own axis. Matching is a set intersection. | **§3.1c, §6.4b NEW** |
+> | **`signalType` retired** | The 7-value category is **gone** from creation, editing, filtering and notifications. `helpNeededTags[0]` is the category now. Builds still in the field keep writing the old field, so legacy rendering is a live path. | **§3.8 NEW**, §4.5 |
+> | **Signal creation wizard** | The single-screen form is replaced by a **7-step, one-question-per-screen wizard** with per-step validation, auto-advance and a review screen. | §3.1 (rewritten) |
+> | **Case timeline** | Status and urgency changes now require a **mandatory update note** and are written to a new `signals/{id}/events` subcollection. The details screen merges `events` + `comments` + a synthetic "reported" row into one history. | **§3.4 NEW** (replaces Comments) |
+> | **Helper-tag onboarding gate** | A non-skippable full-screen picker on the map route for any account without `helperTags` — **including existing accounts**. | **§6.8 NEW** |
+> | **Fan-out rework** | Prioritise-then-backfill: tag matches in radius always notified, then C→B→D nearest-first to a floor of 10, with one widened 250 km re-scan. Candidates with no usable position are dropped. | §6.7 (rewritten) |
+> | **Notification settings** | Per-type checkboxes and Select all/Deselect all are gone; species + helper tags with a ≥1-of-each requirement while enabled, and a load-failure state that refuses to render an editor. | §6.4 |
+> | **Backend** | Functions on **Node 24**, nodemailer 9, first-ever `functions/` unit tests (jest). `ignore-scripts=true` in both npm trees. The dead CI workflow was deleted. | §16.1 |
+> | **Draft loss + photo race** | A finished draft no longer vanishes on one back press from the map; a mid-submit discard no longer drops the photo while reporting success. | §3.1 |
 
-> ## 🚀 Deploy gates — ✅ ALL VERIFIED COMPLETE (2026-08-05)
+> ## 🚀 Deploy gates — ⚠️ NOT CLEAR. One must be done before the device pass
 >
-> `help-a-paw-dev` is **production**. Verified against the live project, not assumed:
+> `help-a-paw-dev` is **production**. Everything below was verified for build 126 and
+> is assumed to still hold, **except the version bump**, which is new for this release.
+> The rules blocker cleared on 2026-08-18 — the `events` block is deployed again.
 >
-> - [x] `cd firestore-tests && npm test` — **91/91 pass**, Firestore + Storage (§16.1)
-> - [x] **Firestore rules deployed and current** — the live ruleset contains every new construct: `allow list: if false` on `publicProfiles`, the `users/{uid}/notifications` and `userCounters` blocks, `isStatusOnlyUpdate`, and the feedback `userId` pin
-> - [x] **Indexes deployed** — all 8, including `notifications (testMode ASC, createdAt DESC)` and `(status, location.geohash, createdAt)` on **both** `signals` and `signals_test`
-> - [x] **Storage rules deployed and current** — `profile_photos` block present (avatars were previously default-denied), and `isSignalReporter` checks `signals` **and** `signals_test`
-> - [x] **Functions deployed** — all 13 present incl. `signalLink`, `cleanupAnonymousUsers`, `deleteAccount`, and the test-collection triggers
-> - [x] **Hosting live** — `assetlinks.json` and `apple-app-site-association` both `200 application/json`; `/signal/**` rewrite serves; an `fbclid` query `301`s to the canonical URL (cache-fragmentation guard working)
-> - [x] **TTL policy ACTIVE** on `notifications.expiresAt` — confirmed via `gcloud firestore fields ttls list`
-> - [x] **App Links verified on-device** — Play build 126 signature matches the published fingerprint; `pm get-app-links` reports `link.helpapaw.org: verified` (§15.1)
-> - [x] Version bumped to **`6.0.2+126`**; both Android devices confirmed running it from Play, iOS via TestFlight
->
-> **Nothing further needs deploying.** Remaining pre-test setup is device/account state — see §16.0.
+> - [x] ✅ **Firestore rules: the `events` block is live again** — re-checked against the
+>       deployed ruleset **2026-08-18**. It was deployed 2026-08-15 and silently reverted
+>       the next day by a `--only firestore:rules` deploy from a branch that predated it
+>       (rules deploys replace the *whole* ruleset); the moderation deploy carried it back
+>       out. While it was missing, **every status change and every urgency change failed
+>       outright** — `_applyLevelChange` commits the signal update and the event create in
+>       one atomic batch, so the denial took the whole batch down and the user saw only
+>       `errorUpdatingStatus`. **Still confirm on the day you ship**, and note the drift
+>       now runs the other way: the live ruleset is `feature/moderator-role`'s, which is
+>       `dev` **plus** the moderation blocks, so a rules deploy from `dev` (or a branch cut
+>       off it) reverts moderation instead. If you deploy rules at all, deploy from the
+>       merged branch and re-read the live ruleset afterwards — `events`, `helpNeededTags`,
+>       `animalType`, `urgency` **and** `isModerator`/`isCommentsLocked` all present.
+> - [ ] 🔴 **Version is still `6.0.2+129` in `pubspec.yaml`.** Bump before building, or
+>       the upgrade-path test in §16.4 has nothing to upgrade *to* and Crashlytics
+>       attributes new crashes to the old build.
+> - [ ] **Functions deployed** from this branch — the fan-out, `recipientSelection`, the
+>       urgency/tag headline shims and the share-page badge all changed. Confirm the
+>       deployed runtime reports **Node 24**.
+> - [ ] `cd firestore-tests && npm test` and `cd functions && npm test` both pass (§16.1)
+> - [ ] **Rules and functions go out BEFORE the app build**, never after (§16.1). The
+>       reverse order is harmless; this order is not.
+> - [x] Indexes, Storage rules, Hosting, TTL policy, App Links — verified 2026-08-05, no
+>       change this release. Re-confirm the ruleset after the re-deploy above.
 
 > ## ⚠️ Pre-Release Blockers & Open Items (resolve before shipping)
 >
-> - [x] **Account deletion implemented.** In-app deletion (Profile → "Delete Account") via the `deleteAccount` Cloud Function: anonymizes authored signals (strips phone numbers), tombstones the user doc as "Deleted user", deletes the notifications subcollection + `userCounters` + profile photo, then deletes the Auth user. See §1.8.
-> - [x] **"My Notifications" page — BUILT 2026-08-04.** Cloud Functions persist a document per push, the rules grant the owner access, a drawer entry with an unread badge reaches the page, and rows render localized. See §6.6. The iOS badge now sends a **real count** (it previously always sent `1`) — see the §6.6 watch-out about sticky badges on older builds.
+> - [ ] 🔴 **The `events` rules revert (above) is the one true blocker.** Nothing in §3.3, §3.3b or §3.4 can pass without it.
+> - [ ] **Version bump outstanding** (`6.0.2+129` → next).
+> - [ ] **The gate reaches every existing user, not just new installs.** §6.8 is the highest-traffic new surface in this release: it stands between the whole installed base and the map on first launch after upgrading. Test it hostile — offline, denied writes, mid-anonymous-sign-in.
+> - [ ] **Legacy signals are a live path, not a migration.** Builds in the field keep writing `signalType` with no tags for months. §3.8 covers what they must look like; one known gap is recorded there.
 > - [ ] **iOS background relaunch is UNVERIFIED.** The whole premise of §7.2 — iOS waking a *terminated* app on a significant location change — has never been observed on a device. It cannot be tested on a debug build. See §7.2 and `BACKGROUND_LOCATION_PENDING_TESTS.md` §1.
 > - [ ] **M-1 is only half done.** Firestore rules still allow **anonymous** users to create signals/comments; the server-side `email_verified` gate is held back until the token-refresh fix (`633da3b`) ships in a released build. Client-side guards are the only thing enforcing it today. Tracking: `HelpAPaw/Flutter#67`. See §11.5.
-> - [ ] **Edit Signal & Delete Signal** flows exist in code (author-only AppBar actions on Signal Details) but were previously untested. Covered in §3.6 and §3.7.
+> - [ ] **Signal history is tamper-*evident*, not tamper-proof.** The reporter can delete individual `events`, because the delete cascade runs on the client. Tracked as `HelpAPaw/Flutter#68`.
 > - [ ] **Light theme only.** No dark theme is defined; verify rendering under OS dark mode. See §14.1.
 > - [ ] **Debug assetlinks fingerprint is still published.** `hosting/public/.well-known/assetlinks.json` lists a machine-local debug keystore alongside the release one. Decide whether to strip it before the release deploy (§15.1).
 
@@ -157,7 +173,8 @@
 
 ### 2.2 Signal Markers
 - [ ] Signal markers appear on the map based on geo-query (100km radius from center)
-- [ ] Marker colors correspond to status: Red (Help Needed), Orange (On The Way), Green (Solved)
+- [ ] ⚠️ **Marker colour is now URGENCY, not status** — Red / Orange (amber) / Green pin assets follow `SignalUrgency`. A signal that is *resolved* but was reported Red still shows a **red** pin; status appears only as a text chip on details and in My Signals. Anyone testing from memory of the last release will read this as a bug.
+- [ ] A signal created **before** the urgency system (no `urgency` field) renders as **amber** — unless its status is Solved, which renders green. Nothing legacy is ever derived as red.
 - [ ] Marker clustering works for nearby signals
 - [ ] Tapping a marker shows an info window (title + description snippet)
 - [ ] Tapping the info window navigates to Signal Details screen
@@ -181,23 +198,70 @@
 
 ## 3. Signal Management
 
-### 3.1 Signal Creation
-- [ ] FAB (add button) opens the new signal form
-- [ ] GPS crosshair appears at map center to indicate signal location
-- [ ] **Title** field is required (text capitalization enabled)
-- [ ] **Description** field is required (text capitalization enabled)
-- [ ] **Phone Number** field is optional (numeric keyboard)
-- [ ] **Signal Type** dropdown with 7 options: Emergency, Lost/Found, Blood Donation, Homeless, Unneutered Animals, Wild Animals, Other
-- [ ] **Photo** attachment: camera icon opens bottom sheet with "Take Photo" / "Choose from Gallery"
-- [ ] Photo preview shows with delete (X) button
-- [ ] Images compressed to max 1920x1920 at 85% quality
-- [ ] Only 1 photo can be attached during creation
-- [ ] Submit button disabled if title or description empty
-- [ ] Loading state shown during submission
-- [ ] On success: form clears, map centers on new signal, info window auto-shows
-- [ ] Creator is automatically subscribed to the signal
-- [ ] Requires authenticated (non-anonymous) user — shows sign-in prompt if anonymous
-- [ ] Signal location uses map center coordinates at time of submission
+### 3.1 Signal Creation — the wizard (REWRITTEN)
+> The single-screen form is gone. Creation is a **7-step wizard, one question per
+> screen** (`NewSignalStep`). Step 1 stays on the live map; steps 2–7 render on
+> `/new_signal`. The order is load-bearing: perishable answers (location, photo) first,
+> then the description, then the judgements *about* what was just described.
+
+**Steps and per-step validation**
+- [ ] FAB → map enters add mode: crosshair at map centre + a location bar; **the FAB hides** while the bar is up
+- [ ] Anonymous user tapping the FAB gets the sign-in dialog, not the wizard
+- [ ] Step order is exactly: **Location → Photo → Details → Animal → Urgency → Help needed → Review**
+- [ ] Progress indicator reads "Step N of 7" and matches the step actually shown
+- [ ] **Next is disabled until the current question is answered** — the reporter can never reach Review in a state submit would reject
+- [ ] **1 Location** (required): confirming pushes the wizard; the pin is where the crosshair was
+- [ ] **2 Photo** (optional): camera/gallery sheet, preview with delete, max 1920 px @ 85%, one photo; Next works with no photo
+- [ ] **3 Details**: title required (≤300), description required (≤10 000), phone optional (numeric keyboard). This is the **only** step with keyboard input.
+- [ ] **4 Animal** (required): single-select cat/dog/other
+- [ ] **5 Urgency** (required): see §3.1b
+- [ ] **6 Help needed**: 1–3 tags, see §3.1c
+- [ ] **7 Review**: every answer listed, each row links back to its own step; Submit
+- [ ] Editing an answer from Review returns to Review, not forward through the remaining steps
+
+**Auto-advance** (the subtle one)
+- [ ] Answering **Animal** or **Urgency** auto-advances after ~250 ms
+- [ ] Auto-advance fires **only when the step was blank on arrival** — going *back* to change an answer must NOT fling the reporter forward again
+- [ ] The **Help needed** step (multi-select) and the typing steps never auto-advance
+
+**Leaving a draft — all three exits behave identically (regression fix)**
+> Step 1 lives on the map, so the map owns two of the three exits. Both discarded
+> unconditionally until `57501ff`, which only became reachable once *Change* on the
+> Review step could return to the map holding six answered steps.
+- [ ] Fill the wizard to **Review**, tap **Change** beside Location, then press **Android back** on the map → a confirm dialog appears; Cancel keeps the draft, Discard clears it
+- [ ] Same state, tap the location bar's **Cancel** → the same confirm dialog
+- [ ] Same state, the wizard's own **×** → the same confirm dialog
+- [ ] A **fresh** FAB tap with nothing entered leaves in **one press, with no dialog** (`isDirty` gate)
+- [ ] Inside the wizard, the system back gesture is a **step back**, not an exit, until step 1
+
+**Submit**
+- [ ] Loading state during submission; Back, Next **and ×** are all disabled while submitting
+- [ ] On success: map centres on the new signal and its info window auto-shows
+- [ ] Creator is auto-subscribed to the signal
+- [ ] Signal stores `location = {geopoint, geohash}` (precision 9), plus urgency, tags and animal type
+- [ ] **Photo race (regression fix):** attach a photo, tap Submit, then immediately tap **× → Discard** while the upload is in flight. The signal must be created **with its photo** — previously the upload was skipped and it still reported full success.
+
+**Input bounds (mirror the Firestore rules)**
+- [ ] **Title stops accepting input at 300 characters**; the write is never rejected with `PERMISSION_DENIED`
+- [ ] **Description stops accepting input at 10 000 characters**
+- [ ] Paste of an over-long string is truncated rather than rejected
+
+### 3.1b Urgency step (NEW)
+> Master spec §5. Urgency is **how bad it is if nobody acts** — orthogonal to status,
+> which is how far along the response is.
+- [ ] Three options with descriptions: **Green**, **Amber**, **Red**
+- [ ] No default — Next stays disabled until one is chosen (nobody publishes a level they didn't pick)
+- [ ] **Choosing Red opens a confirmation dialog with a mandatory tick-box**; confirming proceeds, cancelling leaves urgency unset/unchanged
+- [ ] The Red confirm fires only on a **transition into** Red — re-selecting Red when it is already Red does not re-prompt
+- [ ] The created signal's map pin matches the chosen urgency (§2.2)
+- [ ] A Red signal's `new_signal` push is prefixed **🔴 RED ALERT nearby!** and the inbox row is titled/coloured to match (§6.6)
+
+### 3.1c Help-needed step (NEW)
+- [ ] **1–3 tags** selectable from the 13-code vocabulary; a 4th selection is refused (not silently swapped)
+- [ ] Next is disabled at zero tags
+- [ ] **Selection order is priority order** — the first tag chosen is the signal's category and is what the push headline says ("Rescue needed — …")
+- [ ] The Review screen and the details header both show that first tag as the category
+- [ ] Tag labels are localized; verify the Bulgarian "needed" phrasing reads naturally (Bulgarian does not build it by suffixing)
 
 **Input bounds (mirror the Firestore rules — new)**
 - [ ] **Title stops accepting input at 300 characters**; the write is never rejected with `PERMISSION_DENIED`
@@ -214,46 +278,91 @@
 - [ ] An oversized image (>5 MB after re-encode) is rejected with a message, not a silent drop
 
 ### 3.2 Signal Details Screen
-- [ ] Displays: title, description, signal type name, creation date/time, reporter name, contact phone
+- [ ] Displays: title, description, **the primary help tag as the category** (not a signal type), creation date/time, reporter name, contact phone
+- [ ] **Urgency** is shown — as an editable picker for the reporter, a read-only chip for everyone else (§3.3b)
+- [ ] **Status** is shown as a text chip; it is *not* what the map pin encodes
 - [ ] **Photo carousel**: swipeable PageView with photo counter (e.g., "1/5")
 - [ ] Tap photo for full-screen gallery (PhotoView)
 - [ ] Creator can delete individual photos (X button in corner)
 - [ ] Creator can add photos (up to 5 total): "Add Photo" / "Add Another Photo" page appears
 - [ ] **Navigate button**: opens external navigation app (geo: URI or Google Maps fallback)
 - [ ] **Call button**: initiates phone call to signal's contact phone
-- [ ] **Share button**: shares signal type, description, a `https://link.helpapaw.org/signal/<id>` link and the location via the native share sheet
+- [ ] **Share button**: shares the signal's **headline need** ("Rescue needed"), description, a `https://link.helpapaw.org/signal/<id>` link and the location via the native share sheet
 - [ ] The **signal link comes before** the Google Maps link in the shared text — link-preview scrapers unfurl the *first* URL, and putting maps first made shares preview as a map pin instead of the animal's photo (§15.3)
 - [ ] Sharing works for a signal with no coordinates (the location line is simply omitted)
 - [ ] The shared link round-trips: sending it to another device opens that signal (§15.2)
 - [ ] Navigating from this signal to another (e.g. via a shared link) shows the **new** signal's data — photos, comments and reporter must not be carried over from the previous one
 
-### 3.3 Signal Status Management
+### 3.3 Signal Status Management (update note is NEW)
+> ⚠️ **Nothing in this section can pass unless the `events` rules block is deployed**
+> (see Deploy gates — live again as of 2026-08-18). The signal update and the timeline
+> event are one atomic batch, so a denied event takes the status change down with it and
+> you see only `errorUpdatingStatus`. A whole-section failure here means the rules
+> reverted again; check the live ruleset before filing anything.
 - [ ] Status dropdown visible on details screen (authenticated users only)
 - [ ] 3 options with colored icons: Help Needed (red), Somebody On The Way (orange), Solved (green)
-- [ ] Changing status updates the Firestore document
-- [ ] Status change logs a special comment (orange background) showing "X changed status to Y"
-- [ ] Status change records `lastUpdatedBy` user reference
+- [ ] **Choosing a status opens the mandatory update-note dialog first** — nothing is written before it is confirmed
+- [ ] The dialog shows **the same badge the resulting history row will show** ("Changing to: Resolved")
+- [ ] **Confirm stays disabled while the note is empty or whitespace-only** (it is trimmed)
+- [ ] The note field caps at **500 characters** (matches the rules)
+- [ ] **Backing out of the dialog writes nothing** — and the dropdown snaps back to the stored value on its own (it reads from the signal stream, so it needs no manual revert)
+- [ ] On confirm: `status` + `lastUpdatedBy` update **and** a `status_change` event appear together, or neither does
+- [ ] The change appears in the signal history with the note (§3.4)
 - [ ] User auto-subscribed to signal on status change
+- [ ] Subscribers receive a `status_change` push; the actor does not
 - [ ] Cannot change to same status (no-op)
 
-### 3.4 Comments
+### 3.3b Urgency Change — reporter only (NEW)
+- [ ] **Only the signal's reporter** sees the urgency picker; everyone else sees a read-only chip
+- [ ] A non-reporter cannot change urgency by any route (the rules exclude `urgency` from the status-only allow-list — §11.5)
+- [ ] Changing urgency asks for an update note, exactly as status does
+- [ ] **Escalating to Red: the Red-Alert confirm comes FIRST, then the note dialog** — confirm the intent, then explain it
+- [ ] The picker is **disabled while the write is in flight** — a double-tap must not post two timeline entries or two pushes
+- [ ] The map pin colour changes to match, live, on other devices (§10.2)
+- [ ] An `urgency_change` event appears in the history with the note
+- [ ] **Escalation pushes; de-escalation does not.** Green→Amber and anything→Red notify subscribers; Red→Green is silent.
+- [ ] A write that changes **both** status and urgency sends **one** notification (the escalation wins)
+- [ ] **Reopening a legacy (pre-urgency) signal must not push a phantom escalation** — take a *Solved* signal created before this release, set status back to Help Needed, and confirm subscribers get the **status** notification and no "urgency raised"
+- [ ] **The Edit screen writes the same event with a note** (§3.6) — escalating from there must not notify everyone while the history shows nothing happened
+
+### 3.4 Signal History / Case Timeline (NEW — replaces Comments)
+> One chronological list merged from **two** collections — `events` (status/urgency
+> changes, server-written types later) and `comments` — opened by a synthetic
+> "reported this signal" row derived from the signal document itself. Nothing was
+> backfilled: legacy system entries stay in `comments` and must keep rendering.
+
+**The merged history**
+- [ ] The first row is always **"reported this signal"**, for every signal ever created — including ones that predate the timeline
+- [ ] Status/urgency changes appear as **event** rows with their badge and note
+- [ ] Ordinary comments appear interleaved in the same list, in true chronological order
+- [ ] **Legacy status-change entries (stored as comments) still render** on signals created before this release — they were not migrated
+- [ ] Ordering is stable: rebuilding the screen (rotate, background/foreground) must not reshuffle rows with identical timestamps
+- [ ] **All / Events chips** filter in memory; switching between them is instant and loses nothing
+- [ ] An event with an unrecognised `type` (as if written by a newer build) is **skipped, not crashed on**
+
+**Partial-failure rendering (the reason this was built the way it was)**
+- [ ] The spinner shows only while **both** sources are silent
+- [ ] With the `events` rules missing/denied, the screen still renders the **comments** plus an inline "part of this history could not be loaded" row with a **Retry** — it must NOT blank the whole thread. *(This is also the fastest way to detect the reverted rules deploy.)*
+- [ ] Retry re-subscribes and the missing half appears once access is restored
+- [ ] With **both** denied, the history reports failure rather than showing an empty list
+
+**Comments**
 - [ ] Text input field at bottom of details screen with send button
 - [ ] Comments display: author name, text content, timestamp
-- [ ] Regular comments have white border and left padding
-- [ ] Status-change comments have orange background/border with status icon
-- [ ] Comments ordered by `createdAt` ascending
-- [ ] Real-time updates via StreamBuilder
+- [ ] Comments and events both resolve author names via `publicProfiles`
+- [ ] Real-time updates: a comment or status change from another device appears live
 - [ ] Posting a comment auto-subscribes user to signal
 - [ ] Requires authenticated user
 - [ ] **Comment input stops at 2000 characters** (matches the rules' cap)
 - [ ] **A whitespace-only comment is dropped client-side** — send button does nothing, no `PERMISSION_DENIED`, no blank comment row
 - [ ] Leading/trailing whitespace is trimmed before the write
-- [ ] A **status-change** system comment (which carries no `text`) is still created successfully — the rules' text bounds must not reject it (§3.3)
+- [ ] Posting a comment does **not** count as a status change on the profile screen's statistics (mixing the two was one reason events moved out of `comments`)
 
 ### 3.5 My Signals Page
 - [ ] Lists all signals created by current user
 - [ ] Ordered by creation date (newest first)
-- [ ] Card-based layout with status color indicator and signal type icon
+- [ ] Card-based layout with status colour indicator and **the primary help tag's icon** (no signal-type icon any more)
+- [ ] A signal with no title falls back to the tag's "needed" label, not to "Rescue" for everything
 - [ ] Tap card navigates to Signal Details
 - [ ] Requires authentication — shows sign-in prompt if not logged in
 - [ ] Empty state message when no signals exist
@@ -262,8 +371,11 @@
 - [ ] Edit (pencil) icon appears in Signal Details AppBar **only for the signal's creator**
 - [ ] Edit icon is hidden for non-authors and anonymous users
 - [ ] Tapping it opens the Edit Signal screen (`/edit_signal/:signalId`)
-- [ ] Editable fields: **Title** (required), **Description** (required), **Signal Type** (dropdown), **Contact Phone** (optional, phone keyboard)
-- [ ] Title/Description validation prevents saving when empty
+- [ ] Editable fields: **Title** (required), **Description** (required), **Urgency**, **Help tags** (1–3, required), **Animal type** (required), **Contact Phone** (optional, phone keyboard) — the Signal Type dropdown is **gone**
+- [ ] Title/Description validation prevents saving when empty; saving with **zero tags** or **no animal type** is refused with a message
+- [ ] **Changing urgency here asks for an update note** and writes an `urgency_change` event, exactly as the details screen does (§3.3b) — the two ways to escalate must produce the same history
+- [ ] Saving **without** touching urgency writes **no** event and sends no notification
+- [ ] The urgency change and its event land in **one batch** — neither appears without the other
 - [ ] Non-author opening the route directly is bounced back (guarded by reporter check)
 - [ ] Save shows loading state, success snackbar, and returns to details
 - [ ] Save failure shows an error snackbar and stays on the edit screen
@@ -277,6 +389,28 @@
 - [ ] After deletion, user is navigated away from the (now-gone) details screen
 - [ ] Deleted signal's marker disappears on the map for all users (real-time)
 - [ ] Verify cascade behavior: comments subcollection, Storage photos, and subscriber records are cleaned up (or document expected orphaning)
+- [ ] ⚠️ **The `events` subcollection is deleted too.** Delete a signal that has status/urgency history, then check Firestore directly: `signals/{id}/events` must be **empty**. Firestore keeps subcollection documents when the parent is deleted and nothing can reach them afterwards — missing this orphans them silently.
+
+### 3.8 Legacy signals — signals written by builds already in the field (NEW)
+> `signalType` is retired, but **this is a live path, not a migration**: a phased release
+> means shipped builds keep creating signals with a `signalType` and no tags for months.
+> The server has always recovered the real category from that int; the app now does too.
+> Set one up by writing a `signals_test` document by hand with `signalType: 2` (Blood
+> donation), **no** `helpNeededTags`, no `animalType` and no `urgency`.
+
+- [ ] **Details screen** shows it as **Blood donation**, not "Rescue"
+- [ ] **My Signals** shows the blood-donation icon and label
+- [ ] **Share text** describes it as blood donation
+- [ ] **Public share page** badges it Blood donation — this is the one page people see *before* they have the app
+- [ ] **Push notification** headline reads "Blood donation needed — …"
+- [ ] **In-app inbox row** says the same thing as the push that announced it (this pair contradicted each other before `b512d4a` — the push said Blood donation, the row said Rescue)
+- [ ] Repeat the pair check in **Bulgarian** — the inbox row renders from structured fields, not from the stored English body
+- [ ] Map pin is **amber** (no `urgency` → derived; never red)
+- [ ] It is **not hidden** from anyone who has picked a species (absent `animalType` matches every filter)
+- [ ] It still reaches recipients: matching treats it as `rescue`, so it matches the default helper tag
+- [ ] **Arrival catch-up says the same thing too** (fixed 2026-08-18; this used to be a known gap, expected to read "Rescue needed"). Hardest of the set to stage: travel >3 km with >30 min since the last check, into range of a legacy signal created while you were away. Check **both** halves — the local notification on the lock screen *and* the inbox row it writes must both say Blood donation, matching the push a user in range at creation time would have got.
+- [ ] Editing a legacy signal (which requires choosing tags) **does not** rewrite or drop its stored `signalType` — check the document afterwards
+- [ ] The map's **category filter** files it under **Rescue** — deliberate, so the map and the fan-out agree about what an untagged signal asks for
 
 ---
 
@@ -298,17 +432,29 @@
 - [ ] Toggle: Solved (status 2)
 - [ ] All enabled by default
 
-### 4.4 Signal Type Filter
-- [ ] Toggle each of 7 types independently: Emergency, Lost/Found, Blood Donation, Homeless, Unneutered Animals, Wild Animals, Other
+### 4.4 Urgency Filter (NEW)
+- [ ] Toggle Green / Amber / Red independently, each with its pin icon
 - [ ] All enabled by default
+- [ ] Deselecting Red hides red-pinned signals only; status selection is unaffected (the two axes are independent — verify by filtering to Red + Solved and confirming a resolved red signal still shows)
 
-### 4.5 Bulk Actions
-- [ ] "Select All" button enables all statuses and types
-- [ ] "Clear All" button hides all signals
-- [ ] **"Deselect all signal types" deselects every type** (it previously selected all of them — inverted behaviour, fixed in `814af47`). After tapping it, **zero** signals render on the map.
-- [ ] Re-selecting a single type after a deselect-all shows only that type
+### 4.5 Help Tag & Species Filters (NEW — replaces the signal type filter)
+> The type section is gone. The sheet now filters on the same vocabulary the
+> notifications use, which is what closed the old browse-vs-notify asymmetry.
+- [ ] **Help tags**: all 13 codes listed, toggled independently, all enabled by default
+- [ ] A signal matches if **any** of its 1–3 tags is selected (someone filtering for `foster` still sees a case needing rescue *and* fostering)
+- [ ] **Species**: cat / dog / other, all enabled by default
+- [ ] A signal with **no** `animalType` (legacy) stays visible whatever the species selection — hiding it would be a silent disappearance
+- [ ] A signal with **no** tags (legacy) is filed under **Rescue** — deselect Rescue and it disappears; that is deliberate (§3.8)
+- [ ] Deselecting **every** tag renders zero signals (empty means none, and it is reachable via Clear All)
+- [ ] ⚠️ **Adding a tag, species, status or urgency to the code without adding it to the "all selected" default set leaves it filtered off the map from the moment it exists.** Guarded by `test/map_filter_state_test.dart` — a failure there is a release blocker, not a flaky test.
+
+### 4.6 Bulk Actions
+- [ ] "Select All" enables every status, urgency, tag and species
+- [ ] "Clear All" hides all signals
+- [ ] Re-selecting a single tag after Clear All shows only signals carrying that tag
 - [ ] Filter changes update markers on map in real time
 - [ ] An open info window is reconciled correctly when a filter change hides its signal (§2.2)
+- [ ] The active-filter dot appears whenever **any** of the five axes is off its default
 
 ---
 
@@ -352,10 +498,13 @@
 - [ ] Completing onboarding hides all prompts permanently
 
 ### 6.2 Push Notification Types
-> Cloud Functions emit FCM messages with `type` values: `new_signal`, `status_change`, `new_comment` (`functions/src/index.ts`). Each is **also persisted** to the recipient's in-app inbox (see §6.6).
-- [ ] **New signal nearby** (`new_signal`): Received when a signal is created within the user's configured radius/region and matches their type preferences
-- [ ] **Status change** (`status_change`): Received when a subscribed signal's status changes
-- [ ] **New comment** (`new_comment`): Received when a comment is posted on a subscribed signal (body truncated to 50 chars)
+> Cloud Functions emit FCM messages with `type` values: `new_signal`, `status_change`, **`urgency_change`** and `new_comment` (`functions/src/index.ts`). Each is **also persisted** to the recipient's in-app inbox (see §6.6).
+- [ ] **New signal nearby** (`new_signal`): received when a signal is created near the user; the body reads **urgency + the primary tag's "needed" form** ("Urgent · Rescue needed — …")
+- [ ] **Red Alert**: a red `new_signal` push is prefixed **🔴 RED ALERT nearby!** and is distinguishable on a lock screen
+- [ ] **Status change** (`status_change`): received when a subscribed signal's status changes
+- [ ] **Urgency change** (`urgency_change`, NEW): received on **escalation only** — Green→Amber and anything→Red. A de-escalation sends nothing.
+- [ ] **New comment** (`new_comment`): received when a comment is posted on a subscribed signal (body truncated to 50 chars)
+- [ ] ⚠️ **The update note is NOT in the push or the inbox body** — a status-change push still reads `{signalTitle}: {status}`. Expected, recorded as a known gap; don't file it.
 
 ### 6.3 Notification Handling by App State
 - [ ] **Foreground**: Shows local notification (high priority Android, sound+badge iOS)
@@ -367,13 +516,29 @@
 - [ ] Launching the app **from a local (catch-up) notification** while terminated opens that signal
 - [ ] The background FCM handler runs even when the app is terminated (it records the signal for dedupe — §7.3)
 
-### 6.4 Notification Settings Page
+### 6.4 Notification Settings Page (REWRITTEN)
 - [ ] Toggle notifications enable/disable
 - [ ] Notification radius slider (1-50 km, default 10 km)
-- [ ] Signal type filter checkboxes (7 types)
+- [ ] **Animal-type selector** and **helper-tag selector** — the 7 signal-type checkboxes and the Select all / Deselect all buttons are **gone**
 - [ ] Region of interest: map-based selection with adjustable radius
 - [ ] Settings persist in Firestore `notificationPreferences`
 - [ ] Preferences are read through the typed `NotificationPreferences` model — a user doc with **missing or malformed** preference fields falls back to defaults rather than throwing (covered by `test/models/notification_preferences_test.dart`)
+
+**Validation while notifications are ON (NEW)**
+- [ ] Clearing **every animal type** is refused with "select at least one animal type"; same for helper tags
+- [ ] **The master toggle validates BEFORE flipping** (regression fix): with an empty stored selection, tapping the toggle must not turn on, prompt the OS, show a snackbar and then write nothing — which reverted the next time the screen was opened
+- [ ] With notifications **off**, the screen stays fully editable and no validation fires ("receive nothing" is what the master switch is for)
+
+**Load-failure state (NEW — the destructive one)**
+- [ ] Open the screen **offline** (or with the read otherwise failing): it shows an **error with a Retry**, *not* an editor
+- [ ] ⚠️ It must never show its **defaults** (notifications off, no helper tags) as if they were the stored configuration — saving those would destroy the user's real settings
+- [ ] Retry after connectivity returns loads the real values
+- [ ] A session that appears *later* must not let the on-screen defaults overwrite stored preferences
+
+**Absent vs empty — the two opposite rules in one map**
+- [ ] A user who has **never chosen** species sees **all** species ticked (absent = all)
+- [ ] A user with a **stored empty** species list keeps it empty after opening and closing the screen — it must not be silently re-ticked (that would opt them back in)
+- [ ] A user with no `helperTags` matches on the `rescue` fallback rather than matching nothing (absent = empty here, the opposite rule)
 
 **Location tracking toggle — three distinct outcomes (rewritten)**
 > The toggle now reports what the **native monitors actually started**, not what the permission enum implies. Enum-derived guesses disagreed with reality on Android 9 and when "Always" was granted out-of-band via Settings.
@@ -422,7 +587,9 @@
 - [ ] Entries are not duplicated if a trigger retries (deterministic ids `sig_`/`st_`/`cmt_`/`nb_`)
 
 **Localization**
-- [ ] On a Bulgarian device, rows render in Bulgarian — signal type name, status label and all titles — even though the push text stored on the document is English
+- [ ] On a Bulgarian device, rows render in Bulgarian — help-tag name, urgency, status label and all titles — even though the push text stored on the document is English
+- [ ] A **Red Alert** row is titled and coloured to match its push (§3.1b)
+- [ ] An `urgency_change` row renders with the right level badge
 - [ ] An unknown/legacy `type` falls back to the stored `title`/`body` rather than rendering blank
 
 **Arrival catch-up**
@@ -458,12 +625,44 @@
 - [ ] **Region path**: a user whose region of interest covers the new signal receives the push (even with no live location tracking)
 - [ ] **Just-out-of-range**: a user just beyond both their location radius and region radius does **not** receive the push (Haversine boundary, not just the geohash bucket)
 - [ ] **Far-away user** (different city/country, beyond the 50/100 km query bounds) is excluded — no notification and no wasted read
-- [ ] Signal **type filter** still applies (notified only for subscribed signal types)
-- [ ] Signal **reporter** is not notified about their own signal
+- [ ] Signal **reporter** is not notified about their own signal — **and does not count toward the floor** (otherwise a signal in an empty area quietly reaches one fewer person than intended)
 - [ ] Users with notifications enabled but **no** live location and **no** region of interest receive no `new_signal` pushes (nothing to match on)
 - [ ] **Test-mode isolation** still holds: `testMode` users only receive `signals_test` notifications, prod users only `signals`
 - [ ] Multiple recipients in one area all receive the push (union of location + region paths, deduped by uid — a user matching both paths is notified once)
 - [ ] **Geohash compatibility**: a known-near user stored by the client (`geoflutterfire_plus`) is matched by the server's `geofire-common` bounds (precision mismatch does not cause misses)
+
+**Prioritise-then-backfill (NEW — read the structured log, not just the phone)**
+> Every fan-out logs one line: candidates scanned, eligible count, whether widening
+> fired, the four tier sizes, and how many recipients were backfilled. **This is the
+> only way to test this section** — too few recipients looks like a quiet day and too
+> many looks like spam; neither throws.
+- [ ] **Hard gates are never overridden by the floor**: wrong `testMode`, the reporter, `enabled != true`, and an excluded **species** are dropped before ranking, no matter how thin the pool
+- [ ] **Species is the only hard preference gate left** — a user whose helper tags do not match can still be backfilled in (see below); a user who excluded the species cannot
+- [ ] **Tier A (tag match, in radius) is always notified**, however many there are — the floor is a floor, never a ceiling
+- [ ] **Backfill order is C → B → D, nearest-first**, up to `MIN_RECIPIENTS = 10`: a *matching* helper out of radius (C) outranks a *non-matching* neighbour (B)
+- [ ] Accepted consequence to confirm, not report: a matching helper who set a 10 km radius **can** be told about something 40 km away
+- [ ] **Widened re-scan**: with fewer than 10 eligible candidates, both geohash queries re-run at **250 km** and the tiers rebuild — the log says whether it fired
+- [ ] Widening is **skipped entirely** when the narrow scan already returned more than 500 candidates (a dense area where most users have push off)
+- [ ] The widened queries are **read-capped per range**; a nearer person may be dropped in favour of a further one there (ordering is by geohash, not distance) — acceptable for a last-resort backfill, and the narrow pass stays uncapped and exact
+- [ ] **A candidate with no usable position is dropped, not backfilled** (NEW): a user with tracking off and no region, but a stale `userLocations` doc left over from a revoked permission, must **not** be notified — they stopped sharing that position deliberately and have no opt-out short of turning notifications off
+
+### 6.8 Helper-Tag Onboarding Gate (NEW — highest-traffic new surface)
+> A full-screen, non-skippable picker shown on the map route to any signed-in user with
+> no `helperTags` — **including every existing account**, which is the point: without it
+> the installed base would sit on the `rescue` default forever and tag matching would
+> stay inert. It is a widget wrapper on the route, not a router redirect.
+
+- [ ] On first launch after upgrading, an existing account with no helper tags gets the gate before the map
+- [ ] The gate requires **≥1 helper tag and ≥1 animal type**; there is no skip and no back
+- [ ] Choosing and saving lands on the map, and the gate does not reappear on the next launch
+- [ ] A fresh **anonymous** install hits the gate too (accepted)
+- [ ] **Deep links are exempt** — a notification tap or a shared link opens the signal directly, with no gate. Navigating back to the map is what triggers it. *The app must not stand between someone and an animal in danger to collect a preference.*
+- [ ] **A failed or pending preferences read renders the app, never the gate** — go offline with an account that has no tags and confirm you reach the map. Locking an offline user out of reporting is the failure this must not have.
+- [ ] **Offline save completes (regression fix):** with no connectivity, choosing tags and saving must **not** spin forever. The write is time-boxed and a timeout counts as success — it is already durable in the offline cache and the re-read falls back to the same cache. A genuinely *rejected* write still surfaces an error.
+- [ ] The gate waits for the session rather than assuming one — on a fresh install it must not fall through to the map because anonymous sign-in had not finished yet (this happened on an unauthenticated tablet)
+- [ ] The gate requests **no OS permissions** — no notification or location prompt fires here
+- [ ] **The notification onboarding sheet does not stack on top of the gate**, and (regression fix) **is still offered to a user who already has tags** — it silently stopped appearing for them, because the reused element never re-ran `initState`
+- [ ] Signing out and into a different account re-evaluates the gate for the new uid
 
 ---
 
@@ -541,7 +740,10 @@
 - [ ] Signals older than the **7-day** eligibility window are ignored (note: this is *not* 24 hours)
 - [ ] **Resolved** (status 2) signals are filtered out — pushed into the query via `whereIn` on open status codes
 - [ ] The user's **own** signals are excluded
-- [ ] Signal **type preferences** are honoured; a signal with **no** stored type still gets through (the filter exists to honour opt-outs, not to reject malformed data)
+- [ ] **Species preferences** are honoured; a signal with **no** `animalType` still gets through (the filter exists to honour opt-outs, not to reject legacy data)
+- [ ] **Help tags must genuinely match** — catch-up is deliberately *stricter* than the server fan-out, which backfills non-matching people up to its floor. A user whose tags match nothing must not be pinged every time they travel; that noise is exactly what tags exist to remove.
+- [ ] The local notification's headline uses the same "needed" wording as the server push, so a catch-up and a fan-out for one signal don't read as two different kinds of event
+- [ ] ⚠️ **Known gap:** for a **legacy** signal the catch-up says "Rescue needed" while the server push says its real category (§3.8)
 - [ ] `strictMode` clipping: a signal inside the geohash rectangle but **outside** the real radius does **not** notify
 - [ ] 2–3 qualifying signals produce **separate** notifications, each with its own tap target opening its own signal — grouped in the shade under one group key, not collapsed into one
 - [ ] Tapping a catch-up notification opens the correct signal, and backing out focuses that pin on the map
@@ -614,16 +816,25 @@
 - [ ] Bulgarian (bg) fully translated (key parity with `en` confirmed; remaining diffs are ICU placeholder names, not missing strings)
 - [ ] All UI strings use `AppLocalizations` (no hardcoded strings)
 - [ ] Date/time formatting is locale-aware
-- [ ] Signal type names, status labels, error messages, FAQ content all localized
+- [ ] Help tag names, animal types, urgency levels, status labels, error messages, FAQ content all localized
 
-**New strings this release — verify in Bulgarian on a `bg` device**
+**New strings this release — ~144 new ARB keys. Verify in Bulgarian on a `bg` device**
+- [ ] **Help tag names in BOTH forms** — the plain name ("Rescue") and the "needed" form ("Rescue needed"). Bulgarian does **not** build the second by suffixing the first, which is why it is a separate label per tag rather than a `+ " needed"` string. Check every one of the 13 reads naturally.
+- [ ] `lostFound` and `dangerWarning` deliberately have **no** "needed" form — a lost dog is not "lost / found needed"
+- [ ] **Wizard**: all 7 step titles, the review screen's row labels, the discard-draft confirm
+- [ ] **Urgency**: the three level names *and* their descriptions on the picker; the Red-Alert confirmation dialog and its tick-box
+- [ ] **Update note dialog**: prompt, "Changing to: X" line, the character counter, and the disabled-confirm state
+- [ ] **Timeline**: event row wording for status and urgency changes, the synthetic "reported this signal" row, the All/Events chips, and the "part of this history could not be loaded" retry row
+- [ ] **Settings validation**: `selectAtLeastOneAnimalType`, `selectAtLeastOneHelperTag`
+- [ ] **Onboarding gate** (§6.8): title, explanation, save button, error state
 - [ ] `signInWithGoogle`, `googleSignInFailed` (§1.3)
 - [ ] `pleaseEnterValidEmail` (§8.3)
 - [ ] `locationAlwaysPermissionRequired` (§6.4) — long string, check it doesn't overflow the snackbar
 - [ ] `signalNearbyNotificationTitle` — the **catch-up notification** title, rendered from a **headless isolate** with no `BuildContext` (it looks up the device locale directly). Verify a Bulgarian device gets a Bulgarian notification.
 - [ ] Inbox row strings: `notificationNewSignalTitle/Body`, `notificationStatusChangeTitle/Body`, `notificationNewCommentTitle`, `notificationNearbySignalBody` — rendered from structured fields, **not** from the English `title`/`body` stored on the document (§6.6)
 - [ ] An unsupported device locale falls back to English rather than crashing
-- [ ] The **hosted share page** localizes client-side (§15.3) — its Bulgarian signal-type names are a **third** copy of the type list; confirm they match the app's
+- [ ] The **hosted share page** localizes client-side (§15.3) — its Bulgarian **help-tag** names (`HELP_TAG_NAMES_BY_LANG.bg`) are a second copy of the vocabulary; confirm they match the app's
+- [ ] The **push body** for a new signal reads "urgency · primary tag needed — title" in Bulgarian too, and the inbox row for the same event says the same thing (§3.8)
 
 ---
 
@@ -690,11 +901,32 @@
 - [ ] Manual logging throughout codebase for key events
 - [ ] **Regression watch on the new build** — confirm these known issues do not recur: `add2187e` (`SignInHubActivity` NPE, §1.3), `d98a1898` / `6fb193a6` ("Bad state: No element" at bootstrap, fixed by `71a45ae`), `a8072678` (forgot-password `setState` after dispose — **still open**, `firebase_ui_auth` 3.0.1)
 
-### 11.5 Firestore Rules — Signals & Comments (NEW)
+### 11.5 Firestore Rules — Signals, Events & Comments (NEW)
 > Run the emulator suite first (§16.1). These are the on-device confirmations that the deployed rules behave.
+> ⚠️ **Re-read the LIVE ruleset before starting** — the `events` block was deployed and
+> then silently reverted once already (see Deploy gates). Rules deploys replace the whole
+> ruleset, so an older checkout deploying `--only firestore:rules` drops newer blocks
+> with no warning.
+
+**Signal events (`signals/{id}/events/{eventId}`) — NEW**
+- [ ] Create requires a signed-in caller with `actor == self`; a forged actor is denied
+- [ ] `type` must be in the closed vocabulary — an invented type is denied
+- [ ] **`note` is required, 1–500 chars** — a note-less event is denied, which is why the client cannot write one without the dialog
+- [ ] Level fields are bounded 0–2
+- [ ] **Updates are denied outright** — a delivered event cannot be rewritten
+- [ ] The parent signal's **reporter** can delete events (this is what makes the client-side delete cascade work); a third party cannot
+- [ ] ⚠️ Recorded, not a finding: this makes the history tamper-**evident**, not tamper-proof (`HelpAPaw/Flutter#68`)
+- [ ] The same holds for **`signals_test`**
+- [ ] **Deploy-order check:** on rules *without* the events block, a status change fails **entirely** (atomic batch) — confirm you see `errorUpdatingStatus` and no partial write. That is the symptom to recognise if the revert happens again.
+
+**Signals**
 - [ ] **Create binding**: a signal's `reporter` must equal the caller's user doc — a forged reporter is denied
-- [ ] **Content bounds on create**: title required and ≤300 chars, description ≤10 000, `signalType` an int in 0–6. Out-of-range values are denied.
-- [ ] **Reporter-only edits**: only the signal's author can change title/description/type/phone/photos (§3.6)
+- [ ] **Content bounds on create**: title required and ≤300 chars, description ≤10 000
+- [ ] **New field bounds**: `helpNeededTags` 1–3 strings, `animalType` a known code, `urgency` an int 0–2 — out-of-range values are denied
+- [ ] ⚠️ The new fields are **bounded but not required** — a create without them is still accepted, deliberately, so a shipped build's writes keep working (§3.8)
+- [ ] A retired `signalType` on create is **neither required nor rejected** — a retired field must not be able to refuse an old client's write
+- [ ] **`urgency` is reporter-only**: a non-reporter changing urgency is denied, because it is absent from the status-only allow-list (§3.3b)
+- [ ] **Reporter-only edits**: only the signal's author can change title/description/tags/species/phone/photos (§3.6)
 - [ ] **Status-only volunteer path**: another signed-in user can change **only** `status` (0–2) and must self-stamp `lastUpdatedBy` — attempting to change any other field in the same write is denied
 - [ ] `lastUpdatedBy` cannot be spoofed to a different user
 - [ ] **Delete** is reporter-only (§3.7); a non-author's delete is denied
@@ -921,7 +1153,7 @@
 - [ ] Decide whether to fix now or defer — see the analysis in `docs/ai/SMOKE_TEST_126.md`. Note `NotificationService.onUserLogin()` already exists but **would not fix this**, because it early-returns unless the account already has `notificationPreferences.enabled == true`, which a brand-new user does not.
 
 **B. Baselines to capture before the first test action**
-- [ ] Record the current **Crashlytics** state for build 126 so any new crash is attributable to the run
+- [ ] Record the current **Crashlytics** state for the outgoing build so any new crash is attributable to the run
 - [ ] Note the starting Firestore document counts for `signals_test`, and for the accounts you'll use
 - [ ] Confirm the **feedback recipient inbox** is reachable (still outstanding — §8.3 can't be fully verified without it)
 
@@ -936,19 +1168,37 @@
 - [ ] Grant notifications on all three; on the **Android 14** device this is a real runtime prompt (§14.2)
 - [ ] Grant location **Always** on the iPad (iOS never offers Always on the first prompt — Settings → Privacy & Security → Location Services → Help a Paw → Always)
 - [ ] Decide which Android device is the **clean-install** device for §16.4 and uninstall there
-- [ ] ⚠️ **The 125→126 in-place upgrade has already happened unobserved** on both Android devices (both show `firstInstallTime` in June, `lastUpdateTime` today, installer `com.android.vending`). To test §16.4's upgrade path *deliberately*, roll one device back to the previous closed-track release first, set up state, then update to 126.
+- [ ] ⚠️ **Do not let the upgrade happen unobserved** — that is what spoiled the 125→126 run on both Android devices. Pause Play auto-updates on the observation device, establish the 129 state in §16.4 Phase 1 **first**, and only then update.
+- [ ] Keep **one account with no helper tags** in reserve for §6.8 — completing the gate is not undoable from inside the app.
 
 ### 16.1 Automated suites (run before the device pass)
+> **Deploy order for this release: rules → functions → app build.** Never the reverse.
+> The app's status and urgency writes are atomic batches that include an `events`
+> create, so a build shipped ahead of its rules has a **broken** status dropdown, not a
+> degraded one. Rules ahead of the app is harmless — they grant access to a
+> subcollection no released build writes to yet.
+
 - [ ] `flutter analyze lib` — clean
-- [ ] `flutter test` — all pass, including the new `test/deep_link_parsing_test.dart`, `test/models/notification_preferences_test.dart`, `test/viewmodels/map_view_model_test.dart`
-- [ ] `test/firestore_settings_guard_test.dart` passes — **treat a failure as a release blocker**: assigning custom Firestore `Settings` in Dart silently breaks the Android headless isolate's geo query, and the failure reports as "no signals nearby"
-- [ ] `cd firestore-tests && npm test` — Firestore **and** Storage rules suites pass. Required before **every** rules deploy; device testing cannot validate undeployed rules because `help-a-paw-dev` is production.
+- [ ] `flutter test` — all pass, including the new wizard, urgency-picker, update-note, helper-tag-gate, `MapFilterState` and `mergeSignalHistory` suites
+- [ ] **Vocabulary guards pass — treat any failure as a release blocker.** Every one of them guards a ×2 copy whose drift is *silent*:
+  - `test/help_tag_vocabulary_guard_test.dart` — Dart↔TS tag vocabulary, the "needed" wording (compared as **rendered output**, not as two lists), and the **retired-type table where index *is* the stored int**. A reorder here silently remaps every legacy signal.
+  - `test/signal_event_vocabulary_guard_test.dart` — event types and the 500-char note cap, parsed out of `firestore.rules`. A type the rules accept but the app cannot read is stored and then **never appears in anyone's history**.
+  - `test/urgency_derivation_guard_test.dart` — the legacy urgency fallback
+  - `test/map_filter_state_test.dart` — the "all selected" default sets; a new tag missing from them is invisible on the map from the moment it exists
+  - `test/firestore_settings_guard_test.dart` — assigning custom Firestore `Settings` in Dart silently breaks the Android headless isolate's geo query, and reports as "no signals nearby"
+- [ ] `cd firestore-tests && npm ci && npm test` — Firestore **and** Storage rules suites pass, **including the new `events` cases**. Required before **every** rules deploy; device testing cannot validate undeployed rules because `help-a-paw-dev` is production.
+- [ ] `cd functions && npm ci && npm test` — **NEW**: the first unit tests `functions/` has ever had. Covers `recipientSelection` tier ranking and the floor, and the legacy headline shims (`displayTagsOf` / `signalHeadline`). Every failure mode here is silent in production.
 - [ ] Kotlin: `android/app/src/test/.../GeohashTest.kt` passes (guards the Dart↔Kotlin geohash parity the fan-out depends on)
 - [ ] Swift: `ios/RunnerTests/GeohashTest.swift` passes — and afterwards, restore/verify `build/native_assets/ios/objective_c.framework` before any device build
 - [ ] `cd functions && npm run build` — TypeScript compiles
+- [ ] **`npm ci`, never `npm install`** in either node tree, and confirm `ignore-scripts=true` is still present in `functions/.npmrc` and `firestore-tests/.npmrc`
+- [ ] Deployed functions report the **Node 24** runtime
 
 ### 16.2 Post-deploy backend verification
 - [ ] Function logs show the geohash fan-out selecting recipients (not a full scan) — compare read counts against `COST_ANALYSIS.md` expectations
+- [ ] **The per-fan-out structured line is present and readable**: candidates scanned, eligible count, whether widening fired, the four tier sizes, backfilled count. §6.7 cannot be tested without it, and `MIN_RECIPIENTS` / `WIDEN_RADIUS_KM` cannot be tuned against anything else.
+- [ ] Create one signal and read that line end-to-end: tier A ⊆ recipients, backfill stopped at the floor of 10 (or ran out of candidates), reporter excluded
+- [ ] Confirm the deployed **rules** contain `match /events/`, the tag/species/urgency bounds, and the inbox allow-list that accepts **both** the old and new shapes — read the live ruleset, don't assume the deploy took
 - [ ] Inbox entries appear in `users/{uid}/notifications` with deterministic ids (`sig_`/`st_`/`cmt_`/`nb_`) and an `expiresAt`
 - [ ] `userCounters/{uid}.unread` increments server-side and is repaired by the client on resume
 - [ ] `signalLink` responds for a valid id, an unknown id, and a malformed id (§15.3)
@@ -964,64 +1214,69 @@
 - [ ] Auth deletion happens **only after** the Firestore cleanup succeeded (a failed cleanup is left for the next run)
 - [ ] The **notifications TTL policy** actually expires entries older than 90 days
 
-### 16.4 Upgrade path `6.0.1+125` → `6.0.2+126` — OBSERVED PROCEDURE (dedicated device)
+### 16.4 Upgrade path `6.0.2+129` → this build — OBSERVED PROCEDURE (dedicated device)
 
-> **Most of this release's risk lives here.** An existing install carries prefs, an
-> auth session, an FCM token and a dedupe store written by a build that knew nothing
-> about the inbox, background location, deep links or the v7 Google SDK. A clean
-> install exercises none of that.
+> **Most of this release's risk lives here, and more of it than last time.** An existing
+> install carries an account with **no helper tags**, signals with **no urgency, tags or
+> species**, a status history stored as **comments**, and preferences containing a
+> `signalTypes` list nothing reads any more. Every one of those is a path a clean install
+> never touches — and the first thing the upgraded user meets is a non-skippable gate.
 >
-> ⚠️ **This must be run on a device that is still on 125.** The two attached Android
-> devices already auto-updated to 126 from Play, so the transition happened unobserved
-> and **cannot be replayed on them** without a rollback. Use the dedicated observation
-> device.
+> ⚠️ Run this on a device still on **129**, before it auto-updates. Roll one back to the
+> previous closed-track release if necessary.
 
-#### Phase 1 — Establish 125 state (BEFORE upgrading)
+#### Phase 1 — Establish 129 state (BEFORE upgrading)
 
-- [ ] Install **6.0.1+125** (previous closed-track release, or sideload that APK)
-- [ ] Confirm `versionName=6.0.1 versionCode=125` via `adb shell dumpsys package org.helpapaw.helpapaw | grep version`
-- [ ] Sign in — use a **Google** account, so the v6→v7 SDK migration is exercised
+- [ ] Install **6.0.2+129** (previous closed-track release, or sideload that APK)
+- [ ] Confirm `versionName=6.0.2 versionCode=129` via `adb shell dumpsys package org.helpapaw.helpapaw | grep version`
+- [ ] Sign in — use a **Google** account
 - [ ] Enable **notifications**; confirm a token lands in `users/{uid}.fcmTokens`
 - [ ] Enable **location tracking**; confirm `userLocations/{uid}` exists
-- [ ] Set a **non-default** notification radius (e.g. 25 km) and **deselect two signal types**
+- [ ] Set a **non-default** notification radius (e.g. 25 km) and **deselect two signal types** (the retired filter — this is the field the new build must not read *or* rewrite)
 - [ ] Enable **test mode** (title ×7)
-- [ ] Create one signal and post one comment, so there is authored content
-- [ ] Receive at least one push, and **leave it unread** (iOS: leaves a badge from the old `badge: 1` behaviour)
-- [ ] **Record all of it** — uid, exact radius, which types are deselected, token value, badge number, signal id. This is the comparison baseline; without it "survived the upgrade" is unfalsifiable.
+- [ ] **Create signals of several different types** — at minimum a Blood donation and a Lost/Found, plus one Emergency. These become the §3.8 legacy corpus and cannot be manufactured after the upgrade.
+- [ ] **Change one signal's status and post a comment**, so there is history stored the *old* way (status changes as comments)
+- [ ] Receive at least one push, and **leave it unread**
+- [ ] **Record all of it** — uid, exact radius, which types are deselected, token value, badge number, signal ids **and their types**. Without this baseline, "survived the upgrade" is unfalsifiable.
 
 #### Phase 2 — Upgrade in place (do NOT uninstall)
 
 - [ ] Start `adb logcat` **before** the upgrade and keep it running — `MY_PACKAGE_REPLACED` fires during install and is easy to miss
 - [ ] Update via the Play closed track (preferred — matches what real users get) or `adb install -r`
-- [ ] Confirm `versionCode=126`, and that `firstInstallTime` is **unchanged** while `lastUpdateTime` moves — that proves it was an upgrade, not a reinstall
+- [ ] Confirm the new `versionCode`, and that `firstInstallTime` is **unchanged** while `lastUpdateTime` moves — that proves it was an upgrade, not a reinstall
 
 #### Phase 3 — Verify, before opening the app
 
 - [ ] **`MY_PACKAGE_REPLACED` re-arms background location**: logcat shows `re-armed location updates after android.intent.action.MY_PACKAGE_REPLACED` **without the app being launched** (§7.2)
 - [ ] No crash on the receiver path in logcat
 
-#### Phase 4 — First launch of 126
+#### Phase 4 — First launch of the new build
 
 - [ ] Launches cleanly to the map; **no crash, no launch-screen hang** (§14.6)
 - [ ] **Still signed in** — no forced re-auth, same uid as recorded. This is the Google v6→v7 check: the Firebase session must survive the SDK swap.
-- [ ] **⚠️ The user is NOT dumped into a random signal.** The deferred deep-link one-shot has never run on this install (`deferred_link_checked` didn't exist in 125), so it *will* execute on this first launch and read the original Play install referrer. An organic referrer must be a silent no-op. Landing on a signal here is a **bug**.
-- [ ] Notification radius still reads **25 km**; the same two signal types are still deselected — proves the new typed `NotificationPreferences` model reads 125's data correctly
+- [ ] **⚠️ THE GATE FIRES FIRST.** This account has no `helperTags`, so the very first thing after launch is the non-skippable helper-tag picker (§6.8) — before the map, on an account that has been using the app for months. Confirm it appears, that it can be completed, and that it does not reappear afterwards.
+- [ ] **The gate must not strand this user.** Repeat the first launch with the device **offline**: the app must reach the map rather than showing an ungetpastable gate, and a save made offline must not spin forever.
+- [ ] Notification radius still reads **25 km** — proves the new typed `NotificationPreferences` model reads 129's data correctly
+- [ ] **The retired `signalTypes` list is still on the document, unread and unrewritten** — check Firestore directly. Rewriting it would opt the user back into something they chose against.
 - [ ] **Test mode is still on** and the map still reads `signals_test`
+- [ ] **The legacy signals from Phase 1 render correctly** — run the whole of §3.8 against them here; this is the only place a real pre-upgrade corpus exists
+- [ ] **The old status-change comment still renders in the new merged history** (§3.4), and the synthetic "reported this signal" row appears above it
 - [ ] Authored signal and comment still present, reporter name resolves (not "Unknown")
-- [ ] **Location tracking restored on first launch** — `userLocations/{uid}` updates without the user touching the toggle. Note this is genuinely *new* behaviour: `LocationService.initialize()` was dead code in 125, so tracking silently stopped after every restart. Confirm it now self-starts.
+- [ ] Map pins for the legacy signals are **amber/green by derivation**, never red
 - [ ] **FCM token unchanged** and still in `users/{uid}.fcmTokens` — a rotated token here would mean a delivery gap for real users
 - [ ] A push sent now arrives **exactly once** (no duplicate from a stale token)
-- [ ] Drawer shows the new **Notifications** entry; the inbox opens and renders (empty is fine — 125 wrote no entries)
-- [ ] `userCounters/{uid}` did not exist under 125; confirm the badge sync **creates it** rather than erroring
+- [ ] Location tracking still restores on launch; `userLocations/{uid}` updates without touching the toggle
 
 #### Phase 5 — iOS-specific (TestFlight upgrade over the old build)
 
-- [ ] The app-icon badge left stuck by 125's `badge: 1` behaviour is **cleared on first resume** of 126
-- [ ] Universal Links begin working after the upgrade (125 had no associated-domains entitlement) — tap a shared link
-- [ ] Google sign-out then sign-in uses the **new v7 flow** and shows the account chooser
+- [ ] The gate behaves identically on iOS, including the offline path
+- [ ] Universal Links still work after the upgrade — tap a shared link, and confirm it **bypasses the gate** and opens the signal
+- [ ] Badge count still reconciles on first resume
 
 #### Phase 6 — Regression sweep on the upgraded install
 
-- [ ] Create a signal, comment, change status — all succeed with no `PERMISSION_DENIED` (the rules tightened in this release; a 125-era session must still satisfy them)
-- [ ] The catch-up dedupe store from 125 (`notified_signals`) doesn't cause a missed **or** duplicated notification
+- [ ] Create a signal through the **full wizard**, comment, change status **and** change urgency — all succeed with no `PERMISSION_DENIED` (a 129-era session must satisfy the new rules)
+- [ ] **Edit a legacy signal**: it requires choosing tags and a species to save, and afterwards its stored `signalType` is still there, untouched
+- [ ] The catch-up dedupe store from 129 (`notified_signals`) doesn't cause a missed **or** duplicated notification
 - [ ] Fresh-install path tested **separately** on a different device — both must pass independently
+- [ ] **Mixed-version check (the one only two devices can do):** with one device on 129 and one on the new build, create a signal on each. Each must render sensibly on the other, and the push each generates must announce the right category on both.

@@ -366,11 +366,31 @@ come out together once the installed base has moved on:
 
 | where | what | why |
 |---|---|---|
-| `functions/src/tags.ts` | `signalHeadline` + `RETIRED_SIGNAL_TYPE_HEADLINES` | Without it `helpNeededTagsOf` substitutes the fallback for every untagged signal, so a Blood-donation report from a shipped build pushes as "Rescue needed" — the server discarding a category the client still sends and still means |
+| `functions/src/tags.ts` | `primarySignalTag` + `RETIRED_SIGNAL_TYPE_TAGS` (`signalHeadline` is now `helpTagHeadline(primarySignalTag(…))`) | Without it `helpNeededTagsOf` substitutes the fallback for every untagged signal, so a Blood-donation report from a shipped build pushes as "Rescue needed" — the server discarding a category the client still sends and still means |
 | `functions/src/index.ts` | inbox entries mirror `signalType` when the signal has one | Shipped builds render the row from `signalType` and fall back to the stored **English** body without it, showing Bulgarian users English text |
+| `functions/src/index.ts` | inbox rows are written from `displayTagsOf`, not from the matched tag list | The entry used to be written from `signalTags`, which is what the fan-out *matched* on — and `helpNeededTagsOf` collapses anything untagged to the fallback. One event then announced the same document two ways: "Blood donation needed" on the lock screen, "Rescue needed" in the inbox row |
+| `functions/src/index.ts` (`loadSignalPreview`) | the public share page badges with `primarySignalTag` | The one page people see *before* they have the app; reading tags directly badged every pre-vocabulary signal "Rescue" whatever it was |
+| `lib/src/models/help_tag.dart` + `signal.dart` | `HelpTag.primaryOfSignal` + `retiredSignalTypeCodes`, fed by `Signal.legacySignalType` | The app had no equivalent of the retired table at all, so **every in-app surface** showed those signals as Rescue — details header, share text, My Signals icon and its empty-title fallback |
+| `lib/src/services/nearby_signal_checker.dart` | the arrival catch-up reads `Signal.legacySignalTypeFrom(data)` into `_NotifiableSignal`, headlines through `primaryOfSignal`, and stores `HelpTag.displayCodes` on the inbox row it writes | The one *client-written* notification for a signal. Reading only the codes made the catch-up say "Rescue needed" for a `signalType: 2` signal the server's push called "Blood donation needed" — and `HelpTag.displayCodes` (the Dart mirror of `displayTagsOf`) is needed for the row for exactly the reason the server needs it |
 | `firestore.rules` | the inbox `create` allow-list accepts **both** shapes, requires neither | This is a *client* write path (the arrival catch-up), and `NearbySignalChecker` swallows a denial — rejecting the old shape makes inbox entries silently stop appearing |
 
 Removal is tracked by **HelpAPaw/Flutter#70**, which lists every site.
+
+**The substitution is for display only — never for matching.** `displayTagsOf` is
+deliberately *not* used at the fan-out's matching site, and `MapFilterState`
+deliberately still files an untagged signal under `rescue`: remapping which helpers
+hear about a legacy signal, or which filter reveals it, is a product decision rather
+than a display fix, and the map must agree with the fan-out about what an untagged
+signal asks for. `Signal.toJson()` also omits `legacySignalType` on purpose — it is
+only ever used to *create* a signal (edits go through targeted `update({…})` maps), so
+a legacy document can never have its `signalType` rewritten or dropped by us.
+
+**Every display surface is now legacy-aware**, the arrival catch-up included (fixed
+2026-08-18). The two doors an untagged signal can come through are deliberately
+different: `HelpTag.effectiveCodes` / `helpNeededTagsOf` is what you match with and
+resolves to the fallback, `HelpTag.displayCodes` / `displayTagsOf` is what you show
+and recovers the retired category. Reaching for the matching list to render text is
+the shape of the bug both times it happened.
 
 The earlier plan dropped all three, arguing that four legacy documents did not
 justify a migration mechanism. That was right about existing documents and wrong
@@ -933,16 +953,15 @@ hidden while the bar is up, since the bar carries its own Cancel and they occupy
 same corner. Confirming pushes `/new_signal` (`NewSignalWizardPage`), which renders
 steps 2–7.
 
-| # | Step | Required | Notes |
+| # | `NewSignalStep` | Required | Notes |
 |---|---|---|---|
-| 1 | Location | yes | map crosshair; `confirmLocation(lat, lng)` |
-| 2 | Photo | no | camera/gallery, max 1920 px, quality 85 |
-| 3 | Details | title + description | title ≤300, description ≤10 000, phone optional |
-| 4 | Animal | yes | `AnimalTypeSelector(singleSelect: true)` |
-| 5 | Category | defaults to 0 | **localized** `Signal.getLocalizedSignalTypes` |
-| 6 | Urgency | yes | `UrgencyPicker` **with** descriptions; owns the Red confirm |
-| 7 | Help needed | 1–3 | `HelpTagSelector(maxSelection: HelpTag.maxPerSignal)` |
-| 8 | Review | — | every answer, each linking back to its step; Submit |
+| 1 | `location` | yes | map crosshair; `confirmLocation(lat, lng)`; the only step with `isOnMap` |
+| 2 | `photo` | no | camera/gallery, max 1920 px, quality 85 |
+| 3 | `details` | title + description | title ≤300, description ≤10 000, phone optional |
+| 4 | `animal` | yes | `AnimalTypeSelector(singleSelect: true)`; auto-advances |
+| 5 | `urgency` | yes | `UrgencyPicker` **with** descriptions; owns the Red confirm; auto-advances |
+| 6 | `helpTags` | 1–3 | `HelpTagSelector(maxSelection: HelpTag.maxPerSignal)`; never auto-advances |
+| 7 | `review` | — | every answer, each linking back to its step; Submit |
 
 **The order is load-bearing and documented on the enum.** Location and photo lead
 because they are the only perishable answers — the reporter is in front of the animal
@@ -977,6 +996,17 @@ Leaving the wizard with anything entered (`isDirty`) prompts before discarding.
 answer it tests is one somebody actively gave. The system back gesture is a step back, not an
 exit, until the first step.
 
+**All three exits from a draft ask the same question**, because all three can now be
+reached holding the same finished draft. The wizard owns one (its `×`); the map owns
+the other two, because step 1 lives there — the Android back gesture and the location
+bar's Cancel. The map's two discarded unconditionally until `57501ff`, which was
+harmless only while the map could not be reached with anything entered. It can be now:
+*Change* beside Location on the review step pops back to the map with photo, title,
+description, animal, urgency and tags all still held in the view model, so one back
+press threw away six answered steps with no prompt while the wizard's `×` asked about
+the very same draft. Both map exits now route through the same `isDirty`-gated confirm,
+so a fresh FAB tap still leaves in one press with no dialog.
+
 Length limits mirror the Firestore rules so over-long input is capped at the keyboard
 rather than failing with an opaque `PERMISSION_DENIED`.
 
@@ -987,6 +1017,12 @@ rather than failing with an opaque `PERMISSION_DENIED`.
 3. `subscribeCreatorToSignal` — `arrayUnion` on `users/{uid}.signalSubscriptions`.
 4. If an image was picked: upload to Storage, then `arrayUnion` the URL onto `photoUrls`.
    A failed upload returns *partial success* (`photo_upload_failed`) — the signal exists.
+   **The `XFile` is captured before the first await**, like the location, because it is
+   read *after* two of them: `cancelAddingNewSignal` resets `formState` to a blank one,
+   so tapping `×` → Discard mid-submit used to leave this reading null by the time the
+   upload block ran — the photo was skipped, `addPhotoUrl` never ran, and the submit
+   still reported full success. `×` is also disabled while submitting, the way Back and
+   Next already were; either alone closes the race.
 5. On success the map opens the new signal's info window once it appears in the stream
    (`_showSignalInfoWindow`, `fireImmediately` listener with a 10s safety timeout).
 
@@ -1119,10 +1155,32 @@ including its loading spinner).
 
 **Preferences UI** — `notification_settings_page.dart`: master toggle (requests OS
 permission before enabling), location tracking toggle with a 1–50 km radius slider,
-region of interest (map picker, 1–100 km), and per-type checkboxes with
-Select all / Deselect all. Every change persists immediately via merged writes to
+region of interest (map picker, 1–100 km), an **animal-type** selector and a
+**helper-tag** selector (§4.7). Every change persists immediately via merged writes to
 `users/{uid}.notificationPreferences`. Anonymous users see an "create an account to keep
 your settings" banner.
+
+The per-signal-type checkboxes and their Select all / Deselect all buttons are **gone**
+with §4.4. Two things replaced them:
+
+- **While `enabled` is true the screen requires ≥1 animal type and ≥1 helper tag**
+  (`_validationError`, which the master toggle also consults ahead of turning itself on,
+  so it can refuse before doing anything). The check is scoped to `enabled` on purpose:
+  "receive nothing" is what the master switch is for, and an empty list while
+  notifications are on is a misconfiguration indistinguishable from a bug.
+- **A read that never landed renders an error with a Retry, not an editor** (`_loaded`).
+  After a throw (offline, App Check, a session that never materialised) the screen would
+  otherwise be showing its *defaults* — notifications off, no helper tags — which look
+  exactly like a real configuration; saving those would destroy whatever the user
+  actually had. Refusing at the write instead would accept every tap and then reject it,
+  which reads as broken rather than offline.
+
+Preferences are parsed through `NotificationPreferences.fromMap` rather than re-read
+field by field, because `animalTypes` and `helperTags` carry **opposite** absent/empty
+rules (§4.2) and a second hand-rolled reader is how those rules drift. One deliberate
+asymmetry survives in the UI: a user who has never chosen sees every species ticked
+(absent = all), while a *stored* empty list stays empty, since those users chose to
+receive nothing and re-ticking them would silently opt them back in.
 
 **Onboarding** — `notification_onboarding_sheet.dart`: a modal shown on the map for
 users who haven't completed or dismissed it. It computes which of
@@ -1521,7 +1579,14 @@ page is bilingual with a client-side language switch.
 
 ---
 
-## 9. Cloud Functions (`functions/src/index.ts`, Node 20, gen 2)
+## 9. Cloud Functions (`functions/src/index.ts`, Node 24, gen 2)
+
+> **Runtime.** `functions/package.json` pins `engines.node: "24"` — moved 20 → 22 → 24
+> on 2026-08-17, the last two in one sitting. Check what a local `node --version`
+> actually reports before trusting it as evidence about the deployed runtime — the
+> default `node` on this machine is well ahead of it (a keg-only `node@24` is what
+> matches). `nodemailer` is on **9.x** (taken to clear the feedback mailer's advisories), and
+> `jest` is pinned to **29** because 30 would not install this lockfile on Linux.
 
 | Function | Trigger | Purpose |
 |---|---|---|
@@ -1681,6 +1746,13 @@ Things that live in more than one place and fail **silently** when they drift.
    inbox row announce one signal two ways, and a missing name pushes a raw code
    ("babyCare needed").
    *(Replaces the old "signal type list ×3" invariant, retired with §4.4.)*
+2a. **The retired-`signalType` table (×2).** `HelpTag.retiredSignalTypeCodes` (Dart) and
+   `RETIRED_SIGNAL_TYPE_TAGS` (`tags.ts`). **Index *is* the stored int**, so the two
+   reordering apart silently remaps every legacy signal — a Blood-donation report would
+   start rendering as Foster, with nothing thrown anywhere. Guarded by the same
+   vocabulary guard, which had to learn to strip line comments first: two entries
+   annotate themselves with a quoted word (`"emergency"`, `"wild"`) that the extractor
+   was otherwise reading as array entries. Both tables come out together (§4.4).
 3. **Status codes (×2).** `SignalStatus` (Dart, source of truth) and `SIGNAL_STATUSES`
    (functions, keyed by *code*, not array position).
 4. **`animalTypes` absent vs empty.** Absent = all species; empty = none. Enforced in
@@ -1742,8 +1814,8 @@ dart fix lib --apply
 flutter test                    # unit/widget
 make test-integration           # needs a device + integration_test/test_credentials.json
 
-cd functions && npm run build && npm run deploy
-cd firestore-tests && npm test  # Firestore + Storage rules — before EVERY rules deploy
+cd functions && npm ci && npm run build && npm test && npm run deploy
+cd firestore-tests && npm ci && npm test  # Firestore + Storage rules — before EVERY rules deploy
 
 firebase emulators:start        # auth 9099 · functions 5001 · firestore 8080 · storage 9199 · hosting 5000
 ```
@@ -1756,11 +1828,23 @@ repo whose `GITHUB_TOKEN` defaulted to write. That repo default is now `read`.
 All checks are run locally; see the npm supply chain and pub upgrade sections of
 `CLAUDE.md`.
 
+**npm hardening (both node trees).** `ignore-scripts=true` is committed in
+`functions/.npmrc` and `firestore-tests/.npmrc`; nearly every npm worm executes from a
+`preinstall`/`postinstall` hook and nothing in either tree needs one. `functions/.npmrc`
+**is** uploaded with the function source on deploy (verified 2026-08-17: inflating it
+grew the packaged payload 183.05 KB → 495.1 KB), so it disables scripts in the Cloud
+Build install too — and therefore **must never hold a registry token**, which would ship
+to Cloud Build with the source. Install with `npm ci`, never `npm install`, unless
+deliberately changing versions. Both trees audited clean 2026-08-17: 0 malware
+advisories across 559 package versions, 804/804 registry signatures verified.
+
 ### 13.2 Test suites
 
 | Suite | Location | Covers |
 |---|---|---|
-| Unit/widget | `test/` | `MapViewModel`, `NotificationPreferences`, deep-link parsing, repository mocks |
+| Unit/widget | `test/` | `MapViewModel`, `NotificationPreferences`, deep-link parsing, repository mocks, the wizard, the urgency picker, the update-note dialog, the helper-tag gate, `MapFilterState`, `mergeSignalHistory` |
+| Vocabulary guards | `test/*_guard_test.dart` | The ×2 copies that fail silently: help tags + the retired-type table (parses `tags.ts`), signal-event types + the note cap (parses `firestore.rules`), urgency derivation, and the ban on assigning Firestore `Settings` |
+| Functions unit | `functions/src/__tests__/` (jest) | `recipientSelection` ranking and the floor, `displayTagsOf`/`signalHeadline` legacy headlines. The first tests `functions/` has ever had — every failure mode here is silent (too few recipients looks like a quiet day, too many looks like spam) |
 | Native unit | `android/app/src/test/.../GeohashTest.kt` | geohash parity |
 | Firestore rules | `firestore-tests/rules.test.js` | every rule path, against the emulator |
 | Storage rules | `firestore-tests/storage.rules.test.js` | signal photos (both collections), avatars, size/content-type limits, deletes |
@@ -1782,13 +1866,24 @@ rules grant access to a subcollection no released build writes to. Reads degrade
 gracefully (§7.5 renders the half it can and offers a retry); **writes do not**, because
 atomicity is exactly what makes them all-or-nothing.
 
-⚠️ **Deployed 2026-08-15 and reverted the next day.** A later `firebase deploy
---only firestore:rules` from a branch without the `events` block overwrote it —
-rules deploys replace the whole ruleset, so deploying an older file silently drops
-newer blocks. The symptom on a build of this branch is the §7.5 partial-history
-notice on *every* signal (the `events` listen is denied while `comments` still
-works) and status/urgency changes failing outright. **Re-deploy before this branch
-ships, and deploy rules from the merged branch, never from an older checkout.**
+⚠️ **Deployed 2026-08-15, reverted the next day, live again since.** A `firebase
+deploy --only firestore:rules` from a branch without the `events` block overwrote
+it — rules deploys replace the whole ruleset, so deploying an older file silently
+drops newer blocks. The symptom was the §7.5 partial-history notice on *every*
+signal (the `events` listen denied while `comments` still worked) and status and
+urgency changes failing outright. The moderation deploy carried the block back
+out; **verified against the live ruleset 2026-08-18** — `isSignalEventCreate`,
+`isValidEventNote`, `isValidLevel` and both `events` matches are deployed.
+
+**The drift now runs the other way, and it is the same hazard.** The live ruleset
+is `feature/moderator-role`'s, which is `dev`'s plus the moderation blocks
+(`isModerator`, `isCommentsLocked`, `isNotTouchingModeration`, `reports`,
+`moderationActions`, and `isCommentCreate` taking the parent collection). A
+`--only firestore:rules` from `dev` — or from any branch cut off it — reverts all
+of that: comment locks stop being enforced and a reporter can clear the
+`moderation` map a moderator wrote. **Merge before deploying rules; re-read the
+live rules afterwards.** Whichever way the drift points, the check is the same:
+read the deployed ruleset, do not assume the checkout matches it.
 
 ### 13.4 API key restrictions
 
@@ -1811,6 +1906,8 @@ silently breaks Auth/Firestore/FCM in release builds only.
 | In-app inbox retention | 90 days via a Firestore TTL policy on `expiresAt`; the policy is applied with `gcloud`, **not** by `firebase deploy` |
 | Signal history is client-written and reporter-deletable | Open — tamper-*evident*, not tamper-proof. The reporter can delete individual `events`, because the delete-signal cascade runs on the client. Fix is a `deleteSignal` callable (Admin SDK recursive delete), after which the rule becomes `if false`. Tracked as HelpAPaw/Flutter#68, which also covers hiding signals instead of deleting them |
 | Update note not in the push/inbox body | Open — a status-change push still reads `{signalTitle}: {status}` with no note. Needs `handleSignalUpdated` to query the newest event (safe: the batch is atomic) or a `lastStatusNote` field on the signal, which would widen `isStatusOnlyUpdate`'s allow-list |
+| Arrival catch-up headlines a legacy signal as "Rescue needed" | **Fixed 2026-08-18** (§4.4) — `_NotifiableSignal` now carries `Signal.legacySignalTypeFrom(data)`, the notification body resolves through `primaryOfSignal`, and the inbox row it writes stores `HelpTag.displayCodes` rather than the matched list. Matching is untouched. Disappears with the rest of the shim |
+| `events` rules block deployed then reverted | **Re-deployed** — the moderation deploy carried it back out; verified against the live ruleset 2026-08-18. The standing hazard is unchanged and now points at the moderation blocks instead: see §13.3 |
 | Comment photos | Storage path reserved, no write rule, no UI |
 | `signalLink` push text / server notifications | English only |
 | `Signal.phoneNumber` vs `contactPhone` | Duplicated legacy field, both written with the same value |
@@ -1831,3 +1928,9 @@ silently breaks Auth/Firestore/FCM in release builds only.
 | 2026-08-12 | **Built the help-tag system.** One nine-code vocabulary shared by signals (`helpNeededTags`, 1–3, mandatory) and users (`helperTags`, ≥1), plus `animalType` as an independent axis rather than species-crossed tags. The fan-out is now prioritise-then-backfill: all tag matches in radius are notified, then C→B→D nearest-first up to `MIN_RECIPIENTS` (lowered to 10 before release), with one widened re-scan at 250 km when the pool is thin — ranking extracted to `recipientSelection.ts` with 20 unit tests (the first tests `functions/` has had). Non-skippable onboarding gate implemented as a widget wrapper on the map route, not a router redirect; a failed preferences read renders the app rather than locking the user out. Settings now require ≥1 animal type and helper tag while enabled, and "Deselect all" is gone (stored empty `signalTypes` still means none and is never migrated). Rules validate the new fields but do **not** require them — tightening is a later, separate deploy. §4.1, §4.2, §4.7, §5.1, §7.4, §7.5, §7.6, §7.15, §9, §12. |
 | 2026-08-15 | **Built the signal timeline (master spec §4.6, "Case Timeline").** Status and urgency changes now require a mandatory update note and are written to a new `signals/{id}/events` subcollection instead of `comments` — the two differ in who may write them (later event types must be server-written) and who may delete them, and mixing them was also counting status changes as comments on the profile screen. The details screen merges both collections into one chronological history, opened by a synthetic "reported this signal" row derived from the signal document, with All/Events filter chips. Nothing is backfilled: legacy system entries stay in `comments` and keep rendering, and `handleCommentCreated`'s type guard stays with them. Rules validate a closed event vocabulary with a **required** 1–500 char note, deny updates, and (for now) still let the reporter delete events so the client-side delete cascade works — the tamper hole is recorded as a known gap, HelpAPaw/Flutter#68. No functions change. §4.1, §5.1, §7.5, §12, §14. |
 | 2026-08-15 | **Folded `signalType` into the help-tag vocabulary.** Four of its seven values restated fields that now exist in their own right (Emergency = red urgency, Blood donation / Unneutered animals = tags, Wild animals = `animalType`), so reporters answered the same question twice and the answers could contradict. The deciding case was an injured animal, which master spec §5 makes the worked example of Red urgency and gives no category at all. `helpNeededTags[0]` is now the case's category (master spec §4.2); the vocabulary grew to 13 with `bloodDonation`, `neutering`, `lostFound` and `dangerWarning`. Push and inbox text is now urgency + the primary tag's "needed" form ("Urgent · Rescue needed — …"), as a second localized label per tag rather than a `+ " needed"` suffix, because Bulgarian does not build that phrase by suffixing. The `signalTypes` notification gate is gone — **removing the only negative filter users had** (§4.2), which cost nothing because no user had ever excluded a type. The map filter sheet swapped its type section for tag + species, closing the browse-vs-notify asymmetry. No migration: `signalType` is simply never read, and the four production signals predating tags were fixed by hand. §4.2, §4.4, §4.7, §5.1, §7.4, §7.13, §9, §12. |
+| 2026-08-16 | **Made the legacy category survive everywhere it is shown, not just in the push.** The retired-type table became a table of *tag codes* rather than of headline strings (`primarySignalTag`, with `signalHeadline` derived from it), so the mapping exists once instead of as a parallel list, and the public share page — the one thing people see before they have the app — stopped badging every pre-vocabulary signal "Rescue". §4.4, §12. |
+| 2026-08-17 | **Closed the rest of the legacy-category gap, on both sides.** The inbox row was written from the tag list the fan-out *matched* on, so one event announced the same document as "Blood donation needed" on the lock screen and "Rescue needed" in the inbox; `displayTagsOf` now supplies the display copy, deliberately not the matching one. The app had no equivalent of the retired table at all, so `HelpTag.primaryOfSignal` + `Signal.legacySignalType` mirror the server across the details header, share text and My Signals. The map filter and the fan-out's matching site are unchanged on purpose. One surface remains uncovered — the arrival catch-up's local notification (§14). §4.4, §12. |
+| 2026-08-17 | **Stopped a finished draft vanishing on one back press.** Step 1 of the wizard lives on the map, so the map owns two of the three exits from a draft, and both discarded unconditionally — harmless only until *Change* beside Location on the review step made it reachable with six steps answered. Both now route through the wizard's own `isDirty` confirm. The submit path had the mirror bug: `submitSignal` read `selectedImage` after two awaits, so `×` → Discard mid-submit skipped the upload and still reported full success; the `XFile` is now captured up front and `×` is disabled while submitting. §7.4. |
+| 2026-08-17 | **Functions runtime to Node 24** (via 22), **nodemailer to 9.x**, jest pinned to 29 so the lockfile installs on Linux. §9. |
+| 2026-08-17 | **npm supply-chain hardening.** `ignore-scripts=true` committed in both node trees and verified to ship with the function source (so it also covers the Cloud Build install, and must never hold a registry token); both trees audited clean. The dead `.github/workflows/flutter.yml` was deleted — it had never run, pointed at a non-existent branch, and ran `flutter pub upgrade` before executing package code, on a public repo whose token defaulted to write. §13.1. |
+| 2026-08-18 | **Made the last display surface legacy-aware, and re-checked the rules that were reverted.** The arrival catch-up — the only notification the *client* writes — still headlined from the matched tag list, so a `signalType: 2` signal reached one user as "Blood donation needed" (fan-out) and another as "Rescue needed" (catch-up), for one document. It now carries `Signal.legacySignalTypeFrom(data)` and renders through `primaryOfSignal`, and the inbox row it writes stores `HelpTag.displayCodes` — the Dart mirror of `displayTagsOf`, added so the show-list and the match-list are two named things on this side too. Matching is deliberately unchanged. The `events` rules block reported as reverted is **live again** (the moderation deploy carried it back out, verified against the deployed ruleset); the drift now points the other way — `dev`'s `firestore.rules` is behind live by the whole moderation block, so a rules deploy from `dev` would revert it. §4.4, §13.3, §14. |

@@ -195,6 +195,21 @@ enum HelpTag {
     return fromCode(retiredSignalTypeCodes[signalType]) ?? fallback;
   }
 
+  /// The codes to SHOW for a signal — which is not what the fan-out matched on.
+  ///
+  /// The Dart mirror of `displayTagsOf` in `functions/src/tags.ts`, and it
+  /// exists for the same reason: [effectiveCodes] collapses an untagged signal
+  /// to [fallback], so a legacy `signalType: 2` document *matches* as rescue.
+  /// That is the right list to match with and the wrong one to store on the
+  /// notification it produces — the body is built from [primaryOfSignal], which
+  /// honours the retired type, so persisting the matched list makes the inbox
+  /// row contradict the notification that announced it.
+  ///
+  /// Only the primary is substituted: for a tagged signal this is the identity,
+  /// and any extra tags survive in the order the reporter gave them.
+  static List<String> displayCodes(List<String> codes, int? signalType) =>
+      codes.isNotEmpty ? codes : [primaryOfSignal(codes, signalType).code];
+
   /// [codes] as the matching layer sees them — never empty.
   ///
   /// The Dart mirror of `helpNeededTagsOf` in `functions/src/tags.ts`: a signal

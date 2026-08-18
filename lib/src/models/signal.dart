@@ -93,7 +93,7 @@ class Signal {
       urgency: urgencyFrom(json),
       helpNeededTags: helpNeededTagsFrom(json),
       animalType: json['animalType'] as String?,
-      legacySignalType: json['signalType'] as int?,
+      legacySignalType: legacySignalTypeFrom(json),
       photoUrls: (json['photoUrls'] as List<dynamic>?)
           ?.map((e) => e as String)
           .toList() ?? [],
@@ -115,6 +115,16 @@ class Signal {
           ?.map((e) => e as String)
           .toList() ??
       const [];
+
+  /// The retired `signalType` of a raw signal document, if it still has one.
+  ///
+  /// Pulled out of [fromJson] for the same reason as [helpNeededTagsFrom]: the
+  /// arrival catch-up works on raw document data rather than parsed [Signal]s,
+  /// and it needs this to headline a legacy signal the way the server's push
+  /// for that same signal does. Reading `signalType` in a second place by hand
+  /// is exactly how the two drift.
+  static int? legacySignalTypeFrom(Map<String, dynamic> json) =>
+      (json['signalType'] as num?)?.toInt();
 
   /// Urgency code for a raw signal document.
   ///

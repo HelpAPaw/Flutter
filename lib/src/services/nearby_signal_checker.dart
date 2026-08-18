@@ -336,6 +336,7 @@ class NearbySignalChecker {
         id: doc.id,
         title: (data['title'] as String?)?.trim() ?? '',
         helpNeededTags: helpNeededTags,
+        legacySignalType: Signal.legacySignalTypeFrom(data),
         createdAt: createdAt,
       ));
     }
@@ -369,7 +370,15 @@ class NearbySignalChecker {
       // The signal's headline need, in its "needed" form — the same wording the
       // server push uses, so a catch-up and a fan-out for the same signal do
       // not read as two different kinds of event.
-      final headline = HelpTag.primaryOf(signal.helpNeededTags).neededLabel(l10n);
+      //
+      // Through primaryOfSignal, not primaryOf: an untagged legacy document has
+      // no codes to read, and the server's push for that same signal recovers
+      // the category from `signalType` (`signalHeadline`). Reading only the
+      // codes here would announce a `signalType: 2` signal as "Rescue needed"
+      // locally while the fan-out called it "Blood donation needed".
+      final headline =
+          HelpTag.primaryOfSignal(signal.helpNeededTags, signal.legacySignalType)
+              .neededLabel(l10n);
       // Through the ARB rather than a literal, so this and the inbox row it
       // writes below cannot be formatted two different ways for one event.
       final body = signal.title.isNotEmpty
@@ -390,7 +399,14 @@ class NearbySignalChecker {
         title: l10n.signalNearbyNotificationTitle,
         body: body,
         signalTitle: signal.title,
-        helpNeededTags: signal.helpNeededTags,
+        // The DISPLAY list, not the matched one — the row is re-rendered from
+        // element 0, so storing the raw (empty) codes of a legacy signal would
+        // make the inbox row contradict the notification written just above.
+        // Mirrors what the fan-out stores for the same signal.
+        helpNeededTags: HelpTag.displayCodes(
+          signal.helpNeededTags,
+          signal.legacySignalType,
+        ),
       ));
     }
 
@@ -429,6 +445,7 @@ class _NotifiableSignal {
     required this.id,
     required this.title,
     required this.helpNeededTags,
+    required this.legacySignalType,
     required this.createdAt,
   });
 
@@ -436,8 +453,17 @@ class _NotifiableSignal {
   final String title;
 
   /// What the signal asks for, in the reporter's priority order. Element 0 is
-  /// the headline; empty for a document written before tags existed, which
-  /// [HelpTag.primaryOf] resolves to the fallback.
+  /// the headline; empty for a document written before tags existed, which is
+  /// what [legacySignalType] is read for.
   final List<String> helpNeededTags;
+
+  /// The retired `signalType`, on documents old enough to still carry one.
+  ///
+  /// Kept beside the tags rather than folded into them at parse time: the tag
+  /// *matching* above must keep seeing an untagged signal as untagged (it
+  /// mirrors the server's `helpNeededTagsOf`, which resolves those to the
+  /// fallback), while the text this signal is announced with must recover the
+  /// real category. See [HelpTag.primaryOfSignal].
+  final int? legacySignalType;
   final DateTime createdAt;
 }
