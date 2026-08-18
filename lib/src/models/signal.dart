@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'help_tag.dart';
+import 'moderation_label.dart';
 import 'signal_urgency.dart';
 
 class Signal {
@@ -43,6 +44,46 @@ class Signal {
   /// [HelpTag.retiredSignalTypeCodes].
   final int? legacySignalType;
 
+  /// What a moderator has done to this signal (master spec §18.3).
+  ///
+  /// **Read-only, and deliberately absent from [toJson]** — the same treatment
+  /// [legacySignalType] gets, for a stronger reason. This map is written only by
+  /// the `moderateAction` Cloud Function through the Admin SDK, and
+  /// `firestore.rules` rejects *any* client write that touches it
+  /// (`isNotTouchingModeration`). Putting it in [toJson] would make the reporter's
+  /// own edits fail — and if the rule were ever relaxed, would let a reporter
+  /// quietly clear the lock a moderator put on their signal.
+  ///
+  /// Absent on every signal not moderated, which is nearly all of them.
+  final Map<String, dynamic>? moderation;
+
+  /// Whether a moderator has locked this signal's comments.
+  ///
+  /// Mirrored by `isCommentsLocked()` in the rules, which is the enforcement —
+  /// this getter only decides whether to draw the composer.
+  bool get commentsLocked => moderation?['commentsLocked'] == true;
+
+  /// The warning label a moderator pinned to this signal, if this build can
+  /// render it.
+  ///
+  /// Typed so the vocabulary lives in one place and the banner cannot show a
+  /// string the server never validated — see [ModerationLabel]. Null both when
+  /// no label is pinned and when the pinned code is newer than this build.
+  ///
+  /// **For "is anything pinned?", use [hasModerationLabel] instead.** The two
+  /// differ exactly on that newer-code case, and conflating them is a real bug
+  /// in each direction: rendering off the raw presence would show an empty
+  /// banner, and offering a *clear* action off the typed value would leave a
+  /// moderator on an older build unable to remove a label they can see is there.
+  ModerationLabel? get moderationLabel =>
+      ModerationLabel.fromCode(moderation?['label'] as String?);
+
+  /// Whether any label is pinned, **including a code this build cannot decode**.
+  ///
+  /// This is the predicate a clear/apply toggle wants; [moderationLabel] is the
+  /// one rendering wants.
+  bool get hasModerationLabel => moderation?['label'] != null;
+
   Signal({
     required this.title,
     required this.description,
@@ -55,6 +96,7 @@ class Signal {
     this.helpNeededTags = const [],
     this.animalType,
     this.legacySignalType,
+    this.moderation,
     this.photoUrls = const [],
     this.status = 0,
   });
@@ -94,6 +136,8 @@ class Signal {
       helpNeededTags: helpNeededTagsFrom(json),
       animalType: json['animalType'] as String?,
       legacySignalType: legacySignalTypeFrom(json),
+      moderation: (json['moderation'] as Map<dynamic, dynamic>?)
+          ?.cast<String, dynamic>(),
       photoUrls: (json['photoUrls'] as List<dynamic>?)
           ?.map((e) => e as String)
           .toList() ?? [],

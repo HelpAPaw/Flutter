@@ -16,6 +16,49 @@ service cloud.firestore {
       return resource.data.reporter == userDoc();
     }
 
+    // The caller holds the moderator role (master spec 3.6.1).
+    //
+    // A server-only DOCUMENT, deliberately not a custom auth claim. Moderator
+    // *actions* all run through callable Cloud Functions, which re-check this
+    // same document with the Admin SDK — so the claim would only ever decide
+    // whether the client draws a button, at the cost of a second copy of the
+    // value that can drift. It would also inherit the ID token's refresh
+    // window: a revoked moderator would keep their powers until the token
+    // expired, up to an hour. Reading the document instead makes both grant
+    // and revoke take effect on the very next request.
+    //
+    // Costs one document read per evaluation, which is why every call site
+    // below places it LAST in an `||` chain — the owner check short-circuits
+    // first, so the ordinary path never pays for it.
+    function isModerator() {
+      return request.auth != null
+             && exists(/databases/$(database)/documents/moderators/$(request.auth.uid));
+    }
+
+    // Comments are locked on the parent signal at {coll}/{signalId} (master
+    // spec 18.3, "Lock comments").
+    //
+    // Nested `get()` with defaults so a signal with no `moderation` map at all
+    // — which is every signal written before this feature — reads as unlocked
+    // rather than erroring the whole rule and denying every comment.
+    function isCommentsLocked(coll, signalId) {
+      return get(/databases/$(database)/documents/$(coll)/$(signalId))
+               .data.get('moderation', {}).get('commentsLocked', false) == true;
+    }
+
+    // The `moderation` map is written ONLY by the Cloud Functions (Admin SDK,
+    // bypasses rules). No client may touch it — least of all the reporter.
+    //
+    // This is load-bearing, not defensive: the reporter's own update branch
+    // (isSignalReporter) accepts *any* field at any value, so without this a
+    // reporter could clear `moderation.commentsLocked` or delete the warning
+    // label a moderator put on their signal, straight from a patched client.
+    // The lock would be decoration.
+    function isNotTouchingModeration() {
+      return !request.resource.data.diff(resource.data)
+                .affectedKeys().hasAny(['moderation']);
+    }
+
     // The caller is the reporter of the parent signal at {coll}/{signalId}.
     // Backs the comment-delete cascade for both the prod and test collections,
     // so that ownership check lives in one place instead of being inlined twice.
@@ -100,7 +143,14 @@ service cloud.firestore {
     // three comment shapes — user text comments, and the `status_change` /
     // `urgency_change` system comments (which carry no `text`) — so the text
     // bounds only apply when a `text` field is present.
-    function isCommentCreate() {
+    //
+    // Takes the collection so the lock check can name the parent signal, the
+    // same way isParentSignalReporter does. That `get()` is one extra read per
+    // comment write; comments are low-volume, and it is the difference between
+    // a real lock and a hidden text field. It also denies comments on a
+    // QUARANTINED signal for free: the parent document no longer exists, so
+    // the get() fails and the write is refused.
+    function isCommentCreate(coll, signalId) {
       return request.auth != null
              && request.resource.data.author == userDoc()
              && (
@@ -108,7 +158,8 @@ service cloud.firestore {
                || (request.resource.data.text is string
                    && request.resource.data.text.size() > 0
                    && request.resource.data.text.size() <= 2000)
-             );
+             )
+             && !isCommentsLocked(coll, signalId);
     }
 
     // Validates a signal-timeline event create (master spec 4.6).
@@ -390,10 +441,14 @@ service cloud.firestore {
       // then widen it to the whole vocabulary, matching every user in the
       // fan-out's set intersection. The edit screen writes both fields on
       // update, so this is the path that field actually travels.
+      //
+      // `isNotTouchingModeration()` applies to BOTH branches — see its doc
+      // comment. The reporter branch is the one that matters.
       allow update: if request.auth != null
                     && isValidUrgency()
                     && isValidHelpNeededTags()
                     && isValidAnimalType()
+                    && isNotTouchingModeration()
                     && (isSignalReporter() || isStatusOnlyUpdate());
       // Only the signal's reporter may delete it
       allow delete: if request.auth != null && isSignalReporter();
@@ -401,7 +456,7 @@ service cloud.firestore {
       // Comments subcollection
       match /comments/{commentId} {
         allow read: if true;  // Public read
-        allow create: if isCommentCreate();
+        allow create: if isCommentCreate('signals', signalId);
         // The signal's reporter may delete comments (enables delete-signal cascade)
         allow delete: if request.auth != null
                       && isParentSignalReporter('signals', signalId);
@@ -435,12 +490,13 @@ service cloud.firestore {
                     && isValidUrgency()
                     && isValidHelpNeededTags()
                     && isValidAnimalType()
+                    && isNotTouchingModeration()
                     && (isSignalReporter() || isStatusOnlyUpdate());
       allow delete: if request.auth != null && isSignalReporter();
 
       match /comments/{commentId} {
         allow read: if true;
-        allow create: if isCommentCreate();
+        allow create: if isCommentCreate('signals_test', signalId);
         allow delete: if request.auth != null
                       && isParentSignalReporter('signals_test', signalId);
       }
@@ -486,5 +542,125 @@ service cloud.firestore {
                     );
       allow read, update, delete: if false;  // Only accessible via Admin SDK/Console
     }
+
+    // ---------------------------------------------------------------------
+    // Moderation (master spec 3.6.1, 18)
+    // ---------------------------------------------------------------------
+
+    // The moderator roster. `{ grantedAt, grantedBy, note? }`.
+    //
+    // Granted and revoked ONLY by `functions/scripts/grant_moderator.js` via
+    // the Admin SDK. No client write path exists — not even a moderator's, and
+    // least of all the subject's own, which is what stops self-promotion.
+    //
+    // `get` on your own document is allowed so the app can decide whether to
+    // draw the moderation entry point. `list` is denied for the same reason as
+    // publicProfiles: the roster is exactly the list an attacker would want, to
+    // know whom to target.
+    match /moderators/{userId} {
+      allow get: if request.auth != null && request.auth.uid == userId;
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    // User-submitted reports (master spec 18.1).
+    //
+    // The document id is `{reporterUid}_{targetType}_{targetId}` and THAT is
+    // the rate limit: `create` is allowed, `update` is not, so a second report
+    // of the same target by the same user collides with the existing document
+    // and is denied. One report per user per target, with no throttle
+    // collection to maintain (contrast feedbackThrottle, which throttles an
+    // email rather than a write).
+    //
+    // Reads are moderator-only. A reporter cannot read their own report back —
+    // deliberate, per spec 18.7: internal moderation records are not visible to
+    // users, and a report carries an accusation about someone else.
+    match /reports/{reportId} {
+      allow get, list: if isModerator();
+      allow create: if isReportCreate(reportId);
+      // Status transitions run through the moderation callables so that every
+      // one leaves an audit entry. A direct client write would not.
+      allow update, delete: if false;
+    }
+
+    // Pins the reporter to the caller (no framing someone else), pins the
+    // opening status, and bounds every field.
+    //
+    // `reason` is bounded but NOT checked against an allow-list, for the same
+    // reason as isValidHelpNeededTags: a newer client may know a code this
+    // deployed ruleset has never heard of, and rejecting it would break the new
+    // build rather than the old one. An unrecognised reason still reaches a
+    // moderator, who can read `details`.
+    //
+    // The id check is what makes the one-per-target limit real — without it a
+    // client could write the same report under a fresh random id forever.
+    function isReportCreate(reportId) {
+      return request.auth != null
+             && request.resource.data.keys().hasOnly([
+                  'targetType', 'targetId', 'signalId', 'collection',
+                  'reason', 'details', 'reporterId', 'reportedUserId',
+                  'status', 'testMode', 'createdAt'
+                ])
+             && request.resource.data.targetType in ['signal', 'comment', 'user']
+             && request.resource.data.targetId is string
+             && request.resource.data.targetId.size() > 0
+             && request.resource.data.targetId.size() <= 200
+             && request.resource.data.reporterId == request.auth.uid
+             // Ordered AFTER the type checks above: this concatenates the two
+             // fields, and doing that to a non-string errors the whole rule.
+             && reportId == request.auth.uid + '_'
+                            + request.resource.data.targetType + '_'
+                            + request.resource.data.targetId
+             && request.resource.data.collection in ['signals', 'signals_test']
+             && request.resource.data.reason is string
+             && request.resource.data.reason.size() > 0
+             && request.resource.data.reason.size() <= 64
+             && request.resource.data.details is string
+             && request.resource.data.details.size() <= 1000
+             && request.resource.data.status == 'open'
+             // `testMode` is derived from `collection`, not independent of it.
+             // Validated separately, a patched client could file
+             // `{collection: 'signals', testMode: true}` — a report against a
+             // PRODUCTION signal that lands in the test queue, where no
+             // production moderator is looking. Tying them together is what
+             // makes the queue's testMode filter mean what it says.
+             && request.resource.data.testMode
+                == (request.resource.data.collection == 'signals_test')
+             && request.resource.data.createdAt is timestamp
+             && (!('signalId' in request.resource.data)
+                 || (request.resource.data.signalId is string
+                     && request.resource.data.signalId.size() <= 200))
+             && (!('reportedUserId' in request.resource.data)
+                 || (request.resource.data.reportedUserId is string
+                     && request.resource.data.reportedUserId.size() <= 200));
+    }
+
+    // Audit trail of every moderator action (master spec 18.7).
+    //
+    // Written exclusively by the moderation callables through the Admin SDK,
+    // which is the entire point of routing actions through functions instead of
+    // widening these rules: a client-written audit log is a forgeable one.
+    // Readable by moderators so the queue can show what has already been done
+    // to a signal.
+    match /moderationActions/{actionId} {
+      allow get, list: if isModerator();
+      allow create, update, delete: if false;
+    }
+
+    // Quarantined signals — where a hidden signal's document goes.
+    //
+    // NO client match on purpose: denied by default, to every caller,
+    // moderators included. Hiding therefore makes a signal genuinely
+    // unreadable rather than merely filtered out of the map, which a plain
+    // `hidden: true` field could never do while `signals` stays publicly
+    // readable.
+    //
+    //     match /moderationQuarantine/{id}   <- intentionally absent
+    //
+    // Note that only the signal DOCUMENT moves. Its `comments` and `events`
+    // subcollections stay where they are (Firestore keeps subcollections when a
+    // document is deleted), which is what makes a restore lossless — and also
+    // means those remain publicly readable to anyone holding the signal id.
+    // Recorded in docs/SPECIFICATION.md §14.
   }
 }

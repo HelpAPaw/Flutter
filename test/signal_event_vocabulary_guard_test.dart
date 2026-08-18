@@ -105,6 +105,102 @@ void main() {
     );
     expect(validator.contains('note.size() > 0'), isTrue);
   });
+
+  // ---------------------------------------------------------------------
+  // The TypeScript copy (functions/src/events.ts).
+  //
+  // `docs/SPECIFICATION.md` §12 invariant 5a said there was deliberately no
+  // TypeScript copy of this vocabulary, "and one should be added, with a parity
+  // test, the first time the server writes an event". `moderateSetUrgency`
+  // (functions/src/moderation.ts) is that first time, so this is that test.
+  //
+  // Three copies now: Dart (source of truth), firestore.rules, and TypeScript.
+  // The TS one is the most dangerous to get wrong, because a server-written
+  // event bypasses the rules entirely — an Admin SDK write with a bad `type` or
+  // a wrong `old*`/`new*` key name is accepted by Firestore, stored happily,
+  // and then dropped by the Dart decoder on read. The moderator's action just
+  // never appears in the history, and nothing anywhere logs it.
+  // ---------------------------------------------------------------------
+  final events = File('functions/src/events.ts');
+
+  test('functions/src/events.ts is where the guard expects it', () {
+    expect(events.existsSync(), isTrue);
+  });
+
+  test('the TypeScript vocabulary matches SignalEventType', () {
+    final source = events.readAsStringSync();
+    final block = RegExp(r'SIGNAL_EVENT_TYPES\s*=\s*\[(.*?)\]', dotAll: true)
+        .firstMatch(source);
+
+    expect(block, isNotNull,
+        reason: 'SIGNAL_EVENT_TYPES not found in functions/src/events.ts');
+
+    final codes = RegExp(r'"([^"]+)"')
+        .allMatches(block!.group(1)!)
+        .map((m) => m.group(1)!)
+        .toSet();
+
+    expect(
+      codes,
+      SignalEventType.allCodes.toSet(),
+      reason: 'SIGNAL_EVENT_TYPES has drifted from SignalEventType. A type the '
+          'server writes that Dart cannot decode is stored and then never '
+          'rendered — the silent failure mode.',
+    );
+  });
+
+  test('the TypeScript key names match the Dart encoder', () {
+    final source = events.readAsStringSync();
+
+    for (final type in SignalEventType.values) {
+      final entry = RegExp(
+        '${type.code}:\\s*\\{\\s*oldKey:\\s*"([^"]+)",\\s*newKey:\\s*"([^"]+)"',
+      ).firstMatch(source);
+
+      expect(entry, isNotNull,
+          reason: 'SIGNAL_EVENT_KEYS has no entry for ${type.code}');
+      expect(entry!.group(1), type.oldKey,
+          reason: 'oldKey for ${type.code} differs between TS and Dart. The '
+              'rules validate the Dart names via isValidLevel, so a server '
+              'write with the wrong name produces an event whose old value is '
+              'simply missing.');
+      expect(entry.group(2), type.newKey,
+          reason: 'newKey for ${type.code} differs between TS and Dart.');
+    }
+  });
+
+  test('the TypeScript signal field names match the Dart encoder', () {
+    final source = events.readAsStringSync();
+
+    for (final type in SignalEventType.values) {
+      expect(
+        RegExp('${type.code}:\\s*"${type.signalField}"').hasMatch(source),
+        isTrue,
+        reason: 'SIGNAL_EVENT_FIELDS maps ${type.code} to a different signal '
+            'field than SignalEventType.signalField. That is the field a '
+            'moderator action updates alongside the event, so a mismatch '
+            'writes an event describing a change that did not happen.',
+      );
+    }
+  });
+
+  test('both runtimes agree on the maximum note length', () {
+    final source = events.readAsStringSync();
+    final match =
+        RegExp(r'MAX_EVENT_NOTE_LENGTH\s*=\s*(\d+)').firstMatch(source);
+
+    expect(match, isNotNull,
+        reason: 'MAX_EVENT_NOTE_LENGTH not found in functions/src/events.ts');
+    expect(
+      int.parse(match!.group(1)!),
+      SignalEventType.maxNoteLength,
+      reason: 'The moderation callable bounds its note with '
+          'MAX_EVENT_NOTE_LENGTH and writes it straight into an event. If that '
+          'is higher than the rules bound, a moderator can write an event no '
+          'client could have written — and the note dialog would still cut '
+          'them off at the lower number.',
+    );
+  });
 }
 
 /// The body of a `function name() { ... }` block in the rules file.

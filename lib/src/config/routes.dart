@@ -15,6 +15,15 @@ class Routes {
   static const privacyPolicy = '/privacy_policy';
   static const about = '/about';
 
+  /// The moderator report queue (master spec §18).
+  ///
+  /// Not gated by the router's `redirect`: the role check is a Firestore read
+  /// and a redirect must answer synchronously — the same reasoning that made
+  /// `HelperTagsGate` a widget rather than a redirect (SPECIFICATION §7.15).
+  /// The screen renders its own "not a moderator" state, and `firestore.rules`
+  /// is the actual boundary, so navigating here directly reveals nothing.
+  static const moderation = '/moderation';
+
   /// Steps 2-8 of the create-a-signal wizard. Step 1 (the pin) is answered on
   /// the map itself, so this route is only ever reached by pushing from there
   /// and reads its draft out of `mapViewModelProvider`.

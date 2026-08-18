@@ -1,14 +1,10 @@
 import 'dart:async';
-import 'dart:convert';
 
-import 'package:firebase_app_check/firebase_app_check.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:http/http.dart' as http;
 
 import '../models/vet_clinic.dart';
+import 'callable_client.dart';
 
 class VetClinicService {
   static final VetClinicService instance = VetClinicService._();
@@ -19,75 +15,27 @@ class VetClinicService {
   final Map<String, VetClinic> _clinics = {};
   final Set<String> _clinicsWithDetails = {};
 
-  /// Build the callable function URL for the given function name.
-  /// Firebase v2 callable functions use the project ID and default region.
-  String _callableUrl(String functionName) {
-    final projectId = Firebase.app().options.projectId;
-    return 'https://us-central1-$projectId.cloudfunctions.net/$functionName';
-  }
-
-  /// Call a Firebase callable function via direct HTTP, bypassing the
-  /// cloud_functions Flutter plugin. The native FirebaseFunctions iOS SDK
-  /// uses Swift `async let` patterns that trigger a Swift runtime memory
-  /// corruption bug in release builds (swift_task_dealloc SIGABRT).
-  /// Debug builds are unaffected because they skip compiler optimizations.
-  /// See: https://forums.swift.org/t/suggested-tips-for-swift-concurrency-fatalerror-crashes/80723
-  /// TODO: Revert to cloud_functions plugin once the Swift runtime fix ships.
+  /// Calls a callable function through the shared [CallableClient].
+  ///
+  /// The transport (plain HTTPS rather than the `cloud_functions` plugin, to
+  /// dodge a Swift runtime crash in release builds) now lives in one place —
+  /// see the doc comment there. This wrapper survives only to keep the two
+  /// error messages this service's callers already expect.
   Future<Map<String, dynamic>> _callFunction(
     String functionName,
     Map<String, dynamic> data,
   ) async {
-    final url = _callableUrl(functionName);
-
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-    };
-
-    // Add Firebase Auth token if signed in
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      final idToken = await user.getIdToken();
-      if (idToken != null) {
-        headers['Authorization'] = 'Bearer $idToken';
-      }
-    }
-
-    // Add App Check token
     try {
-      final appCheckToken = await FirebaseAppCheck.instance.getToken();
-      if (appCheckToken != null) {
-        headers['X-Firebase-AppCheck'] = appCheckToken;
+      return await CallableClient.call(functionName, data);
+    } on CallableException catch (e) {
+      if (e.code == 'resource-exhausted') {
+        throw Exception('Rate limit exceeded. Please wait and try again.');
       }
-    } catch (e) {
-      debugPrint('App Check token error: $e');
-    }
-
-    final response = await http.post(
-      Uri.parse(url),
-      headers: headers,
-      body: jsonEncode({'data': data}),
-    ).timeout(const Duration(seconds: 15));
-
-    if (response.statusCode == 429) {
-      throw Exception('Rate limit exceeded. Please wait and try again.');
-    }
-
-    if (response.statusCode != 200) {
-      final body = jsonDecode(response.body);
-      final error = body['error'];
-      if (error != null) {
-        final code = error['status'] ?? error['code'] ?? '';
-        final message = error['message'] ?? 'Unknown error';
-        debugPrint('Cloud Function error: $code - $message');
-        if (code == 'INVALID_ARGUMENT') {
-          throw Exception('Invalid search parameters.');
-        }
+      if (e.code == 'invalid-argument') {
+        throw Exception('Invalid search parameters.');
       }
       throw Exception('Failed to call $functionName. Please try again.');
     }
-
-    final body = jsonDecode(response.body);
-    return (body['result'] as Map<String, dynamic>?) ?? {};
   }
 
   Future<List<VetClinic>> searchNearby(LatLng center, double radiusMeters) async {

@@ -1444,4 +1444,155 @@ class AppLocalizationsBg extends AppLocalizations {
   @override
   String get locationAlwaysPermissionRequired =>
       'За да получавате известия, докато приложението е затворено, разрешете достъп до местоположението „Винаги“ в Настройки. При „Докато използвам приложението“ можем да проверяваме само когато приложението е отворено.';
+
+  @override
+  String get reportSignal => 'Докладване на сигнала';
+
+  @override
+  String get reportComment => 'Докладване на коментара';
+
+  @override
+  String get reportTitle => 'Докладване';
+
+  @override
+  String get reportReasonPrompt => 'Какъв е проблемът?';
+
+  @override
+  String get reportDetailsLabel => 'Друго, което трябва да знаем? (по желание)';
+
+  @override
+  String get reportSubmit => 'Изпращане';
+
+  @override
+  String get reportSubmitted => 'Благодарим. Модератор ще прегледа сигнала.';
+
+  @override
+  String get reportAlreadySubmitted => 'Вече сте докладвали това.';
+
+  @override
+  String get reportFailed =>
+      'Докладването не бе изпратено. Моля, опитайте отново.';
+
+  @override
+  String get reportSignInRequired =>
+      'Влезте в профила си, за да докладвате съдържание.';
+
+  @override
+  String get reportReasonFraud => 'Измама';
+
+  @override
+  String get reportReasonAbuse => 'Насилие или занемаряване на животно';
+
+  @override
+  String get reportReasonHarassment => 'Тормоз';
+
+  @override
+  String get reportReasonFalseInformation => 'Невярна информация';
+
+  @override
+  String get reportReasonDangerousAdvice => 'Опасен съвет';
+
+  @override
+  String get reportReasonAnimalEndangerment => 'Застрашава животно';
+
+  @override
+  String get reportReasonGraphicContent => 'Стряскащо съдържание';
+
+  @override
+  String get reportReasonSpam => 'Спам';
+
+  @override
+  String get reportReasonDoxxing => 'Разкрива лични данни';
+
+  @override
+  String get reportReasonDefamationRisk => 'Публично обвинение срещу човек';
+
+  @override
+  String get reportReasonDuplicateCase => 'Дублира друг сигнал';
+
+  @override
+  String get reportReasonOther => 'Друго';
+
+  @override
+  String get moderation => 'Модерация';
+
+  @override
+  String get moderationQueue => 'Доклади';
+
+  @override
+  String get moderationQueueEmpty => 'Няма отворени доклади.';
+
+  @override
+  String get moderationNotAModerator => 'Нямате достъп на модератор.';
+
+  @override
+  String moderationReportedBy(int count) {
+    return 'Докладван $count пъти';
+  }
+
+  @override
+  String get moderationOpenTarget => 'Отваряне';
+
+  @override
+  String get moderationNoteLabel =>
+      'Защо предприемате това действие? (задължително)';
+
+  @override
+  String get moderationNoteRequired => 'Бележката е задължителна.';
+
+  @override
+  String get moderationActionApplied => 'Готово.';
+
+  @override
+  String get moderationActionFailed =>
+      'Действието не бе изпълнено. Моля, опитайте отново.';
+
+  @override
+  String get moderationPermissionDenied => 'Вече нямате достъп на модератор.';
+
+  @override
+  String get moderationHideSignal => 'Скриване на сигнала';
+
+  @override
+  String get moderationRestoreSignal => 'Възстановяване на сигнала';
+
+  @override
+  String get moderationLockComments => 'Заключване на коментарите';
+
+  @override
+  String get moderationUnlockComments => 'Отключване на коментарите';
+
+  @override
+  String get moderationSetUrgency => 'Корекция на спешността';
+
+  @override
+  String get moderationDeleteComment => 'Изтриване на коментара';
+
+  @override
+  String get moderationSetLabel => 'Добавяне на предупреждение';
+
+  @override
+  String get moderationClearLabel => 'Премахване на предупреждението';
+
+  @override
+  String get moderationDismissReport => 'Отхвърляне на доклада';
+
+  @override
+  String get moderationAddNote => 'Вътрешна бележка';
+
+  @override
+  String get moderationLabelUnverified => 'Непотвърден';
+
+  @override
+  String get moderationLabelDuplicate => 'Възможен дубликат';
+
+  @override
+  String get moderationLabelDisputed => 'Оспорван';
+
+  @override
+  String get moderationCommentsLocked =>
+      'Модератор е заключил коментарите към този сигнал.';
+
+  @override
+  String get moderationBadge => 'Модератор';
 }
