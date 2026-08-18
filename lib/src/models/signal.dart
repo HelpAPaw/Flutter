@@ -63,13 +63,26 @@ class Signal {
   /// this getter only decides whether to draw the composer.
   bool get commentsLocked => moderation?['commentsLocked'] == true;
 
-  /// The warning label a moderator pinned to this signal, if any.
+  /// The warning label a moderator pinned to this signal, if this build can
+  /// render it.
   ///
-  /// Typed rather than a raw code so the vocabulary lives in one place and the
-  /// banner cannot render a string the server never validated — see
-  /// [ModerationLabel].
+  /// Typed so the vocabulary lives in one place and the banner cannot show a
+  /// string the server never validated — see [ModerationLabel]. Null both when
+  /// no label is pinned and when the pinned code is newer than this build.
+  ///
+  /// **For "is anything pinned?", use [hasModerationLabel] instead.** The two
+  /// differ exactly on that newer-code case, and conflating them is a real bug
+  /// in each direction: rendering off the raw presence would show an empty
+  /// banner, and offering a *clear* action off the typed value would leave a
+  /// moderator on an older build unable to remove a label they can see is there.
   ModerationLabel? get moderationLabel =>
       ModerationLabel.fromCode(moderation?['label'] as String?);
+
+  /// Whether any label is pinned, **including a code this build cannot decode**.
+  ///
+  /// This is the predicate a clear/apply toggle wants; [moderationLabel] is the
+  /// one rendering wants.
+  bool get hasModerationLabel => moderation?['label'] != null;
 
   Signal({
     required this.title,

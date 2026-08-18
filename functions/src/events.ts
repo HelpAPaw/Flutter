@@ -10,8 +10,8 @@
  * **This file exists because the server now writes events.** `docs/
  * SPECIFICATION.md` §12 invariant 5a said there was deliberately no TypeScript
  * copy of the vocabulary "and one should be added, with a parity test, the
- * first time the server writes an event". `moderateSetUrgency` in
- * ./moderation is that first time.
+ * first time the server writes an event". The `setUrgency` action of
+ * `moderateAction` (./moderation) is that first time.
  *
  * The other copies are `SignalEventType` (`lib/src/models/signal_event.dart`)
  * and the closed `type ==` list inside `isSignalEventCreate()` in
@@ -65,6 +65,29 @@ export const SIGNAL_EVENT_KEYS: Record<
  * `docs/SPECIFICATION.md` §12.
  */
 export const MAX_EVENT_NOTE_LENGTH = 500;
+
+/**
+ * Whether a signal document is one `moderateAction`'s `restoreSignal` just put
+ * back, rather than a newly reported one.
+ *
+ * Lives here, extracted and exported, so it can be tested: writing a
+ * quarantined signal back to `signals/{id}` is a *create*, so `onSignalCreated`
+ * fires and would push a months-old signal to everyone within 50 km all over
+ * again. That is the highest-consequence invariant in the moderation feature
+ * and the one thing in it that fails at the scale of a whole city.
+ *
+ * Keyed on the marker rather than a `createdAt` age heuristic: a restore
+ * preserves the original `createdAt`, so age cannot tell a restore from a
+ * backdated import, and guessing wrong is a mass notification.
+ *
+ * Note the marker is permanent, so a once-restored signal is exempt from
+ * fan-out forever. Consequence-free today — only `restoreSignal` writes it, and
+ * a signal is only ever created once.
+ */
+export function isRestoredSignal(data: Record<string, unknown> | undefined) {
+  const moderation = data?.moderation as Record<string, unknown> | undefined;
+  return moderation?.restoredAt != null;
+}
 
 /**
  * Builds an event document, the server-side counterpart of Dart's

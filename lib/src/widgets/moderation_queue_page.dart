@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../config/routes.dart';
 import '../models/report_reason.dart';
+import '../models/report_status.dart';
 import '../services/app_preferences_service.dart';
 import '../services/moderation_service.dart';
 import '../utils/nav_extensions.dart';
@@ -45,7 +46,7 @@ class _ModerationQueuePageState extends State<ModerationQueuePage> {
   Stream<QuerySnapshot<Map<String, dynamic>>> get _reports =>
       _reportsStream ??= FirebaseFirestore.instance
           .collection('reports')
-          .where('status', isEqualTo: 'open')
+          .where('status', isEqualTo: ReportStatus.open.code)
           .where('testMode', isEqualTo: AppPreferencesService().isTestMode())
           .orderBy('createdAt', descending: true)
           .limit(_pageSize)
@@ -113,13 +114,15 @@ class _ModerationQueuePageState extends State<ModerationQueuePage> {
         return ListView.separated(
           itemCount: docs.length,
           separatorBuilder: (_, __) => const Divider(height: 1),
-          itemBuilder: (context, index) => _reportTile(l10n, docs[index]),
+          itemBuilder: (context, index) =>
+              _reportTile(context, l10n, docs[index]),
         );
       },
     );
   }
 
   Widget _reportTile(
+    BuildContext context,
     AppLocalizations l10n,
     QueryDocumentSnapshot<Map<String, dynamic>> doc,
   ) {
@@ -143,7 +146,13 @@ class _ModerationQueuePageState extends State<ModerationQueuePage> {
           Text(
             [
               targetType,
-              if (createdAt != null) DateFormat.yMMMd().add_Hm().format(createdAt),
+              // Locale-aware, like every other date in the app — the bare
+              // DateFormat constructors give a Bulgarian moderator English
+              // dates.
+              if (createdAt != null)
+                DateFormat.yMd(Localizations.localeOf(context).languageCode)
+                    .add_jm()
+                    .format(createdAt),
             ].join(' · '),
             style: const TextStyle(fontSize: 12),
           ),

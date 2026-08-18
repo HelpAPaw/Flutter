@@ -32,6 +32,7 @@ import {
   MAX_EVENT_NOTE_LENGTH,
   SIGNAL_EVENT_FIELDS,
 } from "./events";
+import { URGENCY_GREEN, URGENCY_RED } from "./urgency";
 
 /**
  * Lazy handle on Firestore.
@@ -74,9 +75,12 @@ type ModerationAction = (typeof ACTIONS)[number];
 const OUTCOMES = ["actioned", "dismissed"] as const;
 type ReportOutcome = (typeof OUTCOMES)[number];
 
-/** Urgency codes, mirroring `isValidUrgency()` in the rules and Dart's enum. */
-const MIN_URGENCY = 0;
-const MAX_URGENCY = 2;
+// Urgency bounds come from ./urgency rather than being restated here: that
+// module is the one `test/urgency_derivation_guard_test.dart` parses, so a
+// fourth urgency level would be added there — and silently missed by a local
+// copy, after which this callable would reject a level the app can produce.
+const MIN_URGENCY = URGENCY_GREEN;
+const MAX_URGENCY = URGENCY_RED;
 
 /**
  * Confirms the caller holds the moderator role, and returns their uid.
@@ -253,7 +257,9 @@ export const moderateAction = onCall(
     // of their queue.
     if (reportId && action !== "resolveReport" && action !== "addNote") {
       batch.update(db().collection("reports").doc(reportId), {
-        status: "actioned",
+        // From the table, not a literal — this line was already bypassing
+        // OUTCOMES inside the file that defines it.
+        status: OUTCOMES[0],
         resolvedBy: uid,
         resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
       });

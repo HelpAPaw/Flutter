@@ -14,6 +14,7 @@ import * as nodemailer from "nodemailer";
 // scripts/backfill_urgency.js can share them instead of keeping a third copy
 // of the derivation — see the note in ./urgency.
 import { SIGNAL_URGENCIES, URGENCY_RED, urgencyOf } from "./urgency";
+import { isRestoredSignal } from "./events";
 import {
   displayTagsOf,
   effectiveHelperTags,
@@ -685,8 +686,9 @@ async function handleSignalCreated(
   }
 
   // A signal coming back out of moderation quarantine is a CREATE, not an
-  // update: `moderateRestoreSignal` writes the document back to `signals/{id}`,
-  // which fires this trigger. Without this guard, un-hiding a months-old signal
+  // update: `moderateAction`'s `restoreSignal` writes the document back to
+  // `signals/{id}`, which fires this trigger. Without this guard, un-hiding a
+  // months-old signal
   // pushes it to everyone within 50 km all over again, as if it had just been
   // reported. The marker is written by that function and by nothing else.
   //
@@ -694,7 +696,7 @@ async function handleSignalCreated(
   // `createdAt` age heuristic — a restore preserves the original `createdAt`,
   // so age cannot distinguish a restore from a backdated import, and guessing
   // wrong here is a mass notification.
-  if ((signalData.moderation as Record<string, unknown> | undefined)?.restoredAt) {
+  if (isRestoredSignal(signalData)) {
     console.log(`Skipping fan-out for restored signal ${signalId}`);
     return;
   }

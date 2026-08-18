@@ -1259,6 +1259,50 @@ describe('reports', () => {
     await assertFails(setDoc(doc(db, 'reports', reportId(REPORTER, data)), data));
   });
 
+  it('rejects a testMode that disagrees with the collection', async () => {
+    // The dangerous direction: a report against a PRODUCTION signal filed as
+    // test mode lands in the test queue, where no production moderator looks.
+    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const prodAsTest = reportDoc(REPORTER, {
+      collection: 'signals',
+      testMode: true,
+    });
+    await assertFails(
+      setDoc(doc(db, 'reports', reportId(REPORTER, prodAsTest)), prodAsTest),
+    );
+
+    const testAsProd = reportDoc(REPORTER, {
+      targetId: 'signal-7',
+      signalId: 'signal-7',
+      collection: 'signals_test',
+      testMode: false,
+    });
+    await assertFails(
+      setDoc(doc(db, 'reports', reportId(REPORTER, testAsProd)), testAsProd),
+    );
+  });
+
+  it('accepts both consistent pairings', async () => {
+    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const prod = reportDoc(REPORTER, {
+      collection: 'signals',
+      testMode: false,
+    });
+    await assertSucceeds(
+      setDoc(doc(db, 'reports', reportId(REPORTER, prod)), prod),
+    );
+
+    const test = reportDoc(REPORTER, {
+      targetId: 'signal-8',
+      signalId: 'signal-8',
+      collection: 'signals_test',
+      testMode: true,
+    });
+    await assertSucceeds(
+      setDoc(doc(db, 'reports', reportId(REPORTER, test)), test),
+    );
+  });
+
   it('rejects an unknown targetType or collection', async () => {
     const db = testEnv.authenticatedContext(REPORTER).firestore();
     const badType = reportDoc(REPORTER, { targetType: 'fundraiser' });
@@ -1355,7 +1399,7 @@ describe('a moderator is still an ordinary user', () => {
     await assertSucceeds(addDoc(collection(db, 'signals'), signalDoc(db, MOD)));
     // Comment on someone else's.
     await assertSucceeds(
-      addDoc(collection(db, `${'signals'}/${SIGNAL}/comments`), commentDoc(db, MOD)),
+      addDoc(collection(db, `signals/${SIGNAL}/comments`), commentDoc(db, MOD)),
     );
     // Advance status on someone else's, self-stamping like any volunteer.
     await assertSucceeds(
@@ -1383,11 +1427,11 @@ describe('a moderator is still an ordinary user', () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       const admin = ctx.firestore();
       await setDoc(
-        doc(admin, `${'signals'}/${SIGNAL}/comments`, 'c1'),
+        doc(admin, `signals/${SIGNAL}/comments`, 'c1'),
         commentDoc(admin, REPORTER),
       );
     });
-    await assertFails(deleteDoc(doc(db, `${'signals'}/${SIGNAL}/comments`, 'c1')));
+    await assertFails(deleteDoc(doc(db, `signals/${SIGNAL}/comments`, 'c1')));
   });
 
   it('cannot edit the moderation field from the client, even their own', async () => {
@@ -1423,7 +1467,7 @@ describe('a moderator is still an ordinary user', () => {
     });
     const db = testEnv.authenticatedContext(MOD).firestore();
     await assertFails(
-      addDoc(collection(db, `${'signals'}/${SIGNAL}/comments`), commentDoc(db, MOD)),
+      addDoc(collection(db, `signals/${SIGNAL}/comments`), commentDoc(db, MOD)),
     );
   });
 });

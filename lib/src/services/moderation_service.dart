@@ -5,6 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/report_reason.dart';
+import '../models/report_status.dart';
+import '../models/signal_event.dart';
 import 'app_preferences_service.dart';
 import 'callable_client.dart';
 
@@ -27,45 +29,108 @@ class ModerationService {
   /// docs/SPECIFICATION.md §12.
   static const int maxDetailsLength = 1000;
 
-  /// Longest moderator note. Mirrors `MAX_EVENT_NOTE_LENGTH` in
-  /// `functions/src/events.ts` and `isValidEventNote()` in the rules, because a
-  /// `setUrgency` note is written straight into a timeline event.
-  static const int maxNoteLength = 500;
+  /// Longest moderator note.
+  ///
+  /// Not a new constant: a `setUrgency` note is written straight into an
+  /// `events` document, so this IS the event-note limit, and that one is
+  /// already the guarded member of the field-length invariant
+  /// (docs/SPECIFICATION.md §12) — `signal_event_vocabulary_guard_test.dart`
+  /// parses it against `MAX_EVENT_NOTE_LENGTH` and `isValidEventNote()` in the
+  /// rules. Declaring 500 again here would have added the one copy nothing
+  /// checks.
+  static int get maxNoteLength => SignalEventType.maxNoteLength;
 
   FirebaseFirestore get _db => FirebaseFirestore.instance;
 
+  /// Last known role, replayed to each new subscriber so nothing re-reads.
+  bool _isModerator = false;
+
+  /// Fans the single upstream listener out to however many widgets want it.
+  final StreamController<bool> _roleController =
+      StreamController<bool>.broadcast();
+
+  /// The auth watch, created on first use and never cancelled — this is a
+  /// singleton that lives as long as the app.
+  StreamSubscription<User?>? _authSubscription;
+
+  /// The `moderators/{uid}` watch for [_watchedUid], replaced on account change.
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _roleSubscription;
+  String? _watchedUid;
+
   /// Whether the signed-in user holds the moderator role, live.
   ///
-  /// Rebuilds on auth changes and then listens to `moderators/{uid}`, which the
-  /// rules let a user `get` only for themselves. A revocation therefore removes
-  /// the moderation UI immediately — the property a custom auth claim could not
-  /// give us, since a claim survives in the ID token until it expires
-  /// (device-verified in both directions, 2026-08-17).
+  /// Listens to `moderators/{uid}`, which the rules let a user `get` only for
+  /// themselves. A revocation removes the moderation UI immediately — the
+  /// property a custom auth claim could not give us, since a claim survives in
+  /// the ID token until it expires (device-verified in both directions).
   ///
   /// This is a **UI affordance only**. The real boundary is the same check
   /// inside the `moderateAction` callable and in `firestore.rules`, so a stale
   /// `true` costs nothing worse than a button that returns `permission-denied`.
   ///
-  /// Deliberately the only role API, and deliberately uncached: an earlier
-  /// one-shot `isModerator()` with a uid-keyed cache existed alongside it, and
-  /// nothing ever called it. Callers memoize this stream in their own State —
-  /// see `_moderatorStream` in `HomeRouteDrawer` — which is where the caching
-  /// belongs, because only the caller knows its rebuild pattern.
+  /// **Cached here rather than by the caller.** The obvious place looked like
+  /// the widget — memoize the stream in State — and for `ModerationQueuePage`
+  /// that works. For the drawer it does not: `DrawerController` does not build
+  /// its child while dismissed, so `HomeRouteDrawer`'s State is created on open
+  /// and disposed on close, and a State-held memo survives exactly one open.
+  /// Every drawer open by every user, anonymous included, was costing a fresh
+  /// billed read of a document that exists for a handful of accounts. One
+  /// process-lifetime listener replaces all of them: new subscribers get
+  /// [_isModerator] immediately and then share the same upstream.
   ///
   /// Errors are swallowed to `false`: offline, the right answer to "should I
   /// draw the moderation entry point" is no.
-  Stream<bool> watchIsModerator() {
-    return FirebaseAuth.instance.userChanges().asyncExpand((user) {
-      if (user == null) return Stream<bool>.value(false);
-      return _db
+  Stream<bool> watchIsModerator() async* {
+    _ensureRoleSubscription();
+    yield _isModerator;
+    yield* _roleController.stream;
+  }
+
+  /// Starts the auth watch and the per-uid role watch, once.
+  ///
+  /// Two explicit subscriptions rather than `authStateChanges().asyncExpand(…)`,
+  /// which looks like the idiomatic spelling and is wrong here: `asyncExpand`
+  /// waits for each inner stream to **end** before handling the next outer
+  /// event, and `snapshots()` never ends. The first uid would have latched
+  /// forever — signing out, or switching accounts, would never have updated the
+  /// role. Managing the inner subscription by hand is what makes the switch
+  /// actually happen.
+  ///
+  /// `authStateChanges`, not `userChanges`: the latter also fires on the hourly
+  /// ID-token refresh and on any profile update, and each emission would
+  /// re-attach the snapshot listener for a uid that never changed.
+  void _ensureRoleSubscription() {
+    if (_authSubscription != null) return;
+    _authSubscription =
+        FirebaseAuth.instance.authStateChanges().listen((user) {
+      final uid = user?.uid;
+      if (uid == _watchedUid) return;
+      _watchedUid = uid;
+
+      _roleSubscription?.cancel();
+      _roleSubscription = null;
+
+      if (uid == null) {
+        _emitRole(false);
+        return;
+      }
+      _roleSubscription = _db
           .collection(_moderatorsCollection)
-          .doc(user.uid)
+          .doc(uid)
           .snapshots()
-          .map((doc) => doc.exists)
-          .handleError((Object e) {
-            debugPrint('Moderator role stream failed: $e');
-          });
+          .listen(
+        (doc) => _emitRole(doc.exists),
+        onError: (Object e) {
+          debugPrint('Moderator role stream failed: $e');
+          _emitRole(false);
+        },
+      );
     });
+  }
+
+  void _emitRole(bool isModerator) {
+    _isModerator = isModerator;
+    _roleController.add(isModerator);
   }
 
   /// Files a report (spec 18.1).
@@ -99,7 +164,7 @@ class ModerationService {
       'reason': reason.code,
       'details': trimmed,
       'reporterId': uid,
-      'status': 'open',
+      'status': ReportStatus.open.code,
       'testMode': AppPreferencesService().isTestMode(),
       'createdAt': FieldValue.serverTimestamp(),
       if (target.signalId != null) 'signalId': target.signalId,
@@ -244,7 +309,8 @@ class ModerationService {
   }) =>
       _act('resolveReport', {
         'reportId': reportId,
-        'outcome': actioned ? 'actioned' : 'dismissed',
+        'outcome': (actioned ? ReportStatus.actioned : ReportStatus.dismissed)
+            .code,
         'note': note,
       });
 

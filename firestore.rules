@@ -618,7 +618,14 @@ service cloud.firestore {
              && request.resource.data.details is string
              && request.resource.data.details.size() <= 1000
              && request.resource.data.status == 'open'
-             && request.resource.data.testMode is bool
+             // `testMode` is derived from `collection`, not independent of it.
+             // Validated separately, a patched client could file
+             // `{collection: 'signals', testMode: true}` — a report against a
+             // PRODUCTION signal that lands in the test queue, where no
+             // production moderator is looking. Tying them together is what
+             // makes the queue's testMode filter mean what it says.
+             && request.resource.data.testMode
+                == (request.resource.data.collection == 'signals_test')
              && request.resource.data.createdAt is timestamp
              && (!('signalId' in request.resource.data)
                  || (request.resource.data.signalId is string

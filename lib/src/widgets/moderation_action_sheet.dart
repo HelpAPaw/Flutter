@@ -4,10 +4,12 @@ import 'package:flutter/services.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../models/moderation_label.dart';
+import '../models/signal.dart';
 import '../models/report_reason.dart';
 import '../models/signal_urgency.dart';
 import '../services/callable_client.dart';
 import '../services/moderation_service.dart';
+import 'section_header.dart';
 
 /// The moderator's action menu for one report (master spec §18.3).
 ///
@@ -60,11 +62,18 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
   /// Null while loading and on failure; the rows then default to their "apply"
   /// direction, which is the safe reading — a moderator who cannot see the
   /// current state should not be told the content is already locked.
-  Map<String, dynamic>? _moderation;
+  ///
+  /// Held as a parsed [Signal] rather than the raw map, so these predicates are
+  /// the model's and cannot drift from the details screen's.
+  Signal? _signal;
   bool _loadingModeration = true;
 
-  bool get _commentsLocked => _moderation?['commentsLocked'] == true;
-  bool get _hasLabel => _moderation?['label'] != null;
+  bool get _commentsLocked => _signal?.commentsLocked ?? false;
+
+  /// [Signal.hasModerationLabel], **not** `moderationLabel != null`: a toggle
+  /// must offer "Clear" for a label code this build cannot decode, or a
+  /// moderator on an older build could never remove a newer one.
+  bool get _hasLabel => _signal?.hasModerationLabel ?? false;
 
   /// Whether an action row may fire: a note is written, nothing is in flight,
   /// and the current moderation state is known so the toggles point the right
@@ -77,8 +86,14 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
   /// again here would be a second copy of it in Dart.
   ReportTargetType? get _targetType =>
       ReportTargetType.fromCode(widget.report['targetType'] as String? ?? '');
-  String get _collection =>
-      widget.report['collection'] as String? ?? 'signals';
+  /// Which signal collection the report was filed against.
+  ///
+  /// Nullable, and deliberately **not** defaulted to `'signals'`: defaulting
+  /// would act on PRODUCTION content for a report whose collection could not be
+  /// read. The rules make the field mandatory so this is near-unreachable, but
+  /// the safe failure is to offer no signal-targeting action at all — the same
+  /// way an undecodable `targetType` narrows the menu.
+  String? get _collection => widget.report['collection'] as String?;
   String? get _signalId => widget.report['signalId'] as String?;
   String get _targetId => widget.report['targetId'] as String? ?? '';
 
@@ -99,15 +114,19 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
       return;
     }
     try {
+      final collection = _collection;
+      if (collection == null) {
+        if (mounted) setState(() => _loadingModeration = false);
+        return;
+      }
       final doc = await FirebaseFirestore.instance
-          .collection(_collection)
+          .collection(collection)
           .doc(signalId)
           .get();
       if (!mounted) return;
       setState(() {
-        _moderation =
-            (doc.data()?['moderation'] as Map<dynamic, dynamic>?)
-                ?.cast<String, dynamic>();
+        // `fromJson` is fully defaulted, so a partial document is safe.
+        _signal = doc.exists ? Signal.fromJson(doc.data() ?? {}) : null;
         _loadingModeration = false;
       });
     } catch (e) {
@@ -168,7 +187,11 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
     final service = ModerationService.instance;
     final note = _note.text.trim();
     final signalId = _signalId;
-    final hasSignal = signalId != null && signalId.isNotEmpty;
+    final collection = _collection;
+    // Both required before any signal-targeting row is offered — see the
+    // _collection getter for why a missing collection must not default.
+    final hasSignal =
+        signalId != null && signalId.isNotEmpty && collection != null;
 
     return Padding(
       // Lifts the sheet above the keyboard — the note field is the first thing
@@ -183,11 +206,9 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                l10n.moderation,
-                style: Theme.of(context).textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w600),
-              ),
+              // SectionHeader rather than the style inline: that widget exists
+              // precisely because two private copies of this heading drifted.
+              SectionHeader(l10n.moderation),
               const SizedBox(height: 12),
               TextField(
                 controller: _note,
@@ -216,7 +237,7 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
                   icon: Icons.visibility_off,
                   label: l10n.moderationHideSignal,
                   onTap: () => _run(() => service.hideSignal(
-                        collection: _collection,
+                        collection: collection,
                         signalId: signalId,
                         note: note,
                         reportId: widget.reportId,
@@ -232,7 +253,7 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
                       ? l10n.moderationUnlockComments
                       : l10n.moderationLockComments,
                   onTap: () => _run(() => service.setCommentsLocked(
-                        collection: _collection,
+                        collection: collection,
                         signalId: signalId,
                         locked: !_commentsLocked,
                         note: note,
@@ -247,7 +268,7 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
                       ? l10n.moderationClearLabel
                       : l10n.moderationSetLabel,
                   onTap: () => _run(() => service.setLabel(
-                        collection: _collection,
+                        collection: collection,
                         signalId: signalId,
                         label: _hasLabel ? null : ModerationLabel.disputed.code,
                         note: note,
@@ -260,7 +281,7 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
                   icon: Icons.low_priority,
                   label: l10n.moderationSetUrgency,
                   onTap: () => _run(() => service.setUrgency(
-                        collection: _collection,
+                        collection: collection,
                         signalId: signalId,
                         urgency: SignalUrgency.green.code,
                         note: note,
@@ -273,7 +294,7 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
                   icon: Icons.delete_outline,
                   label: l10n.moderationDeleteComment,
                   onTap: () => _run(() => service.deleteComment(
-                        collection: _collection,
+                        collection: collection,
                         signalId: signalId,
                         commentId: _targetId,
                         note: note,
@@ -290,7 +311,7 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
                         targetType: _targetType!,
                         targetId: _targetId,
                         note: note,
-                        collection: _collection,
+                        collection: collection!,
                         reportId: widget.reportId,
                       )),
                 ),

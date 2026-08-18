@@ -16,6 +16,7 @@
 
 import {
   buildEventData,
+  isRestoredSignal,
   SIGNAL_EVENT_FIELDS,
   SIGNAL_EVENT_KEYS,
   SIGNAL_EVENT_TYPES,
@@ -120,6 +121,35 @@ describe("buildEventData", () => {
       expect(event.note).toBe("n");
       expect(event.createdAt).toBe(createdAt);
     }
+  });
+});
+
+describe("isRestoredSignal", () => {
+  // The guard this backs is the one thing in the moderation feature that fails
+  // at the scale of a whole city: without it, un-hiding a months-old signal
+  // pushes it to everyone within 50 km a second time.
+  const restored = { moderation: { restoredAt: new Date() } };
+
+  it("recognises a signal put back by restoreSignal", () => {
+    expect(isRestoredSignal(restored)).toBe(true);
+  });
+
+  it("does not fire for an ordinary new signal", () => {
+    expect(isRestoredSignal({ title: "Injured cat" })).toBe(false);
+    expect(isRestoredSignal({})).toBe(false);
+    expect(isRestoredSignal(undefined)).toBe(false);
+  });
+
+  it("does not fire for a signal moderated but never hidden", () => {
+    // The marker must be `restoredAt` specifically — a locked or labelled
+    // signal is still a real new signal and must reach its neighbours.
+    expect(isRestoredSignal({ moderation: { commentsLocked: true } })).toBe(false);
+    expect(isRestoredSignal({ moderation: { label: "disputed" } })).toBe(false);
+    expect(isRestoredSignal({ moderation: {} })).toBe(false);
+  });
+
+  it("treats an explicit null marker as not restored", () => {
+    expect(isRestoredSignal({ moderation: { restoredAt: null } })).toBe(false);
   });
 });
 

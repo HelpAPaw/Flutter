@@ -1646,7 +1646,7 @@ write that touches `moderation`, on both the reporter and the status-only branch
 is load-bearing, not defensive: the reporter branch accepts *any* field, so without it a
 patched client clears its own comment lock and the lock is decoration.
 
-**`moderateSetUrgency` is the first event the server has ever written**, which is why
+**`moderateAction`'s `setUrgency` is the first event the server has ever written**, which is why
 `functions/src/events.ts` now exists — see §12 invariant 5a, which called for exactly that
 along with a parity test.
 
@@ -1843,6 +1843,18 @@ Things that live in more than one place and fail **silently** when they drift.
    title 300, description 10 000, comment 2000, **signal-event note 500**, profile name 100,
    feedback message 1000, email 254. The note pair is guarded by
    `test/signal_event_vocabulary_guard_test.dart`, which parses the rules.
+5c. **Report status vocabulary (×3).** `ReportStatus` (`models/report_status.dart`),
+   `OUTCOMES` in `functions/src/moderation.ts` (terminal states only — `open` is
+   client-written and server-read), and the `status == 'open'` pin in
+   `isReportCreate`. Guarded by `test/report_status_vocabulary_guard_test.dart`.
+
+   **Guarded because it is a query filter**, unlike the eight moderation action
+   names, which are duplicated Dart↔TS and deliberately left unguarded: an
+   unknown action fails loudly with `invalid-argument`. A status does not. The
+   queue lists `where('status', isEqualTo: 'open')`, so a drift means handled
+   reports never leave the queue or filed reports never enter it, with no error
+   on either side.
+
 5b. **Moderation-label vocabulary (×2).** `ModerationLabel`
    (`models/moderation_label.dart`, source of truth for rendering) and
    `MODERATION_LABELS` in `functions/src/moderation.ts` (source of truth for
@@ -1862,7 +1874,7 @@ Things that live in more than one place and fail **silently** when they drift.
    **never appears in anyone's history**. All guarded by
    `test/signal_event_vocabulary_guard_test.dart`, which parses both files.
 
-   **The TypeScript copy is the dangerous one**, and it arrived with `moderateSetUrgency`
+   **The TypeScript copy is the dangerous one**, and it arrived with `moderateAction`'s `setUrgency`
    (§7.16) — the first server-written event, which this invariant had been anticipating. A
    server write goes through the Admin SDK and so **bypasses the rules entirely**: a wrong
    `type` or a wrong `old*`/`new*` key name is accepted, stored, and then dropped by the
