@@ -124,6 +124,37 @@ describe("buildEventData", () => {
   });
 });
 
+describe("moderation id validation", () => {
+  // `requireId` is not exported (the callable is the module's only entry
+  // point), so this restates its rule rather than importing it. The property
+  // being pinned is why the check exists at all: Firestore's `doc()` takes a
+  // relative PATH, so an id containing "/" resolves to a real nested document —
+  // `deleteComment` with "abc/comments/xyz" would address something the action
+  // never meant to reach, and `quarantineId()` would build a nested path that
+  // `restoreSignal` could never find again.
+  const accepts = (raw: string) =>
+    raw.length > 0 && raw.length <= 200 && !raw.includes("/") &&
+    raw !== "." && raw !== "..";
+
+  it("rejects path separators and traversal", () => {
+    expect(accepts("abc/comments/xyz")).toBe(false);
+    expect(accepts("/")).toBe(false);
+    expect(accepts(".")).toBe(false);
+    expect(accepts("..")).toBe(false);
+  });
+
+  it("still accepts ordinary Firestore ids", () => {
+    expect(accepts("U9nLxygLCSRo642MwuVz")).toBe(true);
+    expect(accepts("signals_test__b6VZKW7Ujlx9Xow1gFx2")).toBe(true);
+  });
+
+  it("rejects empty and over-long ids", () => {
+    expect(accepts("")).toBe(false);
+    expect(accepts("a".repeat(201))).toBe(false);
+    expect(accepts("a".repeat(200))).toBe(true);
+  });
+});
+
 describe("vocabulary tables", () => {
   it("covers every declared type", () => {
     for (const type of SIGNAL_EVENT_TYPES) {

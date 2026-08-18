@@ -127,6 +127,14 @@ function requireId(raw: unknown, what: string): string {
   if (typeof raw !== "string" || raw.length === 0 || raw.length > 200) {
     throw new HttpsError("invalid-argument", `Missing or invalid ${what}.`);
   }
+  // `doc()` takes a RELATIVE PATH, not just an id: "abc/comments/xyz" resolves
+  // to a real nested document, which would let a caller address something these
+  // actions never meant to reach — and would make quarantineId() build a nested
+  // path that restoreSignal could never find again. Rejecting the separator is
+  // this validator's whole job.
+  if (raw.includes("/") || raw === "." || raw === "..") {
+    throw new HttpsError("invalid-argument", `Missing or invalid ${what}.`);
+  }
   return raw;
 }
 
@@ -177,12 +185,19 @@ export const moderateAction = onCall(
         ? null
         : requireId(data.reportId, "report id");
 
-    const result = await runAction(action, uid, note, data);
-
-    // Audit + report resolution, together, after the action succeeded. If the
-    // action threw, neither happens — an audit entry for something that did not
-    // occur is worse than none.
+    // ONE batch for the action, its audit entry and the report resolution.
+    //
+    // Each action does its reads with `await` and then registers its writes
+    // here rather than committing for itself. That is what makes the audit
+    // entry unskippable in practice and not just by convention: when these were
+    // two commits, a failure of the second left the action already applied with
+    // no `moderationActions` row and the report still open — and for
+    // `hideSignal` the moderator's retry then failed with "That signal no
+    // longer exists", leaving a signal hidden with no audit trail at all. A
+    // batch is atomic, so either all of it lands or none of it does.
     const batch = db().batch();
+
+    const result = await runAction(action, uid, note, data, batch);
 
     batch.set(db().collection("moderationActions").doc(), {
       action,
@@ -197,9 +212,11 @@ export const moderateAction = onCall(
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    // `resolveReport` sets the status itself (that IS the action); every other
-    // action closes its originating report as actioned.
-    if (reportId && action !== "resolveReport") {
+    // `resolveReport` sets the status itself (that IS the action), and
+    // `addNote` deliberately changes nothing — a moderator jotting a thought
+    // before deciding must not have the report silently closed and dropped out
+    // of their queue.
+    if (reportId && action !== "resolveReport" && action !== "addNote") {
       batch.update(db().collection("reports").doc(reportId), {
         status: "actioned",
         resolvedBy: uid,
@@ -222,23 +239,25 @@ async function runAction(
   action: ModerationAction,
   uid: string,
   note: string,
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
+  batch: FirebaseFirestore.WriteBatch
 ): Promise<ActionResult> {
   switch (action) {
     case "hideSignal":
-      return hideSignal(uid, note, data);
+      return hideSignal(uid, note, data, batch);
     case "restoreSignal":
-      return restoreSignal(uid, note, data);
+      return restoreSignal(uid, note, data, batch);
     case "setCommentsLocked":
-      return setCommentsLocked(data);
+      return setCommentsLocked(data, batch);
     case "setUrgency":
-      return setUrgency(uid, note, data);
+      return setUrgency(uid, note, data, batch);
     case "deleteComment":
-      return deleteComment(data);
+      return deleteComment(data, batch);
     case "setLabel":
-      return setLabel(uid, data);
+      return setLabel(uid, data, batch);
     case "resolveReport":
-      return resolveReport(uid, data);
+      return resolveReport(uid, data, batch);
+    // Writes nothing of its own — the audit entry IS the note.
     case "addNote":
       return addNote(data);
   }
@@ -263,7 +282,8 @@ async function runAction(
 async function hideSignal(
   uid: string,
   note: string,
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
+  batch: FirebaseFirestore.WriteBatch
 ): Promise<ActionResult> {
   const collection = requireSignalCollection(data.collection);
   const signalId = requireId(data.signalId, "signal id");
@@ -274,7 +294,6 @@ async function hideSignal(
     throw new HttpsError("not-found", "That signal no longer exists.");
   }
 
-  const batch = db().batch();
   batch.set(db().collection(QUARANTINE_COLLECTION).doc(quarantineId(collection, signalId)), {
     data: snapshot.data(),
     collection,
@@ -284,7 +303,6 @@ async function hideSignal(
     note,
   });
   batch.delete(ref);
-  await batch.commit();
 
   return {
     targetType: "signal",
@@ -307,7 +325,8 @@ async function hideSignal(
 async function restoreSignal(
   uid: string,
   note: string,
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
+  batch: FirebaseFirestore.WriteBatch
 ): Promise<ActionResult> {
   const collection = requireSignalCollection(data.collection);
   const signalId = requireId(data.signalId, "signal id");
@@ -315,16 +334,29 @@ async function restoreSignal(
   const quarantineRef = db()
     .collection(QUARANTINE_COLLECTION)
     .doc(quarantineId(collection, signalId));
-  const snapshot = await quarantineRef.get();
+  const signalRef = db().collection(collection).doc(signalId);
+
+  const [snapshot, live] = await Promise.all([
+    quarantineRef.get(),
+    signalRef.get(),
+  ]);
   if (!snapshot.exists) {
     throw new HttpsError("not-found", "That signal is not in quarantine.");
+  }
+  // The write below is a blind full-document overwrite of the snapshot taken at
+  // hide time. If something already occupies the id — a re-created signal, a
+  // concurrent restore — that state would be silently discarded.
+  if (live.exists) {
+    throw new HttpsError(
+      "already-exists",
+      "A signal already exists at that id."
+    );
   }
 
   const stored = (snapshot.data()?.data ?? {}) as Record<string, unknown>;
   const priorModeration = (stored.moderation ?? {}) as Record<string, unknown>;
 
-  const batch = db().batch();
-  batch.set(db().collection(collection).doc(signalId), {
+  batch.set(signalRef, {
     ...stored,
     moderation: {
       ...priorModeration,
@@ -334,7 +366,6 @@ async function restoreSignal(
     },
   });
   batch.delete(quarantineRef);
-  await batch.commit();
 
   return {
     targetType: "signal",
@@ -346,7 +377,8 @@ async function restoreSignal(
 
 /** Lock or unlock a signal's comments (spec 18.3). Enforced in the rules too. */
 async function setCommentsLocked(
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
+  batch: FirebaseFirestore.WriteBatch
 ): Promise<ActionResult> {
   const collection = requireSignalCollection(data.collection);
   const signalId = requireId(data.signalId, "signal id");
@@ -363,7 +395,7 @@ async function setCommentsLocked(
     (snapshot.data()?.moderation as Record<string, unknown> | undefined)
       ?.commentsLocked === true;
 
-  await ref.update({ "moderation.commentsLocked": data.locked });
+  batch.update(ref, { "moderation.commentsLocked": data.locked });
 
   return {
     targetType: "signal",
@@ -391,7 +423,8 @@ async function setCommentsLocked(
 async function setUrgency(
   uid: string,
   note: string,
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
+  batch: FirebaseFirestore.WriteBatch
 ): Promise<ActionResult> {
   const collection = requireSignalCollection(data.collection);
   const signalId = requireId(data.signalId, "signal id");
@@ -417,7 +450,6 @@ async function setUrgency(
   const oldValue = typeof previous === "number" ? previous : MIN_URGENCY;
 
   const actor = db().collection("users").doc(uid);
-  const batch = db().batch();
   batch.update(ref, { urgency, lastUpdatedBy: actor });
   batch.set(
     ref.collection("events").doc(),
@@ -429,7 +461,6 @@ async function setUrgency(
       createdAt: admin.firestore.Timestamp.now(),
     })
   );
-  await batch.commit();
 
   return {
     targetType: "signal",
@@ -442,7 +473,8 @@ async function setUrgency(
 
 /** Remove a single comment (spec 18.3, "Hide post" applied at comment level). */
 async function deleteComment(
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
+  batch: FirebaseFirestore.WriteBatch
 ): Promise<ActionResult> {
   const collection = requireSignalCollection(data.collection);
   const signalId = requireId(data.signalId, "signal id");
@@ -458,7 +490,7 @@ async function deleteComment(
     throw new HttpsError("not-found", "That comment no longer exists.");
   }
 
-  await ref.delete();
+  batch.delete(ref);
 
   return {
     targetType: "comment",
@@ -473,7 +505,8 @@ async function deleteComment(
 /** Pin or clear a warning label on a signal (spec 18.3, "Add warning label"). */
 async function setLabel(
   uid: string,
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
+  batch: FirebaseFirestore.WriteBatch
 ): Promise<ActionResult> {
   const collection = requireSignalCollection(data.collection);
   const signalId = requireId(data.signalId, "signal id");
@@ -491,7 +524,7 @@ async function setLabel(
     (snapshot.data()?.moderation as Record<string, unknown> | undefined)
       ?.label ?? null;
 
-  await ref.update({
+  batch.update(ref, {
     "moderation.label": label,
     "moderation.labelSetBy": label === null ? null : uid,
     "moderation.labelSetAt":
@@ -510,7 +543,8 @@ async function setLabel(
 /** Close a report without acting on the content (spec 18: dismiss, or record). */
 async function resolveReport(
   uid: string,
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
+  batch: FirebaseFirestore.WriteBatch
 ): Promise<ActionResult> {
   const reportId = requireId(data.reportId, "report id");
   const outcome = data.outcome as ReportOutcome;
@@ -524,7 +558,7 @@ async function resolveReport(
     throw new HttpsError("not-found", "That report no longer exists.");
   }
 
-  await ref.update({
+  batch.update(ref, {
     status: outcome,
     resolvedBy: uid,
     resolvedAt: admin.firestore.FieldValue.serverTimestamp(),

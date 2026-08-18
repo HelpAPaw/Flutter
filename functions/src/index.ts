@@ -1705,6 +1705,27 @@ export const deleteAccount = onCall(
         );
       }
 
+      // 1b. Anonymize QUARANTINED signals too (moderation, §7.16).
+      //
+      // Hiding a signal moves its document out of `signals`/`signals_test`, so
+      // the sweep above cannot see it — the phone numbers would survive account
+      // deletion inside `moderationQuarantine/{coll}__{id}.data`, and a later
+      // restore would write that PII straight back into the world-readable
+      // `signals` collection under an account that no longer exists.
+      //
+      // `data.reporter` is the same DocumentReference the sweep above matches
+      // on, so this is the identical query one level down.
+      const quarantined = await db
+        .collection("moderationQuarantine")
+        .where("data.reporter", "==", userRef)
+        .get();
+      await commitInChunks(quarantined.docs, (batch, doc) =>
+        batch.update(doc.ref, {
+          "data.contactPhone": "",
+          "data.phoneNumber": "",
+        })
+      );
+
       // 2. Delete the notifications subcollection.
       const notifications = await userRef.collection("notifications").get();
       await commitInChunks(notifications.docs, (batch, doc) =>

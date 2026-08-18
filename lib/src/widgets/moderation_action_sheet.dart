@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -46,6 +47,23 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
   final TextEditingController _note = TextEditingController();
   bool _busy = false;
 
+  /// Current moderation state of the target signal, loaded once when the sheet
+  /// opens.
+  ///
+  /// Without it every action here was one-directional — "Lock comments" and a
+  /// `disputed` label with no way back, because any action resolves the report
+  /// and takes it out of the queue, so a second report only ever re-offered the
+  /// same one-way rows. A lock applied by mistake was permanent.
+  ///
+  /// Null while loading and on failure; the rows then default to their "apply"
+  /// direction, which is the safe reading — a moderator who cannot see the
+  /// current state should not be told the content is already locked.
+  Map<String, dynamic>? _moderation;
+  bool _loadingModeration = true;
+
+  bool get _commentsLocked => _moderation?['commentsLocked'] == true;
+  bool get _hasLabel => _moderation?['label'] != null;
+
   String get _targetType => widget.report['targetType'] as String? ?? '';
   String get _collection =>
       widget.report['collection'] as String? ?? 'signals';
@@ -57,6 +75,33 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
     super.initState();
     // Enables the action rows the moment the note stops being blank.
     _note.addListener(() => setState(() {}));
+    _loadModeration();
+  }
+
+  /// Reads the target signal's `moderation` map so the toggles can point the
+  /// right way. Signals are world-readable, so this needs no privilege.
+  Future<void> _loadModeration() async {
+    final signalId = _signalId;
+    if (signalId == null || signalId.isEmpty) {
+      if (mounted) setState(() => _loadingModeration = false);
+      return;
+    }
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection(_collection)
+          .doc(signalId)
+          .get();
+      if (!mounted) return;
+      setState(() {
+        _moderation =
+            (doc.data()?['moderation'] as Map<dynamic, dynamic>?)
+                ?.cast<String, dynamic>();
+        _loadingModeration = false;
+      });
+    } catch (e) {
+      debugPrint('Could not read moderation state: $e');
+      if (mounted) setState(() => _loadingModeration = false);
+    }
   }
 
   @override
@@ -165,24 +210,34 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
                         reportId: widget.reportId,
                       )),
                 ),
+                // Both of these toggle off the signal's current state. Offering
+                // only the "apply" direction made a lock or a label permanent:
+                // acting resolves the report, so the queue never surfaces the
+                // signal again to undo it.
                 _action(
-                  icon: Icons.lock_outline,
-                  label: l10n.moderationLockComments,
+                  icon: _commentsLocked ? Icons.lock_open : Icons.lock_outline,
+                  label: _commentsLocked
+                      ? l10n.moderationUnlockComments
+                      : l10n.moderationLockComments,
                   onTap: () => _run(() => service.setCommentsLocked(
                         collection: _collection,
                         signalId: signalId,
-                        locked: true,
+                        locked: !_commentsLocked,
                         note: note,
                         reportId: widget.reportId,
                       )),
                 ),
                 _action(
-                  icon: Icons.label_outline,
-                  label: l10n.moderationSetLabel,
+                  icon: _hasLabel
+                      ? Icons.label_off_outlined
+                      : Icons.label_outline,
+                  label: _hasLabel
+                      ? l10n.moderationClearLabel
+                      : l10n.moderationSetLabel,
                   onTap: () => _run(() => service.setLabel(
                         collection: _collection,
                         signalId: signalId,
-                        label: 'disputed',
+                        label: _hasLabel ? null : 'disputed',
                         note: note,
                         reportId: widget.reportId,
                       )),
@@ -247,7 +302,9 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
     required String label,
     required VoidCallback onTap,
   }) {
-    final enabled = !_busy && _note.text.trim().isNotEmpty;
+    // Also gated on the moderation read, so a toggle can never fire while its
+    // label still points the wrong way.
+    final enabled = !_busy && !_loadingModeration && _note.text.trim().isNotEmpty;
     return ListTile(
       enabled: enabled,
       leading: Icon(icon),

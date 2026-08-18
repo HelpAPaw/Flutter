@@ -34,52 +34,26 @@ class ModerationService {
 
   FirebaseFirestore get _db => FirebaseFirestore.instance;
 
-  /// Cached role answer for the current uid.
+  /// Whether the signed-in user holds the moderator role, live.
   ///
-  /// Keyed by uid rather than a bare bool so an account switch cannot inherit
-  /// the previous user's answer — the failure that would matter here is the
-  /// wrong direction (a non-moderator seeing moderator UI), and it is exactly
-  /// what a plain `bool?` cache would produce after a sign-out.
-  String? _cachedUid;
-  bool _cachedIsModerator = false;
-
-  /// Whether the signed-in user holds the moderator role.
+  /// Rebuilds on auth changes and then listens to `moderators/{uid}`, which the
+  /// rules let a user `get` only for themselves. A revocation therefore removes
+  /// the moderation UI immediately — the property a custom auth claim could not
+  /// give us, since a claim survives in the ID token until it expires
+  /// (device-verified in both directions, 2026-08-17).
   ///
-  /// Reads `moderators/{uid}`, which the rules let a user `get` only for
-  /// themselves. This is a **UI affordance only** — the real boundary is the
-  /// same check inside the `moderateAction` callable and in the rules, so a
-  /// stale `true` here costs nothing worse than a button that returns
-  /// `permission-denied`.
+  /// This is a **UI affordance only**. The real boundary is the same check
+  /// inside the `moderateAction` callable and in `firestore.rules`, so a stale
+  /// `true` costs nothing worse than a button that returns `permission-denied`.
   ///
-  /// Returns false rather than throwing when the read fails: offline, the right
-  /// answer for "should I draw the moderation entry point" is no.
-  Future<bool> isModerator({bool forceRefresh = false}) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) {
-      _cachedUid = null;
-      _cachedIsModerator = false;
-      return false;
-    }
-    if (!forceRefresh && _cachedUid == uid) return _cachedIsModerator;
-
-    try {
-      final doc =
-          await _db.collection(_moderatorsCollection).doc(uid).get();
-      _cachedUid = uid;
-      _cachedIsModerator = doc.exists;
-      return _cachedIsModerator;
-    } catch (e) {
-      debugPrint('Moderator role check failed: $e');
-      return false;
-    }
-  }
-
-  /// Live role, for UI that must appear and disappear without a restart.
+  /// Deliberately the only role API, and deliberately uncached: an earlier
+  /// one-shot `isModerator()` with a uid-keyed cache existed alongside it, and
+  /// nothing ever called it. Callers memoize this stream in their own State —
+  /// see `_moderatorStream` in `HomeRouteDrawer` — which is where the caching
+  /// belongs, because only the caller knows its rebuild pattern.
   ///
-  /// Rebuilds on auth changes and then listens to the roster document, so a
-  /// revocation removes the drawer entry immediately — the property a custom
-  /// auth claim could not give us, since a claim survives in the ID token until
-  /// it expires.
+  /// Errors are swallowed to `false`: offline, the right answer to "should I
+  /// draw the moderation entry point" is no.
   Stream<bool> watchIsModerator() {
     return FirebaseAuth.instance.userChanges().asyncExpand((user) {
       if (user == null) return Stream<bool>.value(false);
@@ -87,21 +61,11 @@ class ModerationService {
           .collection(_moderatorsCollection)
           .doc(user.uid)
           .snapshots()
-          .map((doc) {
-            _cachedUid = user.uid;
-            _cachedIsModerator = doc.exists;
-            return doc.exists;
-          })
+          .map((doc) => doc.exists)
           .handleError((Object e) {
             debugPrint('Moderator role stream failed: $e');
           });
     });
-  }
-
-  /// Clears the cached role. Call on sign-out and account switch.
-  void invalidateRoleCache() {
-    _cachedUid = null;
-    _cachedIsModerator = false;
   }
 
   /// Files a report (spec 18.1).
@@ -146,10 +110,18 @@ class ModerationService {
     try {
       // `create`-only semantics: this throws rather than overwriting when the
       // document already exists, which is how the one-per-target limit surfaces.
+      //
+      // Time-boxed because a Firestore write only completes on server ack, and
+      // offline persistence is on by default — so offline this future never
+      // settles at all. The dialog has already disabled its Submit button by
+      // then, leaving it dead with no snackbar and no way out. Reporting a
+      // failure is the honest answer: the write may still flush later, but the
+      // one thing we must not do is leave the user staring at a frozen dialog.
       await _db
           .collection(_reportsCollection)
           .doc(target.documentId(uid))
-          .set(data);
+          .set(data)
+          .timeout(const Duration(seconds: 15));
       return ReportOutcome.submitted;
     } on FirebaseException catch (e) {
       // `permission-denied` on a payload this method built itself means the

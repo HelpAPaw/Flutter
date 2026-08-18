@@ -30,6 +30,11 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
   /// and the auth StreamBuilder rebuilds the whole list — don't open a fresh
   /// Firestore listener each time, re-reading every unread document.
   Stream<int>? _unreadCount;
+
+  /// Cached for the same reason, plus one of its own: a fresh stream falls back
+  /// to `initialData: false`, so an un-cached moderator entry would blink out
+  /// and back in on every tile tap.
+  Stream<bool>? _moderatorStream;
   String? _unreadCountUid;
 
   Stream<int> _unreadCountStream(String? uid) {
@@ -228,7 +233,8 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
           // Index 12: the tile indices are identity, not order (10 is the
           // inbox, 11 is sign-out), so a new one needs no renumbering.
           StreamBuilder<bool>(
-            stream: ModerationService.instance.watchIsModerator(),
+            stream: _moderatorStream ??=
+                ModerationService.instance.watchIsModerator(),
             initialData: false,
             builder: (context, snapshot) {
               if (snapshot.data != true) return const SizedBox.shrink();
