@@ -2905,6 +2905,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Moderator'**
   String get moderationBadge;
+
+  /// No description provided for @moderationTabReports.
+  ///
+  /// In en, this message translates to:
+  /// **'Reports'**
+  String get moderationTabReports;
+
+  /// No description provided for @moderationTabHidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Hidden'**
+  String get moderationTabHidden;
+
+  /// No description provided for @moderationHiddenEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No hidden signals.'**
+  String get moderationHiddenEmpty;
+
+  /// No description provided for @moderationHiddenBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Hidden by {name}'**
+  String moderationHiddenBy(String name);
+
+  /// No description provided for @moderationRestoreTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore this signal?'**
+  String get moderationRestoreTitle;
+
+  /// No description provided for @moderationRestoreBody.
+  ///
+  /// In en, this message translates to:
+  /// **'It goes back on the map for everyone. Its comments and history are still there.'**
+  String get moderationRestoreBody;
+
+  /// No description provided for @moderationRestore.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore'**
+  String get moderationRestore;
 }
 
 class _AppLocalizationsDelegate

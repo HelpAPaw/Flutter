@@ -1573,4 +1573,28 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get moderationBadge => 'Moderator';
+
+  @override
+  String get moderationTabReports => 'Reports';
+
+  @override
+  String get moderationTabHidden => 'Hidden';
+
+  @override
+  String get moderationHiddenEmpty => 'No hidden signals.';
+
+  @override
+  String moderationHiddenBy(String name) {
+    return 'Hidden by $name';
+  }
+
+  @override
+  String get moderationRestoreTitle => 'Restore this signal?';
+
+  @override
+  String get moderationRestoreBody =>
+      'It goes back on the map for everyone. Its comments and history are still there.';
+
+  @override
+  String get moderationRestore => 'Restore';
 }
