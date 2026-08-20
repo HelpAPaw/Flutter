@@ -538,6 +538,9 @@
   "moderationActionApplied": "Готово.",
   "moderationActionFailed": "Действието не бе изпълнено. Моля, опитайте отново.",
   "moderationPermissionDenied": "Вече нямате достъп на модератор.",
+  "moderationSelfBlocked": "Не можете да модерирате собственото си съдържание.",
+  "moderationActionsLabel": "Модераторски действия",
+  "moderationCommentChooserTitle": "Този коментар",
 
   "moderationHideSignal": "Скриване на сигнала",
   "moderationRestoreSignal": "Възстановяване на сигнала",

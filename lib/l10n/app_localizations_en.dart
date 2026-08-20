@@ -1529,6 +1529,15 @@ class AppLocalizationsEn extends AppLocalizations {
       'You no longer have moderator access.';
 
   @override
+  String get moderationSelfBlocked => 'You cannot moderate your own content.';
+
+  @override
+  String get moderationActionsLabel => 'Moderation actions';
+
+  @override
+  String get moderationCommentChooserTitle => 'This comment';
+
+  @override
   String get moderationHideSignal => 'Hide signal';
 
   @override

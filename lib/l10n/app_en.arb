@@ -723,6 +723,9 @@
   "moderationActionApplied": "Done.",
   "moderationActionFailed": "That did not work. Please try again.",
   "moderationPermissionDenied": "You no longer have moderator access.",
+  "moderationSelfBlocked": "You cannot moderate your own content.",
+  "moderationActionsLabel": "Moderation actions",
+  "moderationCommentChooserTitle": "This comment",
 
   "moderationHideSignal": "Hide signal",
   "moderationRestoreSignal": "Restore signal",

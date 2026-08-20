@@ -35,8 +35,12 @@ import '../models/signal_urgency.dart';
 import 'report_dialog.dart';
 import 'update_note_dialog.dart';
 import 'urgency_picker.dart';
+import '../models/moderation_target.dart';
 import '../models/report_reason.dart';
 import '../services/app_preferences_service.dart';
+import '../services/moderation_service.dart';
+import 'moderation_action_sheet.dart';
+import 'section_header.dart';
 import '../services/public_profile_service.dart';
 
 class SignalDetailsScreen extends StatefulWidget {
@@ -69,6 +73,24 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   final _comments = _HistorySource('comments');
   final _events = _HistorySource('events');
   late final List<_HistorySource> _historySources = [_comments, _events];
+
+  /// Whether the viewer holds the moderator role.
+  ///
+  /// A plain field fed by one subscription rather than a `StreamBuilder`,
+  /// because two very different surfaces need the answer — the app-bar shield
+  /// and every comment row — and wrapping each of a long comment list's rows in
+  /// its own builder to ask the same question is a lot of machinery for a bool.
+  ///
+  /// Safe to hold in State here, unlike in `HomeRouteDrawer`, whose State is
+  /// created and disposed on every drawer open. `ModerationService` fans a
+  /// single process-lifetime listener out to its subscribers, so this costs no
+  /// extra read.
+  ///
+  /// A **UI affordance only** — the real check is in the `moderateAction`
+  /// callable, so a stale `true` costs nothing worse than a button that returns
+  /// `permission-denied`.
+  bool _isModerator = false;
+  StreamSubscription<bool>? _roleSub;
 
   /// Which rows the history list is showing. Client-side over data already in
   /// memory — both listeners stay subscribed either way.
@@ -120,6 +142,11 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   void initState() {
     super.initState();
     _subscribe();
+    _roleSub = ModerationService.instance.watchIsModerator().listen((value) {
+      if (mounted && value != _isModerator) {
+        setState(() => _isModerator = value);
+      }
+    });
   }
 
   void _subscribe() {
@@ -461,6 +488,29 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                       ),
                     ),
                   ),
+                // Act on your own judgement (master spec §18.3). Until this
+                // existed a moderator could only touch content somebody had
+                // already *reported* — the action sheet's only entry point was
+                // the report queue — so a problem post found while browsing had
+                // to be reported first, by the moderator, to themselves.
+                //
+                // Beside the report flag rather than replacing it: reporting
+                // and moderating are different acts, and a moderator may well
+                // want the report on record for whoever holds the queue.
+                //
+                // Not for your own signal. That is enforced server-side (see
+                // `loadSignal` in functions/src/moderation.ts); hiding the icon
+                // just means nobody meets the error.
+                if (!isAuthor && _isModerator)
+                  Semantics(
+                    label: l10n.moderationActionsLabel,
+                    button: true,
+                    enabled: true,
+                    child: IconButton(
+                      icon: const Icon(Icons.shield_outlined),
+                      onPressed: () => _openSignalModeration(signal),
+                    ),
+                  ),
               ]),
             body: Center(
               child: Padding(
@@ -753,13 +803,16 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                             ],
                           ),
                           Text(' ${l10n.urgency}'),
-                          // Urgency is reporter-only. The spec restricts it to
-                          // the signal holder, a moderator or an admin; there are
-                          // no moderator/admin roles yet, so the reporter is
-                          // the whole of that set today. Firestore's
-                          // `isStatusOnlyUpdate` enforces the same rule, so
-                          // hiding this is UI courtesy, not the security
-                          // boundary. Everyone else sees the level read-only.
+                          // Urgency is reporter-only *here*. The spec (§5.3)
+                          // gives it to the signal holder, a moderator or an
+                          // admin — a moderator now reaches it through the
+                          // shield in the app bar, which routes through the
+                          // `moderateAction` callable so the correction is
+                          // audited and carries a note. Firestore's
+                          // `isStatusOnlyUpdate` excludes `urgency` from what a
+                          // client may write, so hiding this picker is UI
+                          // courtesy, not the security boundary. Everyone else
+                          // sees the level read-only.
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 8),
                             child: isAuthor
@@ -1070,20 +1123,36 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: entries.length,
-          itemBuilder: (context, index) =>
-              _buildHistoryRow(entries[index], dateFormat),
+          itemBuilder: (context, index) => _buildHistoryRow(
+            entries[index],
+            dateFormat,
+            // Computed once for the whole list rather than per row. A moderator
+            // may not act on comments under their OWN signal — deleting the
+            // comment criticising your case is the conflict of interest the
+            // server's `requireNotOwnContent` refuses — so on your own signal
+            // the rows behave exactly as they do for everybody else.
+            canModerateComments: _isModerator && !_isUserAuthor(signal),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildHistoryRow(SignalHistoryEntry entry, DateFormat dateFormat) =>
+  Widget _buildHistoryRow(
+    SignalHistoryEntry entry,
+    DateFormat dateFormat, {
+    required bool canModerateComments,
+  }) =>
       switch (entry.kind) {
         SignalHistoryKind.created => _buildCreatedRow(entry, dateFormat),
         SignalHistoryKind.statusChange ||
         SignalHistoryKind.urgencyChange =>
           _buildEventRow(entry, dateFormat),
-        SignalHistoryKind.comment => _buildCommentRow(entry, dateFormat),
+        SignalHistoryKind.comment => _buildCommentRow(
+            entry,
+            dateFormat,
+            canModerateComments: canModerateComments,
+          ),
       };
 
   /// The row every timeline opens with. Not stored — see
@@ -1164,7 +1233,97 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     );
   }
 
-  Widget _buildCommentRow(SignalHistoryEntry entry, DateFormat dateFormat) {
+  /// Opens the moderator action sheet for this signal.
+  ///
+  /// The parsed [signal] is handed over so the sheet does not re-read a
+  /// document this screen is already displaying — it needs `commentsLocked` and
+  /// the label to point its toggles the right way.
+  Future<void> _openSignalModeration(Signal signal) async {
+    final outcome = await showModerationActionSheet(
+      context,
+      target: ModerationTarget.signal(
+        signalId: widget.signalId,
+        collection: AppPreferencesService().signalsCollectionName,
+      ),
+      signal: signal,
+    );
+    if (!mounted) return;
+    // Hiding moves the document out of `signals` entirely, so the stream behind
+    // this screen has just gone empty. Leaving is not cosmetic: the empty
+    // branch in build() would otherwise tell the moderator the signal was
+    // *deleted*, which is both wrong and the opposite of the reversible thing
+    // they just did. `_leaveScreen` also handles the cold-deep-link case, where
+    // there is nothing to pop back to.
+    if (outcome == ModerationOutcome.targetRemoved) _leaveScreen();
+  }
+
+  /// What a long-press on someone else's comment offers a moderator.
+  ///
+  /// A chooser rather than going straight to one or the other, because both
+  /// remain meaningful: reporting puts the comment in the queue for whoever is
+  /// on duty, while deleting is the moderator acting now. Ordinary users never
+  /// see this — for them the long-press goes straight to the report dialog, as
+  /// it always has.
+  Future<void> _showCommentModeratorMenu(SignalHistoryEntry entry) async {
+    final l10n = AppLocalizations.of(context);
+    final collection = AppPreferencesService().signalsCollectionName;
+
+    final moderate = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: SectionHeader(l10n.moderationCommentChooserTitle),
+            ),
+            ListTile(
+              leading: const Icon(Icons.flag_outlined),
+              title: Text(l10n.reportComment),
+              onTap: () => Navigator.of(context).pop(false),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline),
+              title: Text(l10n.moderationDeleteComment),
+              onTap: () => Navigator.of(context).pop(true),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || moderate == null) return;
+
+    if (moderate) {
+      // Through the same sheet as everything else, so the mandatory note and
+      // the audit entry cannot be skipped just because this route is shorter.
+      await showModerationActionSheet(
+        context,
+        target: ModerationTarget.comment(
+          commentId: entry.id,
+          signalId: widget.signalId,
+          collection: collection,
+        ),
+      );
+    } else {
+      await showReportDialog(
+        context,
+        target: ReportTarget.comment(
+          commentId: entry.id,
+          signalId: widget.signalId,
+          collection: collection,
+          reportedUserId: entry.actorId,
+        ),
+      );
+    }
+  }
+
+  Widget _buildCommentRow(
+    SignalHistoryEntry entry,
+    DateFormat dateFormat, {
+    required bool canModerateComments,
+  }) {
     final l10n = AppLocalizations.of(context);
     final currentUid = FirebaseAuth.instance.currentUser?.uid;
     // Reporting your own comment is meaningless; deleting it is what you want,
@@ -1175,17 +1334,26 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       // trailing overflow icon on every row reads as an admin tool, and the
       // rows are already dense. Long-press is the platform gesture for "more
       // about this item" and costs no layout.
+      //
+      // A moderator gets a chooser here instead of going straight to the report
+      // dialog, which is how they act on a comment without waiting for somebody
+      // to report it first. The gesture is deliberately the same one — adding a
+      // visible moderator control per row would turn the list into the admin
+      // tool the comment above rules out.
       onLongPress: !canReport
           ? null
-          : () => showReportDialog(
-                context,
-                target: ReportTarget.comment(
-                  commentId: entry.id,
-                  signalId: widget.signalId,
-                  collection: AppPreferencesService().signalsCollectionName,
-                  reportedUserId: entry.actorId,
-                ),
-              ),
+          : canModerateComments
+              ? () => _showCommentModeratorMenu(entry)
+              : () => showReportDialog(
+                    context,
+                    target: ReportTarget.comment(
+                      commentId: entry.id,
+                      signalId: widget.signalId,
+                      collection:
+                          AppPreferencesService().signalsCollectionName,
+                      reportedUserId: entry.actorId,
+                    ),
+                  ),
       title: _historyCard(
         background: Colors.white,
         border: Colors.grey,
@@ -1323,6 +1491,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   @override
   void dispose() {
     _serverConfirmationTimer?.cancel();
+    _roleSub?.cancel();
     for (final source in _historySources) {
       source.sub?.cancel();
     }

@@ -5,6 +5,7 @@ import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:intl/intl.dart';
 
 import '../config/routes.dart';
+import '../models/moderation_target.dart';
 import '../models/report_reason.dart';
 import '../models/report_status.dart';
 import '../services/app_preferences_service.dart';
@@ -208,8 +209,8 @@ class _ModerationQueuePageState extends State<ModerationQueuePage> {
       ),
       onTap: () => showModerationActionSheet(
         context,
+        target: ModerationTarget.fromReport(data),
         reportId: doc.id,
-        report: data,
       ),
     );
   }
