@@ -12,6 +12,7 @@ import '../services/moderation_service.dart';
 import '../utils/nav_extensions.dart';
 import 'escape_leading.dart';
 import 'moderation_action_sheet.dart';
+import 'moderation_hidden_tab.dart';
 
 /// The moderator's queue of open reports (master spec §18).
 ///
@@ -85,8 +86,38 @@ class _ModerationQueuePageState extends State<ModerationQueuePage> {
               text: l10n.moderationNotAModerator,
             );
           }
-          return _buildQueue(l10n);
+          return _buildTabs(l10n);
         },
+      ),
+    );
+  }
+
+  /// Two views, because they answer different questions: the report queue is
+  /// outstanding work, while Hidden is reversible state. Hiding resolves its
+  /// report — correctly, the report HAS been actioned — so without a second
+  /// surface a hidden signal had no route back at all.
+  Widget _buildTabs(AppLocalizations l10n) {
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        children: [
+          TabBar(
+            labelColor: Colors.orange,
+            indicatorColor: Colors.orange,
+            tabs: [
+              Tab(text: l10n.moderationTabReports),
+              Tab(text: l10n.moderationTabHidden),
+            ],
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                _buildQueue(l10n),
+                const ModerationHiddenTab(),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

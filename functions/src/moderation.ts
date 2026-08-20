@@ -611,3 +611,99 @@ async function addNote(data: Record<string, unknown>): Promise<ActionResult> {
       : { collection: requireSignalCollection(data.collection) }),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Reading quarantine (master spec 18.3 — hiding is "temporarily")
+// ---------------------------------------------------------------------------
+
+/** Most recently hidden signals returned in one page. Matches the queue's cap. */
+const QUARANTINE_PAGE_SIZE = 50;
+
+/**
+ * What the client is told about a hidden signal.
+ *
+ * A **summary, deliberately not the document.** `moderationQuarantine` holds the
+ * whole signal — description, photo URLs, contact phone — and the entire reason
+ * that collection has no client rule match is that its contents are withheld
+ * from readers. A moderator's actual need is "what did I hide, and put that one
+ * back", which title and reason answer. Shipping `data` would undo the hide for
+ * anyone with the moderator role and a crafted client.
+ */
+export interface QuarantineSummary {
+  quarantineId: string;
+  signalId: string;
+  collection: string;
+  title: string;
+  hiddenBy: string;
+  note: string;
+  /** Epoch millis — a Firestore Timestamp does not survive the JSON envelope. */
+  hiddenAtMillis: number | null;
+}
+
+/**
+ * Projects a quarantine document to its summary.
+ *
+ * Exported for its own test: this is where a serialization bug would hide, and
+ * the `hiddenAt` conversion in particular has no compile-time protection —
+ * returning the Timestamp itself yields `{_seconds, _nanoseconds}` on some
+ * transports and `{}` on others, both of which render as a blank date rather
+ * than failing.
+ */
+export function quarantineSummary(
+  id: string,
+  raw: Record<string, unknown> | undefined
+): QuarantineSummary {
+  const data = (raw?.data ?? {}) as Record<string, unknown>;
+  const hiddenAt = raw?.hiddenAt as FirebaseFirestore.Timestamp | undefined;
+  return {
+    quarantineId: id,
+    signalId: typeof raw?.signalId === "string" ? raw.signalId : "",
+    collection: typeof raw?.collection === "string" ? raw.collection : "",
+    title: typeof data.title === "string" ? data.title : "",
+    hiddenBy: typeof raw?.hiddenBy === "string" ? raw.hiddenBy : "",
+    note: typeof raw?.note === "string" ? raw.note : "",
+    hiddenAtMillis:
+      typeof hiddenAt?.toMillis === "function" ? hiddenAt.toMillis() : null,
+  };
+}
+
+/**
+ * Lists the signals currently in quarantine, for the moderator who wants to
+ * put one back.
+ *
+ * **A callable rather than a client read**, which is the whole design decision
+ * here. Letting a moderator read `moderationQuarantine` through the rules would
+ * have been less code and would have given live updates, but it would also ship
+ * the withheld content to the client and would mean the one moderator power
+ * that works by direct read — every other one goes through `moderateAction`
+ * precisely so it is authorized server-side. Keeping the collection denied to
+ * every client preserves the hide guarantee in its strongest form: a hidden
+ * signal is not readable by anyone, moderators included.
+ *
+ * Separate from `moderateAction` on purpose: that endpoint's contract is that
+ * every call carries a mandatory note and leaves an audit entry, and neither
+ * belongs on a read.
+ *
+ * Scoped by collection so a moderator in test mode sees the test-mode
+ * quarantine, matching how the report queue splits.
+ */
+export const listQuarantined = onCall(
+  { enforceAppCheck: true },
+  async (request) => {
+    await requireModerator(request.auth?.uid);
+
+    const data = (request.data ?? {}) as Record<string, unknown>;
+    const collection = requireSignalCollection(data.collection);
+
+    const snapshot = await db()
+      .collection(QUARANTINE_COLLECTION)
+      .where("collection", "==", collection)
+      .orderBy("hiddenAt", "desc")
+      .limit(QUARANTINE_PAGE_SIZE)
+      .get();
+
+    return {
+      items: snapshot.docs.map((doc) => quarantineSummary(doc.id, doc.data())),
+    };
+  }
+);

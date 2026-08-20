@@ -13,7 +13,7 @@
  * `restoreSignal` could never find again.
  */
 
-import { requireId } from "../moderation";
+import { quarantineSummary, requireId } from "../moderation";
 
 /** Whether `requireId` accepts a value, as a boolean rather than a throw. */
 function accepts(raw: unknown): boolean {
@@ -53,5 +53,79 @@ describe("requireId", () => {
 
   it("throws an invalid-argument HttpsError naming the field", () => {
     expect(() => requireId("a/b", "signal id")).toThrow(/signal id/);
+  });
+});
+
+describe("quarantineSummary", () => {
+  // This projection is what keeps the withheld content server-side: the
+  // quarantine document holds the ENTIRE hidden signal, and only these fields
+  // may reach a client. A field added here by accident un-hides content for
+  // anyone holding the moderator role.
+  const doc = {
+    data: {
+      title: "Injured cat near bus stop",
+      description: "Long description that must not travel",
+      contactPhone: "+359888123456",
+      photoUrls: ["https://example.test/photo.jpg"],
+    },
+    collection: "signals_test",
+    signalId: "U9nLxygLCSRo642MwuVz",
+    hiddenBy: "moderator-uid",
+    note: "Duplicate of an existing report",
+    hiddenAt: { toMillis: () => 1755000000000 },
+  } as unknown as Record<string, unknown>;
+
+  it("returns only the summary fields", () => {
+    const summary = quarantineSummary("signals_test__U9nLx", doc);
+    expect(Object.keys(summary).sort()).toEqual([
+      "collection",
+      "hiddenAtMillis",
+      "hiddenBy",
+      "note",
+      "quarantineId",
+      "signalId",
+      "title",
+    ]);
+  });
+
+  it("never leaks the hidden content", () => {
+    const summary = quarantineSummary("signals_test__U9nLx", doc) as unknown as
+      Record<string, unknown>;
+    expect(summary.description).toBeUndefined();
+    expect(summary.contactPhone).toBeUndefined();
+    expect(summary.photoUrls).toBeUndefined();
+    expect(summary.data).toBeUndefined();
+    expect(JSON.stringify(summary)).not.toContain("+359888123456");
+    expect(JSON.stringify(summary)).not.toContain("must not travel");
+  });
+
+  it("carries what a moderator needs to decide", () => {
+    const summary = quarantineSummary("signals_test__U9nLx", doc);
+    expect(summary.quarantineId).toBe("signals_test__U9nLx");
+    expect(summary.signalId).toBe("U9nLxygLCSRo642MwuVz");
+    expect(summary.collection).toBe("signals_test");
+    expect(summary.title).toBe("Injured cat near bus stop");
+    expect(summary.hiddenBy).toBe("moderator-uid");
+    expect(summary.note).toBe("Duplicate of an existing report");
+  });
+
+  it("converts hiddenAt to millis, not a Timestamp", () => {
+    // A Timestamp does not survive the callable's JSON envelope: it arrives as
+    // {_seconds,_nanoseconds} or {} depending on transport, and both render as
+    // a blank date rather than failing.
+    const summary = quarantineSummary("id", doc);
+    expect(summary.hiddenAtMillis).toBe(1755000000000);
+    expect(typeof summary.hiddenAtMillis).toBe("number");
+  });
+
+  it("survives a malformed or partial document", () => {
+    // Quarantine documents are server-written, so this is defence rather than
+    // an expected case — but a blank row is far better than a crashed screen
+    // that hides every OTHER restorable signal too.
+    const summary = quarantineSummary("id", {});
+    expect(summary.title).toBe("");
+    expect(summary.signalId).toBe("");
+    expect(summary.hiddenAtMillis).toBeNull();
+    expect(quarantineSummary("id", undefined).quarantineId).toBe("id");
   });
 });
