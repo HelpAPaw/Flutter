@@ -631,6 +631,134 @@ class AppLocalizationsEn extends AppLocalizations {
   String get someone => 'Someone';
 
   @override
+  String get caseHolder => 'Responsible';
+
+  @override
+  String get caseHolderNobody => 'Nobody has taken this case on yet';
+
+  @override
+  String get caseHolderIsYou => 'You are responsible for this case';
+
+  @override
+  String get caseHolderTakeResponsibility => 'Take responsibility';
+
+  @override
+  String get caseHolderRequestTakeover => 'Offer to take over';
+
+  @override
+  String get caseHolderRequestPending => 'You have offered to take this over';
+
+  @override
+  String get caseHolderWithdrawRequest => 'Withdraw offer';
+
+  @override
+  String get caseHolderRelease => 'I can no longer do this';
+
+  @override
+  String get caseHolderHandOver => 'Hand over';
+
+  @override
+  String get caseHolderDecline => 'Decline';
+
+  @override
+  String get caseHolderOffers => 'Offers to take over';
+
+  @override
+  String get caseHolderStale => 'Nobody has updated this case in a while.';
+
+  @override
+  String get takeoverConfirmTitle => 'Take responsibility for this case?';
+
+  @override
+  String get takeoverConfirmBody =>
+      'You become the person coordinating this case. You can change its status and urgency, and hand it on or step down at any time.';
+
+  @override
+  String get takeoverConfirmAction => 'Take it on';
+
+  @override
+  String get releaseConfirmTitle => 'Step down from this case?';
+
+  @override
+  String get releaseConfirmBody =>
+      'The case stays open and anyone can take it on. Everyone following it is told.';
+
+  @override
+  String get takeoverNoteHint => 'Say what you plan to do';
+
+  @override
+  String get takeoverAlreadyHeld =>
+      'Someone else is responsible for this case. You can offer to take it over.';
+
+  @override
+  String get takeoverRequestSent =>
+      'Your offer was sent to the person responsible.';
+
+  @override
+  String get takeoverAlreadyAsked =>
+      'You have already offered to take this over.';
+
+  @override
+  String takeoverAskAgainAfter(String when) {
+    return 'You can offer again after $when.';
+  }
+
+  @override
+  String get errorChangingCaseHolder => 'Could not change who is responsible.';
+
+  @override
+  String tookResponsibility(String name) {
+    return '$name took responsibility for this case';
+  }
+
+  @override
+  String handedCaseTo(String name, String other) {
+    return '$name handed this case to $other';
+  }
+
+  @override
+  String releasedCase(String name) {
+    return '$name stepped down from this case';
+  }
+
+  @override
+  String get notificationOwnershipChangeTitle => 'Someone took responsibility';
+
+  @override
+  String get notificationOwnershipReleasedTitle => 'This case needs someone';
+
+  @override
+  String notificationOwnershipChangeBody(String name) {
+    return '$name is now responsible';
+  }
+
+  @override
+  String get notificationOwnershipReleasedBody =>
+      'Nobody is responsible for this case now';
+
+  @override
+  String get notificationTakeoverRequestTitle => 'Someone offered to take over';
+
+  @override
+  String notificationTakeoverRequestBody(String name) {
+    return '$name asked to take responsibility';
+  }
+
+  @override
+  String get notificationTakeoverApprovedTitle =>
+      'You are now responsible for a case';
+
+  @override
+  String get notificationTakeoverApprovedBody => 'The case is yours';
+
+  @override
+  String get notificationTakeoverDeclinedTitle => 'Your offer was declined';
+
+  @override
+  String get notificationTakeoverDeclinedBody =>
+      'The current holder is keeping this case';
+
+  @override
   String get deletePhoto => 'Delete photo';
 
   @override

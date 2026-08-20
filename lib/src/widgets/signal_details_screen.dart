@@ -32,11 +32,14 @@ import '../models/signal_status.dart';
 import '../models/animal_type.dart';
 import '../models/help_tag.dart';
 import '../models/signal_urgency.dart';
+import 'help_tag_picker_sheet.dart';
 import 'report_dialog.dart';
 import 'update_note_dialog.dart';
 import 'urgency_picker.dart';
 import '../models/report_reason.dart';
 import '../services/app_preferences_service.dart';
+import '../services/callable_client.dart';
+import '../services/case_ownership_service.dart';
 import '../services/public_profile_service.dart';
 
 class SignalDetailsScreen extends StatefulWidget {
@@ -79,6 +82,9 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   final Map<String, Future<String?>> _nameFutures = {};
   // uids whose lookup has already been given a second chance — see _nameFor.
   final Set<String> _nameRetried = {};
+  // Memoized name PAIRS, for rows whose sentence names two people. Keyed on both
+  // uids because `FutureBuilder` compares by identity — see _namePairFor.
+  final Map<String, Future<List<String?>>> _namePairFutures = {};
   final TextEditingController _newCommentController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _imagePicker = ImagePicker();
@@ -87,6 +93,11 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// Guards a status or urgency write. Without it a double-tap posts two
   /// timeline entries and (on an urgency escalation) two pushes to every
   /// subscriber.
+  ///
+  /// Also guards every **ownership** change, deliberately sharing one flag
+  /// rather than adding a second: a claim can carry a status change with it, so
+  /// two separate guards would let one tap through each of them and produce the
+  /// double write neither was meant to allow.
   bool _isApplyingLevelChange = false;
   final PageController _photoPageController = PageController();
   int _currentPhotoPage = 0;
@@ -111,6 +122,15 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   // gives this screen a ValueKey on the signal id (see main.dart) so the
   // framework disposes and rebuilds instead of swapping `widget` underneath us.
 
+  /// The signed-in user's `users/{uid}` document, as a reference.
+  ///
+  /// Beside [_signalRef] because the two are always used together: every
+  /// coordination write names the signal and stamps the actor.
+  DocumentReference<Map<String, dynamic>> get _userRef =>
+      FirebaseFirestore.instance
+          .collection('users')
+          .doc(FirebaseAuth.instance.currentUser!.uid);
+
   DocumentReference<Map<String, dynamic>> get _signalRef =>
       FirebaseFirestore.instance
           .collection(AppPreferencesService().signalsCollectionName)
@@ -131,6 +151,29 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     _signalStream = _signalRef.snapshots(includeMetadataChanges: true);
     _subscribeToHistory();
   }
+
+  /// Offers to take this case over (master spec §4.5), split by audience.
+  ///
+  /// Two streams rather than one view of the subcollection, because the two
+  /// readers want different things and the collection only ever grows —
+  /// answered requests are never deleted, since the cooldown reads them. A
+  /// volunteer wants **their own** row, which is addressable by id; the holder
+  /// wants the **pending** ones, which is a server-side filter. Sharing one
+  /// unfiltered listener made both pay one read per person who had ever asked.
+  ///
+  /// Created here rather than in [_subscribe] for two reasons. Neither is part
+  /// of the retry cycle — a failed read costs one small block, not the screen.
+  /// And `late final` makes them **lazy**: only the builder that needs one
+  /// touches it, so a passer-by opening a released case opens no listener, and
+  /// the holder never opens the volunteer's.
+  late final Stream<TakeoverRequest?> _myRequestStream =
+      CaseOwnershipService.instance.watchMyRequest(
+    widget.signalId,
+    FirebaseAuth.instance.currentUser!.uid,
+  );
+
+  late final Stream<List<TakeoverRequest>> _pendingRequestsStream =
+      CaseOwnershipService.instance.watchPendingRequests(widget.signalId);
 
   /// Replaces just the two history listeners, leaving `_signalStream` alone.
   ///
@@ -380,6 +423,14 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       _signalWasLoaded = true;
       final signal = Signal.fromJson(snapshot.data!.data() as Map<String, dynamic>);
       final isAuthor = _isUserAuthor(signal);
+      // Master spec §4.5: the case holder coordinates the case. The reporter
+      // keeps their own powers whether or not they still hold it — they own the
+      // photos, the description and the phone number, and §5.2 names "the
+      // original poster/case holder" as one set. `firestore.rules` draws the
+      // same line with `isSignalReporter() || isCaseHolderUpdate()`; this is
+      // which controls to draw, not the security boundary.
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      final canCoordinate = signal.canCoordinate(uid);
 
       return PopScope(
         canPop: false,
@@ -753,16 +804,20 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                             ],
                           ),
                           Text(' ${l10n.urgency}'),
-                          // Urgency is reporter-only. The spec restricts it to
-                          // the signal holder, a moderator or an admin; there are
-                          // no moderator/admin roles yet, so the reporter is
-                          // the whole of that set today. Firestore's
-                          // `isStatusOnlyUpdate` enforces the same rule, so
+                          // Master spec §5.2 restricts marking a case Red to
+                          // "the original poster/case holder, a moderator or an
+                          // admin". Until case ownership existed the reporter
+                          // was the whole of that set by default; now the case
+                          // holder is in it too, which is the spec being
+                          // implemented rather than the rule being relaxed.
+                          // (A moderator's route is still `moderateAction`'s
+                          // `setUrgency`, so their correction is audit-logged.)
+                          // `isCaseHolderUpdate` enforces the same line, so
                           // hiding this is UI courtesy, not the security
                           // boundary. Everyone else sees the level read-only.
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 8),
-                            child: isAuthor
+                            child: canCoordinate
                                 ? UrgencyPicker(
                                     value: signal.urgency,
                                     enabled: !_isApplyingLevelChange,
@@ -776,20 +831,42 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                     child: UrgencyChip(urgency: signal.urgency),
                                   ),
                           ),
-                          // What the signal needs, read-only. Editing lives on the
-                          // edit screen with the rest of the reporter's fields.
+                          // What the signal needs. Master spec §4.2: "as needs
+                          // are resolved, the case holder removes/completes tags
+                          // and the next priority becomes active" — so the
+                          // holder edits these here, rather than through the
+                          // edit screen, which carries the reporter's own
+                          // account of what they saw and stays theirs.
+                          //
                           // Signals from before tags existed have none, so the
-                          // whole block is omitted rather than showing an empty
-                          // heading.
+                          // block is omitted rather than showing an empty
+                          // heading — but a coordinator still needs a way to add
+                          // the first one, which is why the edit affordance is
+                          // not inside the `if`.
                           if (signal.helpNeededTags.isNotEmpty ||
-                              signal.animalType != null) ...[
+                              signal.animalType != null ||
+                              canCoordinate) ...[
                             const SizedBox(height: 8),
                             // Only when there is actually a need to head. A
                             // signal with a species and no tags (legacy, or
                             // edited by an older build) would otherwise read
                             // "Help needed" above a lone Cat chip.
-                            if (signal.helpNeededTags.isNotEmpty)
-                              Text(' ${l10n.helpNeeded}'),
+                            if (signal.helpNeededTags.isNotEmpty ||
+                                canCoordinate)
+                              Row(
+                                children: [
+                                  Text(' ${l10n.helpNeeded}'),
+                                  const Spacer(),
+                                  if (canCoordinate)
+                                    TextButton.icon(
+                                      icon: const Icon(Icons.edit, size: 16),
+                                      label: Text(l10n.change),
+                                      onPressed: _isApplyingLevelChange
+                                          ? null
+                                          : () => _editHelpTags(signal),
+                                    ),
+                                ],
+                              ),
                             Padding(
                               padding:
                                   const EdgeInsets.symmetric(horizontal: 8),
@@ -818,6 +895,12 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                               ),
                             ),
                           ],
+                          // Who is responsible, immediately above the control
+                          // that responsibility gates. The holder is *who*, the
+                          // status is *how far along*, and putting them next to
+                          // each other is what makes "take responsibility, then
+                          // move it" read as one idea rather than two.
+                          _buildCaseHolderBlock(signal, uid),
                           const SizedBox(height: 8),
                           Text(' ${l10n.status}'),
                           DropdownButton<int>(
@@ -856,7 +939,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                   : (value) {
                                       if (value != null) {
                                         _updateSignalStatus(
-                                            signal.status, value);
+                                            signal, signal.status, value);
                                       }
                                     },
                           ),
@@ -1083,8 +1166,100 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         SignalHistoryKind.statusChange ||
         SignalHistoryKind.urgencyChange =>
           _buildEventRow(entry, dateFormat),
+        SignalHistoryKind.ownershipTransfer =>
+          _buildOwnershipRow(entry, dateFormat),
         SignalHistoryKind.comment => _buildCommentRow(entry, dateFormat),
       };
+
+  /// "Ownership history is visible in the case timeline" (master spec §4.5).
+  ///
+  /// Three sentences from one event, told apart by who the actor and the new
+  /// holder are — which is the whole reason the event stores both rather than
+  /// just the new one:
+  ///
+  ///  * no new holder → the holder stepped down;
+  ///  * the actor IS the new holder → they took the case on themselves;
+  ///  * otherwise → the previous holder handed it to someone.
+  ///
+  /// The previous holder stays visible because the row above it in the thread is
+  /// theirs — the spec's "previous case holders remain visible" is satisfied by
+  /// the timeline being a thread, with no per-row restatement.
+  Widget _buildOwnershipRow(SignalHistoryEntry entry, DateFormat dateFormat) {
+    final l10n = AppLocalizations.of(context);
+    final holderId = entry.holderId;
+
+    final Widget sentence;
+    if (holderId == null) {
+      sentence = _actorText(
+        entry.actorId,
+        (name) => l10n.releasedCase(name),
+        fallback: l10n.someone,
+      );
+    } else if (holderId == entry.actorId) {
+      sentence = _actorText(
+        entry.actorId,
+        (name) => l10n.tookResponsibility(name),
+        fallback: l10n.someone,
+      );
+    } else {
+      // Two names in one sentence, which is the one case `_actorText` cannot
+      // serve — it resolves a single uid. Memoized as a *pair*, not just built
+      // from two memoized halves: `FutureBuilder` compares futures by identity,
+      // so a fresh `Future.wait` each build restarts it at `waiting` and the
+      // sentence collapses to zero height for a frame. This screen rebuilds on
+      // every signal, comment and event snapshot, so that was every row
+      // flickering on each one.
+      sentence = FutureBuilder<List<String?>>(
+        future: _namePairFor(entry.actorId, holderId),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const SizedBox.shrink();
+          }
+          final names = snapshot.data ?? const [null, null];
+          final actorName =
+              (names[0]?.isNotEmpty ?? false) ? names[0]! : l10n.someone;
+          final holderName =
+              (names[1]?.isNotEmpty ?? false) ? names[1]! : l10n.unknown;
+          return Text(l10n.handedCaseTo(actorName, holderName));
+        },
+      );
+    }
+
+    return ListTile(
+      title: _historyCard(
+        // The same blue the case-holder block uses, so a transfer reads as
+        // belonging to that part of the screen rather than to the orange
+        // status/urgency events.
+        background: Colors.blue.shade50,
+        border: Colors.blue.shade200,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  holderId == null
+                      ? Icons.person_off_outlined
+                      : Icons.volunteer_activism,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: sentence),
+              ],
+            ),
+            if (entry.note case final note? when note.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(note),
+            ],
+          ],
+        ),
+      ),
+      // The same subtitle slot every other history row uses, so the timeline's
+      // dates stay in one column and `_formatDate` remains the single place a
+      // change to date presentation has to be made.
+      subtitle: _dateSubtitle(entry, dateFormat),
+    );
+  }
 
   /// The row every timeline opens with. Not stored — see
   /// [SignalHistoryEntry.created].
@@ -1288,6 +1463,256 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// [maxLines] for the places the name shares a row with the date: it is
   /// user-supplied and capped at 100 chars, so it has to shrink rather than
   /// overflow.
+  /// Who is responsible for this case, and what this viewer can do about it
+  /// (master spec §4.5).
+  ///
+  /// Four audiences in one block, which is deliberate — the alternative was four
+  /// conditionals scattered through `build()`, and the thing a reader needs to
+  /// see at a glance is that exactly one affordance is offered at a time:
+  ///
+  /// | viewer | sees |
+  /// |---|---|
+  /// | the holder | who they are, plus Release and any offers to answer |
+  /// | the reporter, not holding | who holds it, plus the offers |
+  /// | anyone else, case held | Offer to take over (or their pending offer) |
+  /// | anyone else, case released | Take responsibility |
+  Widget _buildCaseHolderBlock(Signal signal, String? uid) {
+    final l10n = AppLocalizations.of(context);
+    final holder = signal.caseHolder;
+    final isHolder = signal.isHeldBy(uid);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        Text(' ${l10n.caseHolder}'),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Row(
+            children: [
+              Icon(
+                holder == null ? Icons.person_off_outlined : Icons.person,
+                size: 18,
+                // A case nobody holds is the one thing in this block worth
+                // drawing the eye to: it is an ask, not a status.
+                color: holder == null ? Colors.orange : null,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: isHolder
+                    ? Text(l10n.caseHolderIsYou)
+                    : holder == null
+                        ? Text(l10n.caseHolderNobody)
+                        : _actorText(
+                            holder.id,
+                            (name) => name,
+                            fallback: l10n.unknown,
+                            maxLines: 1,
+                          ),
+              ),
+            ],
+          ),
+        ),
+        _buildOwnershipActions(signal, isHolder: isHolder, uid: uid),
+        // HOLDER ONLY, matching `requireCurrentHolder` in the callable. The
+        // reporter can do almost everything else on their own signal, but
+        // `approveRequest`/`declineRequest` are the holder's — so showing them
+        // Hand over / Decline would be offering buttons that always fail with a
+        // generic error. A holder who has gone quiet is what staleness is for,
+        // not what the reporter is for.
+        if (isHolder) _buildTakeoverRequests(),
+      ],
+    );
+  }
+
+  /// The one action this viewer is offered, if any.
+  Widget _buildOwnershipActions(
+    Signal signal, {
+    required bool isHolder,
+    required String? uid,
+  }) {
+    final l10n = AppLocalizations.of(context);
+
+    if (isHolder) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          icon: const Icon(Icons.logout, size: 16),
+          label: Text(l10n.caseHolderRelease),
+          onPressed: _isApplyingLevelChange ? null : () => _releaseCase(),
+        ),
+      );
+    }
+
+    // Nobody holds it, or whoever does has stopped answering — either way there
+    // is no permission to ask for, and the server will say so if it disagrees.
+    //
+    // The staleness half matters: without it the escape hatch the whole design
+    // is shaped around is reachable only as a side effect of using the status
+    // dropdown, and somebody who just wants to take the case on has no button.
+    if (signal.isReleased || CaseOwnershipService.isHolderStale(signal)) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: FilledButton.tonalIcon(
+          icon: const Icon(Icons.volunteer_activism, size: 16),
+          label: Text(l10n.caseHolderTakeResponsibility),
+          onPressed: _isApplyingLevelChange ? null : () => _claimCase(),
+        ),
+      );
+    }
+
+    // Held by someone else: offer to take it over, or show the offer already
+    // made.
+    //
+    // The uid check happens BEFORE the stream is touched. `_myRequestStream` is
+    // keyed on the signed-in uid, and it is `late final`, so reading it with no
+    // session would throw at exactly the moment the app is least able to say
+    // why. Signed out should be impossible here (the app always holds at least
+    // an anonymous session) — which is the reason to fail softly rather than
+    // assert.
+    if (uid == null) return const SizedBox.shrink();
+
+    return StreamBuilder<TakeoverRequest?>(
+      stream: _myRequestStream,
+      builder: (context, snapshot) {
+        // Nothing until the first snapshot: offering to take over a case you
+        // have already offered for reads as a dead button when the write is then
+        // refused by the uid-keyed document id.
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox.shrink();
+        }
+
+        // Their request whatever its status: an *answered* one still occupies
+        // the uid-keyed slot, and whether it can be replaced depends on the
+        // cooldown rather than on it being gone.
+        final mine = snapshot.data;
+
+        // Answered and still cooling down. Say when, rather than offering a
+        // button whose write the rules would refuse.
+        if (mine?.reaskableAt case final until?) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // The holder's reason, when they gave one. They were required to
+                // type it; showing it is what makes that requirement honest.
+                if (mine?.resolvedNote case final why? when why.isNotEmpty)
+                  Text(why),
+                Text(
+                  l10n.takeoverAskAgainAfter(
+                    DateFormat.yMMMd().add_jm().format(until),
+                  ),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          );
+        }
+
+        if (mine != null && mine.isPending) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    l10n.caseHolderRequestPending,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+                TextButton(
+                  onPressed: _isApplyingLevelChange
+                      ? null
+                      : () => _withdrawTakeoverRequest(),
+                  child: Text(l10n.caseHolderWithdrawRequest),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            icon: const Icon(Icons.pan_tool_alt_outlined, size: 16),
+            label: Text(l10n.caseHolderRequestTakeover),
+            onPressed:
+                _isApplyingLevelChange ? null : () => _requestTakeover(),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Pending offers, each answerable in place.
+  Widget _buildTakeoverRequests() {
+    final l10n = AppLocalizations.of(context);
+
+    return StreamBuilder<List<TakeoverRequest>>(
+      stream: _pendingRequestsStream,
+      builder: (context, snapshot) {
+        final pending = snapshot.data ?? const <TakeoverRequest>[];
+        // A read that failed, or a case nobody has offered for, both render
+        // nothing — there is no useful difference to a holder here, and an error
+        // row about a list that is empty far more often than not would be noise.
+        if (pending.isEmpty) return const SizedBox.shrink();
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                l10n.caseHolderOffers,
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+              for (final request in pending)
+                Card(
+                  margin: const EdgeInsets.only(top: 6),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _actorText(
+                          request.requesterId,
+                          (name) => name,
+                          fallback: l10n.unknown,
+                          style: Theme.of(context).textTheme.titleSmall,
+                          maxLines: 1,
+                        ),
+                        if (request.note.isNotEmpty) Text(request.note),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton(
+                              onPressed: _isApplyingLevelChange
+                                  ? null
+                                  : () => _answerTakeover(request,
+                                      approve: false),
+                              child: Text(l10n.caseHolderDecline),
+                            ),
+                            FilledButton(
+                              onPressed: _isApplyingLevelChange
+                                  ? null
+                                  : () => _answerTakeover(request,
+                                      approve: true),
+                              child: Text(l10n.caseHolderHandOver),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _actorText(
     String uid,
     String Function(String name) sentence, {
@@ -1398,6 +1823,15 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     });
   }
 
+  /// Both names for a row that names two people, as one stable future.
+  ///
+  /// Composed from [_nameFor], so the underlying reads stay memoized per uid and
+  /// shared with every other row; this memo exists only so the *combined* future
+  /// keeps its identity across rebuilds.
+  Future<List<String?>> _namePairFor(String first, String second) =>
+      _namePairFutures['$first|$second'] ??=
+          Future.wait([_nameFor(first), _nameFor(second)]);
+
   /// Reads a name from the world-readable public profile, retrying a failed
   /// read. The `publicProfiles` read is auth-gated, and right after a fresh
   /// (anonymous) sign-in the ID token may not be valid yet, so the first read
@@ -1423,8 +1857,24 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     return signal.reporter.id == currentUser.uid;
   }
 
-  Future<void> _updateSignalStatus(int oldStatus, int newStatus) async {
+  /// Move the signal's status, taking responsibility for it first if needed.
+  ///
+  /// **Claim-to-act** (master spec §4.5, "the current case holder can update
+  /// status"). Before case ownership, any signed-in user could move any
+  /// stranger's signal to Resolved with nothing recording that they had taken
+  /// it on. Now a bystander who wants to move a case is asked to take it on —
+  /// one confirmation, one note, one write. The status dropdown stays visible
+  /// and enabled for everyone, because hiding it would leave a volunteer with no
+  /// way to discover that taking the case on is what unlocks it.
+  Future<void> _updateSignalStatus(
+      Signal signal, int oldStatus, int newStatus) async {
     final status = SignalStatus.fromCode(newStatus);
+
+    if (!signal.canCoordinate(FirebaseAuth.instance.currentUser?.uid)) {
+      await _claimCase(newStatus: newStatus);
+      return;
+    }
+
     await _applyLevelChange(
       eventType: SignalEventType.statusChange,
       oldValue: oldStatus,
@@ -1433,6 +1883,242 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       levelBadge: statusBadge(status),
       errorText: (l10n) => l10n.errorUpdatingStatus,
     );
+  }
+
+  // -------------------------------------------------------------------------
+  // Case ownership (master spec §4.5). Every one of these goes through the
+  // `caseOwnership` callable — the client cannot write `caseHolder`, by rule.
+  // -------------------------------------------------------------------------
+
+  /// Take responsibility for a case, optionally moving its status in the same
+  /// action.
+  ///
+  /// [newStatus] arrives from the status dropdown on the claim-to-act path. The
+  /// server applies both in one batch, which is what lets one note explain both
+  /// and stops a failed second write leaving someone owning a case they only
+  /// meant to update.
+  Future<void> _claimCase({int? newStatus}) async {
+    final l10n = AppLocalizations.of(context);
+    final note = await _askOwnershipNote(
+      title: l10n.takeoverConfirmTitle,
+      body: l10n.takeoverConfirmBody,
+      confirmLabel: l10n.takeoverConfirmAction,
+    );
+    if (note == null) return;
+
+    await _runOwnershipChange(() => CaseOwnershipService.instance.claim(
+          signalId: widget.signalId,
+          note: note,
+          newStatus: newStatus,
+        ));
+  }
+
+  /// Step down (master spec §4.8, "I cannot go anymore").
+  Future<void> _releaseCase() async {
+    final l10n = AppLocalizations.of(context);
+    final note = await _askOwnershipNote(
+      title: l10n.releaseConfirmTitle,
+      body: l10n.releaseConfirmBody,
+      confirmLabel: l10n.caseHolderRelease,
+    );
+    if (note == null) return;
+
+    await _runOwnershipChange(() => CaseOwnershipService.instance.release(
+          signalId: widget.signalId,
+          note: note,
+        ));
+  }
+
+  /// Answer someone's offer to take the case on.
+  Future<void> _answerTakeover(
+    TakeoverRequest request, {
+    required bool approve,
+  }) async {
+    final l10n = AppLocalizations.of(context);
+    final note = await _askOwnershipNote(
+      title: approve ? l10n.caseHolderHandOver : l10n.caseHolderDecline,
+      body: approve ? l10n.takeoverConfirmBody : l10n.releaseConfirmBody,
+      confirmLabel: approve ? l10n.caseHolderHandOver : l10n.caseHolderDecline,
+    );
+    if (note == null) return;
+
+    await _runOwnershipChange(() => approve
+        ? CaseOwnershipService.instance.approveRequest(
+            signalId: widget.signalId,
+            requesterId: request.requesterId,
+            note: note,
+          )
+        : CaseOwnershipService.instance.declineRequest(
+            signalId: widget.signalId,
+            requesterId: request.requesterId,
+            note: note,
+          ));
+  }
+
+  /// Offer to take a case its holder has not released.
+  ///
+  /// A plain Firestore write, not a callable — a request carries no privilege.
+  /// The holder hears about it through the `onTakeoverRequested` trigger.
+  Future<void> _requestTakeover() async {
+    final l10n = AppLocalizations.of(context);
+    if (!RepositoryProvider.instance.userRepository.canModifyData) {
+      _showSignInDialog();
+      return;
+    }
+
+    final note = await showUpdateNoteDialog(
+      context,
+      levelLabel: l10n.caseHolderRequestTakeover,
+      levelBadge: const Icon(Icons.pan_tool_alt_outlined, size: 16),
+    );
+    if (note == null || !mounted || _isApplyingLevelChange) return;
+
+    await _runGuarded(() async {
+      final outcome = await CaseOwnershipService.instance.requestTakeover(
+        signalId: widget.signalId,
+        note: note,
+      );
+      if (!mounted) return;
+      // Every outcome is reportable, including the two that are answers rather
+      // than errors — `requestTakeover` never throws, so there is nothing to
+      // catch here.
+      final message = switch (outcome) {
+        TakeoverRequestOutcome.submitted => l10n.takeoverRequestSent,
+        TakeoverRequestOutcome.alreadyAsked => l10n.takeoverAlreadyAsked,
+        TakeoverRequestOutcome.notSignedIn => l10n.signInRequired,
+        TakeoverRequestOutcome.failed => l10n.errorChangingCaseHolder,
+      };
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    });
+  }
+
+  Future<void> _withdrawTakeoverRequest() async {
+    await _runOwnershipChange(
+        () => CaseOwnershipService.instance.withdrawRequest(widget.signalId));
+  }
+
+  /// Confirm the intent, then ask for the note that explains it.
+  ///
+  /// Two dialogs in the order the urgency path already established: confirm what
+  /// you mean to do, *then* say why. Returns null when the user backed out of
+  /// either, and nothing is written — every one of these reads its value from
+  /// the signal stream, so there is nothing to revert.
+  Future<String?> _askOwnershipNote({
+    required String title,
+    required String body,
+    required String confirmLabel,
+  }) async {
+    final l10n = AppLocalizations.of(context);
+    if (!RepositoryProvider.instance.userRepository.canModifyData) {
+      _showSignInDialog();
+      return null;
+    }
+    if (_isApplyingLevelChange) return null;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(body),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(confirmLabel),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return null;
+
+    return showUpdateNoteDialog(
+      context,
+      levelLabel: confirmLabel,
+      levelBadge: const Icon(Icons.volunteer_activism, size: 16),
+    );
+  }
+
+  /// Runs an ownership call behind the shared in-flight guard.
+  ///
+  /// Shares `_isApplyingLevelChange` with the status and urgency paths on
+  /// purpose: a claim can carry a status change, so a separate guard would let
+  /// one tap through each and produce the duplicate neither meant to allow.
+  ///
+  /// `failed-precondition` is not an error but an answer — somebody else got
+  /// there first — so it gets its own message pointing at the offer flow.
+  Future<void> _runOwnershipChange(Future<void> Function() action) =>
+      _runGuarded(() async {
+        try {
+          await action();
+        } catch (e) {
+          if (!mounted) return;
+          final l10n = AppLocalizations.of(context);
+          // `failed-precondition` is not a failure but an answer — somebody else
+          // got there first — so it gets the message that points at the offer
+          // flow instead of the generic one.
+          final alreadyHeld =
+              e is CallableException && e.code == 'failed-precondition';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(alreadyHeld
+                  ? l10n.takeoverAlreadyHeld
+                  : l10n.errorChangingCaseHolder),
+            ),
+          );
+        }
+      });
+
+  /// Runs [body] behind the shared in-flight guard.
+  ///
+  /// The flag's whole job is to stop a second change landing on top of one
+  /// already in flight, and it is deliberately **one flag for every path** — a
+  /// claim can carry a status change, so separate guards would let one tap
+  /// through each of them. Owning the `setState`/`finally` pair here means a new
+  /// path cannot half-implement it; a missed `if (mounted)` in the `finally`
+  /// leaves every control on this screen permanently disabled, which is a bug
+  /// this file has been fixed for before.
+  Future<void> _runGuarded(Future<void> Function() body) async {
+    if (_isApplyingLevelChange) return;
+    setState(() => _isApplyingLevelChange = true);
+    try {
+      await body();
+    } finally {
+      if (mounted) setState(() => _isApplyingLevelChange = false);
+    }
+  }
+
+  /// Change what the case needs (master spec §4.2).
+  ///
+  /// An ordinary field write on the holder branch, not an ownership change — it
+  /// travels through `isCaseHolderUpdate()` like a status change does, and needs
+  /// no callable.
+  Future<void> _editHelpTags(Signal signal) async {
+    final selected = await showHelpTagPicker(
+      context,
+      initial: HelpTag.fromCodes(signal.helpNeededTags),
+    );
+    if (selected == null || !mounted || _isApplyingLevelChange) return;
+
+    await _runGuarded(() async {
+      try {
+        await _signalRef.update({
+          'helpNeededTags': selected.map((t) => t.code).toList(),
+          // The shared stamp, so this write cannot forget the holder's proof of
+          // life the way the edit screen once did.
+          ...CaseOwnershipService.coordinationStamp(_userRef),
+        });
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context).errorUpdatingStatus),
+          ),
+        );
+      }
+    });
   }
 
   /// Change the signal's urgency and record it on the timeline.
@@ -1519,7 +2205,10 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     final batch = FirebaseFirestore.instance.batch();
     batch.update(signalRef, {
       eventType.signalField: newValue,
-      'lastUpdatedBy': userRef,
+      // `lastUpdatedBy` plus the holder's proof of life, from the one helper
+      // that defines what a coordination write carries — see its doc comment for
+      // what each is load-bearing for.
+      ...CaseOwnershipService.coordinationStamp(userRef),
     });
     batch.set(
       signalRef.collection('events').doc(),
@@ -1630,20 +2319,26 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     }
   }
 
-  /// Empties both history subcollections ahead of deleting the signal.
+  /// Empties every subcollection ahead of deleting the signal.
   ///
-  /// The two reads are independent, so they run concurrently and their deletes
-  /// share one batch: two round trips on a tap that shows no progress, instead
-  /// of the four that reading and committing each collection in turn cost.
+  /// **Firestore keeps subcollection documents when the parent document is
+  /// deleted**, and nothing is left to reach them by — so a subcollection missed
+  /// here is orphaned permanently. Adding one to the signal means adding it to
+  /// this list; there is no wildcard.
   ///
-  /// One batch also makes the two deletes atomic — a signal cannot end up with
-  /// its comments gone and its history intact. It is bounded by what a single
-  /// signal accumulates, and a 500-document signal has never existed; if one
-  /// ever does, this is where the chunking goes.
+  /// The reads are independent, so they run concurrently and their deletes share
+  /// one batch: two round trips on a tap that shows no progress, instead of the
+  /// two-per-collection that reading and committing each in turn would cost.
+  ///
+  /// One batch also makes the deletes atomic — a signal cannot end up with its
+  /// comments gone and its history intact. It is bounded by what a single signal
+  /// accumulates, and a 500-document signal has never existed; if one ever does,
+  /// this is where the chunking goes.
   Future<void> _deleteHistory(DocumentReference<Object?> signalRef) async {
     final snapshots = await Future.wait([
       signalRef.collection('comments').get(),
       signalRef.collection('events').get(),
+      signalRef.collection('takeoverRequests').get(),
     ]);
 
     final docs = [for (final snapshot in snapshots) ...snapshot.docs];

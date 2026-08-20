@@ -27,26 +27,23 @@
 import * as admin from "firebase-admin";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 
+import { buildEventData, SIGNAL_EVENT_FIELDS } from "./events";
 import {
-  buildEventData,
-  MAX_EVENT_NOTE_LENGTH,
-  SIGNAL_EVENT_FIELDS,
-} from "./events";
+  db,
+  loadSignal,
+  requireId,
+  requireNote as requireNoteShared,
+  requireSignalCollection,
+  SignalCollection,
+} from "./signalRefs";
 import { URGENCY_GREEN, URGENCY_RED } from "./urgency";
 
-/**
- * Lazy handle on Firestore.
- *
- * NOT a module-level `admin.firestore()`: this module is imported by
- * `index.ts`, so its top level runs *before* `admin.initializeApp()` on line 32
- * of that file. Grabbing the instance at call time is the difference between
- * working and throwing at deploy.
- */
-const db = () => admin.firestore();
-
-/** The two signal collections a moderator can act on. */
-const SIGNAL_COLLECTIONS = ["signals", "signals_test"] as const;
-type SignalCollection = (typeof SIGNAL_COLLECTIONS)[number];
+// Signal addressing (`db`, the collection list, `requireId`, `loadSignal`, the
+// note bound) lives in ./signalRefs so `caseOwnership` uses the same
+// definitions. `requireId` is re-exported because this module's own test suite
+// imports it by that path, and because it is a moderation-era decision that
+// happens to be shared rather than a signalRefs-era one.
+export { requireId };
 
 /** Where a hidden signal's document goes. Denied to every client by rules. */
 const QUARANTINE_COLLECTION = "moderationQuarantine";
@@ -108,71 +105,15 @@ async function requireModerator(uid: string | undefined): Promise<string> {
 
 /** A required, bounded free-text justification. Every action carries one. */
 function requireNote(raw: unknown): string {
-  const note = typeof raw === "string" ? raw.trim() : "";
-  if (note.length === 0) {
-    throw new HttpsError(
-      "invalid-argument",
-      "Every moderation action needs a note explaining it."
-    );
-  }
-  if (note.length > MAX_EVENT_NOTE_LENGTH) {
-    throw new HttpsError(
-      "invalid-argument",
-      `Note must be ${MAX_EVENT_NOTE_LENGTH} characters or fewer.`
-    );
-  }
-  return note;
-}
-
-function requireSignalCollection(raw: unknown): SignalCollection {
-  if (!SIGNAL_COLLECTIONS.includes(raw as SignalCollection)) {
-    throw new HttpsError("invalid-argument", "Unknown signal collection.");
-  }
-  return raw as SignalCollection;
-}
-
-export function requireId(raw: unknown, what: string): string {
-  if (typeof raw !== "string" || raw.length === 0 || raw.length > 200) {
-    throw new HttpsError("invalid-argument", `Missing or invalid ${what}.`);
-  }
-  // `doc()` takes a RELATIVE PATH, not just an id: "abc/comments/xyz" resolves
-  // to a real nested document, which would let a caller address something these
-  // actions never meant to reach — and would make quarantineId() build a nested
-  // path that restoreSignal could never find again. Rejecting the separator is
-  // this validator's whole job.
-  if (raw.includes("/") || raw === "." || raw === "..") {
-    throw new HttpsError("invalid-argument", `Missing or invalid ${what}.`);
-  }
-  return raw;
+  return requireNoteShared(
+    raw,
+    "Every moderation action needs a note explaining it."
+  );
 }
 
 /** Quarantine document id. Namespaced so both collections can share it. */
 function quarantineId(collection: SignalCollection, signalId: string): string {
   return `${collection}__${signalId}`;
-}
-
-/**
- * Validates a signal-targeting action's arguments and loads the signal.
- *
- * Four branches used to repeat this preamble — validate collection, validate
- * id, `get()`, throw `not-found` — each with its own copy of the message and
- * its own chance to forget the existence check. One helper means a new signal
- * action cannot skip it.
- */
-async function loadSignal(data: Record<string, unknown>): Promise<{
-  collection: SignalCollection;
-  signalId: string;
-  ref: FirebaseFirestore.DocumentReference;
-  snapshot: FirebaseFirestore.DocumentSnapshot;
-}> {
-  const collection = requireSignalCollection(data.collection);
-  const signalId = requireId(data.signalId, "signal id");
-  const ref = db().collection(collection).doc(signalId);
-  const snapshot = await ref.get();
-  if (!snapshot.exists) {
-    throw new HttpsError("not-found", "That signal no longer exists.");
-  }
-  return { collection, signalId, ref, snapshot };
 }
 
 /** The `moderation` map on a loaded signal, or an empty one. */

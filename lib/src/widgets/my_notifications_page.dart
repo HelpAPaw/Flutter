@@ -60,6 +60,15 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
         return Icons.priority_high;
       case 'nearby_signal':
         return Icons.location_on;
+      // Case ownership (master spec 4.5). An offer and its answer share the
+      // "someone is asking you something" hand; a transfer gets the same icon
+      // the details screen puts on the Take responsibility button.
+      case 'ownership_change':
+        return Icons.volunteer_activism;
+      case 'takeover_request':
+      case 'takeover_approved':
+      case 'takeover_declined':
+        return Icons.pan_tool_alt_outlined;
       default:
         return Icons.notifications;
     }
@@ -91,6 +100,13 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
         return SignalUrgency.fromCode(data['urgency'] as int? ?? -1).color;
       case 'nearby_signal':
         return Colors.red;
+      // The same blue the case-holder block and its timeline rows use, so
+      // ownership reads as one thread across the app.
+      case 'ownership_change':
+      case 'takeover_request':
+      case 'takeover_approved':
+      case 'takeover_declined':
+        return Colors.blue;
       default:
         return Colors.grey;
     }
@@ -119,6 +135,20 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
         return l10n.notificationNewCommentTitle(signalTitle);
       case 'nearby_signal':
         return l10n.signalNearbyNotificationTitle;
+      // A transfer and a release are one server type, told apart by whether
+      // there is a new holder. `newHolderId` is explicitly null on a release —
+      // a real answer, not a missing field — so the two render differently
+      // without needing two types on the wire.
+      case 'ownership_change':
+        return data['newHolderId'] == null
+            ? l10n.notificationOwnershipReleasedTitle
+            : l10n.notificationOwnershipChangeTitle;
+      case 'takeover_request':
+        return l10n.notificationTakeoverRequestTitle;
+      case 'takeover_approved':
+        return l10n.notificationTakeoverApprovedTitle;
+      case 'takeover_declined':
+        return l10n.notificationTakeoverDeclinedTitle;
       default:
         return data['title'] as String? ?? l10n.notification;
     }
@@ -166,6 +196,24 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
         );
       case 'new_comment':
         return data['commentExcerpt'] as String? ?? fallback;
+      // `newHolderName` is resolved server-side, once, rather than re-read per
+      // reader: a name is not a translatable string, and the alternative is a
+      // publicProfiles read for every row in the list on every rebuild.
+      case 'ownership_change':
+        if (data['newHolderId'] == null) {
+          return l10n.notificationOwnershipReleasedBody;
+        }
+        final holderName = data['newHolderName'] as String?;
+        if (holderName == null) return fallback;
+        return l10n.notificationOwnershipChangeBody(holderName);
+      case 'takeover_request':
+        final requesterName = data['newHolderName'] as String?;
+        if (requesterName == null) return fallback;
+        return l10n.notificationTakeoverRequestBody(requesterName);
+      case 'takeover_approved':
+        return l10n.notificationTakeoverApprovedBody;
+      case 'takeover_declined':
+        return l10n.notificationTakeoverDeclinedBody;
       default:
         return fallback;
     }

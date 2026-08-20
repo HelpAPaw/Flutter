@@ -639,6 +639,139 @@ class AppLocalizationsBg extends AppLocalizations {
   String get someone => 'Някой';
 
   @override
+  String get caseHolder => 'Отговорник';
+
+  @override
+  String get caseHolderNobody => 'Още никой не е поел този случай';
+
+  @override
+  String get caseHolderIsYou => 'Вие отговаряте за този случай';
+
+  @override
+  String get caseHolderTakeResponsibility => 'Поеми отговорност';
+
+  @override
+  String get caseHolderRequestTakeover => 'Предложи да поемеш случая';
+
+  @override
+  String get caseHolderRequestPending => 'Предложили сте да поемете случая';
+
+  @override
+  String get caseHolderWithdrawRequest => 'Оттегли предложението';
+
+  @override
+  String get caseHolderRelease => 'Вече не мога да поема това';
+
+  @override
+  String get caseHolderHandOver => 'Предай случая';
+
+  @override
+  String get caseHolderDecline => 'Откажи';
+
+  @override
+  String get caseHolderOffers => 'Предложения за поемане';
+
+  @override
+  String get caseHolderStale =>
+      'От известно време никой не е обновявал този случай.';
+
+  @override
+  String get takeoverConfirmTitle =>
+      'Да поемете ли отговорност за този случай?';
+
+  @override
+  String get takeoverConfirmBody =>
+      'Вие ставате човекът, който координира случая. Можете да променяте статуса и спешността му, както и да го предадете или да се откажете по всяко време.';
+
+  @override
+  String get takeoverConfirmAction => 'Поемам го';
+
+  @override
+  String get releaseConfirmTitle => 'Да се откажете ли от този случай?';
+
+  @override
+  String get releaseConfirmBody =>
+      'Случаят остава отворен и всеки може да го поеме. Всички, които го следят, ще бъдат уведомени.';
+
+  @override
+  String get takeoverNoteHint => 'Опишете какво възнамерявате да направите';
+
+  @override
+  String get takeoverAlreadyHeld =>
+      'Друг човек отговаря за този случай. Можете да предложите да го поемете.';
+
+  @override
+  String get takeoverRequestSent =>
+      'Предложението ви беше изпратено на отговорника.';
+
+  @override
+  String get takeoverAlreadyAsked =>
+      'Вече сте предложили да поемете този случай.';
+
+  @override
+  String takeoverAskAgainAfter(String when) {
+    return 'Можете да предложите отново след $when.';
+  }
+
+  @override
+  String get errorChangingCaseHolder =>
+      'Отговорникът не можа да бъде променен.';
+
+  @override
+  String tookResponsibility(String name) {
+    return '$name пое отговорност за този случай';
+  }
+
+  @override
+  String handedCaseTo(String name, String other) {
+    return '$name предаде този случай на $other';
+  }
+
+  @override
+  String releasedCase(String name) {
+    return '$name се отказа от този случай';
+  }
+
+  @override
+  String get notificationOwnershipChangeTitle => 'Някой пое отговорност';
+
+  @override
+  String get notificationOwnershipReleasedTitle =>
+      'Този случай търси отговорник';
+
+  @override
+  String notificationOwnershipChangeBody(String name) {
+    return '$name вече отговаря за него';
+  }
+
+  @override
+  String get notificationOwnershipReleasedBody =>
+      'В момента никой не отговаря за този случай';
+
+  @override
+  String get notificationTakeoverRequestTitle =>
+      'Някой предложи да поеме случая';
+
+  @override
+  String notificationTakeoverRequestBody(String name) {
+    return '$name поиска да поеме отговорност';
+  }
+
+  @override
+  String get notificationTakeoverApprovedTitle => 'Вече отговаряте за случай';
+
+  @override
+  String get notificationTakeoverApprovedBody => 'Случаят е ваш';
+
+  @override
+  String get notificationTakeoverDeclinedTitle =>
+      'Предложението ви беше отказано';
+
+  @override
+  String get notificationTakeoverDeclinedBody =>
+      'Настоящият отговорник запазва случая';
+
+  @override
   String get deletePhoto => 'Изтрий снимка';
 
   @override

@@ -1226,6 +1226,222 @@ abstract class AppLocalizations {
   /// **'Someone'**
   String get someone;
 
+  /// No description provided for @caseHolder.
+  ///
+  /// In en, this message translates to:
+  /// **'Responsible'**
+  String get caseHolder;
+
+  /// No description provided for @caseHolderNobody.
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody has taken this case on yet'**
+  String get caseHolderNobody;
+
+  /// No description provided for @caseHolderIsYou.
+  ///
+  /// In en, this message translates to:
+  /// **'You are responsible for this case'**
+  String get caseHolderIsYou;
+
+  /// No description provided for @caseHolderTakeResponsibility.
+  ///
+  /// In en, this message translates to:
+  /// **'Take responsibility'**
+  String get caseHolderTakeResponsibility;
+
+  /// No description provided for @caseHolderRequestTakeover.
+  ///
+  /// In en, this message translates to:
+  /// **'Offer to take over'**
+  String get caseHolderRequestTakeover;
+
+  /// No description provided for @caseHolderRequestPending.
+  ///
+  /// In en, this message translates to:
+  /// **'You have offered to take this over'**
+  String get caseHolderRequestPending;
+
+  /// No description provided for @caseHolderWithdrawRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Withdraw offer'**
+  String get caseHolderWithdrawRequest;
+
+  /// No description provided for @caseHolderRelease.
+  ///
+  /// In en, this message translates to:
+  /// **'I can no longer do this'**
+  String get caseHolderRelease;
+
+  /// No description provided for @caseHolderHandOver.
+  ///
+  /// In en, this message translates to:
+  /// **'Hand over'**
+  String get caseHolderHandOver;
+
+  /// No description provided for @caseHolderDecline.
+  ///
+  /// In en, this message translates to:
+  /// **'Decline'**
+  String get caseHolderDecline;
+
+  /// No description provided for @caseHolderOffers.
+  ///
+  /// In en, this message translates to:
+  /// **'Offers to take over'**
+  String get caseHolderOffers;
+
+  /// No description provided for @caseHolderStale.
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody has updated this case in a while.'**
+  String get caseHolderStale;
+
+  /// No description provided for @takeoverConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Take responsibility for this case?'**
+  String get takeoverConfirmTitle;
+
+  /// No description provided for @takeoverConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You become the person coordinating this case. You can change its status and urgency, and hand it on or step down at any time.'**
+  String get takeoverConfirmBody;
+
+  /// No description provided for @takeoverConfirmAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Take it on'**
+  String get takeoverConfirmAction;
+
+  /// No description provided for @releaseConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Step down from this case?'**
+  String get releaseConfirmTitle;
+
+  /// No description provided for @releaseConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The case stays open and anyone can take it on. Everyone following it is told.'**
+  String get releaseConfirmBody;
+
+  /// No description provided for @takeoverNoteHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Say what you plan to do'**
+  String get takeoverNoteHint;
+
+  /// No description provided for @takeoverAlreadyHeld.
+  ///
+  /// In en, this message translates to:
+  /// **'Someone else is responsible for this case. You can offer to take it over.'**
+  String get takeoverAlreadyHeld;
+
+  /// No description provided for @takeoverRequestSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Your offer was sent to the person responsible.'**
+  String get takeoverRequestSent;
+
+  /// No description provided for @takeoverAlreadyAsked.
+  ///
+  /// In en, this message translates to:
+  /// **'You have already offered to take this over.'**
+  String get takeoverAlreadyAsked;
+
+  /// No description provided for @takeoverAskAgainAfter.
+  ///
+  /// In en, this message translates to:
+  /// **'You can offer again after {when}.'**
+  String takeoverAskAgainAfter(String when);
+
+  /// No description provided for @errorChangingCaseHolder.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not change who is responsible.'**
+  String get errorChangingCaseHolder;
+
+  /// No description provided for @tookResponsibility.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} took responsibility for this case'**
+  String tookResponsibility(String name);
+
+  /// No description provided for @handedCaseTo.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} handed this case to {other}'**
+  String handedCaseTo(String name, String other);
+
+  /// No description provided for @releasedCase.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} stepped down from this case'**
+  String releasedCase(String name);
+
+  /// No description provided for @notificationOwnershipChangeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Someone took responsibility'**
+  String get notificationOwnershipChangeTitle;
+
+  /// No description provided for @notificationOwnershipReleasedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This case needs someone'**
+  String get notificationOwnershipReleasedTitle;
+
+  /// No description provided for @notificationOwnershipChangeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is now responsible'**
+  String notificationOwnershipChangeBody(String name);
+
+  /// No description provided for @notificationOwnershipReleasedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody is responsible for this case now'**
+  String get notificationOwnershipReleasedBody;
+
+  /// No description provided for @notificationTakeoverRequestTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Someone offered to take over'**
+  String get notificationTakeoverRequestTitle;
+
+  /// No description provided for @notificationTakeoverRequestBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} asked to take responsibility'**
+  String notificationTakeoverRequestBody(String name);
+
+  /// No description provided for @notificationTakeoverApprovedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'You are now responsible for a case'**
+  String get notificationTakeoverApprovedTitle;
+
+  /// No description provided for @notificationTakeoverApprovedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The case is yours'**
+  String get notificationTakeoverApprovedBody;
+
+  /// No description provided for @notificationTakeoverDeclinedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your offer was declined'**
+  String get notificationTakeoverDeclinedTitle;
+
+  /// No description provided for @notificationTakeoverDeclinedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The current holder is keeping this case'**
+  String get notificationTakeoverDeclinedBody;
+
   /// No description provided for @deletePhoto.
   ///
   /// In en, this message translates to:

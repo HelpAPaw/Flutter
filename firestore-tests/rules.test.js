@@ -25,6 +25,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  serverTimestamp,
   setDoc,
   updateDoc,
 } from 'firebase/firestore';
@@ -527,6 +528,263 @@ for (const coll of ['signals', 'signals_test']) {
     });
   });
 
+  // Master spec 4.5 — a volunteer asks the current holder to hand the case over.
+  // Client-written (a request carries no privilege); APPROVING it is the
+  // caseOwnership callable's job, which is why `update` is denied outright here.
+  describe(`${coll} — takeoverRequests`, () => {
+    const SIGNAL = 'signal-1';
+    const requestsPath = `${coll}/${SIGNAL}/takeoverRequests`;
+    const SECOND = 'second-volunteer-uid';
+
+    /** What the app writes. `uid` is both the author and the document id. */
+    const requestDoc = (db, uid) => ({
+      requester: doc(db, 'users', uid),
+      status: 'pending',
+      note: 'I live two streets away and can go this afternoon.',
+      createdAt: new Date(),
+    });
+
+    beforeEach(async () => {
+      await testEnv.clearFirestore();
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, coll, SIGNAL), signalDoc(db, REPORTER));
+      });
+    });
+
+    it('lets a signed-in non-holder file one request', async () => {
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+      await assertSucceeds(setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER)));
+    });
+
+    // The document id IS the rate limit: create is allowed, update is not, so
+    // one person gets one live request per signal.
+    it('denies a second request from the same user', async () => {
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+      await assertSucceeds(setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER)));
+      await assertFails(setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER)));
+    });
+
+    it('denies filing a request under someone else’s id, or authored by them', async () => {
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+      await assertFails(setDoc(doc(db, requestsPath, REPORTER), requestDoc(db, REPORTER)));
+      await assertFails(setDoc(doc(db, requestsPath, OTHER), requestDoc(db, REPORTER)));
+    });
+
+    // This is a NEW surface, so it can be strict from day one — the M-1 gap
+    // exists only for collections already-released builds write anonymously.
+    it('denies an anonymous caller', async () => {
+      const db = testEnv.authenticatedContext(OTHER, { firebase: { sign_in_provider: 'anonymous' } })
+        .firestore();
+      await assertFails(setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER)));
+    });
+
+    it('denies the current case holder requesting their own case', async () => {
+      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      await assertFails(setDoc(doc(db, requestsPath, REPORTER), requestDoc(db, REPORTER)));
+    });
+
+    it('requires a note, pins the status to pending, and rejects extra fields', async () => {
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const base = requestDoc(db, OTHER);
+
+      await assertFails(setDoc(doc(db, requestsPath, OTHER), { ...base, note: '' }));
+      await assertFails(setDoc(doc(db, requestsPath, OTHER), { ...base, note: 'x'.repeat(501) }));
+      await assertFails(setDoc(doc(db, requestsPath, OTHER), { ...base, status: 'approved' }));
+      await assertFails(setDoc(doc(db, requestsPath, OTHER), { ...base, approvedBy: 'me' }));
+    });
+
+    /** An answered request, resolved `daysAgo` days ago. */
+    const answeredDoc = (db, uid, status, daysAgo) => ({
+      ...requestDoc(db, uid),
+      status,
+      resolvedBy: doc(db, 'users', REPORTER),
+      resolvedAt: new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000),
+    });
+
+    // Flipping `status` client-side would be claiming to have been accepted.
+    it('denies every client approving a request', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER));
+      });
+
+      for (const uid of [OTHER, REPORTER]) {
+        const db = testEnv.authenticatedContext(uid).firestore();
+        await assertFails(updateDoc(doc(db, requestsPath, OTHER), { status: 'approved' }));
+      }
+    });
+
+    // A decline is not permanent — a case looks different two weeks later. But
+    // re-asking notifies the holder, so it has to cost something.
+    it('lets a declined request be re-filed after the cooldown', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, requestsPath, OTHER), answeredDoc(db, OTHER, 'declined', 3));
+      });
+
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+      await assertSucceeds(setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER)));
+    });
+
+    it('denies re-filing before the cooldown has passed', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, requestsPath, OTHER), answeredDoc(db, OTHER, 'declined', 0));
+      });
+
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+      await assertFails(setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER)));
+    });
+
+    it('denies replacing a request that is still pending', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER));
+      });
+
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+      await assertFails(setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER)));
+    });
+
+    // A re-file has to pass the create validator too, so it cannot arrive in a
+    // shape a fresh request could never have — least of all already approved.
+    it('denies a re-file that is not a plain pending request', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, requestsPath, OTHER), answeredDoc(db, OTHER, 'declined', 3));
+      });
+
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const base = requestDoc(db, OTHER);
+      await assertFails(
+        setDoc(doc(db, requestsPath, OTHER), { ...base, status: 'approved' }),
+      );
+      await assertFails(setDoc(doc(db, requestsPath, OTHER), { ...base, note: '' }));
+    });
+
+    it('denies someone else re-filing another user’s request', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, requestsPath, OTHER), answeredDoc(db, OTHER, 'declined', 3));
+      });
+
+      const db = testEnv.authenticatedContext(SECOND).firestore();
+      await assertFails(setDoc(doc(db, requestsPath, OTHER), requestDoc(db, SECOND)));
+    });
+
+    // Withdrawing is an UPDATE, not a delete — see the next test for why.
+    it('lets the requester withdraw a pending request', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER));
+      });
+
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, requestsPath, OTHER), {
+          status: 'withdrawn',
+          resolvedAt: serverTimestamp(),
+        }),
+      );
+    });
+
+    // THE BYPASS THIS CLOSES: if withdrawing removed the document, `create`
+    // would be unconstrained again and withdraw → re-file → withdraw → re-file
+    // is an unlimited loop, pushing to the holder every time. Occupying the slot
+    // is what makes the cooldown mean anything.
+    it('denies the requester deleting their own request at all', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER));
+        await setDoc(doc(db, requestsPath, SECOND), answeredDoc(db, SECOND, 'declined', 0));
+      });
+
+      const pending = testEnv.authenticatedContext(OTHER).firestore();
+      await assertFails(deleteDoc(doc(pending, requestsPath, OTHER)));
+
+      const answered = testEnv.authenticatedContext(SECOND).firestore();
+      await assertFails(deleteDoc(doc(answered, requestsPath, SECOND)));
+    });
+
+    // A withdrawal that could choose its own resolvedAt is a cooldown that can
+    // be skipped — the same reasoning as holderActiveAt on the signal.
+    it('pins the withdrawal timestamp to the server clock', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER));
+      });
+
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+      await assertFails(
+        updateDoc(doc(db, requestsPath, OTHER), {
+          status: 'withdrawn',
+          resolvedAt: new Date(2000, 0, 1),
+        }),
+      );
+    });
+
+    it('denies withdrawing to any status other than withdrawn', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER));
+      });
+
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+      for (const status of ['approved', 'declined', 'pending']) {
+        await assertFails(
+          updateDoc(doc(db, requestsPath, OTHER), {
+            status,
+            resolvedAt: serverTimestamp(),
+          }),
+        );
+      }
+    });
+
+    // A withdrawal is answered, so re-asking costs the same cooldown a decline
+    // does — otherwise withdraw-and-refile is the loop all over again.
+    it('applies the cooldown to a withdrawal too', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, requestsPath, OTHER), answeredDoc(db, OTHER, 'withdrawn', 0));
+        await setDoc(doc(db, requestsPath, SECOND), answeredDoc(db, SECOND, 'withdrawn', 3));
+      });
+
+      const tooSoon = testEnv.authenticatedContext(OTHER).firestore();
+      await assertFails(setDoc(doc(tooSoon, requestsPath, OTHER), requestDoc(tooSoon, OTHER)));
+
+      const cooled = testEnv.authenticatedContext(SECOND).firestore();
+      await assertSucceeds(setDoc(doc(cooled, requestsPath, SECOND), requestDoc(cooled, SECOND)));
+    });
+
+    // The reporter's delete is unconditional — the delete-signal cascade has to
+    // be able to empty the subcollection, or it is orphaned forever.
+    it('lets the parent reporter delete, for the cascade', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER));
+      });
+
+      const stranger = testEnv.authenticatedContext('stranger-uid').firestore();
+      await assertFails(deleteDoc(doc(stranger, requestsPath, OTHER)));
+
+      const reporter = testEnv.authenticatedContext(REPORTER).firestore();
+      await assertSucceeds(deleteDoc(doc(reporter, requestsPath, OTHER)));
+    });
+
+    it('is readable by any signed-in user, but not anonymously unauthenticated', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), requestsPath, OTHER), requestDoc(ctx.firestore(), OTHER));
+      });
+
+      const signedIn = testEnv.authenticatedContext('anyone-uid').firestore();
+      await assertSucceeds(getDoc(doc(signedIn, requestsPath, OTHER)));
+
+      const signedOut = testEnv.unauthenticatedContext().firestore();
+      await assertFails(getDoc(doc(signedOut, requestsPath, OTHER)));
+    });
+  });
+
   // H-1 is already deployed; these lock it in so an M-1 refactor of the shared
   // helpers can't silently regress signal takeover.
   describe(`${coll} — update/delete (H-1 regression guard)`, () => {
@@ -548,10 +806,105 @@ for (const coll of ['signals', 'signals_test']) {
       await assertFails(updateDoc(doc(other, coll, SIGNAL), { title: 'Vandalised' }));
     });
 
-    it('lets a non-reporter advance status when self-stamping lastUpdatedBy', async () => {
+    // CHANGED with case ownership (master spec 4.5). This used to succeed:
+    // isStatusOnlyUpdate let ANY signed-in user move ANY signal's status. It is
+    // now isCaseHolderUpdate, gated on isCaseHolder(), so a bystander has to take
+    // responsibility for the case first — through the caseOwnership callable,
+    // which no rule can grant.
+    it('rejects a non-holder advancing status, even self-stamping lastUpdatedBy', async () => {
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+      await assertFails(
+        updateDoc(doc(db, coll, SIGNAL), { status: 1, lastUpdatedBy: doc(db, 'users', OTHER) }),
+      );
+    });
+
+    // The fixture has no `caseHolder` field at all — the shape of every signal
+    // written before case ownership existed. This is the derivation that must
+    // never be dropped: absent means the reporter holds it, so the reporter goes
+    // through isCaseHolderUpdate() as well as their own branch.
+    it('lets the case holder advance status on a legacy signal with no caseHolder', async () => {
+      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, coll, SIGNAL), { status: 1, lastUpdatedBy: doc(db, 'users', REPORTER) }),
+      );
+    });
+
+    it('lets an explicit case holder who is not the reporter advance status', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, coll, SIGNAL),
+          signalDoc(db, REPORTER, { caseHolder: doc(db, 'users', OTHER) }));
+      });
+
       const db = testEnv.authenticatedContext(OTHER).firestore();
       await assertSucceeds(
         updateDoc(doc(db, coll, SIGNAL), { status: 1, lastUpdatedBy: doc(db, 'users', OTHER) }),
+      );
+    });
+
+    // A RELEASED case stores an explicit null. That must not fall back to the
+    // reporter — the reporter is precisely the person who may have stepped away.
+    // They keep their own reporter branch; nobody passes the holder branch.
+    it('gives a released signal no case holder at all', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, coll, SIGNAL), signalDoc(db, REPORTER, { caseHolder: null }));
+      });
+
+      const other = testEnv.authenticatedContext(OTHER).firestore();
+      await assertFails(
+        updateDoc(doc(other, coll, SIGNAL), { status: 1, lastUpdatedBy: doc(other, 'users', OTHER) }),
+      );
+
+      const reporter = testEnv.authenticatedContext(REPORTER).firestore();
+      await assertSucceeds(updateDoc(doc(reporter, coll, SIGNAL), { title: 'Updated' }));
+    });
+
+    // caseHolder is written only by the caseOwnership callable (Admin SDK). The
+    // reporter branch accepts any field, so without isNotTouchingOwnership() the
+    // reporter could never be handed off from, and a patched client could seize
+    // any case with a single field write and no timeline entry.
+    it('denies every client writing caseHolder — the reporter and the holder alike', async () => {
+      const reporter = testEnv.authenticatedContext(REPORTER).firestore();
+      await assertFails(
+        updateDoc(doc(reporter, coll, SIGNAL), { caseHolder: doc(reporter, 'users', REPORTER) }),
+      );
+      await assertFails(updateDoc(doc(reporter, coll, SIGNAL), { caseHolder: null }));
+
+      const other = testEnv.authenticatedContext(OTHER).firestore();
+      await assertFails(
+        updateDoc(doc(other, coll, SIGNAL), {
+          caseHolder: doc(other, 'users', OTHER),
+          lastUpdatedBy: doc(other, 'users', OTHER),
+        }),
+      );
+    });
+
+    // holderActiveAt is what the staleness rule reads, so a holder free to pick
+    // its value could hold an abandoned case forever.
+    it('pins holderActiveAt to the server clock on both branches', async () => {
+      const reporter = testEnv.authenticatedContext(REPORTER).firestore();
+      await assertFails(
+        updateDoc(doc(reporter, coll, SIGNAL), { holderActiveAt: new Date(2099, 0, 1) }),
+      );
+      await assertSucceeds(
+        updateDoc(doc(reporter, coll, SIGNAL), {
+          status: 1,
+          lastUpdatedBy: doc(reporter, 'users', REPORTER),
+          holderActiveAt: serverTimestamp(),
+        }),
+      );
+    });
+
+    // Master spec 4.2: the holder completes tags as needs are resolved.
+    it('lets the case holder change urgency and help tags', async () => {
+      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, coll, SIGNAL), {
+          urgency: 2,
+          helpNeededTags: ['vet'],
+          lastUpdatedBy: doc(db, 'users', REPORTER),
+        }),
       );
     });
 
@@ -624,6 +977,35 @@ for (const coll of ['signals', 'signals_test']) {
       for (const urgency of [-1, 3, 42, '2', 1.5]) {
         await assertFails(updateDoc(doc(db, coll, SIGNAL), { urgency }));
       }
+    });
+
+    // holderActiveAt is what the staleness escape hatch reads. isValidHolderStamp
+    // only guards the UPDATE rules, so without an explicit clause on create a
+    // patched client could stamp a far-future value, make the age permanently
+    // negative, and freeze the case behind its holder forever.
+    it('rejects holderActiveAt at creation, at any value', async () => {
+      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      for (const at of [new Date(2099, 0, 1), new Date(), serverTimestamp()]) {
+        await assertFails(
+          addDoc(collection(db, coll), { ...signalDoc(db, REPORTER), holderActiveAt: at }),
+        );
+      }
+    });
+
+    it('accepts a create that names the reporter as the case holder, and no other', async () => {
+      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      await assertSucceeds(
+        addDoc(collection(db, coll), {
+          ...signalDoc(db, REPORTER),
+          caseHolder: doc(db, 'users', REPORTER),
+        }),
+      );
+      await assertFails(
+        addDoc(collection(db, coll), {
+          ...signalDoc(db, REPORTER),
+          caseHolder: doc(db, 'users', OTHER),
+        }),
+      );
     });
 
     it('still lets the reporter edit a legacy signal that has no urgency', async () => {
@@ -1401,7 +1783,15 @@ describe('a moderator is still an ordinary user', () => {
     await assertSucceeds(
       addDoc(collection(db, `signals/${SIGNAL}/comments`), commentDoc(db, MOD)),
     );
-    // Advance status on someone else's, self-stamping like any volunteer.
+    // Advance status on a case they hold, self-stamping like any volunteer.
+    // Since case ownership (master spec 4.5) that means holding it first — a
+    // moderator gets no shortcut past isCaseHolder(), which is the point of
+    // this describe: the role adds moderateAction, not content powers.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), 'signals', SIGNAL), {
+        caseHolder: doc(ctx.firestore(), 'users', MOD),
+      });
+    });
     await assertSucceeds(
       updateDoc(doc(db, 'signals', SIGNAL), {
         status: 1,

@@ -270,6 +270,75 @@
     }
   },
   "someone": "Someone",
+
+  "caseHolder": "Responsible",
+  "caseHolderNobody": "Nobody has taken this case on yet",
+  "caseHolderIsYou": "You are responsible for this case",
+  "caseHolderTakeResponsibility": "Take responsibility",
+  "caseHolderRequestTakeover": "Offer to take over",
+  "caseHolderRequestPending": "You have offered to take this over",
+  "caseHolderWithdrawRequest": "Withdraw offer",
+  "caseHolderRelease": "I can no longer do this",
+  "caseHolderHandOver": "Hand over",
+  "caseHolderDecline": "Decline",
+  "caseHolderOffers": "Offers to take over",
+  "caseHolderStale": "Nobody has updated this case in a while.",
+  "takeoverConfirmTitle": "Take responsibility for this case?",
+  "takeoverConfirmBody": "You become the person coordinating this case. You can change its status and urgency, and hand it on or step down at any time.",
+  "takeoverConfirmAction": "Take it on",
+  "releaseConfirmTitle": "Step down from this case?",
+  "releaseConfirmBody": "The case stays open and anyone can take it on. Everyone following it is told.",
+  "takeoverNoteHint": "Say what you plan to do",
+  "takeoverAlreadyHeld": "Someone else is responsible for this case. You can offer to take it over.",
+  "takeoverRequestSent": "Your offer was sent to the person responsible.",
+  "takeoverAlreadyAsked": "You have already offered to take this over.",
+  "takeoverAskAgainAfter": "You can offer again after {when}.",
+  "@takeoverAskAgainAfter": {
+    "placeholders": {
+      "when": {"type": "String"}
+    }
+  },
+  "errorChangingCaseHolder": "Could not change who is responsible.",
+  "tookResponsibility": "{name} took responsibility for this case",
+  "@tookResponsibility": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "handedCaseTo": "{name} handed this case to {other}",
+  "@handedCaseTo": {
+    "placeholders": {
+      "name": {"type": "String"},
+      "other": {"type": "String"}
+    }
+  },
+  "releasedCase": "{name} stepped down from this case",
+  "@releasedCase": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "notificationOwnershipChangeTitle": "Someone took responsibility",
+  "notificationOwnershipReleasedTitle": "This case needs someone",
+  "notificationOwnershipChangeBody": "{name} is now responsible",
+  "@notificationOwnershipChangeBody": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "notificationOwnershipReleasedBody": "Nobody is responsible for this case now",
+  "notificationTakeoverRequestTitle": "Someone offered to take over",
+  "notificationTakeoverRequestBody": "{name} asked to take responsibility",
+  "@notificationTakeoverRequestBody": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "notificationTakeoverApprovedTitle": "You are now responsible for a case",
+  "notificationTakeoverApprovedBody": "The case is yours",
+  "notificationTakeoverDeclinedTitle": "Your offer was declined",
+  "notificationTakeoverDeclinedBody": "The current holder is keeping this case",
+
   "deletePhoto": "Delete Photo",
   "confirmDeletePhoto": "Are you sure you want to delete this photo?",
   "photoAddedSuccessfully": "Photo added successfully!",

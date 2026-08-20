@@ -31,7 +31,7 @@ void main() {
     expect(rules.existsSync(), isTrue);
   });
 
-  test('the rules accept exactly the types the app can write', () {
+  test('the rules accept exactly the types a CLIENT can write', () {
     final source = rules.readAsStringSync();
     final validator = _function(source, 'isSignalEventCreate');
 
@@ -42,11 +42,37 @@ void main() {
 
     expect(
       accepted,
-      SignalEventType.allCodes.toSet(),
+      SignalEventType.clientCodes.toSet(),
       reason: 'isSignalEventCreate in firestore.rules has drifted from '
-          'SignalEventType. A type only the rules know about is stored and then '
-          'never rendered, and nothing reports it.',
+          'SignalEventType.clientCodes. A type only the rules know about is '
+          'stored and then never rendered, and nothing reports it.',
     );
+  });
+
+  // The asymmetry that makes the two lists different rather than one list.
+  //
+  // A server-only type is written through the Admin SDK, which bypasses rules
+  // entirely, so the rules never need to accept it — and NOT accepting it is
+  // what makes an ownership transfer unforgeable by the person claiming the
+  // case. This test exists to stop the previous one being "fixed" by adding the
+  // missing code to the rules, which would look like a green build and quietly
+  // remove that property.
+  test('server-only types are deliberately absent from the rules', () {
+    final serverOnly = SignalEventType.values
+        .where((t) => t.serverOnly)
+        .map((t) => t.code)
+        .toSet();
+    expect(serverOnly, isNotEmpty,
+        reason: 'ownership_transfer is server-only; if that changed on purpose, '
+            'this test and the comment in isSignalEventCreate go together');
+
+    final source = rules.readAsStringSync();
+    final validator = _function(source, 'isSignalEventCreate');
+    for (final code in serverOnly) {
+      expect(validator.contains("'$code'"), isFalse,
+          reason: '$code is server-only but isSignalEventCreate accepts it, so '
+              'a client can now forge one');
+    }
   });
 
   test('both sides agree on the maximum note length', () {
@@ -129,7 +155,10 @@ void main() {
 
   test('the TypeScript vocabulary matches SignalEventType', () {
     final source = events.readAsStringSync();
-    final block = RegExp(r'SIGNAL_EVENT_TYPES\s*=\s*\[(.*?)\]', dotAll: true)
+    // Anchored on `const SIGNAL_EVENT_TYPES` so it cannot match the tail of
+    // `CLIENT_SIGNAL_EVENT_TYPES`, which is a different list on purpose.
+    final block = RegExp(r'const SIGNAL_EVENT_TYPES\s*=\s*\[(.*?)\]',
+            dotAll: true)
         .firstMatch(source);
 
     expect(block, isNotNull,
@@ -147,6 +176,28 @@ void main() {
           'server writes that Dart cannot decode is stored and then never '
           'rendered — the silent failure mode.',
     );
+  });
+
+  // The third list. `CLIENT_SIGNAL_EVENT_TYPES` is what the rules are supposed
+  // to accept, so it drifting from `clientCodes` means the TypeScript and the
+  // rules disagree about which types are server-only — and the property that
+  // depends on that (an unforgeable ownership transfer) would then be documented
+  // in one place and absent from the other.
+  test('the TypeScript client subset matches SignalEventType.clientCodes', () {
+    final source = events.readAsStringSync();
+    final block = RegExp(r'CLIENT_SIGNAL_EVENT_TYPES\s*=\s*\[(.*?)\]',
+            dotAll: true)
+        .firstMatch(source);
+
+    expect(block, isNotNull,
+        reason: 'CLIENT_SIGNAL_EVENT_TYPES not found in functions/src/events.ts');
+
+    final codes = RegExp(r'"([^"]+)"')
+        .allMatches(block!.group(1)!)
+        .map((m) => m.group(1)!)
+        .toSet();
+
+    expect(codes, SignalEventType.clientCodes.toSet());
   });
 
   test('the TypeScript key names match the Dart encoder', () {

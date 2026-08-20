@@ -23,18 +23,48 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 /// clause, with nothing already stored reshaped. That is the property the old
 /// `comments` home could not offer, because there the discriminator had to
 /// compete with "is this a user comment at all?".
+/// What kind of before/after values an event carries.
+///
+/// Status and urgency are both small ints on a fixed 0..2 scale; ownership is a
+/// pair of user references, one of which may legitimately be null. They cannot
+/// share an encoder or a decoder branch, and the discriminator is what stops a
+/// future type quietly being decoded as the wrong shape.
+enum SignalEventPayload {
+  /// `old*`/`new*` are `int` status or urgency codes.
+  level,
+
+  /// `old*`/`new*` are `DocumentReference`s to `users/{uid}`, **nullable** — a
+  /// release has no new holder, and that is the event rather than a defect.
+  holderRef,
+}
+
 enum SignalEventType {
   statusChange(
     code: 'status_change',
     signalField: 'status',
     oldKey: 'oldStatus',
     newKey: 'newStatus',
+    historyKind: SignalHistoryKind.statusChange,
   ),
   urgencyChange(
     code: 'urgency_change',
     signalField: 'urgency',
     oldKey: 'oldUrgency',
     newKey: 'newUrgency',
+    historyKind: SignalHistoryKind.urgencyChange,
+  ),
+
+  /// Case ownership moved (master spec 4.5) — claimed, handed over or released.
+  ///
+  /// The first **server-only** event type. See [serverOnly].
+  ownershipTransfer(
+    code: 'ownership_transfer',
+    signalField: 'caseHolder',
+    oldKey: 'oldHolder',
+    newKey: 'newHolder',
+    historyKind: SignalHistoryKind.ownershipTransfer,
+    payload: SignalEventPayload.holderRef,
+    serverOnly: true,
   );
 
   const SignalEventType({
@@ -42,6 +72,9 @@ enum SignalEventType {
     required this.signalField,
     required this.oldKey,
     required this.newKey,
+    required this.historyKind,
+    this.payload = SignalEventPayload.level,
+    this.serverOnly = false,
   });
 
   /// Stable identifier persisted in Firestore. Never rename or reuse — stored
@@ -65,9 +98,40 @@ enum SignalEventType {
   final String oldKey;
   final String newKey;
 
-  /// Every code, for the Dart↔rules drift guard.
+  /// Which row this event becomes in the merged history.
+  ///
+  /// Declared here rather than switched on in the decoder so that adding a type
+  /// is one edit in one place — the decoder used to carry a parallel switch whose
+  /// only job was to restate this mapping.
+  final SignalHistoryKind historyKind;
+
+  /// The shape of this event's `old*`/`new*` values. See [SignalEventPayload].
+  final SignalEventPayload payload;
+
+  /// Whether only the server may write this type.
+  ///
+  /// **A server-only type is deliberately absent from `isSignalEventCreate()` in
+  /// `firestore.rules`.** The Cloud Function writes it through the Admin SDK,
+  /// which bypasses rules entirely, so leaving it out of the client vocabulary
+  /// costs nothing and buys a real property: an ownership transfer can never be
+  /// forged by a client, and therefore the timeline's account of who took
+  /// responsibility for a case cannot be fabricated by the person claiming it.
+  ///
+  /// This is why the drift guard compares [clientCodes] against the rules and
+  /// [allCodes] against the functions — see
+  /// `test/signal_event_vocabulary_guard_test.dart`. Adding a server-only code to
+  /// the rules to "make the guard pass" would silently undo the property above.
+  final bool serverOnly;
+
+  /// Every code. Mirrored by `SIGNAL_EVENT_TYPES` in `functions/src/events.ts`,
+  /// which must know all of them because the server writes all of them.
   static final List<String> allCodes =
       List.unmodifiable(values.map((t) => t.code));
+
+  /// The codes a client may write, and therefore exactly the set
+  /// `isSignalEventCreate()` in `firestore.rules` accepts.
+  static final List<String> clientCodes =
+      List.unmodifiable(values.where((t) => !t.serverOnly).map((t) => t.code));
 
   /// Maximum length of an event's update note.
   ///
@@ -94,28 +158,48 @@ enum SignalEventType {
   /// definition. Before it did, `'note'`, `'actor'`, `'createdAt'` and the
   /// level field names were string literals inside two different widgets, and
   /// nothing could test that what one writes is what the other reads.
+  ///
+  /// Only defined for [SignalEventPayload.level] types. There is no client-side
+  /// encoder for [SignalEventPayload.holderRef] because no client writes one —
+  /// the `caseOwnership` callable does, through `functions/src/events.ts`.
   Map<String, dynamic> eventData({
     required int oldValue,
     required int newValue,
     required String note,
     required DocumentReference actor,
-  }) =>
-      {
+  }) {
+    // A throw, not an assert: asserts are compiled out in release, and the
+    // failure this guards is silent by construction. A ref-payload type encoded
+    // as two ints produces a document the rules accept (the server writes it
+    // through the Admin SDK) and the decoder then drops on read — the row simply
+    // never appears in anyone's history, which is the exact failure mode
+    // SPECIFICATION §12.5a exists to prevent.
+    if (payload != SignalEventPayload.level) {
+      throw StateError('eventData encodes int levels; $code carries $payload');
+    }
+    return {
         'type': code,
         oldKey: oldValue,
         newKey: newValue,
         'note': note,
         // Client-set, not a server sentinel: the history sorts on this and a
         // pending write with no timestamp would have nowhere to go.
-        'createdAt': DateTime.now(),
-        'actor': actor,
-      };
+      'createdAt': DateTime.now(),
+      'actor': actor,
+    };
+  }
 }
 
 /// What a single row of the signal's history is.
 ///
 /// [created] has no stored document behind it — see [SignalHistoryEntry.created].
-enum SignalHistoryKind { created, statusChange, urgencyChange, comment }
+enum SignalHistoryKind {
+  created,
+  statusChange,
+  urgencyChange,
+  ownershipTransfer,
+  comment,
+}
 
 /// Which rows the history list is showing.
 enum SignalHistoryFilter {
@@ -139,6 +223,7 @@ class SignalHistoryEntry {
     required this.actorId,
     this.createdAt,
     this.level,
+    this.holderId,
     this.note,
     this.text,
   });
@@ -166,6 +251,13 @@ class SignalHistoryEntry {
   /// The mandatory update note (spec §4.6). Null on entries written before the
   /// note existed — those are legacy rows in `comments` and must keep rendering.
   final String? note;
+
+  /// The uid this case was transferred **to**, on an ownership transfer.
+  ///
+  /// Null both on every other kind and on a *release*, where there is genuinely
+  /// no new holder. The renderer tells the two apart by [kind], which is why this
+  /// stays nullable rather than carrying a sentinel.
+  final String? holderId;
 
   /// Comment body. Null on every other kind.
   final String? text;
@@ -224,24 +316,39 @@ class SignalHistoryEntry {
     final type = SignalEventType.fromCode(rawType);
     if (type == null) return null;
 
-    // One switch, not two: the kind and the level field are the same decision,
-    // and splitting them meant a new event type had to be added in two places.
-    final (kind, rawLevel) = switch (type) {
-      SignalEventType.statusChange =>
-        (SignalHistoryKind.statusChange, data[type.newKey]),
-      SignalEventType.urgencyChange =>
-        (SignalHistoryKind.urgencyChange, data[type.newKey]),
-    };
-    if (rawLevel is! int) return null;
+    // The kind comes off the type itself (SignalEventType.historyKind); only the
+    // payload still needs deciding, and it is decided by the payload
+    // discriminator rather than by listing the types again. Adding a type is one
+    // edit unless it also introduces a new payload shape.
+    final note = data['note'] as String?;
+    final raw = data[type.newKey];
 
-    return SignalHistoryEntry(
-      id: id,
-      kind: kind,
-      actorId: actor.id,
-      createdAt: createdAt,
-      level: rawLevel,
-      note: data['note'] as String?,
-    );
+    switch (type.payload) {
+      case SignalEventPayload.level:
+        if (raw is! int) return null;
+        return SignalHistoryEntry(
+          id: id,
+          kind: type.historyKind,
+          actorId: actor.id,
+          createdAt: createdAt,
+          level: raw,
+          note: note,
+        );
+
+      case SignalEventPayload.holderRef:
+        // A null new holder is a RELEASE, not a malformed document, so unlike a
+        // missing level it must not be rejected. Only a value of the wrong type
+        // is unreadable.
+        if (raw != null && raw is! DocumentReference) return null;
+        return SignalHistoryEntry(
+          id: id,
+          kind: type.historyKind,
+          actorId: actor.id,
+          createdAt: createdAt,
+          holderId: (raw as DocumentReference?)?.id,
+          note: note,
+        );
+    }
   }
 
   /// Decodes a Firestore timestamp field defensively.

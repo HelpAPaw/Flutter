@@ -233,6 +233,74 @@
   "updateNoteRequired": "Моля, опишете какво се промени — всички, които следят сигнала, ще го видят.",
   "changedStatusTo": "{name} промени статуса на {status}",
   "someone": "Някой",
+
+  "caseHolder": "Отговорник",
+  "caseHolderNobody": "Още никой не е поел този случай",
+  "caseHolderIsYou": "Вие отговаряте за този случай",
+  "caseHolderTakeResponsibility": "Поеми отговорност",
+  "caseHolderRequestTakeover": "Предложи да поемеш случая",
+  "caseHolderRequestPending": "Предложили сте да поемете случая",
+  "caseHolderWithdrawRequest": "Оттегли предложението",
+  "caseHolderRelease": "Вече не мога да поема това",
+  "caseHolderHandOver": "Предай случая",
+  "caseHolderDecline": "Откажи",
+  "caseHolderOffers": "Предложения за поемане",
+  "caseHolderStale": "От известно време никой не е обновявал този случай.",
+  "takeoverConfirmTitle": "Да поемете ли отговорност за този случай?",
+  "takeoverConfirmBody": "Вие ставате човекът, който координира случая. Можете да променяте статуса и спешността му, както и да го предадете или да се откажете по всяко време.",
+  "takeoverConfirmAction": "Поемам го",
+  "releaseConfirmTitle": "Да се откажете ли от този случай?",
+  "releaseConfirmBody": "Случаят остава отворен и всеки може да го поеме. Всички, които го следят, ще бъдат уведомени.",
+  "takeoverNoteHint": "Опишете какво възнамерявате да направите",
+  "takeoverAlreadyHeld": "Друг човек отговаря за този случай. Можете да предложите да го поемете.",
+  "takeoverRequestSent": "Предложението ви беше изпратено на отговорника.",
+  "takeoverAlreadyAsked": "Вече сте предложили да поемете този случай.",
+  "takeoverAskAgainAfter": "Можете да предложите отново след {when}.",
+  "@takeoverAskAgainAfter": {
+    "placeholders": {
+      "when": {"type": "String"}
+    }
+  },
+  "errorChangingCaseHolder": "Отговорникът не можа да бъде променен.",
+  "tookResponsibility": "{name} пое отговорност за този случай",
+  "@tookResponsibility": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "handedCaseTo": "{name} предаде този случай на {other}",
+  "@handedCaseTo": {
+    "placeholders": {
+      "name": {"type": "String"},
+      "other": {"type": "String"}
+    }
+  },
+  "releasedCase": "{name} се отказа от този случай",
+  "@releasedCase": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "notificationOwnershipChangeTitle": "Някой пое отговорност",
+  "notificationOwnershipReleasedTitle": "Този случай търси отговорник",
+  "notificationOwnershipChangeBody": "{name} вече отговаря за него",
+  "@notificationOwnershipChangeBody": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "notificationOwnershipReleasedBody": "В момента никой не отговаря за този случай",
+  "notificationTakeoverRequestTitle": "Някой предложи да поеме случая",
+  "notificationTakeoverRequestBody": "{name} поиска да поеме отговорност",
+  "@notificationTakeoverRequestBody": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "notificationTakeoverApprovedTitle": "Вече отговаряте за случай",
+  "notificationTakeoverApprovedBody": "Случаят е ваш",
+  "notificationTakeoverDeclinedTitle": "Предложението ви беше отказано",
+  "notificationTakeoverDeclinedBody": "Настоящият отговорник запазва случая",
   "deletePhoto": "Изтрий снимка",
   "confirmDeletePhoto": "Сигурни ли сте, че искате да изтриете тази снимка?",
   "photoAddedSuccessfully": "Снимката е добавена успешно!",

@@ -96,12 +96,16 @@ void main() {
     });
 
     test('skips an event type this build does not know', () {
-      // The forward-compatibility case: a newer client wrote an ownership
-      // transfer. Guessing at what it meant would put a wrong sentence in the
-      // history, and throwing would take out the whole thread.
+      // The forward-compatibility case: a newer client wrote something this
+      // build has never heard of. Guessing at what it meant would put a wrong
+      // sentence in the history, and throwing would take out the whole thread.
+      //
+      // (This used to use `ownership_transfer` as the stand-in for "unknown",
+      // which stopped being unknown when case ownership shipped. The placeholder
+      // is deliberately not a code anyone plans to add.)
       expect(
         SignalHistoryEntry.fromDocument(
-            'e4', statusEvent(type: 'ownership_transfer')),
+            'e4', statusEvent(type: 'fundraising_update')),
         isNull,
       );
     });
@@ -145,7 +149,12 @@ void main() {
     // The round trip is the point of having the encoder: before it existed the
     // field names were string literals in two widgets, and nothing could check
     // that what one writes is what the decoder reads.
-    for (final type in SignalEventType.values) {
+    // Level-payload types only. `eventData` encodes two ints, and the
+    // ref-payload types (ownership) have no Dart encoder at all — no client
+    // writes one, which is the point of `serverOnly`. Their round trip is
+    // covered below against the shape the server actually produces.
+    for (final type in SignalEventType.values
+        .where((t) => t.payload == SignalEventPayload.level)) {
       test('${type.code} survives a round trip through fromDocument', () {
         final written = type.eventData(
           oldValue: 0,
@@ -163,6 +172,86 @@ void main() {
         expect(entry.createdAt, isNotNull);
       });
     }
+
+    // Ownership events have NO Dart encoder — `buildOwnershipEventData` in
+    // functions/src/events.ts writes them, through the Admin SDK, which bypasses
+    // the rules. Nothing on this side can catch a wrong key name for us, so what
+    // the decoder accepts is pinned here against the shape that module produces.
+    group('ownership_transfer (server-written)', () {
+      Map<String, dynamic> ownershipEvent({
+        Object? oldHolder,
+        Object? newHolder,
+      }) =>
+          {
+            'type': 'ownership_transfer',
+            'oldHolder': oldHolder,
+            'newHolder': newHolder,
+            'note': 'I can get there this afternoon.',
+            'createdAt': DateTime(2026, 8, 19, 15),
+            'actor': actor,
+          };
+
+      test('decodes a handover to a new holder', () {
+        final entry = SignalHistoryEntry.fromDocument(
+          'o1',
+          ownershipEvent(oldHolder: actor, newHolder: _FakeRef('u2')),
+        )!;
+
+        expect(entry.kind, SignalHistoryKind.ownershipTransfer);
+        expect(entry.holderId, 'u2');
+        expect(entry.actorId, 'u1');
+        expect(entry.note, 'I can get there this afternoon.');
+        expect(entry.isEvent, isTrue);
+        // No level: an ownership transfer has none, and a `-1` sentinel would be
+        // resolved to a real status by any caller that forgot to check `kind`.
+        expect(entry.level, isNull);
+      });
+
+      // The release case, and the one a level-shaped decoder would have thrown
+      // away: a null new holder IS the event, not a malformed document.
+      test('decodes a release, keeping a null holder', () {
+        final entry = SignalHistoryEntry.fromDocument(
+          'o2',
+          ownershipEvent(oldHolder: actor, newHolder: null),
+        )!;
+
+        expect(entry.kind, SignalHistoryKind.ownershipTransfer);
+        expect(entry.holderId, isNull);
+      });
+
+      test('decodes a claim of a released case, with no previous holder', () {
+        final entry = SignalHistoryEntry.fromDocument(
+          'o3',
+          ownershipEvent(oldHolder: null, newHolder: _FakeRef('u3')),
+        )!;
+
+        expect(entry.holderId, 'u3');
+      });
+
+      test('skips a document whose new holder is the wrong type', () {
+        expect(
+          SignalHistoryEntry.fromDocument(
+              'o4', ownershipEvent(newHolder: 'u2')),
+          isNull,
+        );
+      });
+
+      // A StateError rather than an AssertionError on purpose: asserts are
+      // compiled out in release, and encoding a ref payload as two ints would
+      // then produce a document the decoder silently drops — the row never
+      // appears in anyone's history, with nothing logged.
+      test('has no client encoder — eventData refuses the ref payload', () {
+        expect(
+          () => SignalEventType.ownershipTransfer.eventData(
+            oldValue: 0,
+            newValue: 1,
+            note: 'n',
+            actor: actor,
+          ),
+          throwsA(isA<StateError>()),
+        );
+      });
+    });
 
     test('names the fields the rules validate', () {
       final written = SignalEventType.statusChange.eventData(

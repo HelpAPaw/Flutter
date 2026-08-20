@@ -15,6 +15,7 @@ import * as nodemailer from "nodemailer";
 // of the derivation — see the note in ./urgency.
 import { SIGNAL_URGENCIES, URGENCY_RED, urgencyOf } from "./urgency";
 import { isRestoredSignal } from "./events";
+import { caseHolderOf } from "./signalRefs";
 import {
   displayTagsOf,
   effectiveHelperTags,
@@ -39,7 +40,30 @@ admin.initializeApp();
 // read. It must be imported AFTER initializeApp() — see the lazy `db()` there.
 export { moderateAction } from "./moderation";
 
+// Case ownership (master spec 4.5), re-exported for the same reasons and with
+// the same initializeApp() ordering constraint.
+export { caseOwnership } from "./caseOwnership";
+
 const db = admin.firestore();
+
+/**
+ * The display name behind a uid, or undefined when there is not one.
+ *
+ * Server-side push text is English-only (SPECIFICATION 8), but a *name* is not
+ * a translatable string, and "Ana is now responsible" is the difference between
+ * a notification someone acts on and one they ignore. Never throws: a failed
+ * profile read must not cost the whole notification.
+ */
+async function readPublicName(uid: string): Promise<string | undefined> {
+  try {
+    const profile = await db.collection("publicProfiles").doc(uid).get();
+    const name = profile.data()?.name;
+    return typeof name === "string" && name.length > 0 ? name : undefined;
+  } catch (error) {
+    console.warn(`Could not read public profile name for ${uid}:`, error);
+    return undefined;
+  }
+}
 
 // API keys
 const placesApiKey = defineSecret("PLACES_API_KEY");
@@ -288,7 +312,17 @@ interface InboxEntry {
    * collapse two different status transitions into one.
    */
   docId: string;
-  type: "new_signal" | "status_change" | "urgency_change" | "new_comment";
+  type:
+    | "new_signal"
+    | "status_change"
+    | "urgency_change"
+    | "new_comment"
+    // Case ownership, master spec §4.5. `ownership_change` goes to a signal's
+    // subscribers; the two `takeover_*` types go to one person each.
+    | "ownership_change"
+    | "takeover_request"
+    | "takeover_approved"
+    | "takeover_declined";
   title: string;
   body: string;
   signalId: string;
@@ -309,6 +343,14 @@ interface InboxEntry {
   statusCode?: number;
   urgency?: number;
   commentExcerpt?: string;
+  /**
+   * Who now holds the case, on the ownership types. Null on a *release*, which
+   * is a real answer ("nobody") rather than a missing value — the app renders
+   * the two differently.
+   */
+  newHolderId?: string | null;
+  /** Their display name, resolved once here rather than per reader. */
+  newHolderName?: string;
 }
 
 /**
@@ -993,7 +1035,17 @@ async function handleSignalUpdated(
   const urgencyStored = typeof afterData.urgency === "number";
   const urgencyEscalated = urgencyStored && newUrgency > oldUrgency;
 
-  if (!statusChanged && !urgencyEscalated) {
+  // Case ownership moved (master spec §4.5). Compared through `caseHolderOf` on
+  // BOTH sides so the absent-means-the-reporter derivation is applied
+  // consistently: the first ever transfer on a legacy signal goes from an absent
+  // field to a reference, and comparing the raw values would read that as
+  // "nobody -> someone" and announce that an unheld case had been taken when in
+  // fact it was taken *from the reporter*.
+  const oldHolder = caseHolderOf(beforeData);
+  const newHolder = caseHolderOf(afterData);
+  const ownershipChanged = (oldHolder?.id ?? null) !== (newHolder?.id ?? null);
+
+  if (!statusChanged && !urgencyEscalated && !ownershipChanged) {
     return;
   }
 
@@ -1037,10 +1089,17 @@ async function handleSignalUpdated(
     return;
   }
 
-  // Which change to announce. When a single write moves both, the escalation
-  // is the more urgent thing to say, and announcing one keeps the subscriber
-  // from being buzzed twice for one action. In practice the app writes them
-  // separately.
+  // Which change to announce. When a single write moves several, ONE of them is
+  // announced — being buzzed twice for one action is what trains people to mute
+  // a signal that matters.
+  //
+  // Ownership outranks the other two, and unlike them it is routinely written
+  // together with a status change: `caseOwnership`'s `claim` sets `caseHolder`
+  // and `status` in the same batch precisely so that taking a case and moving it
+  // cannot come apart. That arrives here as one invocation with both diffs, and
+  // it is one action to the person who did it — so the ownership branch carries
+  // `statusCode` and says both things in one sentence, rather than letting the
+  // status branch fire a second push about the same tap.
   //
   // The two shapes differ only in these five values, so they are picked here
   // and the fan-out below runs once — otherwise every future change to the
@@ -1055,14 +1114,51 @@ async function handleSignalUpdated(
   // the app repairs it with a count() aggregation on resume; see the
   // `userCounters` note in docs/SPECIFICATION.md, which says not to add a
   // trigger to fix it.
+  // Resolved only on the ownership path, and only when there is a holder to
+  // name: one extra document read on a rare write, in exchange for a push that
+  // says who took the case instead of "someone".
+  const newHolderName = ownershipChanged && newHolder
+    ? await readPublicName(newHolder.id)
+    : undefined;
+
   const change: {
     docId: string;
     type: InboxEntry["type"];
     title: string;
     body: string;
-    inboxField: Partial<Pick<InboxEntry, "urgency" | "statusCode">>;
+    inboxField: Partial<
+      Pick<
+        InboxEntry,
+        "urgency" | "statusCode" | "newHolderId" | "newHolderName"
+      >
+    >;
     dataField: Record<string, string>;
-  } = urgencyEscalated
+  } = ownershipChanged
+    ? {
+        // Keyed by the new holder so a case that changes hands twice produces
+        // two rows, and a retry of either produces one. A release keys on
+        // `none`, which is the only value it can have.
+        docId: `own_${signalId}_${newHolder?.id ?? "none"}`,
+        type: "ownership_change" as const,
+        title: newHolder
+          ? "Someone took responsibility"
+          : "This case needs someone",
+        body: newHolder
+          ? `${signalTitle}: ${newHolderName ?? "A volunteer"} is now responsible` +
+            (statusChanged ? ` — ${SIGNAL_STATUSES[newStatus] || "Updated"}` : "")
+          : `${signalTitle}: nobody is responsible for this case now`,
+        inboxField: {
+          newHolderId: newHolder?.id ?? null,
+          ...(newHolderName ? { newHolderName } : {}),
+          // Carried so the row can say both things — see the note above.
+          ...(statusChanged ? { statusCode: newStatus } : {}),
+        },
+        dataField: {
+          ...(newHolder ? { newHolderId: newHolder.id } : {}),
+          ...(statusChanged ? { statusCode: String(newStatus) } : {}),
+        },
+      }
+    : urgencyEscalated
     ? {
         docId: `urg_${signalId}_${newUrgency}`,
         type: "urgency_change" as const,
@@ -1264,6 +1360,198 @@ export const onTestSignalUpdated = onDocumentUpdated(
 export const onTestCommentCreated = onDocumentCreated(
   "signals_test/{signalId}/comments/{commentId}",
   (event) => handleCommentCreated(event, true)
+);
+
+/**
+ * Deliver one notification to exactly one person.
+ *
+ * The counterpart to the fan-out paths above, which all resolve a *set* of
+ * recipients. Case ownership is the first feature here whose notifications are
+ * addressed — "somebody offered to take your case", "your offer was accepted" —
+ * so the recipient is known and the only work is the delivery.
+ *
+ * That delivery is four rules that have been got wrong before and must not be
+ * restated per caller: the recipient has to exist, they have to be in the same
+ * test mode (or test traffic leaks into a production inbox, silently), the inbox
+ * entry is written whether or not they have a token, and the badge count comes
+ * back from the inbox write and has to reach `sendNotificationsToUsers`.
+ */
+async function notifyOneUser(
+  uid: string,
+  isTestMode: boolean,
+  entry: Omit<InboxEntry, "read" | "testMode" | "createdAt" | "expiresAt">,
+  dataField: Record<string, string>
+): Promise<void> {
+  const userDoc = await db.collection("users").doc(uid).get();
+  const userData = userDoc.data() as UserData | undefined;
+  if (!userData) return;
+  if ((userData.testMode === true) !== isTestMode) return;
+
+  const badgeByUid = await writeInboxEntries([uid], entry, isTestMode);
+
+  // A missing token rules out the push, not the inbox entry — the entry is
+  // already written above.
+  const tokens = userData.fcmTokens ?? [];
+  if (tokens.length === 0) return;
+
+  await sendNotificationsToUsers(
+    new Map([[uid, tokens]]),
+    { title: entry.title, body: entry.body },
+    {
+      signalId: entry.signalId,
+      type: entry.type,
+      signalTitle: truncateForPayload(entry.signalTitle),
+      ...dataField,
+    },
+    badgeByUid
+  );
+}
+
+/**
+ * Tell the current case holder that someone has asked to take the case over
+ * (master spec §4.5).
+ *
+ * A trigger rather than a write inside the callable, because filing a request is
+ * an ordinary *client* write — it carries no privilege, so routing it through a
+ * function would buy nothing, exactly as with `reports`. Approving one is the
+ * privileged half, and that is `caseOwnership`.
+ *
+ * `onDocumentWritten`, not `onDocumentCreated`, because a request can become
+ * pending TWICE: once on create, and again when an answered one is re-filed
+ * after the cooldown (§4.8) — which is an *update*, and a create trigger would
+ * miss it silently, leaving the holder with an offer nobody told them about.
+ */
+async function handleTakeoverRequested(
+  signalId: string,
+  requesterId: string,
+  isTestMode: boolean
+): Promise<void> {
+  const collection = isTestMode ? "signals_test" : "signals";
+
+  // Independent of each other — `requesterId` comes from the path, not from the
+  // signal — so they overlap rather than queueing. The profile read is wasted on
+  // the guard bail-outs below, which is one read on a path that notifies nobody.
+  const [signalSnapshot, requesterName] = await Promise.all([
+    db.collection(collection).doc(signalId).get(),
+    readPublicName(requesterId),
+  ]);
+
+  const signalData = signalSnapshot.data();
+  if (!signalData) return;
+
+  const holder = caseHolderOf(signalData);
+  // Nobody to ask. A released case is claimed outright rather than requested, so
+  // this is a request filed in the moment between the two — harmless, and there
+  // is no one it could be delivered to.
+  if (!holder || holder.id === requesterId) return;
+
+  const signalTitle = (signalData.title as string) ?? "";
+  const name = requesterName ?? "A volunteer";
+
+  await notifyOneUser(
+    holder.id,
+    isTestMode,
+    {
+      docId: `req_${signalId}_${requesterId}`,
+      type: "takeover_request",
+      title: "Someone offered to take over",
+      body: `${signalTitle}: ${name} asked to take responsibility`,
+      signalId,
+      signalTitle,
+      newHolderId: requesterId,
+      newHolderName: name,
+    },
+    { newHolderId: requesterId }
+  );
+}
+
+/**
+ * Tell a volunteer that their takeover request was answered.
+ *
+ * Note the *approval* also moves ownership, which makes `handleSignalUpdated`
+ * fire an `ownership_change` to the signal's subscribers. The two are not
+ * duplicates: that one announces to everyone watching the case that it changed
+ * hands, this one answers the question the requester asked.
+ */
+async function handleTakeoverResolved(
+  signalId: string,
+  requesterId: string,
+  after: FirebaseFirestore.DocumentData,
+  isTestMode: boolean
+): Promise<void> {
+  const collection = isTestMode ? "signals_test" : "signals";
+  const signalSnapshot = await db.collection(collection).doc(signalId).get();
+  const signalTitle = (signalSnapshot.data()?.title as string) ?? "";
+
+  const approved = after.status === "approved";
+  const title = approved
+    ? "You are now responsible for a case"
+    : "Your takeover request was declined";
+  const body = approved
+    ? `${signalTitle}: the case is yours`
+    : `${signalTitle}: the current holder is keeping this case`;
+
+  await notifyOneUser(
+    requesterId,
+    isTestMode,
+    {
+      docId: `reqres_${signalId}_${requesterId}_${after.status}`,
+      type: approved ? "takeover_approved" : "takeover_declined",
+      title,
+      body,
+      signalId,
+      signalTitle,
+      ...(approved ? { newHolderId: requesterId } : {}),
+    },
+    {}
+  );
+}
+
+/**
+ * The single trigger on a takeover request, for one signals collection.
+ *
+ * ONE `onDocumentWritten` rather than a create trigger and an update trigger:
+ * both would match the same path, so every write invoked two functions (and
+ * deployed two more cold-start surfaces) for one thing happening. The two
+ * outcomes are mutually exclusive and both are decided from the same before/after
+ * pair, with no read, so the dispatch is free.
+ *
+ * A *withdrawal* matches neither branch, deliberately: nobody needs to be told
+ * that somebody changed their mind.
+ */
+async function handleTakeoverWritten(
+  event: Parameters<Parameters<typeof onDocumentWritten>[1]>[0],
+  isTestMode: boolean
+): Promise<void> {
+  const signalId = event.params.signalId as string;
+  const requesterId = event.params.requesterId as string;
+  const before = event.data?.before.data();
+  const after = event.data?.after.data();
+  if (!after) return;
+
+  // Became pending — a fresh ask, or one re-filed after the cooldown.
+  if (after.status === "pending" && before?.status !== "pending") {
+    return handleTakeoverRequested(signalId, requesterId, isTestMode);
+  }
+
+  // Was answered by the holder. Guarded on the *transition* so a later write
+  // touching an already-answered request cannot re-notify.
+  if (
+    before?.status === "pending" &&
+    (after.status === "approved" || after.status === "declined")
+  ) {
+    return handleTakeoverResolved(signalId, requesterId, after, isTestMode);
+  }
+}
+
+export const onTakeoverWritten = onDocumentWritten(
+  "signals/{signalId}/takeoverRequests/{requesterId}",
+  (event) => handleTakeoverWritten(event, false)
+);
+
+export const onTestTakeoverWritten = onDocumentWritten(
+  "signals_test/{signalId}/takeoverRequests/{requesterId}",
+  (event) => handleTakeoverWritten(event, true)
 );
 
 // Feedback type labels

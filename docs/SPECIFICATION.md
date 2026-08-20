@@ -166,6 +166,8 @@ allow-listed in the console or anonymous sign-in fails.
 | `photoUrls` | string[] | Storage download URLs, max 5 enforced in the UI |
 | ~~`signalType`~~ | int | **retired, see §4.4.** Present on documents written before the tag merge; nothing reads or writes it, and the rules neither require nor bound it |
 | `lastUpdatedBy` | DocumentReference | set on status **and** urgency change; rules require self-stamping on the status-only path |
+| `caseHolder` | DocumentReference \| **null** \| **absent** | Who is responsible now (§4.8). **Three states**: absent = written before case ownership, the reporter holds it by derivation; a ref = held; explicit `null` = *released*. **Server-owned on transfer** — `isNotTouchingOwnership()` rejects any client write that touches it, on the reporter branch too. Written once, at creation, by `Signal.toJson()` |
+| `holderActiveAt` | Timestamp | When the holder last acted. Drives the staleness rule. Pinned to `request.time` by `isValidHolderStamp()` whenever a client write touches it, so it is a server clock even though a client stamps it |
 | `moderation` | map | **server-owned**, see §7.16. `{ commentsLocked?: bool, label?: string, labelSetBy?, labelSetAt?, restoredAt?, restoredBy?, restoreNote? }`. Written only by the `moderateAction` callable; `firestore.rules` rejects any client write that touches it, and it is absent from `Signal.toJson()` |
 
 Subcollection **`comments/{commentId}`** — what people *said*:
@@ -188,9 +190,16 @@ calls them signals, not cases):
   note: string (1–500), createdAt, actor: Ref→users/{uid} }`
 - *Urgency change*: `{ type: 'urgency_change', oldUrgency: int, newUrgency: int,
   note: string (1–500), createdAt, actor: Ref }`
+- *Ownership transfer*: `{ type: 'ownership_transfer', oldHolder: Ref|null,
+  newHolder: Ref|null, note: string (1–500), createdAt, actor: Ref }` —
+  **server-written only** (§4.8). Both holders are nullable and both nulls are
+  real: `oldHolder` is null when a released case is claimed, `newHolder` when a
+  case is released. Neither may be omitted — a decoder cannot tell "released"
+  from "malformed" if the key is simply absent.
 
-**Not in `comments`, for three reasons.** Later event types — ownership transfer,
-closure by a moderator, vet and fundraising updates — have to be *server*-written, while
+**Not in `comments`, for three reasons.** Later event types — ownership transfer
+(now built, §4.8), closure by a moderator, vet and fundraising updates — have to be
+*server*-written, while
 a comment is user-authored by definition; the rules can validate a **closed** `type`
 vocabulary here instead of accumulating another "only when present" clause per type in
 `isCommentCreate()`; and `profile_page.dart` counts `collectionGroup('comments')` by
@@ -211,6 +220,19 @@ note"), enforced in the rules and by the note dialog. `text` on a comment is opt
 only because the legacy shapes above carry none; `note` must never pick up the same
 escape hatch. Legacy entries have no note and render without one.
 
+Subcollection **`takeoverRequests/{requesterUid}`** — offers to take the case on
+(§4.8):
+
+`{ requester: Ref→users/{uid}, status: 'pending'|'approved'|'declined'|'withdrawn',
+note: string (1–500), createdAt }`, plus `resolvedBy`/`resolvedAt` once answered, and
+`resolvedNote` on a decline — the only place that note goes, since a decline writes no
+timeline event.
+
+**The document id is the rate limit** — it is the requester's uid, `create` is
+allowed and `update` is denied, so one person has at most one live request per
+signal. Same trick as `reports`. Client-written (a request carries no privilege);
+answering one is the `caseOwnership` callable's job.
+
 #### `users/{uid}` — private, owner-only
 
 | Field | Type | Notes |
@@ -230,13 +252,15 @@ Subcollection **`notifications/{id}`** — the in-app inbox, see §7.13.
 
 | field | type | notes |
 |---|---|---|
-| `type` | string | `new_signal` \| `status_change` \| `urgency_change` \| `new_comment` \| `nearby_signal` — the same vocabulary as the FCM `data.type` |
+| `type` | string | `new_signal` \| `status_change` \| `urgency_change` \| `new_comment` \| `nearby_signal` \| `ownership_change` \| `takeover_request` \| `takeover_approved` \| `takeover_declined` — the same vocabulary as the FCM `data.type` |
 | `signalId` | string | deep-link target |
 | `signalTitle` | string | rendered client-side |
 | `helpNeededTags` | string[]? | `new_signal` / `nearby_signal` — element 0 is the headline the row is rendered from |
 | `statusCode` | int? | `status_change` |
 | `urgency` | int? | `urgency_change` (also set on `new_signal`) |
 | `commentExcerpt` | string? | `new_comment` |
+| `newHolderId` | string? | the ownership types. **Explicitly null on a release** — a real answer, which is what lets one server type render as both "someone took this on" and "nobody holds this now" |
+| `newHolderName` | string? | resolved server-side once, rather than a `publicProfiles` read per row per rebuild. A name is not a translatable string |
 | `title`, `body` | string | the English push text — **fallback only**, see §7.13 |
 | `read` | bool | flipped by the owner; the only field the rules let a client update |
 | `testMode` | bool | keeps `signals_test` entries out of the production inbox |
@@ -244,7 +268,9 @@ Subcollection **`notifications/{id}`** — the in-app inbox, see §7.13.
 | `expiresAt` | Timestamp | `createdAt + 90d`; drives the TTL policy |
 
 Ids are deterministic — `sig_{signalId}`, `st_{signalId}_{status}`,
-`urg_{signalId}_{urgency}`, `cmt_{commentId}`, `nb_{signalId}` — because
+`urg_{signalId}_{urgency}`, `cmt_{commentId}`, `nb_{signalId}`,
+`own_{signalId}_{newHolderUid|none}`, `req_{signalId}_{requesterUid}`,
+`reqres_{signalId}_{requesterUid}_{status}` — because
 Firestore triggers are at-least-once and a retry must overwrite rather than
 duplicate.
 
@@ -500,10 +526,13 @@ Rules, mirrored by `SIGNAL_URGENCIES` (functions) and the backfill script:
 - **Required at creation** (master spec §4.4): `NewSignalFormState.urgency` is
   nullable and `isValid` gates submission, so nobody publishes a level they did
   not choose.
-- **Reporter-only.** Master spec §5.2 limits it to the case holder, a moderator or
-  an admin; with no moderator/admin roles yet the reporter is that whole set.
-  Enforced by `urgency` being **absent** from `isStatusOnlyUpdate`'s allowlist —
-  see §5.1.
+- **Reporter or case holder.** Master spec §5.2 limits it to "the original
+  poster/case holder, a moderator or an admin". This entry used to say
+  *reporter-only*, because with no ownership concept the reporter was the whole of
+  that set by default. Since §4.8 the case holder is in it too, enforced by
+  `isCaseHolderUpdate()` — which gates on `isCaseHolder()` and *then* allows
+  `urgency`. A moderator's route is still `moderateAction`'s `setUrgency`, so their
+  correction is audit-logged rather than silent. See §5.1.
 - **Red requires confirmation** (master spec §5.2.1): `RedAlertConfirmationDialog`
   has a mandatory tick-box and fires only on a *transition into* Red.
   `UrgencyPicker` owns this so no call site can skip it.
@@ -599,6 +628,150 @@ Rules, mirrored by `functions/src/tags.ts`:
 Selection is required in a **non-skippable full-screen gate** (§7.15), so the
 vocabulary is only useful once that has shipped to the installed base.
 
+---
+
+### 4.8 Case ownership (master spec §4.5)
+
+> The original poster becomes the initial case holder. Case ownership can be
+> transferred if someone else takes responsibility. Ownership history is visible in
+> the case timeline; the original poster and previous case holders remain visible.
+> The current case holder can update status.
+
+**The three states of `caseHolder` are the design.** Absent means the document was
+written before case ownership and its *reporter* holds it; a reference means held;
+an explicit **`null`** means *released* — held by nobody, claimable by anyone.
+
+Collapsing absent into null makes every existing signal unowned and locks its own
+reporter out of changing its status. Collapsing null into absent hands a released
+case straight back to the one person who just stepped away from it. Both fail
+silently, which is why the derivation exists in exactly three guarded places:
+`Signal.caseHolderFrom` (Dart), `caseHolderOf` (`functions/src/signalRefs.ts`) and
+`isCaseHolder()`'s default argument in the rules.
+
+**Nothing is backfilled, ever.** Builds released before this keep creating signals
+with no `caseHolder`, so no runtime may assume the field is present — the same
+permanent-derivation rule as `urgency` (§4.6). New clients *do* write
+`caseHolder == reporter` at creation so a future `where('caseHolder', …)` query has
+something to match, but such a query would still exclude every legacy signal
+silently. **Backfill before adding one**, exactly as §4.6 warns for urgency.
+
+#### Who may do what
+
+| | reporter | case holder | anyone else |
+|---|---|---|---|
+| status, urgency, help tags | ✔ | ✔ | claim first |
+| title, description, photos, phone | ✔ | — | — |
+| delete the signal | ✔ | — | — |
+| `caseHolder` | **never** | **never** | **never** — the callable only |
+
+The reporter keeps every power over their own report whether or not they still hold
+the case: they own the photos, the description and the phone number, and master spec
+§5.2 names "the original poster/case holder" as one set. `Signal.canCoordinate`
+mirrors `isSignalReporter() || isCaseHolderUpdate()`; the rules are the enforcement.
+
+#### The deadlock, and the three ways out
+
+Ownership only its holder can give away is ownership a holder who stops answering
+keeps forever — and the animal with it. So there are three escape routes and they
+escalate:
+
+1. **Ask.** `takeoverRequests/{uid}` is a plain client write; `onTakeoverRequested`
+   tells the holder; the holder approves or declines.
+2. **Take a released case.** `release` writes an explicit null; anyone may `claim`.
+3. **Take a stale case.** `holderActiveAt` older than `STALE_HOLDER_DAYS = 14`
+   makes a held case claimable, and the displaced holder is told.
+
+None of these needs a moderator, which is the point: moderators are scarce and a
+stray dog is not. A signal with no usable timestamp reads as **not** stale: the safe
+direction is "you have to ask", never "anyone may take this".
+
+**The server decides staleness, but the client has to be able to draw the button.**
+`STALE_HOLDER_DAYS` is the enforcement, and a claim it disagrees with comes back as
+`failed-precondition`; `CaseOwnershipService.staleHolderAfter` mirrors it purely so the
+UI knows to offer *Take responsibility* rather than *Offer to take over*. Without that
+copy the escape hatch is **unreachable** — a case held by someone who stopped answering
+looks exactly like one held by someone active, so the only affordance shown is an offer
+sent to a person who by definition is not reading it. Drift there mis-draws a button
+and grants nothing; guarded by `test/takeover_cooldown_guard_test.dart` (§12.5e).
+
+**A decline is not permanent.** An answered request may be filed again after
+`isAfterReaskCooldown()` — **one day** — because a case looks very different two weeks
+later and a volunteer turned down in the first hour may be the right person once the
+holder has moved on. Re-filing is an *update* that must also satisfy the create
+validator, so a re-filed request cannot arrive in a shape a fresh one could never have
+(least of all already `approved`).
+
+> **The cooldown is only real because withdrawing is an UPDATE, not a delete.** The
+> requester has no delete at all: freeing the uid-keyed slot would make `create`
+> unconstrained again, and withdraw → re-file → withdraw → re-file is an unlimited loop
+> that pushes to the holder every time. Marking the request `withdrawn` leaves the slot
+> occupied, so asking again costs the same cooldown that being declined does, and
+> `isTakeoverWithdraw()` pins `resolvedAt` to `request.time` because a timestamp the
+> requester chooses is a cooldown they skip. The reporter's delete stays unconditional
+> because the delete-signal cascade has to be able to empty the subcollection.
+>
+> For the same reason `onTakeoverRequested` is an **`onDocumentWritten`**, not an
+> `onDocumentCreated`: a re-file makes a request pending without creating a document,
+> and a create trigger would miss it silently, leaving the holder with an offer nobody
+> told them about. Its guard is "became pending", so an approve, a decline and a
+> withdrawal all fall through.
+
+**Answering an offer is the holder's, not the reporter's.** `approveRequest` and
+`declineRequest` both go through `requireCurrentHolder`, and the UI shows the offer list
+only to the holder to match — the reporter can do almost everything else on their own
+signal, but offering them Hand over / Decline would be offering buttons that always
+fail. A holder who has gone quiet is what staleness is for.
+
+#### Why a callable, not rules
+
+`firestore.rules` can express "the holder may change the status" — `isCaseHolderUpdate()`
+does. It cannot express the *transfer*:
+
+1. A transfer is two documents (the signal and its timeline event) that must land
+   together; rules validate one write at a time, so a client could move ownership
+   with no history saying so — which is exactly what §4.5 requires be visible.
+2. The event must be **unforgeable**. `ownership_transfer` is deliberately absent
+   from `isSignalEventCreate()`, so the only writer is the Admin SDK. See
+   `SignalEventType.serverOnly` and the guard note below.
+3. Approving a request must verify it is real and pending, and mark it approved, in
+   the same breath as the transfer.
+4. Staleness needs a server clock compared against a field the client must not
+   choose — hence `isValidHolderStamp()` pinning `holderActiveAt` to `request.time`.
+
+**Every action runs in a `runTransaction`, not a batch.** Each one decides what to do
+by reading who currently holds the case, and a batch takes no read lock — two
+volunteers tapping Take responsibility in the same second would both read
+`caseHolder: null`, both pass the guard and both commit, putting two transfers on the
+timeline and telling the loser they hold a case they do not. The read has to happen
+*inside* the transaction for the lock to cover the value the decision was made on.
+
+`caseOwnership` (`functions/src/caseOwnership.ts`) dispatches on `action`:
+`claim` / `release` / `approveRequest` / `declineRequest`, each with a **mandatory
+note** for the same reason a status change has one. It **rejects anonymous callers**,
+the only write path in the app that does so from day one — the M-1 gap (#67) exists
+because released builds create signals anonymously, and nothing has ever claimed a
+case.
+
+**`claim` carries an optional `status`.** That is what makes claim-to-act one action:
+a volunteer moving a case they do not hold confirms once, writes one note, and the
+server applies the transfer and the status change in one batch. Split into two round
+trips, a failed second write leaves someone owning a case they only meant to update.
+
+> **One tap must produce one notification.** Because `claim` writes `caseHolder` and
+> `status` in the same batch, `handleSignalUpdated` sees both diffs in one
+> invocation. The ownership branch therefore outranks the status branch and carries
+> `statusCode` itself, saying both things in one sentence. Letting both fire is how a
+> single tap becomes two pushes, which is what trains people to mute a signal that
+> matters.
+
+#### Deliberately not built
+
+Moderator/admin case assignment (master spec §21.2) — that is the admin tier, which
+does not exist. Assigned helpers and the rescue-coordination commitments (§4.3, §4.8
+of the master spec: "I can transport", "I am going to check") are a separate feature:
+case ownership is the *one responsible person* axis, helpers are the *many
+volunteers* axis. Pinned comments (§9.1) are now unblocked by this field.
+
 ## 5. Security model (`firestore.rules`, `storage.rules`)
 
 ### 5.1 Firestore
@@ -610,19 +783,23 @@ vocabulary is only useful once that has shipped to the installed base.
 | `userLocations/{uid}` | owner | owner | owner | owner |
 | `userCounters/{uid}` | owner | owner, `{unread,updatedAt}` only, `unread >= 0` | same | — |
 | `publicProfiles/{uid}` | `get` any signed-in; **`list` denied** | owner, `name` only, validated | owner, only `name` may change | owner |
-| `signals/{id}`, `signals_test/{id}` | **public** | signed-in, `reporter == self`, bounded fields, `urgency` 0–2 **if present** | reporter (anything) *or* any signed-in user changing **only** `status`+`lastUpdatedBy` (self-stamped, 0–2) — **never `urgency`** | reporter only |
+| `signals/{id}`, `signals_test/{id}` | **public** | signed-in, `reporter == self`, bounded fields, `urgency` 0–2 **if present**, `caseHolder == self` **if present**, `holderActiveAt` **rejected outright** | reporter (anything) *or* the **case holder** changing only `status`/`urgency`/`helpNeededTags`/`lastUpdatedBy`/`holderActiveAt`. `caseHolder` denied on **both** branches; `holderActiveAt` pinned to `request.time` | reporter only |
 | `…/comments/{id}` | public | signed-in, `author == self`, `text` 1–2000 when present | — | parent signal's reporter (delete cascade) |
 | `…/events/{id}` | public | signed-in, `actor == self`, `type` in the closed vocabulary, `note` 1–500 **required**, levels 0–2, `createdAt` a timestamp | **denied** | parent signal's reporter (delete cascade) |
+| `…/takeoverRequests/{uid}` | signed-in | signed-in **non-anonymous**, id == self, `requester == self`, `status == 'pending'`, `note` 1–500, exact key set, and **not** the current holder | re-file after the cooldown (must also pass the create validator), *or* withdraw `pending → withdrawn` with `resolvedAt == request.time`. Approving/declining is the callable | parent signal's reporter only (delete cascade) — **not** the requester, see §4.8 |
 | `{path=**}/comments/{id}` (group) | signed-in | — | — | — |
 | `feedback/{id}` | denied | signed-in, `userId == self`, bounded message/type/email | denied | denied |
 
 Helper functions: `userDoc()`, `isSignalReporter()`, `isParentSignalReporter()`,
 `isSignalCreate()`, `isCommentCreate()`, `isSignalEventCreate()`, `isValidEventNote()`,
-`isValidLevel()`, `isValidProfileName()`, `isStatusOnlyUpdate()`, `isValidUrgency()`.
+`isValidLevel()`, `isValidProfileName()`, `isCaseHolderUpdate()`, `isValidUrgency()`,
+and the ownership four: `isCaseHolder()`, `isParentCaseHolder()`,
+`isNotTouchingOwnership()`, `isValidHolderStamp()`, `isValidInitialCaseHolder()`,
+`isTakeoverRequestCreate()`.
 
 > **An event does not authorise the change it describes.** A `status_change` event
 > passes `isSignalEventCreate()`; the signal write next to it in the same batch still has
-> to pass `isStatusOnlyUpdate()` separately. The two are independent on purpose — a
+> to pass `isCaseHolderUpdate()` separately. The two are independent on purpose — a
 > client that writes only the event changes nothing.
 >
 > **The reporter can still delete events**, which is what lets the client-side
@@ -631,10 +808,18 @@ Helper functions: `userDoc()`, `isSignalReporter()`, `isParentSignalReporter()`,
 > server-side (Admin SDK recursive delete, like `deleteAccount`), after which the rule
 > becomes `if false`. Tracked as HelpAPaw/Flutter#68.
 
-> **`isStatusOnlyUpdate` must never gain `urgency`.** Its `affectedKeys().hasOnly([...])`
-> list omitting `urgency` is the entire enforcement of the reporter-only rule in §4.6 —
-> adding it would let any signed-in user escalate a stranger's case to Red Alert, or
-> quietly de-escalate a real one. Guarded by `firestore-tests/rules.test.js`.
+> **`isStatusOnlyUpdate` became `isCaseHolderUpdate` with case ownership (§4.8), and
+> the load-bearing clause moved.** The old function let *any* signed-in user change
+> *any* signal's status, which is why `urgency` had to be omitted from its
+> `affectedKeys().hasOnly([...])` list — that omission was the entire enforcement of
+> "only the case holder may mark a signal Red", and adding it would have let a stranger
+> escalate or quietly de-escalate someone else's case.
+>
+> The new function gates on **`isCaseHolder()`** first, so `urgency` and
+> `helpNeededTags` being in the list is master spec §5.2 and §4.2 being implemented,
+> not the old rule being weakened. **The clause that must never be dropped is now
+> `isCaseHolder()`.** Guarded by `firestore-tests/rules.test.js`, which also pins the
+> absent-vs-null distinction on both sides.
 >
 > `isValidUrgency()` bounds the value but deliberately does **not** require the field:
 > app builds released before the urgency system still create signals without it, and
@@ -1156,11 +1341,23 @@ that has regressed repeatedly (R5-004, R6-001, R6-002), which is why it lives ou
   Call (`tel:` intent) when a contact phone exists, Share (§7.9), and — for the author —
   Edit and Delete.
 - **Status change:** dropdown over `SignalStatus.values`. Asks for the mandatory update
-  note (below), then updates `status` + `lastUpdatedBy`, appends a `status_change`
-  **event**, and subscribes the actor to the signal. Any signed-in non-anonymous user may
-  do this (rules allow status-only updates).
-- **Urgency change:** `UrgencyPicker` for the **reporter only**; everyone else sees a
-  read-only `UrgencyChip` (§4.6). Updates `urgency` + `lastUpdatedBy` and appends an
+  note (below), then updates `status` + `lastUpdatedBy` + `holderActiveAt`, appends a
+  `status_change` **event**, and subscribes the actor to the signal. **Reporter or case
+  holder only** (§4.8) — the dropdown stays visible and enabled for everyone else, and
+  choosing a status offers to take the case on first (**claim-to-act**): one
+  confirmation, one note, one server batch that moves both. Hiding the control instead
+  would leave a volunteer with no way to discover that taking the case on is what
+  unlocks it.
+- **Case holder block:** who is responsible, immediately above the status dropdown —
+  the holder is *who*, the status is *how far along*, and putting them together is what
+  makes "take it on, then move it" read as one idea. Carries exactly one affordance per
+  viewer: Release for the holder, Take responsibility on a released case, Offer to take
+  over on a held one (or the pending offer, with Withdraw). The holder and the reporter
+  also see pending offers, each answerable in place. The offers listener is `late final`
+  and therefore **lazy** — a passer-by opening a released or self-held case opens no
+  listener at all.
+- **Urgency change:** `UrgencyPicker` for the **reporter or case holder** (§4.8);
+  everyone else sees a read-only `UrgencyChip` (§4.6). Updates `urgency` + `lastUpdatedBy` and appends an
   `urgency_change` **event**. The picker is disabled while the write is in flight — a
   double-tap would otherwise post two timeline entries and two pushes. **The edit
   screen must write the same `urgency_change` event, with a note**, or escalating from
@@ -1193,13 +1390,20 @@ that has regressed repeatedly (R5-004, R6-001, R6-002), which is why it lives ou
   is not stable, and the list would otherwise reshuffle between rebuilds. A document with
   an unknown `type` is **skipped, not thrown on**: it came from a newer build.
   *All* / *Events* chips filter in memory; both listeners stay subscribed either way.
+- **Help tags:** read-only chips, plus a Change affordance for the reporter or holder
+  that opens `showHelpTagPicker` (`help_tag_picker_sheet.dart`, wrapping the existing
+  `HelpTagSelector`). Master spec §4.2 gives tag completion to the holder. Deliberately
+  *not* the edit screen, which carries the reporter's account of what they saw and stays
+  theirs. The picker returns a **List**, not a Set — array order is priority order
+  (§4.4), and a Set at the boundary would leave that resting on insertion order.
 - **Comments:** text field capped at 2000 chars, whitespace-only input dropped
   client-side; posting also subscribes the author to the signal. Author names resolve
   through `publicProfiles`.
 - **Delete signal:** confirm → best-effort Storage photo deletes → batch-delete the
-  `comments` **and `events`** subcollections → delete the doc → pop. Missing either one
-  orphans it: Firestore keeps subcollection documents when the parent document is deleted,
-  and nothing is left to reach them by.
+  `comments`, `events` **and `takeoverRequests`** subcollections → delete the doc → pop.
+  Missing any one orphans it: Firestore keeps subcollection documents when the parent
+  document is deleted, and nothing is left to reach them by. There is no wildcard —
+  **adding a subcollection to a signal means adding it to `_deleteHistory`.**
 - **Leaving:** `_leaveScreen` is the single exit — it claims the exit
   (`_hasNavigatedAway`), `popUntil`s away anything this screen pushed (the imperative
   photo gallery, the edit route, sheets) so the pop targets *this* route and not
@@ -1733,13 +1937,15 @@ page is bilingual with a client-side language switch.
 | Function | Trigger | Purpose |
 |---|---|---|
 | `onSignalCreated` / `onTestSignalCreated` | create `signals/{id}` / `signals_test/{id}` | **Nearby fan-out** (below) |
-| `onSignalUpdated` / `onTestSignalUpdated` | update | Push `status_change` to subscribers, skipping `lastUpdatedBy` |
+| `onSignalUpdated` / `onTestSignalUpdated` | update | Push `status_change`, an urgency escalation, **or an `ownership_change`** to subscribers, skipping `lastUpdatedBy`. Exactly one per invocation — ownership outranks the other two and carries `statusCode` when a claim moved both (§4.8) |
 | `onCommentCreated` / `onTestCommentCreated` | create comment | Push `new_comment` (body truncated to 50 chars) to subscribers, skipping the author. **Returns early on `type === 'status_change'`** — those have no `text` |
 | `onUserTokensWritten` | write `users/{uid}` | Token dedupe: removes this device's token from every other user doc. Only runs when `tokenLastSaved` changed, so location/subscription writes don't trigger it |
 | `onFeedbackCreated` | create `feedback/{id}` | Rate-limited SMTP email via nodemailer; HTML-escaped |
 | `searchVetClinics` | callable (App Check) | Places `searchNearby`, key server-side, 30-day cache keyed by precision-5 geohash + km-rounded radius. Radius 0–50 000 m |
 | `getVetClinicDetails` | callable (App Check) | Places details (phone, rating, hours, Maps URI), 30-day cache per placeId |
 | `deleteAccount` | callable (App Check) | Anonymize + tombstone + delete (§7.2) |
+| `caseOwnership` | callable (App Check) | **Case ownership** (§4.8) — claim / release / approveRequest / declineRequest. Rejects anonymous callers; writes the signal, the `ownership_transfer` event and the subscription in one batch. `functions/src/caseOwnership.ts` |
+| `onTakeoverWritten` / `onTestTakeoverWritten` | **write** `…/takeoverRequests/{uid}` | **One** trigger per collection for both outcomes — tell the current holder somebody offered, or tell the requester they were answered. Audience of one either way, dispatched from the before/after pair with no read. `onDocumentWritten` rather than `onDocumentCreated` because a re-file after the cooldown makes a request pending without creating a document (§4.8); one trigger rather than two because a create and an update trigger on the same path would invoke two functions per write. A *withdrawal* matches neither branch — nobody needs telling that somebody changed their mind |
 | `moderateAction` | callable (App Check) | **All eight moderator actions** (§7.16). Verifies `moderators/{uid}` server-side, acts, writes a `moderationActions` audit entry and resolves the originating report — implementation in `functions/src/moderation.ts` |
 | `cleanupAnonymousUsers` | schedule `0 3 * * 0` UTC | Deletes anonymous Auth users with no linked providers inactive > **90 days**, clearing Firestore data first so a failed cleanup retries next run. `ANON_CLEANUP_DRY_RUN` flag available |
 | `signalLink` | HTTPS (Hosting rewrite `/signal/**`) | Public share/fallback page (§7.9) |
@@ -1911,6 +2117,17 @@ Things that live in more than one place and fail **silently** when they drift.
    arguments up to `MapScreenState`), so they cannot be derived from their enums.
    `test/map_filter_state_test.dart` compares them; without it, appending a tag,
    species, status or urgency leaves it filtered off the map from the moment it exists.
+5e. **The two ownership clocks (×2 each).** `isAfterReaskCooldown()` in
+   `firestore.rules` vs `CaseOwnershipService.reaskCooldown`, and `STALE_HOLDER_DAYS`
+   in `functions/src/caseOwnership.ts` vs `CaseOwnershipService.staleHolderAfter`. In
+   both pairs the *server* is the enforcement and the Dart copy exists only so the UI
+   can draw the right affordance — drift mis-draws a button and grants nothing, but it
+   is silent in both directions: too short offers a button whose write is denied, too
+   long hides an action that would have been allowed. The staleness pair is the one
+   that matters, because the button it draws is the only way a case escapes a holder
+   who has stopped answering. Guarded by `test/takeover_cooldown_guard_test.dart`,
+   which parses the rules and the TypeScript rather than restating either.
+
 5. **Field-length limits (×2).** Firestore rules vs `LengthLimitingTextInputFormatter`:
    title 300, description 10 000, comment 2000, **signal-event note 500**, profile name 100,
    feedback message 1000, email 254. The note pair is guarded by
@@ -1937,10 +2154,19 @@ Things that live in more than one place and fail **silently** when they drift.
    and the banner renders nothing, so the moderator believes the signal is
    annotated and every reader sees an unannotated one.
 
-5a. **Signal-event type vocabulary (×3).** `SignalEventType` (`models/signal_event.dart`,
-   source of truth), the `type ==` list inside `isSignalEventCreate()` in
-   `firestore.rules`, and `SIGNAL_EVENT_TYPES` / `SIGNAL_EVENT_KEYS` /
-   `SIGNAL_EVENT_FIELDS` / `MAX_EVENT_NOTE_LENGTH` in `functions/src/events.ts`. The
+5a. **Signal-event type vocabulary (×3, and the rules list is deliberately SHORTER).**
+   `SignalEventType` (`models/signal_event.dart`, source of truth), the `type ==` list
+   inside `isSignalEventCreate()` in `firestore.rules`, and `SIGNAL_EVENT_TYPES` /
+   `CLIENT_SIGNAL_EVENT_TYPES` / `SIGNAL_EVENT_KEYS` / `SIGNAL_EVENT_FIELDS` /
+   `MAX_EVENT_NOTE_LENGTH` in `functions/src/events.ts`.
+
+   **The rules must match `clientCodes`, not `allCodes`.** `ownership_transfer` is
+   `serverOnly` (§4.8): the callable writes it through the Admin SDK, which bypasses
+   rules entirely, so omitting it from the rules costs nothing and buys a real
+   property — nobody can forge a timeline entry claiming they took responsibility for
+   a case. `signal_event_vocabulary_guard_test.dart` asserts the absence explicitly,
+   precisely so the "types match" test cannot be made green by adding the code to the
+   rules and quietly removing that property. The
    failure modes are asymmetric: a type the app writes but the rules reject is denied
    *loudly*, while a type the rules accept but the app cannot read is stored and then
    **never appears in anyone's history**. All guarded by
@@ -1952,6 +2178,15 @@ Things that live in more than one place and fail **silently** when they drift.
    `type` or a wrong `old*`/`new*` key name is accepted, stored, and then dropped by the
    Dart decoder on read. The moderator's correction just never appears, and nothing logs
    it.
+5d. **The case-holder derivation (×3).** `Signal.caseHolderFrom` (Dart), `caseHolderOf`
+   (`functions/src/signalRefs.ts`) and `isCaseHolder()`'s default argument in
+   `firestore.rules`. All three must resolve an **absent** `caseHolder` to the reporter
+   and an **explicit null** to nobody. Both errors are silent and opposite: collapsing
+   absent → null locks every legacy signal's own reporter out of it; collapsing
+   null → absent hands a released case back to the person who released it. Covered by
+   `test/models/case_holder_test.dart`, `functions/src/__tests__/caseOwnership.test.ts`
+   and the `signals`/`signals_test` blocks in `firestore-tests/rules.test.js`. See §4.8.
+
 6. **Fan-out radius caps ≥ UI caps.** `MAX_LOCATION_RADIUS_KM` (50) ≥ the slider max;
    `MAX_REGION_RADIUS_KM` (100) ≥ the region slider max.
 7. **`Routes.linkHost` ↔ `LINK_HOST`** (functions) ↔ the Android intent filter host ↔
@@ -2078,7 +2313,7 @@ silently breaks Auth/Firestore/FCM in release builds only.
 | iOS unread badge count | **Fixed 2026-08-04** — real `badge: N` from `userCounters`, cleared on resume via the native badge channel. Accepted consequence: on pre-release builds the badge climbs and never clears (§7.13) |
 | In-app inbox retention | 90 days via a Firestore TTL policy on `expiresAt`; the policy is applied with `gcloud`, **not** by `firebase deploy` |
 | Signal history is client-written and reporter-deletable | Open — tamper-*evident*, not tamper-proof. The reporter can delete individual `events`, because the delete-signal cascade runs on the client. Fix is a `deleteSignal` callable (Admin SDK recursive delete), after which the rule becomes `if false`. Tracked as HelpAPaw/Flutter#68, which also covers hiding signals instead of deleting them |
-| Update note not in the push/inbox body | Open — a status-change push still reads `{signalTitle}: {status}` with no note. Needs `handleSignalUpdated` to query the newest event (safe: the batch is atomic) or a `lastStatusNote` field on the signal, which would widen `isStatusOnlyUpdate`'s allow-list |
+| Update note not in the push/inbox body | Open — a status-change push still reads `{signalTitle}: {status}` with no note. Needs `handleSignalUpdated` to query the newest event (safe: the batch is atomic) or a `lastStatusNote` field on the signal, which would widen `isCaseHolderUpdate`'s allow-list |
 | Arrival catch-up headlines a legacy signal as "Rescue needed" | **Fixed 2026-08-18** (§4.4) — `_NotifiableSignal` now carries `Signal.legacySignalTypeFrom(data)`, the notification body resolves through `primaryOfSignal`, and the inbox row it writes stores `HelpTag.displayCodes` rather than the matched list. Matching is untouched. Disappears with the rest of the shim |
 | `events` rules block deployed then reverted | **Re-deployed** — the moderation deploy carried it back out; verified against the live ruleset 2026-08-18. The standing hazard is unchanged and now points at the moderation blocks instead: see §13.3 |
 | Comment photos | Storage path reserved, no write rule, no UI |
@@ -2087,6 +2322,10 @@ silently breaks Auth/Firestore/FCM in release builds only.
 | A hidden signal's photos stay readable by URL | Open — hiding moves the Firestore document to quarantine, but `storage.rules` grants `signals/{id}/photos/**` `read: true` unconditionally, so anyone holding a photo URL keeps it. Closing it means gating photo reads on the parent document existing, which costs a cross-service `firestore.get` on every photo load (§7.16) |
 | A hidden signal's comments and events stay readable | Open, and the flip side of what makes a restore lossless: subcollections survive the document's deletion, and `comments`/`events` are `read: if true`. Requires the signal id to exploit |
 | **A hidden signal cannot be restored from the app** | **Open — found in device verification 2026-08-17.** `hideSignal` resolves its originating report, which removes it from the queue; the action sheet is the only entry point to `restoreSignal`, so the un-hide path disappears with it. The callable works (verified by writing the document back directly), but nothing in the UI can reach it. Fix: let a moderator *read* `moderationQuarantine` and add a "Hidden signals" screen. That is the right boundary anyway — the point of quarantine is keeping hidden content from the **public**, and spec §18.3 says hiding is "temporarily", which requires reversibility. `firestore-tests/rules.test.js` currently asserts the opposite ("denied to every client, moderators included") and must be updated with it |
+| Case ownership is not enforced until the rules ship | Open by design — the rules narrowing `status` to reporter-or-holder must be deployed **after** the app release that offers claim-to-act, or an already-released client that is neither gets a bare `permission-denied` behind a generic "could not update status" snackbar. Until then both the old and the new behaviour are permitted and the UI does the guiding. See the §4.8 rollout note |
+| A stale-claim displaces a holder with no appeal | Open — `STALE_HOLDER_DAYS = 14` of silence makes a case claimable and the displaced holder is only *told*. There is no "no, I am still on this" other than claiming it back, which works but reads as a tug of war. A holder who acts at all resets the clock, so this only bites someone genuinely absent |
+| Ownership notifications are English only | Open, like every other server-written push (§8). The inbox rows render localized from the structured fields; the `title`/`body` fallback and the push text do not |
+| Takeover requests are readable by any signed-in user | Accepted — they name someone who volunteered but has not been accepted. Public read would have matched `comments`/`events`; signed-in is tighter and costs nothing, since every reader of this app holds at least an anonymous session |
 | Moderator appointment is a terminal script | By design until the admin tier exists — spec §3.6 puts appointment above the moderator level. `functions/scripts/grant_moderator.js` |
 | `grant_moderator.js` is unverified | Open — it needs Application Default Credentials, which this machine has not set up (`gcloud auth application-default login`). The 2026-08-17 grants were made through the Firebase MCP instead, so the script's own code path has never run |
 | Moderator actions have no entry point outside the queue | Open — a moderator can only act on content someone has **reported**, not on anything they come across while browsing. Adding the action sheet to the signal details screen for moderators would close it |
@@ -2099,6 +2338,7 @@ silently breaks Auth/Firestore/FCM in release builds only.
 
 | Date | Change |
 |---|---|
+| 2026-08-20 | **Built case ownership (master spec §4.5)** — the "who is responsible for this animal right now" axis the app had never had, and the thing several later spec features (pinned comments §9.1, tag completion §4.2, Red Alert authority §5.2, fundraising verification §13) all attach to. Before this, *any* signed-in user could move *any* stranger's signal to Resolved with nothing recording that they had taken it on. **`caseHolder` has three states and the distinction is the whole design**: absent = written before ownership, reporter holds it by derivation (permanent, never backfilled — the `urgency` precedent); a ref = held; explicit `null` = *released*. Both ways of collapsing that fail silently and in opposite directions, so the derivation is a guarded ×3 invariant (§12.5d). **Status/urgency/tags moved to reporter-or-holder**: `isStatusOnlyUpdate` became `isCaseHolderUpdate` and the load-bearing clause moved from the *field list* to `isCaseHolder()` — which is why `urgency` may now be in that list without weakening §5.2. Non-holders get **claim-to-act**: the dropdown stays live and choosing a status offers to take the case on, one confirmation and one note, applied by the server in one batch (so one tap is also one notification — the ownership branch of `handleSignalUpdated` outranks the status branch and carries `statusCode`). **Transfers are a callable, not rules**, because they are two documents that must land together, because the timeline entry has to be unforgeable, and because staleness needs a server clock: `ownership_transfer` is the first `serverOnly` event type and is deliberately *absent* from `isSignalEventCreate()`, with a guard test asserting the absence so nobody makes the vocabulary test pass by removing the property. **The deadlock a silent holder would otherwise create has three escapes** — ask (`takeoverRequests`, uid-keyed so the id is the rate limit), take a released case, or take one stale past `STALE_HOLDER_DAYS = 14` — none of which needs a moderator. `caseOwnership` is also the first write path to reject anonymous callers outright, which a *new* surface can afford where #67 cannot. **Every action runs in a transaction**, because deciding from a plain read and then committing a batch takes no read lock and lets two simultaneous claims both win. **A declined request can be re-filed after a one-day cooldown** — permanence would be wrong (a case looks different two weeks on) but re-asking notifies the holder, so it has to cost something; the cooldown is only real because withdrawing is an *update* and the requester has no delete at all, otherwise withdraw-and-refile is an unlimited loop straight past it, and `onTakeoverRequested` is an `onDocumentWritten` because a re-file creates no document. `functions/src/signalRefs.ts` extracted from `moderation.ts` on its second caller. 251 rules tests, 234 Dart tests, 75 functions tests. §4.1, §4.6, §4.8, §5.1, §7.5, §9, §12, §14. **Rollout inverts the usual order** — functions, then the app release, then the rules — because the rules change narrows who may write `status`, and a released client that is neither reporter nor holder would otherwise get a bare `permission-denied`. |
 | 2026-08-01 | Initial specification, written from the codebase at `6.0.1+125` (branch `dev`). |
 | 2026-08-01 | Investigated the `storage.rules` note: confirmed BUG-1 (avatar upload always denied), BUG-2 (test-mode signal photos denied) and BUG-3 (failed upload reported as success). Recorded the emulator's project-prefixed reference representation as a testing caveat. §5.2, §14. |
 | 2026-08-01 | Fixed all three, added `firestore-tests/storage.rules.test.js` (27 cases) and size/content-type limits (5 MB signal photos, 2 MB avatars, `image/*`). Client now declares `contentType` on every upload; avatar reads are public. **`storage.rules` deployed to production.** §5.2, §13.2, §14. |
