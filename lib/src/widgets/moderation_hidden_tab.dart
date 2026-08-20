@@ -30,7 +30,27 @@ class ModerationHiddenTab extends StatefulWidget {
 }
 
 class _ModerationHiddenTabState extends State<ModerationHiddenTab> {
-  late Future<List<QuarantinedSignal>> _hidden;
+  /// The list, held directly rather than behind a `FutureBuilder`.
+  ///
+  /// The Future form looked natural and did not survive device testing: after a
+  /// restore, `_load()` demonstrably returned zero items and `setState` ran on
+  /// a mounted State, yet the builder never re-ran and the restored signal
+  /// stayed on screen — leaving a moderator staring at a row they had just
+  /// removed, with no way to tell whether it had worked. Three explicit fields
+  /// are what a FutureBuilder was managing anyway, and they can be set from a
+  /// completed call directly, which is the one thing that does reliably repaint.
+  List<QuarantinedSignal> _hidden = const [];
+  bool _loading = true;
+  bool _failed = false;
+
+  /// Owned by the State, not by the dialog that uses it.
+  ///
+  /// Disposing it in the dialog's `whenComplete` looked right and crashed the
+  /// screen: that callback fires on `Navigator.pop`, while the route's exit
+  /// animation is still running and the `TextField` still depends on the
+  /// controller — `'_dependents.isEmpty': is not true`. The restore itself had
+  /// already succeeded, so the failure was a red screen over completed work.
+  final TextEditingController _noteController = TextEditingController();
 
   /// The collection this moderator is looking at, fixed for the tab's life so a
   /// refresh cannot silently switch which quarantine is listed.
@@ -39,16 +59,34 @@ class _ModerationHiddenTabState extends State<ModerationHiddenTab> {
   @override
   void initState() {
     super.initState();
-    _hidden = _load();
+    _refresh();
   }
 
-  Future<List<QuarantinedSignal>> _load() =>
-      ModerationService.instance.listQuarantined(collection: _collection);
+  @override
+  void dispose() {
+    _noteController.dispose();
+    super.dispose();
+  }
 
   Future<void> _refresh() async {
-    final future = _load();
-    setState(() => _hidden = future);
-    await future.catchError((_) => <QuarantinedSignal>[]);
+    if (mounted) setState(() => _loading = true);
+    try {
+      final items = await ModerationService.instance
+          .listQuarantined(collection: _collection);
+      if (!mounted) return;
+      setState(() {
+        _hidden = items;
+        _loading = false;
+        _failed = false;
+      });
+    } catch (e) {
+      debugPrint('Could not list hidden signals: $e');
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _failed = true;
+      });
+    }
   }
 
   Future<void> _confirmRestore(QuarantinedSignal signal) async {
@@ -85,14 +123,14 @@ class _ModerationHiddenTabState extends State<ModerationHiddenTab> {
   /// is as much a moderation decision as the hide was, and the audit entry's
   /// value is the reasoning.
   Future<String?> _askForNote(QuarantinedSignal signal) {
-    final controller = TextEditingController();
+    _noteController.clear();
     return showDialog<String>(
       context: context,
       builder: (context) {
         final l10n = AppLocalizations.of(context);
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            final note = controller.text.trim();
+            final note = _noteController.text.trim();
             return AlertDialog(
               title: Text(l10n.moderationRestoreTitle),
               content: Column(
@@ -105,7 +143,7 @@ class _ModerationHiddenTabState extends State<ModerationHiddenTab> {
                   Text(l10n.moderationRestoreBody),
                   const SizedBox(height: 16),
                   TextField(
-                    controller: controller,
+                    controller: _noteController,
                     autofocus: true,
                     maxLines: 2,
                     textCapitalization: TextCapitalization.sentences,
@@ -138,7 +176,7 @@ class _ModerationHiddenTabState extends State<ModerationHiddenTab> {
           },
         );
       },
-    ).whenComplete(controller.dispose);
+    );
   }
 
   @override
@@ -147,32 +185,32 @@ class _ModerationHiddenTabState extends State<ModerationHiddenTab> {
 
     return RefreshIndicator(
       onRefresh: _refresh,
-      child: FutureBuilder<List<QuarantinedSignal>>(
-        future: _hidden,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return _scrollableMessage(
-              icon: Icons.error_outline,
-              text: l10n.errorGeneric,
-            );
-          }
-          final hidden = snapshot.data ?? const <QuarantinedSignal>[];
-          if (hidden.isEmpty) {
-            return _scrollableMessage(
-              icon: Icons.visibility_off_outlined,
-              text: l10n.moderationHiddenEmpty,
-            );
-          }
-          return ListView.separated(
-            itemCount: hidden.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (context, index) => _row(l10n, hidden[index]),
-          );
-        },
-      ),
+      child: _body(l10n),
+    );
+  }
+
+  Widget _body(AppLocalizations l10n) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_failed) {
+      return _scrollableMessage(
+        icon: Icons.error_outline,
+        text: l10n.errorGeneric,
+      );
+    }
+    if (_hidden.isEmpty) {
+      return _scrollableMessage(
+        icon: Icons.visibility_off_outlined,
+        text: l10n.moderationHiddenEmpty,
+      );
+    }
+    return ListView.separated(
+      // Always scrollable so pull-to-refresh works even with one short row.
+      physics: const AlwaysScrollableScrollPhysics(),
+      itemCount: _hidden.length,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (context, index) => _row(l10n, _hidden[index]),
     );
   }
 
