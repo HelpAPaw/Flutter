@@ -1348,7 +1348,7 @@ that has regressed repeatedly (R5-004, R6-001, R6-002), which is why it lives ou
   confirmation, one note, one server batch that moves both. Hiding the control instead
   would leave a volunteer with no way to discover that taking the case on is what
   unlocks it.
-- **Case holder block:** who is responsible, immediately above the status dropdown —
+- **Case holder block** (`case_holder_block.dart`): who is responsible, immediately above the status dropdown —
   the holder is *who*, the status is *how far along*, and putting them together is what
   makes "take it on, then move it" read as one idea. Carries exactly one affordance per
   viewer: Release for the holder, Take responsibility on a released case, Offer to take
@@ -1937,7 +1937,7 @@ page is bilingual with a client-side language switch.
 | Function | Trigger | Purpose |
 |---|---|---|
 | `onSignalCreated` / `onTestSignalCreated` | create `signals/{id}` / `signals_test/{id}` | **Nearby fan-out** (below) |
-| `onSignalUpdated` / `onTestSignalUpdated` | update | Push `status_change`, an urgency escalation, **or an `ownership_change`** to subscribers, skipping `lastUpdatedBy`. Exactly one per invocation — ownership outranks the other two and carries `statusCode` when a claim moved both (§4.8) |
+| `onSignalUpdated` / `onTestSignalUpdated` | update | Push `status_change`, an urgency escalation, **or an `ownership_change`** to subscribers, skipping `lastUpdatedBy`. **Exactly one per invocation**: each candidate is built by its own producer in `announcements.ts`, ranked, and the winner *merges in* the loser's fields when a claim moved both — so the status sentence has one author instead of being re-inlined into the ownership branch (§4.8) |
 | `onCommentCreated` / `onTestCommentCreated` | create comment | Push `new_comment` (body truncated to 50 chars) to subscribers, skipping the author. **Returns early on `type === 'status_change'`** — those have no `text` |
 | `onUserTokensWritten` | write `users/{uid}` | Token dedupe: removes this device's token from every other user doc. Only runs when `tokenLastSaved` changed, so location/subscription writes don't trigger it |
 | `onFeedbackCreated` | create `feedback/{id}` | Rate-limited SMTP email via nodemailer; HTML-escaped |
@@ -2159,6 +2159,14 @@ Things that live in more than one place and fail **silently** when they drift.
    inside `isSignalEventCreate()` in `firestore.rules`, and `SIGNAL_EVENT_TYPES` /
    `CLIENT_SIGNAL_EVENT_TYPES` / `SIGNAL_EVENT_KEYS` / `SIGNAL_EVENT_FIELDS` /
    `MAX_EVENT_NOTE_LENGTH` in `functions/src/events.ts`.
+
+   `SignalEventType` is a **sealed hierarchy**, not an enum: `LevelEventType`
+   carries two ints and owns `eventData`, `HolderEventType` carries two nullable
+   user references and has no client encoder at all. Encoding an ownership
+   transfer as two ints therefore does not compile — it was a runtime throw, and
+   an `assert` before that, which is compiled out in release precisely where the
+   failure is silent. The decoder switches on the subtype, so a new one is a
+   compile error rather than a row that never renders.
 
    **The rules must match `clientCodes`, not `allCodes`.** `ownership_transfer` is
    `serverOnly` (§4.8): the callable writes it through the Admin SDK, which bypasses

@@ -23,67 +23,39 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 /// clause, with nothing already stored reshaped. That is the property the old
 /// `comments` home could not offer, because there the discriminator had to
 /// compete with "is this a user comment at all?".
-/// What kind of before/after values an event carries.
 ///
-/// Status and urgency are both small ints on a fixed 0..2 scale; ownership is a
-/// pair of user references, one of which may legitimately be null. They cannot
-/// share an encoder or a decoder branch, and the discriminator is what stops a
-/// future type quietly being decoded as the wrong shape.
-enum SignalEventPayload {
-  /// `old*`/`new*` are `int` status or urgency codes.
-  level,
-
-  /// `old*`/`new*` are `DocumentReference`s to `users/{uid}`, **nullable** — a
-  /// release has no new holder, and that is the event rather than a defect.
-  holderRef,
-}
-
-enum SignalEventType {
-  statusChange(
-    code: 'status_change',
-    signalField: 'status',
-    oldKey: 'oldStatus',
-    newKey: 'newStatus',
-    historyKind: SignalHistoryKind.statusChange,
-  ),
-  urgencyChange(
-    code: 'urgency_change',
-    signalField: 'urgency',
-    oldKey: 'oldUrgency',
-    newKey: 'newUrgency',
-    historyKind: SignalHistoryKind.urgencyChange,
-  ),
-
-  /// Case ownership moved (master spec 4.5) — claimed, handed over or released.
-  ///
-  /// The first **server-only** event type. See [serverOnly].
-  ownershipTransfer(
-    code: 'ownership_transfer',
-    signalField: 'caseHolder',
-    oldKey: 'oldHolder',
-    newKey: 'newHolder',
-    historyKind: SignalHistoryKind.ownershipTransfer,
-    payload: SignalEventPayload.holderRef,
-    serverOnly: true,
-  );
-
+/// ---
+///
+/// One kind of thing that can happen to a signal.
+///
+/// A **sealed hierarchy rather than an enum**, because the types stopped being
+/// variations on one shape. Status and urgency carry two ints on a fixed 0..2
+/// scale and are written by the client; ownership carries two nullable user
+/// references and is written only by the server. An enum reconciles that with a
+/// discriminator field and an encoder that is valid for only some of its
+/// values — a partial method, guarded at runtime, on a class whose entire
+/// purpose is to stop a malformed event being written.
+///
+/// Splitting moves that guard to compile time: [eventData] exists on
+/// [LevelEventType] and nowhere else, so encoding an ownership transfer as two
+/// ints does not compile. The spec names three more event types coming
+/// (moderator closure, vet updates, fundraising), at least two of which are not
+/// int levels, and each one now picks a subtype instead of adding a
+/// discriminator value and another partial method.
+sealed class SignalEventType {
   const SignalEventType({
     required this.code,
     required this.signalField,
     required this.oldKey,
     required this.newKey,
     required this.historyKind,
-    this.payload = SignalEventPayload.level,
     this.serverOnly = false,
   });
 
   /// Stable identifier persisted in Firestore. Never rename or reuse — stored
-  /// events reference it, and the value is mirrored in `firestore.rules`
-  /// (guarded by `test/signal_event_vocabulary_guard_test.dart`).
-  ///
-  /// There is deliberately no TypeScript copy: no function reads or writes
-  /// `events`. One is owed, with a parity test, the first time the server
-  /// writes an event — see `docs/SPECIFICATION.md` §12.5a.
+  /// events reference it, and the value is mirrored in `firestore.rules` and in
+  /// `functions/src/events.ts` (guarded by
+  /// `test/signal_event_vocabulary_guard_test.dart`).
   final String code;
 
   /// The field this event changes on the signal document itself.
@@ -101,12 +73,9 @@ enum SignalEventType {
   /// Which row this event becomes in the merged history.
   ///
   /// Declared here rather than switched on in the decoder so that adding a type
-  /// is one edit in one place — the decoder used to carry a parallel switch whose
-  /// only job was to restate this mapping.
+  /// is one edit in one place — the decoder used to carry a parallel switch
+  /// whose only job was to restate this mapping.
   final SignalHistoryKind historyKind;
-
-  /// The shape of this event's `old*`/`new*` values. See [SignalEventPayload].
-  final SignalEventPayload payload;
 
   /// Whether only the server may write this type.
   ///
@@ -119,9 +88,57 @@ enum SignalEventType {
   ///
   /// This is why the drift guard compares [clientCodes] against the rules and
   /// [allCodes] against the functions — see
-  /// `test/signal_event_vocabulary_guard_test.dart`. Adding a server-only code to
-  /// the rules to "make the guard pass" would silently undo the property above.
+  /// `test/signal_event_vocabulary_guard_test.dart`. Adding a server-only code
+  /// to the rules to "make the guard pass" would silently undo the property
+  /// above.
+  ///
+  /// Deliberately **not** implied by the subtype: the two are orthogonal. A
+  /// future ref-payload type could be client-written, and a future level type
+  /// could be server-only.
   final bool serverOnly;
+
+  static const LevelEventType statusChange = LevelEventType(
+    code: 'status_change',
+    signalField: 'status',
+    oldKey: 'oldStatus',
+    newKey: 'newStatus',
+    historyKind: SignalHistoryKind.statusChange,
+  );
+
+  static const LevelEventType urgencyChange = LevelEventType(
+    code: 'urgency_change',
+    signalField: 'urgency',
+    oldKey: 'oldUrgency',
+    newKey: 'newUrgency',
+    historyKind: SignalHistoryKind.urgencyChange,
+  );
+
+  /// Case ownership moved (master spec §4.5) — claimed, handed over or released.
+  ///
+  /// The first **server-only** type. See [serverOnly].
+  static const HolderEventType ownershipTransfer = HolderEventType(
+    code: 'ownership_transfer',
+    signalField: 'caseHolder',
+    oldKey: 'oldHolder',
+    newKey: 'newHolder',
+    historyKind: SignalHistoryKind.ownershipTransfer,
+    serverOnly: true,
+  );
+
+  /// Every type. Hand-maintained because a sealed class has no generated
+  /// `values` — adding a type means adding it here, which the vocabulary guard
+  /// then checks against both other runtimes.
+  static const List<SignalEventType> values = [
+    statusChange,
+    urgencyChange,
+    ownershipTransfer,
+  ];
+
+  /// Maximum length of an event's update note.
+  ///
+  /// Mirrored by `firestore.rules` and by the input formatter on the note
+  /// dialog — see the field-length invariant in `docs/SPECIFICATION.md` §12.
+  static const int maxNoteLength = 500;
 
   /// Every code. Mirrored by `SIGNAL_EVENT_TYPES` in `functions/src/events.ts`,
   /// which must know all of them because the server writes all of them.
@@ -132,12 +149,6 @@ enum SignalEventType {
   /// `isSignalEventCreate()` in `firestore.rules` accepts.
   static final List<String> clientCodes =
       List.unmodifiable(values.where((t) => !t.serverOnly).map((t) => t.code));
-
-  /// Maximum length of an event's update note.
-  ///
-  /// Mirrored by `firestore.rules` and by the input formatter on the note
-  /// dialog — see the field-length invariant in `docs/SPECIFICATION.md` §12.
-  static const int maxNoteLength = 500;
 
   /// Resolve a persisted [code], or null if it is unknown.
   ///
@@ -152,42 +163,67 @@ enum SignalEventType {
     return null;
   }
 
+  @override
+  String toString() => 'SignalEventType($code)';
+}
+
+/// An event whose before/after values are `int` status or urgency codes.
+final class LevelEventType extends SignalEventType {
+  const LevelEventType({
+    required super.code,
+    required super.signalField,
+    required super.oldKey,
+    required super.newKey,
+    required super.historyKind,
+    super.serverOnly,
+  });
+
   /// The document to write into `signals/{id}/events`.
   ///
   /// The encoder lives beside the decoder so the wire shape has exactly one
-  /// definition. Before it did, `'note'`, `'actor'`, `'createdAt'` and the
-  /// level field names were string literals inside two different widgets, and
-  /// nothing could test that what one writes is what the other reads.
+  /// definition. Before it did, `'note'`, `'actor'`, `'createdAt'` and the level
+  /// field names were string literals inside two different widgets, and nothing
+  /// could test that what one writes is what the other reads.
   ///
-  /// Only defined for [SignalEventPayload.level] types. There is no client-side
-  /// encoder for [SignalEventPayload.holderRef] because no client writes one —
-  /// the `caseOwnership` callable does, through `functions/src/events.ts`.
+  /// Defined on this subtype and nowhere else: there is no client encoder for a
+  /// [HolderEventType], because no client writes one. That used to be a runtime
+  /// throw inside a shared method; here the call simply does not compile.
   Map<String, dynamic> eventData({
     required int oldValue,
     required int newValue,
     required String note,
     required DocumentReference actor,
-  }) {
-    // A throw, not an assert: asserts are compiled out in release, and the
-    // failure this guards is silent by construction. A ref-payload type encoded
-    // as two ints produces a document the rules accept (the server writes it
-    // through the Admin SDK) and the decoder then drops on read — the row simply
-    // never appears in anyone's history, which is the exact failure mode
-    // SPECIFICATION §12.5a exists to prevent.
-    if (payload != SignalEventPayload.level) {
-      throw StateError('eventData encodes int levels; $code carries $payload');
-    }
-    return {
+  }) =>
+      {
         'type': code,
         oldKey: oldValue,
         newKey: newValue,
         'note': note,
         // Client-set, not a server sentinel: the history sorts on this and a
         // pending write with no timestamp would have nowhere to go.
-      'createdAt': DateTime.now(),
-      'actor': actor,
-    };
-  }
+        'createdAt': DateTime.now(),
+        'actor': actor,
+      };
+}
+
+/// An event whose before/after values are references to `users/{uid}`.
+///
+/// **Both are nullable, and both nulls are real**: `oldHolder` is null when a
+/// released case is claimed, `newHolder` when a case is released. A decoder
+/// cannot tell "released" from "malformed" if the key is simply absent, so the
+/// writer must always emit both.
+///
+/// No Dart encoder — `buildOwnershipEventData` in `functions/src/events.ts`
+/// writes these, through the Admin SDK.
+final class HolderEventType extends SignalEventType {
+  const HolderEventType({
+    required super.code,
+    required super.signalField,
+    required super.oldKey,
+    required super.newKey,
+    required super.historyKind,
+    super.serverOnly,
+  });
 }
 
 /// What a single row of the signal's history is.
@@ -316,15 +352,15 @@ class SignalHistoryEntry {
     final type = SignalEventType.fromCode(rawType);
     if (type == null) return null;
 
-    // The kind comes off the type itself (SignalEventType.historyKind); only the
-    // payload still needs deciding, and it is decided by the payload
-    // discriminator rather than by listing the types again. Adding a type is one
-    // edit unless it also introduces a new payload shape.
+    // The kind comes off the type itself; only the payload still needs
+    // decoding, and switching on the SUBTYPE is what makes that exhaustive —
+    // `SignalEventType` is sealed, so a new subtype is a compile error here
+    // rather than a row that silently fails to render.
     final note = data['note'] as String?;
     final raw = data[type.newKey];
 
-    switch (type.payload) {
-      case SignalEventPayload.level:
+    switch (type) {
+      case LevelEventType():
         if (raw is! int) return null;
         return SignalHistoryEntry(
           id: id,
@@ -335,7 +371,7 @@ class SignalHistoryEntry {
           note: note,
         );
 
-      case SignalEventPayload.holderRef:
+      case HolderEventType():
         // A null new holder is a RELEASE, not a malformed document, so unlike a
         // missing level it must not be rejected. Only a value of the wrong type
         // is unreadable.

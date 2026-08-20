@@ -149,12 +149,11 @@ void main() {
     // The round trip is the point of having the encoder: before it existed the
     // field names were string literals in two widgets, and nothing could check
     // that what one writes is what the decoder reads.
-    // Level-payload types only. `eventData` encodes two ints, and the
-    // ref-payload types (ownership) have no Dart encoder at all — no client
-    // writes one, which is the point of `serverOnly`. Their round trip is
-    // covered below against the shape the server actually produces.
-    for (final type in SignalEventType.values
-        .where((t) => t.payload == SignalEventPayload.level)) {
+    // Level types only. `eventData` is defined on `LevelEventType` and nowhere
+    // else — a `HolderEventType` has no Dart encoder, because no client writes
+    // one. Their round trip is covered below against the shape the server
+    // actually produces.
+    for (final type in SignalEventType.values.whereType<LevelEventType>()) {
       test('${type.code} survives a round trip through fromDocument', () {
         final written = type.eventData(
           oldValue: 0,
@@ -236,20 +235,19 @@ void main() {
         );
       });
 
-      // A StateError rather than an AssertionError on purpose: asserts are
-      // compiled out in release, and encoding a ref payload as two ints would
-      // then produce a document the decoder silently drops — the row never
-      // appears in anyone's history, with nothing logged.
-      test('has no client encoder — eventData refuses the ref payload', () {
-        expect(
-          () => SignalEventType.ownershipTransfer.eventData(
-            oldValue: 0,
-            newValue: 1,
-            note: 'n',
-            actor: actor,
-          ),
-          throwsA(isA<StateError>()),
-        );
+      // There is nothing to assert at runtime any more, and that is the point:
+      // `eventData` lives on `LevelEventType`, so
+      // `SignalEventType.ownershipTransfer.eventData(...)` does not compile.
+      // This used to be a runtime throw on a shared method — which was already
+      // an improvement on the assert before it, since asserts are compiled out
+      // in release and the failure it guards is silent by construction.
+      //
+      // What is still worth pinning is that the type IS the ref-payload
+      // subtype, because that is what the compiler checks against.
+      test('is a holder-payload type, so it has no client encoder', () {
+        expect(SignalEventType.ownershipTransfer, isA<HolderEventType>());
+        expect(SignalEventType.ownershipTransfer, isNot(isA<LevelEventType>()));
+        expect(SignalEventType.ownershipTransfer.serverOnly, isTrue);
       });
     });
 

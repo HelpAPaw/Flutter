@@ -32,13 +32,13 @@ import '../models/signal_status.dart';
 import '../models/animal_type.dart';
 import '../models/help_tag.dart';
 import '../models/signal_urgency.dart';
+import 'case_holder_block.dart';
 import 'help_tag_picker_sheet.dart';
 import 'report_dialog.dart';
 import 'update_note_dialog.dart';
 import 'urgency_picker.dart';
 import '../models/report_reason.dart';
 import '../services/app_preferences_service.dart';
-import '../services/callable_client.dart';
 import '../services/case_ownership_service.dart';
 import '../services/public_profile_service.dart';
 
@@ -152,28 +152,6 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     _subscribeToHistory();
   }
 
-  /// Offers to take this case over (master spec §4.5), split by audience.
-  ///
-  /// Two streams rather than one view of the subcollection, because the two
-  /// readers want different things and the collection only ever grows —
-  /// answered requests are never deleted, since the cooldown reads them. A
-  /// volunteer wants **their own** row, which is addressable by id; the holder
-  /// wants the **pending** ones, which is a server-side filter. Sharing one
-  /// unfiltered listener made both pay one read per person who had ever asked.
-  ///
-  /// Created here rather than in [_subscribe] for two reasons. Neither is part
-  /// of the retry cycle — a failed read costs one small block, not the screen.
-  /// And `late final` makes them **lazy**: only the builder that needs one
-  /// touches it, so a passer-by opening a released case opens no listener, and
-  /// the holder never opens the volunteer's.
-  late final Stream<TakeoverRequest?> _myRequestStream =
-      CaseOwnershipService.instance.watchMyRequest(
-    widget.signalId,
-    FirebaseAuth.instance.currentUser!.uid,
-  );
-
-  late final Stream<List<TakeoverRequest>> _pendingRequestsStream =
-      CaseOwnershipService.instance.watchPendingRequests(widget.signalId);
 
   /// Replaces just the two history listeners, leaving `_signalStream` alone.
   ///
@@ -900,7 +878,16 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                           // status is *how far along*, and putting them next to
                           // each other is what makes "take responsibility, then
                           // move it" read as one idea rather than two.
-                          _buildCaseHolderBlock(signal, uid),
+                          CaseHolderBlock(
+                            signal: signal,
+                            signalId: widget.signalId,
+                            uid: uid,
+                            busy: _isApplyingLevelChange,
+                            runGuarded: _runGuarded,
+                            nameOf: _nameWidget,
+                            onClaim: _claimCase,
+                            onSignInRequired: _showSignInDialog,
+                          ),
                           const SizedBox(height: 8),
                           Text(' ${l10n.status}'),
                           DropdownButton<int>(
@@ -1476,242 +1463,6 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// | the reporter, not holding | who holds it, plus the offers |
   /// | anyone else, case held | Offer to take over (or their pending offer) |
   /// | anyone else, case released | Take responsibility |
-  Widget _buildCaseHolderBlock(Signal signal, String? uid) {
-    final l10n = AppLocalizations.of(context);
-    final holder = signal.caseHolder;
-    final isHolder = signal.isHeldBy(uid);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 8),
-        Text(' ${l10n.caseHolder}'),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Row(
-            children: [
-              Icon(
-                holder == null ? Icons.person_off_outlined : Icons.person,
-                size: 18,
-                // A case nobody holds is the one thing in this block worth
-                // drawing the eye to: it is an ask, not a status.
-                color: holder == null ? Colors.orange : null,
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: isHolder
-                    ? Text(l10n.caseHolderIsYou)
-                    : holder == null
-                        ? Text(l10n.caseHolderNobody)
-                        : _actorText(
-                            holder.id,
-                            (name) => name,
-                            fallback: l10n.unknown,
-                            maxLines: 1,
-                          ),
-              ),
-            ],
-          ),
-        ),
-        _buildOwnershipActions(signal, isHolder: isHolder, uid: uid),
-        // HOLDER ONLY, matching `requireCurrentHolder` in the callable. The
-        // reporter can do almost everything else on their own signal, but
-        // `approveRequest`/`declineRequest` are the holder's — so showing them
-        // Hand over / Decline would be offering buttons that always fail with a
-        // generic error. A holder who has gone quiet is what staleness is for,
-        // not what the reporter is for.
-        if (isHolder) _buildTakeoverRequests(),
-      ],
-    );
-  }
-
-  /// The one action this viewer is offered, if any.
-  Widget _buildOwnershipActions(
-    Signal signal, {
-    required bool isHolder,
-    required String? uid,
-  }) {
-    final l10n = AppLocalizations.of(context);
-
-    if (isHolder) {
-      return Align(
-        alignment: Alignment.centerLeft,
-        child: TextButton.icon(
-          icon: const Icon(Icons.logout, size: 16),
-          label: Text(l10n.caseHolderRelease),
-          onPressed: _isApplyingLevelChange ? null : () => _releaseCase(),
-        ),
-      );
-    }
-
-    // Nobody holds it, or whoever does has stopped answering — either way there
-    // is no permission to ask for, and the server will say so if it disagrees.
-    //
-    // The staleness half matters: without it the escape hatch the whole design
-    // is shaped around is reachable only as a side effect of using the status
-    // dropdown, and somebody who just wants to take the case on has no button.
-    if (signal.isReleased || CaseOwnershipService.isHolderStale(signal)) {
-      return Align(
-        alignment: Alignment.centerLeft,
-        child: FilledButton.tonalIcon(
-          icon: const Icon(Icons.volunteer_activism, size: 16),
-          label: Text(l10n.caseHolderTakeResponsibility),
-          onPressed: _isApplyingLevelChange ? null : () => _claimCase(),
-        ),
-      );
-    }
-
-    // Held by someone else: offer to take it over, or show the offer already
-    // made.
-    //
-    // The uid check happens BEFORE the stream is touched. `_myRequestStream` is
-    // keyed on the signed-in uid, and it is `late final`, so reading it with no
-    // session would throw at exactly the moment the app is least able to say
-    // why. Signed out should be impossible here (the app always holds at least
-    // an anonymous session) — which is the reason to fail softly rather than
-    // assert.
-    if (uid == null) return const SizedBox.shrink();
-
-    return StreamBuilder<TakeoverRequest?>(
-      stream: _myRequestStream,
-      builder: (context, snapshot) {
-        // Nothing until the first snapshot: offering to take over a case you
-        // have already offered for reads as a dead button when the write is then
-        // refused by the uid-keyed document id.
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox.shrink();
-        }
-
-        // Their request whatever its status: an *answered* one still occupies
-        // the uid-keyed slot, and whether it can be replaced depends on the
-        // cooldown rather than on it being gone.
-        final mine = snapshot.data;
-
-        // Answered and still cooling down. Say when, rather than offering a
-        // button whose write the rules would refuse.
-        if (mine?.reaskableAt case final until?) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // The holder's reason, when they gave one. They were required to
-                // type it; showing it is what makes that requirement honest.
-                if (mine?.resolvedNote case final why? when why.isNotEmpty)
-                  Text(why),
-                Text(
-                  l10n.takeoverAskAgainAfter(
-                    DateFormat.yMMMd().add_jm().format(until),
-                  ),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-            ),
-          );
-        }
-
-        if (mine != null && mine.isPending) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    l10n.caseHolderRequestPending,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
-                TextButton(
-                  onPressed: _isApplyingLevelChange
-                      ? null
-                      : () => _withdrawTakeoverRequest(),
-                  child: Text(l10n.caseHolderWithdrawRequest),
-                ),
-              ],
-            ),
-          );
-        }
-
-        return Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            icon: const Icon(Icons.pan_tool_alt_outlined, size: 16),
-            label: Text(l10n.caseHolderRequestTakeover),
-            onPressed:
-                _isApplyingLevelChange ? null : () => _requestTakeover(),
-          ),
-        );
-      },
-    );
-  }
-
-  /// Pending offers, each answerable in place.
-  Widget _buildTakeoverRequests() {
-    final l10n = AppLocalizations.of(context);
-
-    return StreamBuilder<List<TakeoverRequest>>(
-      stream: _pendingRequestsStream,
-      builder: (context, snapshot) {
-        final pending = snapshot.data ?? const <TakeoverRequest>[];
-        // A read that failed, or a case nobody has offered for, both render
-        // nothing — there is no useful difference to a holder here, and an error
-        // row about a list that is empty far more often than not would be noise.
-        if (pending.isEmpty) return const SizedBox.shrink();
-
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                l10n.caseHolderOffers,
-                style: Theme.of(context).textTheme.labelLarge,
-              ),
-              for (final request in pending)
-                Card(
-                  margin: const EdgeInsets.only(top: 6),
-                  child: Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _actorText(
-                          request.requesterId,
-                          (name) => name,
-                          fallback: l10n.unknown,
-                          style: Theme.of(context).textTheme.titleSmall,
-                          maxLines: 1,
-                        ),
-                        if (request.note.isNotEmpty) Text(request.note),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            TextButton(
-                              onPressed: _isApplyingLevelChange
-                                  ? null
-                                  : () => _answerTakeover(request,
-                                      approve: false),
-                              child: Text(l10n.caseHolderDecline),
-                            ),
-                            FilledButton(
-                              onPressed: _isApplyingLevelChange
-                                  ? null
-                                  : () => _answerTakeover(request,
-                                      approve: true),
-                              child: Text(l10n.caseHolderHandOver),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        );
-      },
-    );
-  }
 
   Widget _actorText(
     String uid,
@@ -1891,188 +1642,6 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   // -------------------------------------------------------------------------
 
   /// Take responsibility for a case, optionally moving its status in the same
-  /// action.
-  ///
-  /// [newStatus] arrives from the status dropdown on the claim-to-act path. The
-  /// server applies both in one batch, which is what lets one note explain both
-  /// and stops a failed second write leaving someone owning a case they only
-  /// meant to update.
-  Future<void> _claimCase({int? newStatus}) async {
-    final l10n = AppLocalizations.of(context);
-    final note = await _askOwnershipNote(
-      title: l10n.takeoverConfirmTitle,
-      body: l10n.takeoverConfirmBody,
-      confirmLabel: l10n.takeoverConfirmAction,
-    );
-    if (note == null) return;
-
-    await _runOwnershipChange(() => CaseOwnershipService.instance.claim(
-          signalId: widget.signalId,
-          note: note,
-          newStatus: newStatus,
-        ));
-  }
-
-  /// Step down (master spec §4.8, "I cannot go anymore").
-  Future<void> _releaseCase() async {
-    final l10n = AppLocalizations.of(context);
-    final note = await _askOwnershipNote(
-      title: l10n.releaseConfirmTitle,
-      body: l10n.releaseConfirmBody,
-      confirmLabel: l10n.caseHolderRelease,
-    );
-    if (note == null) return;
-
-    await _runOwnershipChange(() => CaseOwnershipService.instance.release(
-          signalId: widget.signalId,
-          note: note,
-        ));
-  }
-
-  /// Answer someone's offer to take the case on.
-  Future<void> _answerTakeover(
-    TakeoverRequest request, {
-    required bool approve,
-  }) async {
-    final l10n = AppLocalizations.of(context);
-    final note = await _askOwnershipNote(
-      title: approve ? l10n.caseHolderHandOver : l10n.caseHolderDecline,
-      body: approve ? l10n.takeoverConfirmBody : l10n.releaseConfirmBody,
-      confirmLabel: approve ? l10n.caseHolderHandOver : l10n.caseHolderDecline,
-    );
-    if (note == null) return;
-
-    await _runOwnershipChange(() => approve
-        ? CaseOwnershipService.instance.approveRequest(
-            signalId: widget.signalId,
-            requesterId: request.requesterId,
-            note: note,
-          )
-        : CaseOwnershipService.instance.declineRequest(
-            signalId: widget.signalId,
-            requesterId: request.requesterId,
-            note: note,
-          ));
-  }
-
-  /// Offer to take a case its holder has not released.
-  ///
-  /// A plain Firestore write, not a callable — a request carries no privilege.
-  /// The holder hears about it through the `onTakeoverRequested` trigger.
-  Future<void> _requestTakeover() async {
-    final l10n = AppLocalizations.of(context);
-    if (!RepositoryProvider.instance.userRepository.canModifyData) {
-      _showSignInDialog();
-      return;
-    }
-
-    final note = await showUpdateNoteDialog(
-      context,
-      levelLabel: l10n.caseHolderRequestTakeover,
-      levelBadge: const Icon(Icons.pan_tool_alt_outlined, size: 16),
-    );
-    if (note == null || !mounted || _isApplyingLevelChange) return;
-
-    await _runGuarded(() async {
-      final outcome = await CaseOwnershipService.instance.requestTakeover(
-        signalId: widget.signalId,
-        note: note,
-      );
-      if (!mounted) return;
-      // Every outcome is reportable, including the two that are answers rather
-      // than errors — `requestTakeover` never throws, so there is nothing to
-      // catch here.
-      final message = switch (outcome) {
-        TakeoverRequestOutcome.submitted => l10n.takeoverRequestSent,
-        TakeoverRequestOutcome.alreadyAsked => l10n.takeoverAlreadyAsked,
-        TakeoverRequestOutcome.notSignedIn => l10n.signInRequired,
-        TakeoverRequestOutcome.failed => l10n.errorChangingCaseHolder,
-      };
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-    });
-  }
-
-  Future<void> _withdrawTakeoverRequest() async {
-    await _runOwnershipChange(
-        () => CaseOwnershipService.instance.withdrawRequest(widget.signalId));
-  }
-
-  /// Confirm the intent, then ask for the note that explains it.
-  ///
-  /// Two dialogs in the order the urgency path already established: confirm what
-  /// you mean to do, *then* say why. Returns null when the user backed out of
-  /// either, and nothing is written — every one of these reads its value from
-  /// the signal stream, so there is nothing to revert.
-  Future<String?> _askOwnershipNote({
-    required String title,
-    required String body,
-    required String confirmLabel,
-  }) async {
-    final l10n = AppLocalizations.of(context);
-    if (!RepositoryProvider.instance.userRepository.canModifyData) {
-      _showSignInDialog();
-      return null;
-    }
-    if (_isApplyingLevelChange) return null;
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(body),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(l10n.cancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(confirmLabel),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return null;
-
-    return showUpdateNoteDialog(
-      context,
-      levelLabel: confirmLabel,
-      levelBadge: const Icon(Icons.volunteer_activism, size: 16),
-    );
-  }
-
-  /// Runs an ownership call behind the shared in-flight guard.
-  ///
-  /// Shares `_isApplyingLevelChange` with the status and urgency paths on
-  /// purpose: a claim can carry a status change, so a separate guard would let
-  /// one tap through each and produce the duplicate neither meant to allow.
-  ///
-  /// `failed-precondition` is not an error but an answer — somebody else got
-  /// there first — so it gets its own message pointing at the offer flow.
-  Future<void> _runOwnershipChange(Future<void> Function() action) =>
-      _runGuarded(() async {
-        try {
-          await action();
-        } catch (e) {
-          if (!mounted) return;
-          final l10n = AppLocalizations.of(context);
-          // `failed-precondition` is not a failure but an answer — somebody else
-          // got there first — so it gets the message that points at the offer
-          // flow instead of the generic one.
-          final alreadyHeld =
-              e is CallableException && e.code == 'failed-precondition';
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(alreadyHeld
-                  ? l10n.takeoverAlreadyHeld
-                  : l10n.errorChangingCaseHolder),
-            ),
-          );
-        }
-      });
-
-  /// Runs [body] behind the shared in-flight guard.
-  ///
   /// The flag's whole job is to stop a second change landing on top of one
   /// already in flight, and it is deliberately **one flag for every path** — a
   /// claim can carry a status change, so separate guards would let one tap
@@ -2121,6 +1690,57 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     });
   }
 
+  /// Take responsibility for a case, optionally moving its status with it.
+  ///
+  /// Lives here rather than in [CaseHolderBlock] because the **status dropdown**
+  /// shares it: choosing a status you are not entitled to set offers to claim
+  /// first, and that has to be the same flow as pressing the button in the
+  /// block, or the two ways of taking a case on write different history.
+  ///
+  /// [newStatus] arrives from the dropdown on that path. The server applies both
+  /// in one batch, which is what lets one note explain both and stops a failed
+  /// second write leaving someone owning a case they only meant to update.
+  Future<void> _claimCase({int? newStatus}) async {
+    final l10n = AppLocalizations.of(context);
+    final note = await askOwnershipNote(
+      context,
+      title: l10n.takeoverConfirmTitle,
+      body: l10n.takeoverConfirmBody,
+      confirmLabel: l10n.takeoverConfirmAction,
+      busy: _isApplyingLevelChange,
+      onSignInRequired: _showSignInDialog,
+      canModifyData: RepositoryProvider.instance.userRepository.canModifyData,
+    );
+    if (note == null || !mounted) return;
+
+    await runOwnershipChange(
+      context,
+      _runGuarded,
+      () => CaseOwnershipService.instance.claim(
+        signalId: widget.signalId,
+        note: note,
+        newStatus: newStatus,
+      ),
+    );
+  }
+
+  /// [CaseHolderBlock]'s name renderer, adapting [_actorText] so the block
+  /// shares this screen's memoized `publicProfiles` cache rather than starting
+  /// a second one.
+  Widget _nameWidget(
+    String uid, {
+    required String fallback,
+    TextStyle? style,
+    int? maxLines,
+  }) =>
+      _actorText(
+        uid,
+        (name) => name,
+        fallback: fallback,
+        style: style,
+        maxLines: maxLines,
+      );
+
   /// Change the signal's urgency and record it on the timeline.
   ///
   /// The Red Alert confirmation has already been handled by [UrgencyPicker]
@@ -2154,7 +1774,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// notifying whoever made the change — so leaving it stale on an urgency
   /// write would silently mute a subscriber.
   Future<void> _applyLevelChange({
-    required SignalEventType eventType,
+    required LevelEventType eventType,
     required int oldValue,
     required int newValue,
     required String levelLabel,

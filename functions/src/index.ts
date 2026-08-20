@@ -13,7 +13,14 @@ import * as nodemailer from "nodemailer";
 // urgency is how bad it is if nobody acts. These live in their own module so
 // scripts/backfill_urgency.js can share them instead of keeping a third copy
 // of the derivation — see the note in ./urgency.
-import { SIGNAL_URGENCIES, URGENCY_RED, urgencyOf } from "./urgency";
+import { URGENCY_RED, urgencyOf } from "./urgency";
+import {
+  AnnouncedChange,
+  NotificationType,
+  ownershipChangeOf,
+  statusChangeOf,
+  urgencyChangeOf,
+} from "./announcements";
 import { isRestoredSignal } from "./events";
 import { caseHolderOf } from "./signalRefs";
 import {
@@ -83,11 +90,7 @@ const messaging = admin.messaging();
 // app's unified F-006 EN labels (statusNeedsHelp / statusInProgress /
 // statusResolved). Push text is English-only (function has no i18n). Unknown
 // codes fall back to "Updated" at the lookup site.
-const SIGNAL_STATUSES: Record<number, string> = {
-  0: "Needs help",
-  1: "In progress",
-  2: "Resolved",
-};
+// SIGNAL_STATUSES moved to ./announcements with the code that renders it.
 
 // Maximum radii (km) a user can configure in the app UI. These bound how far
 // from a new signal we look for candidate recipients via geohash range queries,
@@ -312,17 +315,7 @@ interface InboxEntry {
    * collapse two different status transitions into one.
    */
   docId: string;
-  type:
-    | "new_signal"
-    | "status_change"
-    | "urgency_change"
-    | "new_comment"
-    // Case ownership, master spec §4.5. `ownership_change` goes to a signal's
-    // subscribers; the two `takeover_*` types go to one person each.
-    | "ownership_change"
-    | "takeover_request"
-    | "takeover_approved"
-    | "takeover_declined";
+  type: NotificationType;
   title: string;
   body: string;
   signalId: string;
@@ -1093,93 +1086,47 @@ async function handleSignalUpdated(
   // announced — being buzzed twice for one action is what trains people to mute
   // a signal that matters.
   //
-  // Ownership outranks the other two, and unlike them it is routinely written
-  // together with a status change: `caseOwnership`'s `claim` sets `caseHolder`
-  // and `status` in the same batch precisely so that taking a case and moving it
-  // cannot come apart. That arrives here as one invocation with both diffs, and
-  // it is one action to the person who did it — so the ownership branch carries
-  // `statusCode` and says both things in one sentence, rather than letting the
-  // status branch fire a second push about the same tap.
-  //
-  // The two shapes differ only in these five values, so they are picked here
-  // and the fan-out below runs once — otherwise every future change to the
-  // payload or badge handling has to be made twice, in step.
-  //
-  // The code in each `docId` is load-bearing: `st_{signalId}` alone would make
-  // a later transition overwrite the earlier entry instead of adding one.
-  // Known and accepted for urgency, which can oscillate: green->amber->green->
-  // amber re-uses an id, overwriting the entry (correct — it *is* a fresh
-  // escalation and should resurface as unread) while `unread` is incremented
-  // again, so the counter over-counts. That counter is advisory by design and
-  // the app repairs it with a count() aggregation on resume; see the
-  // `userCounters` note in docs/SPECIFICATION.md, which says not to add a
-  // trigger to fix it.
   // Resolved only on the ownership path, and only when there is a holder to
   // name: one extra document read on a rare write, in exchange for a push that
   // says who took the case instead of "someone".
-  const newHolderName = ownershipChanged && newHolder
-    ? await readPublicName(newHolder.id)
-    : undefined;
+  const newHolderName =
+    ownershipChanged && newHolder ? await readPublicName(newHolder.id) : undefined;
 
-  const change: {
-    docId: string;
-    type: InboxEntry["type"];
-    title: string;
-    body: string;
-    inboxField: Partial<
-      Pick<
-        InboxEntry,
-        "urgency" | "statusCode" | "newHolderId" | "newHolderName"
-      >
-    >;
-    dataField: Record<string, string>;
-  } = ownershipChanged
-    ? {
-        // Keyed by the new holder so a case that changes hands twice produces
-        // two rows, and a retry of either produces one. A release keys on
-        // `none`, which is the only value it can have.
-        docId: `own_${signalId}_${newHolder?.id ?? "none"}`,
-        type: "ownership_change" as const,
-        title: newHolder
-          ? "Someone took responsibility"
-          : "This case needs someone",
-        body: newHolder
-          ? `${signalTitle}: ${newHolderName ?? "A volunteer"} is now responsible` +
-            (statusChanged ? ` — ${SIGNAL_STATUSES[newStatus] || "Updated"}` : "")
-          : `${signalTitle}: nobody is responsible for this case now`,
-        inboxField: {
-          newHolderId: newHolder?.id ?? null,
-          ...(newHolderName ? { newHolderName } : {}),
-          // Carried so the row can say both things — see the note above.
-          ...(statusChanged ? { statusCode: newStatus } : {}),
-        },
-        dataField: {
-          ...(newHolder ? { newHolderId: newHolder.id } : {}),
-          ...(statusChanged ? { statusCode: String(newStatus) } : {}),
-        },
-      }
-    : urgencyEscalated
-    ? {
-        docId: `urg_${signalId}_${newUrgency}`,
-        type: "urgency_change" as const,
-        title:
-          newUrgency === URGENCY_RED
-            ? "🔴 Escalated to RED ALERT"
-            : "Signal urgency raised",
-        // No `|| "Updated"` fallback: the rules bound urgency to 0-2 and this
-        // branch already required a stored number, so every key is present.
-        body: `${signalTitle}: ${SIGNAL_URGENCIES[newUrgency]}`,
-        inboxField: { urgency: newUrgency },
-        dataField: { urgency: String(newUrgency) },
-      }
-    : {
-        docId: `st_${signalId}_${newStatus}`,
-        type: "status_change" as const,
-        title: "Signal status updated",
-        body: `${signalTitle}: ${SIGNAL_STATUSES[newStatus] || "Updated"}`,
-        inboxField: { statusCode: newStatus },
-        dataField: { statusCode: String(newStatus) },
-      };
+  // Each change that could be announced, described independently. The winner is
+  // the highest-ranked one present.
+  //
+  // This was a chained ternary while there were two candidates. At three it
+  // stopped working: ownership routinely lands in the same write as a status
+  // change (`caseOwnership`'s `claim` sets both, so that taking a case and
+  // moving it cannot come apart), so the ownership branch had to re-inline the
+  // status branch's formatting, and the "one push per invocation" rule existed
+  // only as the shape of the expression. Ranking them and then *merging* the
+  // loser's fields into the winner says both things once.
+  const candidates: (AnnouncedChange | null)[] = [
+    ownershipChanged ? ownershipChangeOf(signalId, signalTitle, newHolder, newHolderName) : null,
+    urgencyEscalated ? urgencyChangeOf(signalId, signalTitle, newUrgency) : null,
+    statusChanged ? statusChangeOf(signalId, signalTitle, newStatus) : null,
+  ];
+
+  const [winner, ...alsoRan] = candidates.filter(
+    (c): c is AnnouncedChange => c !== null
+  );
+  if (!winner) return;
+
+  // An ownership transfer that also moved the status says so, rather than
+  // letting the status candidate fire a second push about the same tap. The
+  // status sentence and codes come from the status candidate itself, so there
+  // is still exactly one place that knows how to phrase a status change.
+  const status = alsoRan.find((c) => c.type === "status_change");
+  const change: AnnouncedChange =
+    winner.type === "ownership_change" && status
+      ? {
+          ...winner,
+          body: `${winner.body} — ${status.summary}`,
+          inboxField: { ...winner.inboxField, ...status.inboxField },
+          dataField: { ...winner.dataField, ...status.dataField },
+        }
+      : winner;
 
   const badgeByUid = await writeInboxEntries(
     inboxRecipients,
