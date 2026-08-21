@@ -322,13 +322,38 @@ the `onUserTokensWritten` trigger. Written from Dart *and* from native Android/i
 Deleted when the user turns tracking off, on account deletion, and by the anonymous
 cleanup job.
 
-#### `publicProfiles/{uid}` — world-readable display name
+#### `publicProfiles/{uid}` — world-readable display name and contribution stats
 
-`{ name: string (1–100, no control chars), deleted?: bool, deletedAt?: Timestamp }`
+`{ name: string (1–100, no control chars), signalsPosted?: int, deleted?: bool,
+deletedAt?: Timestamp }`
 
 The only user data any viewer can read. Resolves reporter and comment-author names.
 Overwritten with `"Deleted user"` on account deletion so erasure propagates everywhere
 dynamically. `list` is denied so the user base can't be enumerated.
+
+**`signalsPosted` is server-owned, and this document is why it lives here.** The rules
+already restrict the client to `name` alone — `keys().hasOnly(['name'])` on create,
+`affectedKeys().hasOnly(['name'])` on update — so an Admin-SDK counter written beside it
+is unforgeable **without any rules change**. `userCounters` was the obvious alternative
+and is exactly wrong: that document *is* client-writable by design, so a statistic kept
+there would be one its own subject could set.
+
+Incremented once by `recordSignalPosted` inside `handleSignalCreated`, at the moment a
+signal is reported, and **never decremented**. That is the requirement — master spec
+§3.5.1: *"these stats remain even when old cases are deleted or archived"*. The profile
+used to run a live `count()` over `signals`, which measured *signals still visible*, so
+every way a signal can leave that collection took the credit with it: the reporter
+removing it (§7.5), a moderator hiding it (§7.16), and the ~6-month archive of master spec
+§4.10 when it arrives. **Test-mode signals do not count** — they are isolated precisely so
+they cannot affect production, and an inflated statistic would be the one thing that
+leaked back out.
+
+**Optional on the wire**, and the fallback is the migration: a profile with no
+`signalsPosted` predates the counter and the app falls back to the old live count rather
+than showing a proud zero to someone who has reported for years. Backfilled by
+`functions/scripts/backfill_signals_posted.js`, which **must run before removal ships** —
+it counts the live collection, so once people start removing signals the source it counts
+from is already gone.
 
 #### `feedback/{id}` — write-only from clients
 
@@ -381,6 +406,33 @@ nothing else, which is the entire reason moderator powers are functions rather t
 widened ruleset: a client-written audit log is a forgeable one. `before`/`after` are small
 summaries, never whole documents — the log must not become a permanently readable copy of
 content that was hidden precisely so it would not be read.
+
+#### `removedSignals/{collection}__{signalId}` — the reporter's own bin (§7.5)
+
+`{ data: <the whole signal>, collection, signalId, removedBy, removedAt }`
+
+Where a signal goes when the person who reported it takes it down. Written, read back and
+emptied by the `signalRemoval` callable through the Admin SDK; **no client may write it at
+all**.
+
+**The same move-not-a-flag shape as `moderationQuarantine`, and a separate collection for
+three reasons**: these expire after `REMOVED_RETENTION_DAYS` (30) and quarantine does not,
+the *reporter* restores these where only a moderator restores quarantine, and
+`listQuarantined` is a 50-item moderator worklist that ordinary removals would swamp.
+
+**Unlike quarantine it is readable — by exactly one person.** Quarantine is denied to
+everyone because its whole purpose is withholding content from readers. A removal is the
+opposite: it is the reader's own content in their own bin, and they have to see what is in
+there to decide what to bring back. The rule is
+`resource.data.data.reporter == userDoc()`, which also constrains the query — My Signals
+filters on `data.reporter`, so every document the query can return already satisfies the
+rule, and an unfiltered `list` is denied outright. Everyone else, moderators included,
+reads only the projected summary through `listQuarantined`.
+
+**Only the document moves.** `comments`, `events`, `takeoverRequests` and the Storage
+photos all stay at `signals/{id}/…`, which is what makes a restore lossless — and means
+anything cleaning up after a removal must reach for `signals/{id}`, never for anything
+under `removedSignals`. Same trick, same trap, as §7.16.
 
 #### Server-only collections (no client rule match ⇒ denied by default)
 
@@ -811,9 +863,10 @@ volunteers* axis. Pinned comments (§9.1) are now unblocked by this field.
 | `userCounters/{uid}` | owner | owner, `{unread,updatedAt}` only, `unread >= 0` | same | — |
 | `publicProfiles/{uid}` | `get` any signed-in; **`list` denied** | owner, `name` only, validated | owner, only `name` may change | owner |
 | `signals/{id}`, `signals_test/{id}` | **public** | signed-in, `reporter == self`, bounded fields, `urgency` 0–2 **if present**, `caseHolder == self` **if present**, `holderActiveAt` **rejected outright** | reporter (anything) *or* the **case holder** changing only `status`/`urgency`/`helpNeededTags`/`lastUpdatedBy`/`holderActiveAt`. `caseHolder` denied on **both** branches; `holderActiveAt` pinned to `request.time` | reporter only |
-| `…/comments/{id}` | public | signed-in, `author == self`, `text` 1–2000 when present | — | parent signal's reporter (delete cascade) |
-| `…/events/{id}` | public | signed-in, `actor == self`, `type` in the closed vocabulary, `note` 1–500 **required**, levels 0–2, `createdAt` a timestamp | **denied** | parent signal's reporter (delete cascade) |
-| `…/takeoverRequests/{uid}` | signed-in | signed-in **non-anonymous**, id == self, `requester == self`, `status == 'pending'`, `note` 1–500, exact key set, and **not** the current holder | re-file after the cooldown (must also pass the create validator), *or* withdraw `pending → withdrawn` with `resolvedAt == request.time`. Approving/declining is the callable | parent signal's reporter only (delete cascade) — **not** the requester, see §4.8 |
+| `…/comments/{id}` | public | signed-in, `author == self`, `text` 1–2000 when present | — | parent signal's reporter (**legacy cascade** — retiring, see below) |
+| `…/events/{id}` | public | signed-in, `actor == self`, `type` in the closed vocabulary, `note` 1–500 **required**, levels 0–2, `createdAt` a timestamp | **denied** | parent signal's reporter (**legacy cascade** — retiring, see below) |
+| `…/takeoverRequests/{uid}` | signed-in | signed-in **non-anonymous**, id == self, `requester == self`, `status == 'pending'`, `note` 1–500, exact key set, and **not** the current holder | re-file after the cooldown (must also pass the create validator), *or* withdraw `pending → withdrawn` with `resolvedAt == request.time`. Approving/declining is the callable | parent signal's reporter only (**legacy cascade** — retiring) — **not** the requester, see §4.8 |
+| `removedSignals/{id}` | the reporter named in `data.reporter`, **`list` only with that filter** | **denied** | **denied** | **denied** — `signalRemoval` moves documents in and out through the Admin SDK (§4.1, §7.5) |
 | `{path=**}/comments/{id}` (group) | signed-in | — | — | — |
 | `feedback/{id}` | denied | signed-in, `userId == self`, bounded message/type/email | denied | denied |
 
@@ -824,16 +877,36 @@ and the ownership four: `isCaseHolder()`, `isParentCaseHolder()`,
 `isNotTouchingOwnership()`, `isValidHolderStamp()`, `isValidInitialCaseHolder()`,
 `isTakeoverRequestCreate()`.
 
+> **The three cascade deletes are retiring, and the flip is a DEPLOY ORDER.**
+> `comments`, `events` and `takeoverRequests` each grant the parent signal's reporter a
+> delete for one reason only: the delete-signal cascade used to run on the client and had
+> to be able to empty them, or deleting a signal orphaned them forever. On `events` that
+> made the case timeline tamper-*evident* rather than tamper-proof. On `comments` it is
+> worse than an audit problem — there is no author-delete rule at all, so the standing
+> effect is that **a comment's author cannot delete their own comment but the signal's
+> reporter can delete anyone's**, unaudited, which is precisely the power master spec
+> §18.3 routes through `moderateAction.deleteComment`.
+>
+> That cascade is gone: `signalRemoval` moves the document and `purgeRemoval` erases the
+> descendants with an Admin SDK `recursiveDelete`, which bypasses rules entirely. Nothing
+> in the new client deletes a subcollection document. **All three therefore become
+> `allow delete: if false`, and `isParentSignalReporter()` becomes dead code — but not in
+> the same deploy as the rest of #68.** Every already-released build still runs the old
+> cascade, whose one batch covers all three subcollections; denying it makes that batch
+> fail atomically, so nothing is deleted and the user gets `failedToRemoveSignal` on any
+> signal with history. Clean, but a broken Delete button until they update. Flip it only
+> once the release carrying `signalRemoval` is on the installed base — the same sequencing
+> #67 and #71 are waiting on. See §13.3.
+
 > **An event does not authorise the change it describes.** A `status_change` event
 > passes `isSignalEventCreate()`; the signal write next to it in the same batch still has
 > to pass `isCaseHolderUpdate()` separately. The two are independent on purpose — a
 > client that writes only the event changes nothing.
 >
-> **The reporter can still delete events**, which is what lets the client-side
-> delete-signal cascade empty the subcollection — and what makes the history
-> tamper-*evident* rather than tamper-proof. Closing it means moving deletion
-> server-side (Admin SDK recursive delete, like `deleteAccount`), after which the rule
-> becomes `if false`. Tracked as HelpAPaw/Flutter#68.
+> **The reporter can still delete events** until the flip described above lands, which
+> is what keeps the history tamper-*evident* rather than tamper-proof. The server-side
+> replacement is built (`signalRemoval`); what is outstanding is only the rules deploy,
+> and its ordering. Tracked as HelpAPaw/Flutter#68.
 
 > **`isStatusOnlyUpdate` became `isCaseHolderUpdate` with case ownership (§4.8), and
 > the load-bearing clause moved.** The old function let *any* signed-in user change
@@ -1156,10 +1229,18 @@ phone, upload an avatar to `profile_photos/{uid}.jpg`, view signal/comment count
 
 **Account deletion:** `AuthService.deleteAccount()` calls the `deleteAccount` callable
 over plain HTTPS (see §7.14 for why), then signs out. Server-side (§9) it strips phone
-numbers from authored signals in both collections, deletes the notifications
-subcollection and `userLocations/{uid}`, tombstones `users/{uid}` and
+numbers from authored signals in both collections **and from quarantined ones**, deletes
+the notifications subcollection and `userLocations/{uid}`, tombstones `users/{uid}` and
 `publicProfiles/{uid}` as `"Deleted user"`, deletes the avatar, and finally deletes the
 Auth user.
+
+**It PURGES the user's `removedSignals` outright, rather than anonymizing them.** The
+sweeps above anonymize because a live or hidden signal is community content other people
+may still be acting on. A *removed* signal is content its author already took down, so
+nothing is lost by erasing it — and purging means there is no fourth resting place for a
+phone number to survive account deletion, which is exactly the bug the quarantine sweep
+had to be added to fix when hiding introduced the third. The purge takes the photos and
+subcollections with it, which the anonymizing sweeps deliberately leave alone.
 
 **Sign-out** (drawer): best-effort `onUserLogout()` (arrayRemove this device's FCM
 token, 5s timeout) → `GoogleSignIn.signOut()` (so the next sign-in shows the chooser) →
@@ -1426,11 +1507,43 @@ that has regressed repeatedly (R5-004, R6-001, R6-002), which is why it lives ou
 - **Comments:** text field capped at 2000 chars, whitespace-only input dropped
   client-side; posting also subscribes the author to the signal. Author names resolve
   through `publicProfiles`.
-- **Delete signal:** confirm → best-effort Storage photo deletes → batch-delete the
-  `comments`, `events` **and `takeoverRequests`** subcollections → delete the doc → pop.
-  Missing any one orphans it: Firestore keeps subcollection documents when the parent
-  document is deleted, and nothing is left to reach them by. There is no wildcard —
-  **adding a subcollection to a signal means adding it to `_deleteHistory`.**
+- **Remove signal** (#68): two dialogs, then one call to `signalRemoval`.
+
+  **The first dialog exists because of what people were actually using Delete for.** A
+  reporter whose animal has been helped reaches for Delete rather than Resolved — the case
+  is finished, so the post feels like clutter. That threw away the outcome others could
+  have learned from and, while statistics were a live `count()`, the credit for having
+  reported it at all. So an **open** case is asked *"Is this case resolved?"* with
+  **Mark as resolved** as the primary action; an already-resolved one goes straight to the
+  removal confirmation and is not nagged. Resolving from here reuses `_updateSignalStatus`,
+  so it asks for the same mandatory update note and offers claim-to-act exactly as the
+  dropdown does — resolving from the delete button must not produce a different kind of
+  history from resolving the normal way.
+
+  **The removal itself is server-side.** `signalRemoval` moves the document to
+  `removedSignals` (§4.1) and leaves the subcollections and photos where they are, so a
+  restore is lossless; a scheduled purge erases everything after 30 days, and My Signals
+  (§7.11) is where the user restores or erases it sooner. It **refuses while an open
+  `report` names the signal** — post something harmful, withdraw it before a moderator
+  reaches the queue, and the evidence is gone; that is the one abuse a recoverable removal
+  invites, and it is closed here rather than by changing what removal means for everyone
+  else. The client shows `signalUnderReview` for that `failed-precondition` and
+  `failedToRemoveSignal` for anything else.
+
+  **What this replaces**, and why none of it comes back: a client-side cascade of
+  best-effort Storage deletes plus one batch emptying `comments`, `events` and
+  `takeoverRequests` **by name**. It could not be finished (an app killed mid-cascade
+  orphaned them permanently — Firestore keeps subcollection documents when the parent goes,
+  and `isParentSignalReporter` then *errors* on the missing parent, so nothing could go
+  back for them), it forced three delete rules open (§5.1), and it carried a standing
+  hazard: *adding a subcollection to a signal meant remembering to add it to
+  `_deleteHistory`*. `recursiveDelete` has no list to forget.
+
+  **`_hasNavigatedAway` is still claimed before the call** (R6-002), for a changed reason:
+  the local cache no longer applies the delete instantly — the server does the write — but
+  the still-live listener does report the document missing the moment that lands, and the
+  `deletedWhileOpen` branch would pop a route of its own and replace the success message
+  with the *other* user's "no longer available". The claim is released if the call throws.
 - **Leaving:** `_leaveScreen` is the single exit — it claims the exit
   (`_hasNavigatedAway`), `popUntil`s away anything this screen pushed (the imperative
   photo gallery, the edit route, sheets) so the pop targets *this* route and not
@@ -1727,9 +1840,22 @@ document but suppress the email.
 
 ### 7.11 My signals
 
-`/my_signals` streams the active signals collection filtered by
-`reporter == users/{uid}`, ordered by `createdAt desc`, showing status colour, type icon
-and date. Signed-out users get a sign-in prompt.
+`/my_signals` has **two tabs**, and the second one is what makes removal a bin rather than
+a delete: without somewhere to see removed signals, *"you can restore it for 30 days"* is a
+promise the app never keeps — the user taps Remove, the signal vanishes, and nothing they
+can reach says otherwise.
+
+- **My Signals** — streams the active signals collection filtered by
+  `reporter == users/{uid}`, ordered by `createdAt desc`, showing urgency colour, tag icon
+  and date. Signed-out users get a sign-in prompt.
+- **Removed** (#68) — streams `removedSignals` filtered by `data.reporter`, which is the
+  only shape the rules permit (§4.1); the test-mode split is applied in memory rather than
+  as a second `where`, so one composite index is enough. Each row carries **the purge date,
+  not the removal date** — what the user needs from it is how long they still have — plus
+  **Restore** and **Delete permanently**. The tab is the only `StatefulWidget` here,
+  because an in-flight action has to disable its own row: both are server round trips, and
+  a double tap on Restore races two writes at the same id, the second of which comes back
+  `already-exists` and reports a failure for something that in fact succeeded.
 
 ### 7.12 Static pages
 
@@ -2048,8 +2174,10 @@ page is bilingual with a client-side language switch.
 | `deleteAccount` | callable (App Check) | Anonymize + tombstone + delete (§7.2) |
 | `caseOwnership` | callable (App Check) | **Case ownership** (§4.8) — claim / release / approveRequest / declineRequest. Rejects anonymous callers; writes the signal, the `ownership_transfer` event and the subscription in one batch. `functions/src/caseOwnership.ts` |
 | `onTakeoverWritten` / `onTestTakeoverWritten` | **write** `…/takeoverRequests/{uid}` | **One** trigger per collection for both outcomes — tell the current holder somebody offered, or tell the requester they were answered. Audience of one either way, dispatched from the before/after pair with no read. `onDocumentWritten` rather than `onDocumentCreated` because a re-file after the cooldown makes a request pending without creating a document (§4.8); one trigger rather than two because a create and an update trigger on the same path would invoke two functions per write. A *withdrawal* matches neither branch — nobody needs telling that somebody changed their mind |
-| `listQuarantined` | callable (App Check) | Lists hidden signals as **summaries** for the Hidden tab (§7.16). Separate from `moderateAction` because that endpoint's contract is a mandatory note plus an audit entry, and neither belongs on a read |
+| `listQuarantined` | callable (App Check) | Lists hidden signals as **summaries** for the Hidden tab (§7.16). Separate from `moderateAction` because that endpoint's contract is a mandatory note plus an audit entry, and neither belongs on a read. Takes an optional `source` — `quarantine` (default, so an older client keeps getting the answer it always got) or `removed`, so a moderator investigating an account can see what it withdrew. The projection is what makes that safe: only title, actor and timestamp ever leave the server |
 | `moderateAction` | callable (App Check) | **All eight moderator actions** (§7.16). Verifies `moderators/{uid}` server-side, acts, writes a `moderationActions` audit entry and resolves the originating report — implementation in `functions/src/moderation.ts` |
+| `signalRemoval` | callable (App Check) | **Removing a signal** (§7.5) — remove / restore / deletePermanently, the reporter's own delete made recoverable. Authorizes every action against the stored `reporter`; **allows anonymous callers**, unlike `caseOwnership`, because released builds create signals from anonymous sessions. `functions/src/removeSignal.ts` |
+| `purgeRemovedSignals` | schedule `0 4 * * 0` UTC | Erases removals past `REMOVED_RETENTION_DAYS` (30) — the signal's subcollections via `recursiveDelete`, its Storage photos by prefix, then the removal record **last**, so a failed run is resumable. The purge is what makes a bounded recovery window different from indefinite retention |
 | `cleanupAnonymousUsers` | schedule `0 3 * * 0` UTC | Deletes anonymous Auth users with no linked providers inactive > **90 days**, clearing Firestore data first so a failed cleanup retries next run. `ANON_CLEANUP_DRY_RUN` flag available |
 | `signalLink` | HTTPS (Hosting rewrite `/signal/**`) | Public share/fallback page (§7.9) |
 
@@ -2167,6 +2295,9 @@ without the native monitor is not an error.
 | `signals`, `signals_test` | `status ASC, location.geohash ASC, createdAt ASC` | arrival catch-up |
 | `users` | `notificationPreferences.enabled ASC, notificationPreferences.regionOfInterest.geohash ASC` | region fan-out path |
 | `comments` (field override) | `author ASC` collection-group | profile comment count |
+| `removedSignals` | `data.reporter ASC, removedAt DESC` | the Removed tab (§7.11) |
+| `removedSignals` | `collection ASC, removedAt DESC` | `listQuarantined(source: removed)` |
+| `reports` | `targetType ASC, targetId ASC, status ASC` | the open-report check that refuses a removal (§7.5) |
 
 A missing composite index surfaces only as a caught geo-query failure — hence the
 explicit debug log in `NearbySignalChecker._queryNearbySignals`.
@@ -2404,6 +2535,31 @@ of that: comment locks stop being enforced and a reporter can clear the
 live rules afterwards.** Whichever way the drift points, the check is the same:
 read the deployed ruleset, do not assume the checkout matches it.
 
+**Removal (#68) ships in five steps, and step 5 is the one that waits.**
+
+1. **Deploy the functions** — `signalRemoval`, `purgeRemovedSignals`, the
+   `recordSignalPosted` increment, `deleteAccount`'s removal purge, `listQuarantined`'s
+   `source`. All additive; nothing released calls any of it.
+2. **Run `functions/scripts/backfill_signals_posted.js`** (dry run, then `--apply`).
+   **Before step 4, not after**: it counts the live `signals` collection, so once people
+   start removing signals the source it counts from is already gone and it would write
+   numbers *lower* than the ones it exists to restore.
+3. **Deploy the rules and indexes** — the `removedSignals` match plus its two indexes and
+   the `reports` one. Also additive: no released build touches that collection, and the
+   three cascade delete rules are **deliberately left as they are** at this point.
+4. **Release the app.**
+5. **Once that release is on the installed base**, flip `comments`, `events` and
+   `takeoverRequests` to `allow delete: if false`, delete `isParentSignalReporter()`, and
+   invert the corresponding assertions in `firestore-tests/rules.test.js` (they run once
+   per collection — see the loop at the top of the file).
+
+Step 5 cannot ride along with step 3, and that is the whole reason it is numbered
+separately: every already-released build still runs the old client cascade, whose single
+batch covers all three subcollections. Denying it makes that batch fail atomically — so
+nothing is deleted and the user gets an error rather than a half-deleted signal, which is
+clean but is still a Delete button that does not work until they update. This is the same
+sequencing #67 and #71 are already waiting on, and it is now the third such item.
+
 ### 13.4 API key restrictions
 
 The release iOS API key must allow: Token Service, Firebase Installations, Firebase
@@ -2423,7 +2579,11 @@ silently breaks Auth/Firestore/FCM in release builds only.
 | iOS deferred deep links | Deliberately not implemented (clipboard prompt cost) |
 | iOS unread badge count | **Fixed 2026-08-04** — real `badge: N` from `userCounters`, cleared on resume via the native badge channel. Accepted consequence: on pre-release builds the badge climbs and never clears (§7.13) |
 | In-app inbox retention | 90 days via a Firestore TTL policy on `expiresAt`; the policy is applied with `gcloud`, **not** by `firebase deploy` |
-| Signal history is client-written and reporter-deletable | Open — tamper-*evident*, not tamper-proof. The reporter can delete individual `events`, because the delete-signal cascade runs on the client. Fix is a `deleteSignal` callable (Admin SDK recursive delete), after which the rule becomes `if false`. Tracked as HelpAPaw/Flutter#68, which also covers hiding signals instead of deleting them |
+| Signal history is client-written and reporter-deletable | **Fix built, deploy pending** (#68). `signalRemoval` moves removal server-side and `purgeRemoval` erases descendants with `recursiveDelete`, so nothing in the new client deletes a subcollection document. What remains is flipping `comments`, `events` and `takeoverRequests` to `if false` — **step 5 of §13.3**, which must wait for the release, because denying them breaks the old client's cascade batch. `comments` was the worse half all along: no author-delete rule exists, so a reporter can delete anyone's comment on their own signal, unaudited |
+| A removed signal is retained for 30 days | By design (#68), and the trade the recovery window buys. `REMOVED_RETENTION_DAYS` is enforced by `purgeRemovedSignals`, and "Delete permanently" plus `deleteAccount` are the immediate-erasure paths. **The privacy policy must state the window** — master spec §A2 still lists the data-retention policy as unwritten, and a disclosed bounded window with a purge that runs is the whole basis for this being a bin rather than indefinite retention |
+| A removed signal's comments, events and photos stay readable | Open — the same two gaps hiding already has, now reachable more often. `signalRemoval` moves only the document; `comments`/`events` are `read: if true` and `storage.rules` grants signal photos `read: true` unconditionally, so anyone holding the signal id keeps them until the purge. Requires the id to exploit |
+| Contribution stats under-report for accounts that already removed signals | Open and permanent for those accounts. The backfill counts the live `signals` collection, so anything deleted under the old hard-delete path is not there to count. Nothing can recover it — the documents are gone |
+| Moderators cannot see removed signals in the app | Open — `listQuarantined` takes `source: 'removed'` and the Dart model carries `QuarantineSource`, but no tab renders it. The abuse case it would serve is already blocked at source: `signalRemoval` refuses while an open report names the signal |
 | Update note not in the push/inbox body | Open — a status-change push still reads `{signalTitle}: {status}` with no note. Needs `handleSignalUpdated` to query the newest event (safe: the batch is atomic) or a `lastStatusNote` field on the signal, which would widen `isCaseHolderUpdate`'s allow-list |
 | Arrival catch-up headlines a legacy signal as "Rescue needed" | **Fixed 2026-08-18** (§4.4) — `_NotifiableSignal` now carries `Signal.legacySignalTypeFrom(data)`, the notification body resolves through `primaryOfSignal`, and the inbox row it writes stores `HelpTag.displayCodes` rather than the matched list. Matching is untouched. Disappears with the rest of the shim |
 | `events` rules block deployed then reverted | **Re-deployed** — the moderation deploy carried it back out; verified against the live ruleset 2026-08-18. The standing hazard is unchanged and now points at the moderation blocks instead: see §13.3 |
@@ -2448,8 +2608,10 @@ silently breaks Auth/Firestore/FCM in release builds only.
 
 ## 15. Document changelog
 
+
 | Date | Change |
 |---|---|
+| 2026-08-21 | **Replaced deleting a signal with removing it (#68).** Deleting was a client-side cascade — best-effort Storage deletes, then one batch emptying `comments`, `events` and `takeoverRequests` **by name**. It could not be finished (an app killed mid-cascade orphaned the subcollections permanently, and `isParentSignalReporter` then *errors* on the missing parent, so nothing could go back for them), it forced three delete rules open, and it carried the standing hazard that adding a subcollection meant remembering to add it to `_deleteHistory`. **`signalRemoval` moves the document to `removedSignals`** and leaves the subcollections and photos where they are — the same move-not-a-flag shape as `hideSignal`, for the same reasons, and a separate collection because these expire, the *reporter* restores them, and `listQuarantined` is a 50-item moderator worklist ordinary removals would swamp. `purgeRemovedSignals` erases everything after `REMOVED_RETENTION_DAYS = 30`, deleting the removal record **last** so a failed run is resumable; `deleteAccount` purges a departing user's removals outright rather than anonymizing them, so there is no fourth place for a phone number to survive. **The motivating problem was not audit but statistics**: people reached for Delete to mean "this case is finished", and the profile counted signals with a live `count()` over `signals` — so it measured *signals still visible*, and every removal, hide or future §4.10 archive took the credit with it. Master spec §3.5.1 requires the opposite. Counting moved to a server-written `publicProfiles.signalsPosted`, which needs **no rules change** because that document already restricts clients to `name` (`userCounters` would have been forgeable). Hiding alone would not have fixed it, since a hidden signal has to leave `signals` too. An open case is now asked "is this resolved?" first, reusing the ordinary status path so the history is identical; removal is refused while an open report names the signal, which is the one abuse a recoverable removal invites. **The three cascade delete rules are deliberately left permissive here** — flipping them breaks every released build's cascade batch, so it is step 5 of §13.3, behind the app release, alongside #67 and #71. 258 rules tests, 260 Dart tests, 107 functions tests. §4.1, §5.1, §7.2, §7.5, §7.11, §9, §11, §13.3, §14. |
 | 2026-08-20 | **Built case ownership (master spec §4.5)** — the "who is responsible for this animal right now" axis the app had never had, and the thing several later spec features (pinned comments §9.1, tag completion §4.2, Red Alert authority §5.2, fundraising verification §13) all attach to. Before this, *any* signed-in user could move *any* stranger's signal to Resolved with nothing recording that they had taken it on. **`caseHolder` has three states and the distinction is the whole design**: absent = written before ownership, reporter holds it by derivation (permanent, never backfilled — the `urgency` precedent); a ref = held; explicit `null` = *released*. Both ways of collapsing that fail silently and in opposite directions, so the derivation is a guarded ×3 invariant (§12.5d). **Status/urgency/tags moved to reporter-or-holder**: `isStatusOnlyUpdate` became `isCaseHolderUpdate` and the load-bearing clause moved from the *field list* to `isCaseHolder()` — which is why `urgency` may now be in that list without weakening §5.2. Non-holders get **claim-to-act**: the dropdown stays live and choosing a status offers to take the case on, one confirmation and one note, applied by the server in one batch (so one tap is also one notification — the ownership branch of `handleSignalUpdated` outranks the status branch and carries `statusCode`). **Transfers are a callable, not rules**, because they are two documents that must land together, because the timeline entry has to be unforgeable, and because staleness needs a server clock: `ownership_transfer` is the first `serverOnly` event type and is deliberately *absent* from `isSignalEventCreate()`, with a guard test asserting the absence so nobody makes the vocabulary test pass by removing the property. **The deadlock a silent holder would otherwise create has three escapes** — ask (`takeoverRequests`, uid-keyed so the id is the rate limit), take a released case, or take one stale past `STALE_HOLDER_DAYS = 14` — none of which needs a moderator. `caseOwnership` is also the first write path to reject anonymous callers outright, which a *new* surface can afford where #67 cannot. **Every action runs in a transaction**, because deciding from a plain read and then committing a batch takes no read lock and lets two simultaneous claims both win. **A declined request can be re-filed after a one-day cooldown** — permanence would be wrong (a case looks different two weeks on) but re-asking notifies the holder, so it has to cost something; the cooldown is only real because withdrawing is an *update* and the requester has no delete at all, otherwise withdraw-and-refile is an unlimited loop straight past it, and `onTakeoverRequested` is an `onDocumentWritten` because a re-file creates no document. `functions/src/signalRefs.ts` extracted from `moderation.ts` on its second caller. 251 rules tests, 234 Dart tests, 75 functions tests. §4.1, §4.6, §4.8, §5.1, §7.5, §9, §12, §14. **Rollout inverts the usual order** — functions, then the app release, then the rules — because the rules change narrows who may write `status`, and a released client that is neither reporter nor holder would otherwise get a bare `permission-denied`. |
 | 2026-08-20 | **Let moderators act on their own judgement, and stopped them acting on themselves** (§7.16, §14). Every moderator power was reachable only from a report: the action sheet took a non-nullable `reportId` and read each row's target out of the raw report document, and its one call site was the queue tile. So a moderator who came across a problem post while browsing had to report it — to themselves — before they could touch it, which master spec §18.3 never intended. Closed **client-side only**: `moderateAction` already treated `reportId` as optional and skipped the report half when absent, so no rules change, no new callable, no rules deploy. The sheet is now target-shaped (`ModerationTarget`, with `fromReport` keeping the never-default-`'signals'` and unknown-`targetType` safety properties), entered from a shield in the signal details app bar and from a Report/Delete chooser on a comment's long-press; "Dismiss report" renders only when there *is* a report. Hiding from the details screen returns `targetRemoved` so the screen leaves rather than reporting the signal as deleted. Added in the same pass, since the browsing entry point makes it reachable: **`requireNotOwnContent`**, refusing any action on the moderator's own signal or comment with `failed-precondition` — placed inside `moderation.ts`'s own `loadSignal` so no future moderator action can forget it, with `deleteComment` and `restoreSignal` calling it directly and `addNote` exempt. (That wrapper sits over the shared `signalRefs.loadSignal`, which case ownership also uses — the self-check deliberately does **not** live in the shared helper, because acting on your own case is `caseOwnership`'s normal path, not an abuse.) Guarded by a source-reading coverage test, because a new action that skipped the check would compile perfectly and fail silently. 234 Dart tests, 67 functions tests, 197 rules tests. **`moderateAction` deployed to help-a-paw-dev and device-verified on SM X205 + SM J610FN 2026-08-21** — six actions performed with an empty report queue, each audited with **no `reportId`**; lock/unlock and label set/clear round-tripped (the direction the queue path could never reach); hide popped to the map and restore skipped the fan-out; and a report filed against the moderator's *own* signal was refused `failed-precondition` with the signal left byte-identical. |
 | 2026-08-01 | Initial specification, written from the codebase at `6.0.1+125` (branch `dev`). |

@@ -38,10 +38,13 @@ import 'report_dialog.dart';
 import 'update_note_dialog.dart';
 import 'urgency_picker.dart';
 import '../models/moderation_target.dart';
+import '../models/removed_signal.dart';
 import '../models/report_reason.dart';
 import '../services/app_preferences_service.dart';
+import '../services/callable_client.dart';
 import '../services/case_ownership_service.dart';
 import '../services/moderation_service.dart';
+import '../services/signal_removal_service.dart';
 import 'moderation_action_sheet.dart';
 import 'section_header.dart';
 import '../services/public_profile_service.dart';
@@ -76,6 +79,20 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   final _comments = _HistorySource('comments');
   final _events = _HistorySource('events');
   late final List<_HistorySource> _historySources = [_comments, _events];
+
+  /// Removing, and the two dialogs in front of it. See [_confirmRemoveSignal].
+  final _removalService = SignalRemovalService();
+
+  /// Whether a removal is in flight.
+  ///
+  /// The removal is a network round trip now, not a local cache write, so the
+  /// button stays on screen and tappable for as long as it takes. Without this
+  /// a second tap fires a second call — which fails `not-found` because the
+  /// first one succeeded, and whose `catch` hands back the exit claim the first
+  /// one took. The listener's `deletedWhileOpen` branch then pops a route of
+  /// its own and replaces the success message with "no longer available",
+  /// which is R6-002 arriving by a different door.
+  bool _isRemoving = false;
 
   /// Whether the viewer holds the moderator role.
   ///
@@ -460,12 +477,14 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                   ),
                 if (isAuthor)
                   Semantics(
-                    label: l10n.deleteSignal,
+                    label: l10n.removeSignal,
                     button: true,
-                    enabled: true,
+                    enabled: !_isRemoving,
                     child: IconButton(
                       icon: const Icon(Icons.delete),
-                      onPressed: () => _confirmDeleteSignal(),
+                      onPressed: _isRemoving
+                          ? null
+                          : () => _confirmRemoveSignal(signal),
                     ),
                   ),
                 Semantics(
@@ -2027,13 +2046,63 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     }
   }
 
-  Future<void> _confirmDeleteSignal() async {
+  /// Take a signal down — the author's own "delete", made recoverable (#68).
+  ///
+  /// Two dialogs, and the first one exists because of what people were actually
+  /// using Delete for. A reporter whose animal has been helped reaches for
+  /// Delete rather than Resolved: the case is finished, so the post feels like
+  /// clutter. That silently threw away the outcome other people could have
+  /// learned from, and — until statistics moved off the live collection — the
+  /// credit for having reported it. So an OPEN case is asked the question
+  /// first, with Resolved as the primary action; an already-resolved one goes
+  /// straight to the removal confirmation and is not nagged.
+  ///
+  /// The removal itself is one call to `signalRemoval`. Everything the old
+  /// client-side cascade did — the photos, the three subcollections, the
+  /// document — now happens server-side, which is what lets the rules stop
+  /// granting the reporter deletes on `comments`, `events` and
+  /// `takeoverRequests`. See `SignalRemovalService`.
+  Future<void> _confirmRemoveSignal(Signal signal) async {
     final l10n = AppLocalizations.of(context);
+
+    if (SignalStatus.fromCode(signal.status).isOpen) {
+      final choice = await showDialog<_RemoveChoice>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(l10n.removeSignalCaseOpenTitle),
+          content: Text(l10n.removeSignalCaseOpenBody),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, _RemoveChoice.remove),
+              child: Text(l10n.removeAnyway),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, _RemoveChoice.resolve),
+              child: Text(l10n.markAsResolved),
+            ),
+          ],
+        ),
+      );
+      if (choice == null || !mounted) return;
+      if (choice == _RemoveChoice.resolve) {
+        // Reuses the ordinary status path, so this asks for the same mandatory
+        // update note and offers claim-to-act exactly as the dropdown does.
+        // Resolving from here must not produce a different kind of history
+        // from resolving the normal way.
+        await _updateSignalStatus(
+          signal,
+          signal.status,
+          SignalStatus.resolved.code,
+        );
+        return;
+      }
+    }
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(l10n.deleteSignal),
-        content: Text(l10n.confirmDeleteSignal),
+        title: Text(l10n.removeSignal),
+        content: Text(l10n.confirmRemoveSignal(RemovedSignal.retentionDays)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -2042,105 +2111,58 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: Text(l10n.delete),
+            child: Text(l10n.remove),
           ),
         ],
       ),
     );
 
     if (confirm != true || !mounted) return;
+    // Re-checked after the dialogs, not just on the button: the taps that open
+    // them are cheap, and two dialogs is plenty of time for a first removal to
+    // still be in flight behind them.
+    if (_isRemoving) return;
+    setState(() => _isRemoving = true);
 
+    // Claim the exit before the call, not after it (R6-002). The reason has
+    // changed but not gone away: the local cache no longer applies a delete
+    // instantly — the server does the write — but the still-live listener does
+    // report the document missing the moment that lands, and the "deleted while
+    // you were reading it" branch would then pop a route of its own and replace
+    // the message below with the *other* user's "no longer available".
+    _hasNavigatedAway = true;
     try {
-      final signalRef = _signalRef;
-
-      // Read signal data to get photo URLs before deletion
-      final signalDoc = await signalRef.get();
-      if (signalDoc.exists) {
-        final signal = Signal.fromJson(signalDoc.data()!);
-
-        // Delete photos from Storage (best-effort)
-        for (final photoUrl in signal.photoUrls) {
-          try {
-            final ref = FirebaseStorage.instanceFor(
-                    bucket: 'gs://help-a-paw-dev.appspot.com')
-                .refFromURL(photoUrl);
-            await ref.delete();
-          } catch (_) {
-            // Storage deletion failed, continue with the rest
-          }
-        }
-      }
-
-      // Batch-delete both history subcollections. `events` has to be included:
-      // Firestore keeps subcollection documents when the parent document is
-      // deleted, so anything missed here is orphaned with nothing left to reach
-      // it by. This is also the only reason the rules let the reporter delete
-      // events at all — see the known gap on that rule (HelpAPaw/Flutter#68).
-      await _deleteHistory(signalRef);
-
-      // Claim the exit before the delete, not after it: Firestore applies the
-      // delete to the local cache immediately, so the still-live listener
-      // reports the document missing while this method is parked on the await.
-      // The "deleted while you were reading it" branch would then pop a route
-      // of its own and replace the success message below with the *other*
-      // user's "this signal is no longer available" (R6-002).
-      _hasNavigatedAway = true;
-      await signalRef.delete();
+      await _removalService.remove(widget.signalId);
 
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(l10n.signalDeletedSuccessfully),
+          content: Text(l10n.signalRemovedSuccessfully),
           backgroundColor: Colors.green,
         ),
       );
-
       _leaveScreen();
     } catch (e) {
-      // The signal is still there, so give the exit claim back.
+      // Still there, so give the exit claim back.
       _hasNavigatedAway = false;
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.failedToDeleteSignal),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      if (!mounted) return;
+      // `failed-precondition` is the one refusal worth explaining: the signal
+      // has an open report against it, so withdrawing it would take the
+      // evidence out from under the moderator looking at it. Anything else is
+      // a generic failure the user can only retry.
+      final message = e is CallableException && e.code == 'failed-precondition'
+          ? l10n.signalUnderReview
+          : l10n.failedToRemoveSignal;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
+      );
+    } finally {
+      // Irrelevant on success — the screen is gone — and load-bearing on
+      // failure: without it the button stays disabled for good and the user
+      // cannot retry. The `mounted` check is the one this file has been fixed
+      // for before; missing it leaves the control permanently dead.
+      if (mounted) setState(() => _isRemoving = false);
     }
-  }
-
-  /// Empties every subcollection ahead of deleting the signal.
-  ///
-  /// **Firestore keeps subcollection documents when the parent document is
-  /// deleted**, and nothing is left to reach them by — so a subcollection missed
-  /// here is orphaned permanently. Adding one to the signal means adding it to
-  /// this list; there is no wildcard.
-  ///
-  /// The reads are independent, so they run concurrently and their deletes share
-  /// one batch: two round trips on a tap that shows no progress, instead of the
-  /// two-per-collection that reading and committing each in turn would cost.
-  ///
-  /// One batch also makes the deletes atomic — a signal cannot end up with its
-  /// comments gone and its history intact. It is bounded by what a single signal
-  /// accumulates, and a 500-document signal has never existed; if one ever does,
-  /// this is where the chunking goes.
-  Future<void> _deleteHistory(DocumentReference<Object?> signalRef) async {
-    final snapshots = await Future.wait([
-      signalRef.collection('comments').get(),
-      signalRef.collection('events').get(),
-      signalRef.collection('takeoverRequests').get(),
-    ]);
-
-    final docs = [for (final snapshot in snapshots) ...snapshot.docs];
-    if (docs.isEmpty) return;
-
-    final batch = FirebaseFirestore.instance.batch();
-    for (final doc in docs) {
-      batch.delete(doc.reference);
-    }
-    await batch.commit();
   }
 
   void _showImageSourceDialog() {
@@ -2477,6 +2499,13 @@ class _FullScreenPhotoGalleryState extends State<_FullScreenPhotoGallery> {
 /// Exists so the two sources move as units instead of as six parallel fields:
 /// every predicate on this screen asks the same question of both, and a third
 /// source would otherwise mean three more fields and four more boolean arms.
+/// What the resolve-first dialog came back with.
+///
+/// An enum rather than a nullable bool because there are genuinely three
+/// answers — mark it Resolved, remove it anyway, and dismissed — and `null`
+/// already carries the third. See [_SignalDetailsScreenState._confirmRemoveSignal].
+enum _RemoveChoice { resolve, remove }
+
 class _HistorySource {
   _HistorySource(this.collection);
 

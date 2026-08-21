@@ -727,15 +727,42 @@
   "completeNotificationSetup": "Complete notification setup",
 
   "editSignal": "Edit Signal",
-  "deleteSignal": "Delete Signal",
-  "confirmDeleteSignal": "Are you sure you want to delete this signal? This action cannot be undone.",
   "signalUpdatedSuccessfully": "Signal updated successfully",
-  "signalDeletedSuccessfully": "Signal deleted successfully",
   "signalNoLongerAvailable": "This signal is no longer available",
   "signalNoLongerAvailableHint": "It may have been deleted by the person who reported it.",
   "backToMap": "Back to map",
   "failedToUpdateSignal": "Failed to update signal. Please try again.",
-  "failedToDeleteSignal": "Failed to delete signal. Please try again.",
+  "removeSignal": "Remove signal",
+  "removeSignalCaseOpenTitle": "Is this case resolved?",
+  "removeSignalCaseOpenBody": "If the animal has been helped, mark the case Resolved instead. Your report and its history stay on the map for others to learn from, and it still counts towards your profile.",
+  "markAsResolved": "Mark as resolved",
+  "removeAnyway": "Remove anyway",
+  "confirmRemoveSignal": "This signal will be taken off the map. You can restore it from My Signals for the next {days} days, after which it is deleted permanently.",
+  "@confirmRemoveSignal": {
+    "placeholders": {
+      "days": {"type": "int"}
+    }
+  },
+  "remove": "Remove",
+  "signalRemovedSuccessfully": "Signal removed",
+  "failedToRemoveSignal": "Failed to remove signal. Please try again.",
+  "signalUnderReview": "This signal is being reviewed and cannot be removed right now.",
+
+  "activeSignals": "Active",
+  "removedSignals": "Removed",
+  "noRemovedSignals": "Nothing here. Signals you remove can be restored from this list.",
+  "restoreSignalAction": "Restore",
+  "signalRestored": "Signal restored",
+  "failedToRestoreSignal": "Failed to restore signal. Please try again.",
+  "deletePermanently": "Delete permanently",
+  "confirmDeletePermanently": "Delete this signal and its photos, comments and history for good? This cannot be undone.",
+  "signalDeletedPermanently": "Signal deleted permanently",
+  "restorableUntil": "Deleted permanently on {date}",
+  "@restorableUntil": {
+    "placeholders": {
+      "date": {"type": "String"}
+    }
+  },
   "contactPhone": "Contact Phone",
 
   "errorAddingComment": "Failed to add comment. Please try again.",

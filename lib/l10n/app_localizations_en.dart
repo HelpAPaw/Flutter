@@ -1498,17 +1498,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get editSignal => 'Edit Signal';
 
   @override
-  String get deleteSignal => 'Delete Signal';
-
-  @override
-  String get confirmDeleteSignal =>
-      'Are you sure you want to delete this signal? This action cannot be undone.';
-
-  @override
   String get signalUpdatedSuccessfully => 'Signal updated successfully';
-
-  @override
-  String get signalDeletedSuccessfully => 'Signal deleted successfully';
 
   @override
   String get signalNoLongerAvailable => 'This signal is no longer available';
@@ -1525,8 +1515,74 @@ class AppLocalizationsEn extends AppLocalizations {
       'Failed to update signal. Please try again.';
 
   @override
-  String get failedToDeleteSignal =>
-      'Failed to delete signal. Please try again.';
+  String get removeSignal => 'Remove signal';
+
+  @override
+  String get removeSignalCaseOpenTitle => 'Is this case resolved?';
+
+  @override
+  String get removeSignalCaseOpenBody =>
+      'If the animal has been helped, mark the case Resolved instead. Your report and its history stay on the map for others to learn from, and it still counts towards your profile.';
+
+  @override
+  String get markAsResolved => 'Mark as resolved';
+
+  @override
+  String get removeAnyway => 'Remove anyway';
+
+  @override
+  String confirmRemoveSignal(int days) {
+    return 'This signal will be taken off the map. You can restore it from My Signals for the next $days days, after which it is deleted permanently.';
+  }
+
+  @override
+  String get remove => 'Remove';
+
+  @override
+  String get signalRemovedSuccessfully => 'Signal removed';
+
+  @override
+  String get failedToRemoveSignal =>
+      'Failed to remove signal. Please try again.';
+
+  @override
+  String get signalUnderReview =>
+      'This signal is being reviewed and cannot be removed right now.';
+
+  @override
+  String get activeSignals => 'Active';
+
+  @override
+  String get removedSignals => 'Removed';
+
+  @override
+  String get noRemovedSignals =>
+      'Nothing here. Signals you remove can be restored from this list.';
+
+  @override
+  String get restoreSignalAction => 'Restore';
+
+  @override
+  String get signalRestored => 'Signal restored';
+
+  @override
+  String get failedToRestoreSignal =>
+      'Failed to restore signal. Please try again.';
+
+  @override
+  String get deletePermanently => 'Delete permanently';
+
+  @override
+  String get confirmDeletePermanently =>
+      'Delete this signal and its photos, comments and history for good? This cannot be undone.';
+
+  @override
+  String get signalDeletedPermanently => 'Signal deleted permanently';
+
+  @override
+  String restorableUntil(String date) {
+    return 'Deleted permanently on $date';
+  }
 
   @override
   String get contactPhone => 'Contact Phone';

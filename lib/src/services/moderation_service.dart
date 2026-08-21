@@ -242,9 +242,11 @@ class ModerationService {
   /// snapshot listener would have meant the client reading the collection.
   Future<List<QuarantinedSignal>> listQuarantined({
     required String collection,
+    QuarantineSource source = QuarantineSource.quarantine,
   }) async {
     final result = await CallableClient.call('listQuarantined', {
       'collection': collection,
+      'source': source.wireName,
     });
     final items = result['items'];
     if (items is! List) return const [];

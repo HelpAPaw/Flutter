@@ -117,11 +117,7 @@ class _ProfilePageState extends State<ProfilePage> {
     final userRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
 
     try {
-      final signalsSnapshot = await FirebaseFirestore.instance
-          .collection(AppPreferencesService().signalsCollectionName)
-          .where('reporter', isEqualTo: userRef)
-          .count()
-          .get();
+      final signalsCount = await _loadSignalsPosted(user.uid, userRef);
 
       final commentsSnapshot = await FirebaseFirestore.instance
           .collectionGroup('comments')
@@ -130,7 +126,7 @@ class _ProfilePageState extends State<ProfilePage> {
           .get();
 
       setState(() {
-        _signalsCount = signalsSnapshot.count ?? 0;
+        _signalsCount = signalsCount;
         _commentsCount = commentsSnapshot.count ?? 0;
       });
     } catch (e) {
@@ -141,6 +137,47 @@ class _ProfilePageState extends State<ProfilePage> {
         );
       }
     }
+  }
+
+  /// How many signals this account has reported (master spec §3.5.1).
+  ///
+  /// **A stored counter, not a query.** This used to be a live `count()` over
+  /// `signals` filtered by reporter, which quietly measured something else:
+  /// signals still *visible*. Every way a signal can leave that collection took
+  /// the credit with it — the reporter removing it (#68), a moderator hiding
+  /// it, and the ~6-month archive of §4.10 when it lands. §3.5.1 requires the
+  /// opposite: "these stats remain even when old cases are deleted or
+  /// archived". `handleSignalCreated` increments the counter once, at the
+  /// moment of reporting, and nothing decrements it.
+  ///
+  /// It lives on `publicProfiles/{uid}` because the rules there already limit
+  /// the client to the `name` field alone, so a server-written counter beside
+  /// it cannot be forged. `userCounters` was the obvious alternative and is
+  /// exactly wrong: that document *is* client-writable by design.
+  ///
+  /// **The fallback is the migration.** An account with no `signalsPosted`
+  /// predates the counter, so it falls back to the old live count rather than
+  /// showing a proud zero to someone who has reported for years. Drop the
+  /// fallback once the backfill has run everywhere — and note it under-reports
+  /// for exactly the accounts this change is meant to help, since a signal they
+  /// already removed is no longer there to count.
+  Future<int> _loadSignalsPosted(
+    String uid,
+    DocumentReference<Map<String, dynamic>> userRef,
+  ) async {
+    final profile = await FirebaseFirestore.instance
+        .collection('publicProfiles')
+        .doc(uid)
+        .get();
+    final stored = profile.data()?['signalsPosted'];
+    if (stored is int) return stored;
+
+    final legacy = await FirebaseFirestore.instance
+        .collection(AppPreferencesService().signalsCollectionName)
+        .where('reporter', isEqualTo: userRef)
+        .count()
+        .get();
+    return legacy.count ?? 0;
   }
 
   Future<void> _updateProfile() async {
