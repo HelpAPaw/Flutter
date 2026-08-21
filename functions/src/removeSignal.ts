@@ -328,7 +328,11 @@ async function purgeRemoval(
     await admin
       .storage()
       .bucket()
-      .deleteFiles({ prefix: `signals/${signalId}/photos` });
+      // Trailing slash on purpose: this is a *prefix* match feeding a bulk
+      // delete, and without it `signals/X/photos` would also match a sibling
+      // path like `signals/X/photosomethingelse/`. Nothing writes such a path
+      // today, which is exactly why it would go unnoticed if something did.
+      .deleteFiles({ prefix: `signals/${signalId}/photos/` });
   } catch (error) {
     // Best-effort, and logged rather than swallowed: once the signal document
     // is gone nothing can authorize a photo delete through the rules

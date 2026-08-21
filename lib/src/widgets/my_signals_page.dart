@@ -109,7 +109,13 @@ class MySignalsPage extends StatelessWidget {
             return TabBarView(
               children: [
                 _ActiveSignalsTab(uid: user.uid),
-                const _RemovedSignalsTab(),
+                // Keyed by uid so a change of account builds a fresh State.
+                // The removals stream is `late final` and captures the uid it
+                // was created under; without this key the State survives a
+                // sign-out and keeps streaming the previous account's bin,
+                // which the rules then deny — an error message rather than a
+                // leak, but a confusing one.
+                _RemovedSignalsTab(key: ValueKey(user.uid)),
               ],
             );
           },
@@ -230,7 +236,7 @@ class _ActiveSignalsTab extends StatelessWidget {
 /// races two writes at the same id — the second comes back `already-exists`,
 /// reporting a failure for something that in fact succeeded.
 class _RemovedSignalsTab extends StatefulWidget {
-  const _RemovedSignalsTab();
+  const _RemovedSignalsTab({super.key});
 
   @override
   State<_RemovedSignalsTab> createState() => _RemovedSignalsTabState();
@@ -238,6 +244,16 @@ class _RemovedSignalsTab extends StatefulWidget {
 
 class _RemovedSignalsTabState extends State<_RemovedSignalsTab> {
   final _service = SignalRemovalService();
+
+  /// The removals stream, subscribed **once**.
+  ///
+  /// `late final`, not a call inside `build()`. `StreamBuilder` keys off stream
+  /// *identity*, so a fresh `watchMine()` per build cancels the Firestore
+  /// listener and opens a new one — and `_run` calls `setState` twice, at the
+  /// start and end of every action. The visible symptom is the whole list
+  /// blinking back to a spinner the moment you tap Restore; the invisible one
+  /// is a billed listen per rebuild.
+  late final Stream<List<RemovedSignal>> _removals = _service.watchMine();
 
   /// Signal ids with an action in flight.
   final _busy = <String>{};
@@ -307,7 +323,7 @@ class _RemovedSignalsTabState extends State<_RemovedSignalsTab> {
     final l10n = AppLocalizations.of(context);
 
     return StreamBuilder<List<RemovedSignal>>(
-      stream: _service.watchMine(),
+      stream: _removals,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(
