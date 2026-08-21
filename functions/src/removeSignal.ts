@@ -51,6 +51,7 @@ import {
   requireSignalCollection,
   signalRefOf,
   SignalCollection,
+  withheldSignalId,
 } from "./signalRefs";
 
 /** Where a removed signal's document goes. Readable only by its reporter. */
@@ -73,17 +74,6 @@ const PURGE_BATCH_SIZE = 200;
 /** Every action name. Stable strings; they appear in logs. */
 const ACTIONS = ["remove", "restore", "deletePermanently"] as const;
 type RemovalAction = (typeof ACTIONS)[number];
-
-/**
- * Removal document id. Namespaced by collection so production and test-mode
- * signals cannot collide, matching `moderationQuarantine`'s scheme.
- */
-export function removedId(
-  collection: SignalCollection,
-  signalId: string
-): string {
-  return `${collection}__${signalId}`;
-}
 
 /**
  * Confirms the caller is the signal's reporter.
@@ -144,7 +134,7 @@ async function loadRemoved(data: Record<string, unknown>): Promise<{
   const { collection, signalId, ref: signalRef } = signalRefOf(data);
   const removedRef = db()
     .collection(REMOVED_COLLECTION)
-    .doc(removedId(collection, signalId));
+    .doc(withheldSignalId(collection, signalId));
   const snapshot = await removedRef.get();
   if (!snapshot.exists) {
     throw new HttpsError("not-found", "That signal is not in your removed list.");
@@ -217,7 +207,7 @@ async function remove(uid: string, data: Record<string, unknown>) {
 
   const batch = db().batch();
   batch.set(
-    db().collection(REMOVED_COLLECTION).doc(removedId(collection, signalId)),
+    db().collection(REMOVED_COLLECTION).doc(withheldSignalId(collection, signalId)),
     {
       data: snapshot.data(),
       collection,
@@ -320,28 +310,73 @@ async function purgeRemoval(
   signalId: string,
   removedRef: FirebaseFirestore.DocumentReference
 ): Promise<void> {
-  await db().recursiveDelete(db().collection(collection).doc(signalId));
-
-  // Photos live at `signals/{id}/photos/**` for BOTH collections — the Storage
-  // path has never carried the test-mode split (see storage.rules).
-  try {
-    await admin
+  // Firestore and Storage are independent stores, so these two run TOGETHER.
+  // Only the third step is ordered against them.
+  await Promise.all([
+    db().recursiveDelete(db().collection(collection).doc(signalId)),
+    // Photos live at `signals/{id}/photos/**` for BOTH collections — the
+    // Storage path has never carried the test-mode split (see storage.rules).
+    admin
       .storage()
       .bucket()
       // Trailing slash on purpose: this is a *prefix* match feeding a bulk
       // delete, and without it `signals/X/photos` would also match a sibling
       // path like `signals/X/photosomethingelse/`. Nothing writes such a path
       // today, which is exactly why it would go unnoticed if something did.
-      .deleteFiles({ prefix: `signals/${signalId}/photos/` });
-  } catch (error) {
-    // Best-effort, and logged rather than swallowed: once the signal document
-    // is gone nothing can authorize a photo delete through the rules
-    // (storage.rules resolves the reporter with a cross-service get on the
-    // signal), so this is the only thing that will ever clean them up.
-    console.error(`Failed to delete photos for ${signalId}:`, error);
-  }
+      .deleteFiles({ prefix: `signals/${signalId}/photos/` })
+      // Caught HERE rather than around the Promise.all, so a Storage failure
+      // cannot cancel the Firestore half — and best-effort because once the
+      // signal document is gone nothing can authorize a photo delete through
+      // the rules (storage.rules resolves the reporter with a cross-service
+      // get on the signal), so this is the only thing that will ever clean
+      // them up. The removal record survives, so the next run retries.
+      .catch((error) =>
+        console.error(`Failed to delete photos for ${signalId}:`, error)
+      ),
+  ]);
 
   await removedRef.delete();
+}
+
+/**
+ * Purges a page of removal records, skipping any that are malformed.
+ *
+ * Both sweeps below go through here rather than repeating the loop, and the
+ * validation is the reason that matters: `purgeRemoval` hands `signalId`
+ * straight to `recursiveDelete`, and `doc("")` throws while an *undefined* id
+ * quietly produces an auto-id — so a malformed record is the one input in this
+ * file that could aim a bulk delete at a path nobody asked to erase. Two copies
+ * of that check is one copy that can be forgotten.
+ *
+ * One failure never stops the sweep: these documents are independent, and a
+ * single bad record must not strand every other expired removal behind it.
+ *
+ * Returns how many were actually erased.
+ */
+async function purgeAll(
+  docs: FirebaseFirestore.QueryDocumentSnapshot[],
+  context: string
+): Promise<number> {
+  let purged = 0;
+  for (const doc of docs) {
+    const raw = doc.data();
+    const signalId = raw.signalId as string;
+    if (typeof signalId !== "string" || signalId.length === 0) {
+      console.error(`${context}: skipping malformed removal ${doc.id}`);
+      continue;
+    }
+    try {
+      await purgeRemoval(
+        requireSignalCollection(raw.collection),
+        signalId,
+        doc.ref
+      );
+      purged += 1;
+    } catch (error) {
+      console.error(`${context}: purge failed for ${doc.id}:`, error);
+    }
+  }
+  return purged;
 }
 
 /**
@@ -375,29 +410,7 @@ export const purgeRemovedSignals = onSchedule(
       return;
     }
 
-    let purged = 0;
-    for (const doc of expired.docs) {
-      const raw = doc.data();
-      const collection = raw.collection as SignalCollection;
-      const signalId = raw.signalId as string;
-      // A malformed record would otherwise recursiveDelete the wrong path, or
-      // the whole collection. Skip it loudly instead.
-      if (typeof signalId !== "string" || signalId.length === 0) {
-        console.error(`Purge: skipping malformed removal ${doc.id}`);
-        continue;
-      }
-      try {
-        await purgeRemoval(
-          requireSignalCollection(collection),
-          signalId,
-          doc.ref
-        );
-        purged += 1;
-      } catch (error) {
-        console.error(`Purge: failed for ${doc.id}:`, error);
-      }
-    }
-
+    const purged = await purgeAll(expired.docs, "Purge");
     console.log(`Purge: ${purged}/${expired.size} removals erased.`);
   }
 );
@@ -421,21 +434,5 @@ export async function purgeRemovalsFor(
     .where("data.reporter", "==", userRef)
     .get();
 
-  for (const doc of owned.docs) {
-    const raw = doc.data();
-    const signalId = raw.signalId as string;
-    if (typeof signalId !== "string" || signalId.length === 0) {
-      console.error(`Account deletion: skipping malformed removal ${doc.id}`);
-      continue;
-    }
-    try {
-      await purgeRemoval(
-        requireSignalCollection(raw.collection),
-        signalId,
-        doc.ref
-      );
-    } catch (error) {
-      console.error(`Account deletion: purge failed for ${doc.id}:`, error);
-    }
-  }
+  await purgeAll(owned.docs, "Account deletion");
 }

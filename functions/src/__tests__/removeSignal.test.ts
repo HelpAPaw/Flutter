@@ -1,18 +1,19 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import { REMOVED_RETENTION_DAYS, removedId } from "../removeSignal";
+import { REMOVED_RETENTION_DAYS } from "../removeSignal";
+import { withheldSignalId } from "../signalRefs";
 
-describe("removedId", () => {
+describe("withheldSignalId", () => {
   it("namespaces by collection so the two modes cannot collide", () => {
     // Test mode and production can hold the same signal id — `signals_test` is
     // a separate collection, not a separate id space. A removal document keyed
     // on the id alone would let a test-mode removal restore over a production
     // signal, or be purged by the other one's expiry.
-    expect(removedId("signals", "abc")).toBe("signals__abc");
-    expect(removedId("signals_test", "abc")).toBe("signals_test__abc");
-    expect(removedId("signals", "abc")).not.toBe(
-      removedId("signals_test", "abc")
+    expect(withheldSignalId("signals", "abc")).toBe("signals__abc");
+    expect(withheldSignalId("signals_test", "abc")).toBe("signals_test__abc");
+    expect(withheldSignalId("signals", "abc")).not.toBe(
+      withheldSignalId("signals_test", "abc")
     );
   });
 });
@@ -80,13 +81,20 @@ describe("removal guard coverage", () => {
   it("never lets a malformed record aim recursiveDelete at a collection root", () => {
     // `db().collection(c).doc("")` throws, but an undefined id silently
     // produces an auto-id — and a wrong path handed to recursiveDelete is the
-    // one bug in this file that destroys data nobody asked to delete. Both
-    // sweeps validate before they call it.
+    // one bug in this file that destroys data nobody asked to delete.
+    //
+    // Both sweeps go through `purgeAll`, so the check lives once. This asserts
+    // that it is there AND that neither sweep has grown its own loop around
+    // `purgeRemoval` that could skip it.
+    expect(bodyOf("purgeAll")).toContain('typeof signalId !== "string"');
     for (const sweep of ["purgeRemovedSignals", "purgeRemovalsFor"]) {
-      const start = source.indexOf(sweep);
+      const start = source.indexOf(`export const ${sweep}`) >= 0
+        ? source.indexOf(`export const ${sweep}`)
+        : source.indexOf(`export async function ${sweep}`);
       expect(start).toBeGreaterThan(-1);
-      const body = source.slice(start);
-      expect(body).toContain('typeof signalId !== "string"');
+      const body = source.slice(start, start + 1200);
+      expect(body).toContain("purgeAll(");
+      expect(body).not.toContain("purgeRemoval(");
     }
   });
 });

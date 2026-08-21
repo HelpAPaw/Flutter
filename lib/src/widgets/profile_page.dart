@@ -117,17 +117,22 @@ class _ProfilePageState extends State<ProfilePage> {
     final userRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
 
     try {
-      final signalsCount = await _loadSignalsPosted(user.uid, userRef);
-
-      final commentsSnapshot = await FirebaseFirestore.instance
-          .collectionGroup('comments')
-          .where('author', isEqualTo: userRef)
-          .count()
-          .get();
+      // Two independent reads, so they overlap rather than queue. They used to
+      // be sequential awaits, which made the stats block wait out two round
+      // trips to show one row of numbers.
+      final results = await Future.wait([
+        _loadSignalsPosted(user.uid, userRef),
+        FirebaseFirestore.instance
+            .collectionGroup('comments')
+            .where('author', isEqualTo: userRef)
+            .count()
+            .get()
+            .then((snapshot) => snapshot.count ?? 0),
+      ]);
 
       setState(() {
-        _signalsCount = signalsCount;
-        _commentsCount = commentsSnapshot.count ?? 0;
+        _signalsCount = results[0];
+        _commentsCount = results[1];
       });
     } catch (e) {
       if (mounted) {

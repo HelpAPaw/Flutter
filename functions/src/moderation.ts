@@ -35,6 +35,7 @@ import {
   requireNote as requireNoteShared,
   requireSignalCollection,
   SignalCollection,
+  withheldSignalId,
 } from "./signalRefs";
 import { URGENCY_GREEN, URGENCY_RED } from "./urgency";
 import { REMOVED_COLLECTION } from "./removeSignal";
@@ -115,10 +116,7 @@ function requireNote(raw: unknown): string {
   );
 }
 
-/** Quarantine document id. Namespaced so both collections can share it. */
-function quarantineId(collection: SignalCollection, signalId: string): string {
-  return `${collection}__${signalId}`;
-}
+
 
 /**
  * Refuses an action whose target belongs to the moderator performing it.
@@ -336,7 +334,7 @@ async function hideSignal(
 ): Promise<ActionResult> {
   const { collection, signalId, ref, snapshot } = await loadSignal(uid, data);
 
-  batch.set(db().collection(QUARANTINE_COLLECTION).doc(quarantineId(collection, signalId)), {
+  batch.set(db().collection(QUARANTINE_COLLECTION).doc(withheldSignalId(collection, signalId)), {
     data: snapshot.data(),
     collection,
     signalId,
@@ -376,7 +374,7 @@ async function restoreSignal(
 
   const quarantineRef = db()
     .collection(QUARANTINE_COLLECTION)
-    .doc(quarantineId(collection, signalId));
+    .doc(withheldSignalId(collection, signalId));
   const signalRef = db().collection(collection).doc(signalId);
 
   const [snapshot, live] = await Promise.all([
