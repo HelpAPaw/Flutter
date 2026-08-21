@@ -123,8 +123,14 @@ class CaseHolderBlock extends StatelessWidget {
                     ? Text(l10n.caseHolderIsYou)
                     : holder == null
                         ? Text(l10n.caseHolderNobody)
+                        // `someone`, not `unknown`: this is the fallback the
+                        // rest of the timeline uses for a person, and an
+                        // account with no publicProfiles document is common
+                        // enough (legacy and Google sign-ups both) that
+                        // "Unknown" reads like an error rather than a missing
+                        // name. See the publicProfiles gap in SPECIFICATION 14.
                         : nameOf(holder.id,
-                            fallback: l10n.unknown, maxLines: 1),
+                            fallback: l10n.someone, maxLines: 1),
               ),
             ],
           ),
@@ -281,9 +287,13 @@ class CaseHolderBlock extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // The most important of the three: this row asks the
+                        // holder to hand responsibility for an animal to this
+                        // person, and "Unknown" reads like something is broken.
+                        // Matches the push, which says "A volunteer".
                         nameOf(
                           request.requesterId,
-                          fallback: l10n.unknown,
+                          fallback: l10n.someone,
                           style: Theme.of(context).textTheme.titleSmall,
                           maxLines: 1,
                         ),
@@ -348,8 +358,11 @@ class CaseHolderBlock extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final note = await askOwnershipNote(
       context,
-      title: approve ? l10n.caseHolderHandOver : l10n.caseHolderDecline,
-      body: approve ? l10n.takeoverConfirmBody : l10n.releaseConfirmBody,
+      title: approve ? l10n.handOverConfirmTitle : l10n.caseHolderDecline,
+      // Its own string. `takeoverConfirmBody` is written in the second person
+      // — "You become the person coordinating this case" — which is exactly
+      // wrong here: the holder is handing the case to somebody else.
+      body: approve ? l10n.handOverConfirmBody : l10n.declineConfirmBody,
       confirmLabel: approve ? l10n.caseHolderHandOver : l10n.caseHolderDecline,
       busy: busy,
       onSignInRequired: onSignInRequired,

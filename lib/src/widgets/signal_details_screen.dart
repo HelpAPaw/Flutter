@@ -1205,8 +1205,10 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
           final names = snapshot.data ?? const [null, null];
           final actorName =
               (names[0]?.isNotEmpty ?? false) ? names[0]! : l10n.someone;
+          // Same fallback as the actor above — one sentence should not mix
+          // "Someone" and "Unknown" for two people in the same position.
           final holderName =
-              (names[1]?.isNotEmpty ?? false) ? names[1]! : l10n.unknown;
+              (names[1]?.isNotEmpty ?? false) ? names[1]! : l10n.someone;
           return Text(l10n.handedCaseTo(actorName, holderName));
         },
       );

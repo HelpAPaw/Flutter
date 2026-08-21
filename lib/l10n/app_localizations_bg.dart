@@ -687,6 +687,17 @@ class AppLocalizationsBg extends AppLocalizations {
   String get takeoverConfirmAction => 'Поемам го';
 
   @override
+  String get handOverConfirmTitle => 'Да предадете ли случая?';
+
+  @override
+  String get handOverConfirmBody =>
+      'Този човек става координатор на случая. Вие оставате абонирани за сигнала и можете да предложите да го поемете обратно по-късно.';
+
+  @override
+  String get declineConfirmBody =>
+      'Ще бъде уведомен, че запазвате случая. Може да предложи отново след ден.';
+
+  @override
   String get releaseConfirmTitle => 'Да се откажете ли от този случай?';
 
   @override

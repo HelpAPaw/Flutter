@@ -1316,6 +1316,24 @@ abstract class AppLocalizations {
   /// **'Take it on'**
   String get takeoverConfirmAction;
 
+  /// No description provided for @handOverConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Hand this case over?'**
+  String get handOverConfirmTitle;
+
+  /// No description provided for @handOverConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'They become the person coordinating this case. You stay on the signal and can offer to take it back later.'**
+  String get handOverConfirmBody;
+
+  /// No description provided for @declineConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'They are told you are keeping the case. They can offer again after a day.'**
+  String get declineConfirmBody;
+
   /// No description provided for @releaseConfirmTitle.
   ///
   /// In en, this message translates to:

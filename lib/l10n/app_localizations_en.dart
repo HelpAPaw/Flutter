@@ -677,6 +677,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get takeoverConfirmAction => 'Take it on';
 
   @override
+  String get handOverConfirmTitle => 'Hand this case over?';
+
+  @override
+  String get handOverConfirmBody =>
+      'They become the person coordinating this case. You stay on the signal and can offer to take it back later.';
+
+  @override
+  String get declineConfirmBody =>
+      'They are told you are keeping the case. They can offer again after a day.';
+
+  @override
   String get releaseConfirmTitle => 'Step down from this case?';
 
   @override
