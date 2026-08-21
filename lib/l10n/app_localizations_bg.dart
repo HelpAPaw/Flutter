@@ -1695,6 +1695,16 @@ class AppLocalizationsBg extends AppLocalizations {
   String get moderationPermissionDenied => 'Вече нямате достъп на модератор.';
 
   @override
+  String get moderationSelfBlocked =>
+      'Не можете да модерирате собственото си съдържание.';
+
+  @override
+  String get moderationActionsLabel => 'Модераторски действия';
+
+  @override
+  String get moderationCommentChooserTitle => 'Този коментар';
+
+  @override
   String get moderationHideSignal => 'Скриване на сигнала';
 
   @override
@@ -1739,4 +1749,28 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get moderationBadge => 'Модератор';
+
+  @override
+  String get moderationTabReports => 'Доклади';
+
+  @override
+  String get moderationTabHidden => 'Скрити';
+
+  @override
+  String get moderationHiddenEmpty => 'Няма скрити сигнали.';
+
+  @override
+  String moderationHiddenBy(String name) {
+    return 'Скрит от $name';
+  }
+
+  @override
+  String get moderationRestoreTitle => 'Възстановяване на сигнала?';
+
+  @override
+  String get moderationRestoreBody =>
+      'Сигналът се връща на картата за всички. Коментарите и историята му са запазени.';
+
+  @override
+  String get moderationRestore => 'Възстановяване';
 }

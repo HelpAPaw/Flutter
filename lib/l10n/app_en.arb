@@ -795,6 +795,9 @@
   "moderationActionApplied": "Done.",
   "moderationActionFailed": "That did not work. Please try again.",
   "moderationPermissionDenied": "You no longer have moderator access.",
+  "moderationSelfBlocked": "You cannot moderate your own content.",
+  "moderationActionsLabel": "Moderation actions",
+  "moderationCommentChooserTitle": "This comment",
 
   "moderationHideSignal": "Hide signal",
   "moderationRestoreSignal": "Restore signal",
@@ -811,5 +814,16 @@
   "moderationLabelDuplicate": "Possible duplicate",
   "moderationLabelDisputed": "Disputed",
   "moderationCommentsLocked": "A moderator has locked comments on this signal.",
-  "moderationBadge": "Moderator"
+  "moderationBadge": "Moderator",
+
+  "moderationTabReports": "Reports",
+  "moderationTabHidden": "Hidden",
+  "moderationHiddenEmpty": "No hidden signals.",
+  "moderationHiddenBy": "Hidden by {name}",
+  "@moderationHiddenBy": {
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "moderationRestoreTitle": "Restore this signal?",
+  "moderationRestoreBody": "It goes back on the map for everyone. Its comments and history are still there.",
+  "moderationRestore": "Restore"
 }

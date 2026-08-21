@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/report_reason.dart';
+import '../models/quarantined_signal.dart';
 import '../models/report_status.dart';
 import '../models/signal_event.dart';
 import 'app_preferences_service.dart';
@@ -228,6 +229,31 @@ class ModerationService {
         'signalId': signalId,
         'note': note,
       }, reportId: reportId);
+
+  /// Lists the signals currently in quarantine.
+  ///
+  /// A callable rather than a Firestore query: `moderationQuarantine` has no
+  /// client rule match, so a hidden signal is unreadable by everyone — the
+  /// server projects each document down to a summary before it leaves. That is
+  /// what keeps hiding meaningful; see `functions/src/moderation.ts`.
+  ///
+  /// No live stream, deliberately. This is a short list a moderator consults
+  /// when they want to undo something, not data that changes under them, and a
+  /// snapshot listener would have meant the client reading the collection.
+  Future<List<QuarantinedSignal>> listQuarantined({
+    required String collection,
+  }) async {
+    final result = await CallableClient.call('listQuarantined', {
+      'collection': collection,
+    });
+    final items = result['items'];
+    if (items is! List) return const [];
+    return items
+        .whereType<Map>()
+        .map((item) =>
+            QuarantinedSignal.fromJson(item.cast<String, dynamic>()))
+        .toList();
+  }
 
   /// Puts a quarantined signal back.
   Future<void> restoreSignal({

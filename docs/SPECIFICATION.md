@@ -1872,16 +1872,43 @@ transport quirk in §7.14, now shared via `services/callable_client.dart`). **Th
 mandatory** on every action, for the same reason it is on a status change: the audit log's
 value is the reasoning.
 
-| Action | Effect |
-|---|---|
-| `hideSignal` | moves the signal document to `moderationQuarantine` |
-| `restoreSignal` | writes it back with `moderation.restoredAt` |
-| `setCommentsLocked` | `moderation.commentsLocked`; also enforced in the rules |
-| `setUrgency` | §5.3 urgency correction — **writes an `events` row** |
-| `deleteComment` | deletes one comment |
-| `setLabel` | `moderation.label` — `unverified` / `duplicate` / `disputed` |
-| `resolveReport` | closes a report as actioned/dismissed |
-| `addNote` | audit-only internal note |
+| Action | Effect | Own content? |
+|---|---|---|
+| `hideSignal` | moves the signal document to `moderationQuarantine` | refused |
+| `restoreSignal` | writes it back with `moderation.restoredAt` | refused |
+| `setCommentsLocked` | `moderation.commentsLocked`; also enforced in the rules | refused |
+| `setUrgency` | §5.3 urgency correction — **writes an `events` row** | refused |
+| `deleteComment` | deletes one comment | refused |
+| `setLabel` | `moderation.label` — `unverified` / `duplicate` / `disputed` | refused |
+| `resolveReport` | closes a report as actioned/dismissed | n/a |
+| `addNote` | audit-only internal note | allowed |
+
+**`reportId` is optional on every action.** When present, the action also resolves that
+report; when absent, the moderator is acting on their own judgement on something they came
+across while browsing, and the server simply skips the report half. This is what lets the
+same sheet serve both entry points — see "Two entry points" below.
+
+**A moderator may not act on their own content.** `requireNotOwnContent` compares the
+stored `reporter` / `author` reference against the acting uid and throws
+`failed-precondition`. It lives inside `loadSignal`, which all four signal actions share,
+so a check every branch would otherwise have to remember cannot be forgotten by a branch
+added later; `deleteComment` and `restoreSignal` load their own documents and call it
+directly. `deleteComment` clears **two** owners — the comment's author, and the reporter of
+the signal it sits under, since deleting the comment criticising your own case is the same
+conflict of interest as locking the thread. It reads that parent directly rather than
+through `loadSignal`, whose `not-found` would break the one legitimate case where the parent
+is absent: a signal hidden earlier keeps its comments, because subcollections survive the
+document. Without it a moderator could clear a `disputed` label off their own case, lock
+the thread criticising it, or downgrade a Red Alert about them — each perfectly audited,
+and each exactly the unchecked power master spec §3.6.1 says the role must not carry.
+`addNote` is exempt: it changes nothing and is the context the audit log wants. An absent
+or malformed owner does *not* trip the guard, or the legacy documents most likely to need
+moderating would be the ones nobody could moderate. `failed-precondition` rather than
+`permission-denied` because the role is intact — the app maps the two to different
+messages, and reporting a revoked role to a moderator who still has one would send them to
+the wrong person for help. Guarded by `self-moderation guard coverage` in
+`functions/src/__tests__/moderation.test.ts`, which reads the source, because a new action
+that skipped the check would compile perfectly and fail silently.
 
 **Hiding moves the document; it does not set a flag.** Firestore keeps subcollections when
 a document is deleted, so `comments` and `events` stay where they are and a restore is
@@ -1902,6 +1929,53 @@ Two consequences:
    notification.
 2. **A hidden signal's photos stay publicly readable by URL**, because `storage.rules`
    grants signal photos `read: true` unconditionally. Recorded in §14.
+
+**Two entry points.** A moderator reaches the action sheet either from a **report** in the
+queue, or from the **shield in the signal details app bar** — and for a comment, from a
+chooser on the row's long-press offering *Report* or *Delete comment*. The second route is
+the one that lets a moderator act on their own judgement, which master spec §18.3 assumes
+throughout ("hide or escalate problematic posts" is a frontline power, not a response to
+paperwork). Until it existed the queue was the only way in, so a problem post found while
+browsing had to be reported first — by the moderator, to themselves — before they could
+touch it.
+
+The sheet is target-shaped rather than report-shaped: `ModerationTarget`
+(`models/moderation_target.dart`) carries the `targetType`, `collection`, `signalId` and
+`targetId` that used to be read straight out of a raw report map, with
+`ModerationTarget.fromReport` holding the decoding for the queue path. It keeps that
+decoding's two safety properties — **`collection` is never defaulted to `'signals'`**, so a
+report whose collection cannot be read offers no signal-targeting action rather than acting
+on production content, and an unknown `targetType` narrows the menu instead of guessing.
+Both are pinned in `test/models/moderation_target_test.dart`. The "Dismiss report" row
+renders only when a `reportId` is present.
+
+The shield is drawn only for a moderator who is **not** the reporter, and the comment
+chooser likewise only on a signal they did not report — both mirroring the server-side
+self-moderation guard, so nobody meets that error in ordinary use. The role comes from one
+`watchIsModerator()` subscription held by the details screen's State, since both the app bar
+and every comment row need the answer; the per-row capability is computed once for the whole
+list, not per row. Hiding from this screen returns
+`ModerationOutcome.targetRemoved` and the screen leaves via `_leaveScreen()` — the document
+has left `signals`, and the screen's empty branch would otherwise report it as *deleted*,
+which is both wrong and the opposite of the reversible thing that just happened.
+
+**Restoring a hidden signal: the Hidden tab.** Hiding resolves its originating
+report — correctly, it *has* been actioned — which drops it out of the queue, and
+that queue is the only route to the action sheet. So hiding was a one-way door
+until §7.16 gained a second surface: a `Hidden` tab on `ModerationQueuePage`,
+fed by the `listQuarantined` callable.
+
+**That list is a callable and not a client read, deliberately.** Opening
+`moderationQuarantine` to `isModerator()` would have been less code and would
+have given live updates, but it would ship the withheld content — description,
+photos, contact phone — to the client, and would make this the one moderator
+power that works by direct read when every other goes through a callable so it
+is authorized server-side. Instead the server projects each document to a
+**summary** (`quarantineSummary`: id, signalId, collection, title, hiddenBy,
+note, `hiddenAtMillis`), so a hidden signal stays unreadable by everyone,
+moderators included, and the rules need no change at all. The timestamp crosses
+as epoch millis because a Firestore `Timestamp` does not survive the callable's
+JSON envelope; both halves of that contract are tested.
 
 **The reporter cannot undo moderation.** `isNotTouchingModeration()` denies any client
 write that touches `moderation`, on both the reporter and the status-only branches. This
@@ -1946,6 +2020,7 @@ page is bilingual with a client-side language switch.
 | `deleteAccount` | callable (App Check) | Anonymize + tombstone + delete (§7.2) |
 | `caseOwnership` | callable (App Check) | **Case ownership** (§4.8) — claim / release / approveRequest / declineRequest. Rejects anonymous callers; writes the signal, the `ownership_transfer` event and the subscription in one batch. `functions/src/caseOwnership.ts` |
 | `onTakeoverWritten` / `onTestTakeoverWritten` | **write** `…/takeoverRequests/{uid}` | **One** trigger per collection for both outcomes — tell the current holder somebody offered, or tell the requester they were answered. Audience of one either way, dispatched from the before/after pair with no read. `onDocumentWritten` rather than `onDocumentCreated` because a re-file after the cooldown makes a request pending without creating a document (§4.8); one trigger rather than two because a create and an update trigger on the same path would invoke two functions per write. A *withdrawal* matches neither branch — nobody needs telling that somebody changed their mind |
+| `listQuarantined` | callable (App Check) | Lists hidden signals as **summaries** for the Hidden tab (§7.16). Separate from `moderateAction` because that endpoint's contract is a mandatory note plus an audit entry, and neither belongs on a read |
 | `moderateAction` | callable (App Check) | **All eight moderator actions** (§7.16). Verifies `moderators/{uid}` server-side, acts, writes a `moderationActions` audit entry and resolves the originating report — implementation in `functions/src/moderation.ts` |
 | `cleanupAnonymousUsers` | schedule `0 3 * * 0` UTC | Deletes anonymous Auth users with no linked providers inactive > **90 days**, clearing Firestore data first so a failed cleanup retries next run. `ANON_CLEANUP_DRY_RUN` flag available |
 | `signalLink` | HTTPS (Hosting rewrite `/signal/**`) | Public share/fallback page (§7.9) |
@@ -2329,14 +2404,15 @@ silently breaks Auth/Firestore/FCM in release builds only.
 | `Signal.phoneNumber` vs `contactPhone` | Duplicated legacy field, both written with the same value |
 | A hidden signal's photos stay readable by URL | Open — hiding moves the Firestore document to quarantine, but `storage.rules` grants `signals/{id}/photos/**` `read: true` unconditionally, so anyone holding a photo URL keeps it. Closing it means gating photo reads on the parent document existing, which costs a cross-service `firestore.get` on every photo load (§7.16) |
 | A hidden signal's comments and events stay readable | Open, and the flip side of what makes a restore lossless: subcollections survive the document's deletion, and `comments`/`events` are `read: if true`. Requires the signal id to exploit |
-| **A hidden signal cannot be restored from the app** | **Open — found in device verification 2026-08-17.** `hideSignal` resolves its originating report, which removes it from the queue; the action sheet is the only entry point to `restoreSignal`, so the un-hide path disappears with it. The callable works (verified by writing the document back directly), but nothing in the UI can reach it. Fix: let a moderator *read* `moderationQuarantine` and add a "Hidden signals" screen. That is the right boundary anyway — the point of quarantine is keeping hidden content from the **public**, and spec §18.3 says hiding is "temporarily", which requires reversibility. `firestore-tests/rules.test.js` currently asserts the opposite ("denied to every client, moderators included") and must be updated with it |
+| A hidden signal could not be restored from the app | **Fixed 2026-08-19** (§7.16). `hideSignal` resolves its report, which drops it out of the queue — and the queue was the only route to any moderator action, so the un-hide path disappeared with it. Closed with a `listQuarantined` callable and a Hidden tab, **not** by opening `moderationQuarantine` to client reads: the server projects each document to a summary, so the withheld content never reaches a client and the collection stays denied to everyone |
 | Case ownership is not enforced until the rules ship | Open by design — the rules narrowing `status` to reporter-or-holder must be deployed **after** the app release that offers claim-to-act, or an already-released client that is neither gets a bare `permission-denied` behind a generic "could not update status" snackbar. Until then both the old and the new behaviour are permitted and the UI does the guiding. See the §4.8 rollout note |
 | A stale-claim displaces a holder with no appeal | Open — `STALE_HOLDER_DAYS = 14` of silence makes a case claimable and the displaced holder is only *told*. There is no "no, I am still on this" other than claiming it back, which works but reads as a tug of war. A holder who acts at all resets the clock, so this only bites someone genuinely absent |
 | Ownership notifications are English only | Open, like every other server-written push (§8). The inbox rows render localized from the structured fields; the `title`/`body` fallback and the push text do not |
 | Takeover requests are readable by any signed-in user | Accepted — they name someone who volunteered but has not been accepted. Public read would have matched `comments`/`events`; signed-in is tighter and costs nothing, since every reader of this app holds at least an anonymous session |
 | Moderator appointment is a terminal script | By design until the admin tier exists — spec §3.6 puts appointment above the moderator level. `functions/scripts/grant_moderator.js` |
 | `grant_moderator.js` is unverified | Open — it needs Application Default Credentials, which this machine has not set up (`gcloud auth application-default login`). The 2026-08-17 grants were made through the Firebase MCP instead, so the script's own code path has never run |
-| Moderator actions have no entry point outside the queue | Open — a moderator can only act on content someone has **reported**, not on anything they come across while browsing. Adding the action sheet to the signal details screen for moderators would close it |
+| Moderator actions have no entry point outside the queue | **Fixed 2026-08-20** (§7.16) — a shield in the signal details app bar and a chooser on a comment's long-press open the same action sheet with no `reportId`. The server already treated `reportId` as optional, so no rules change and no new callable were needed |
+| A moderator could moderate their own content | **Fixed 2026-08-20, deployed and device-verified 2026-08-21** (§7.16) — `requireNotOwnContent` inside `loadSignal` (plus `deleteComment` and `restoreSignal`, which load their own documents) refuses with `failed-precondition`. `addNote` and `resolveReport` are exempt, both confirmed on device. The client hides the affordance on your own content, so the queue path is the only way to reach the error |
 | No behaviour points, restrictions, bans or appeals | Deliberately out of scope for the first moderation slice (master spec §18.4–18.6) |
 | Moderator actions are not notified to the affected user | Open — master spec §18.7 says users are told when a behaviour flag is added. Nothing writes an inbox entry for a hide/lock/label yet |
 
@@ -2347,6 +2423,7 @@ silently breaks Auth/Firestore/FCM in release builds only.
 | Date | Change |
 |---|---|
 | 2026-08-20 | **Built case ownership (master spec §4.5)** — the "who is responsible for this animal right now" axis the app had never had, and the thing several later spec features (pinned comments §9.1, tag completion §4.2, Red Alert authority §5.2, fundraising verification §13) all attach to. Before this, *any* signed-in user could move *any* stranger's signal to Resolved with nothing recording that they had taken it on. **`caseHolder` has three states and the distinction is the whole design**: absent = written before ownership, reporter holds it by derivation (permanent, never backfilled — the `urgency` precedent); a ref = held; explicit `null` = *released*. Both ways of collapsing that fail silently and in opposite directions, so the derivation is a guarded ×3 invariant (§12.5d). **Status/urgency/tags moved to reporter-or-holder**: `isStatusOnlyUpdate` became `isCaseHolderUpdate` and the load-bearing clause moved from the *field list* to `isCaseHolder()` — which is why `urgency` may now be in that list without weakening §5.2. Non-holders get **claim-to-act**: the dropdown stays live and choosing a status offers to take the case on, one confirmation and one note, applied by the server in one batch (so one tap is also one notification — the ownership branch of `handleSignalUpdated` outranks the status branch and carries `statusCode`). **Transfers are a callable, not rules**, because they are two documents that must land together, because the timeline entry has to be unforgeable, and because staleness needs a server clock: `ownership_transfer` is the first `serverOnly` event type and is deliberately *absent* from `isSignalEventCreate()`, with a guard test asserting the absence so nobody makes the vocabulary test pass by removing the property. **The deadlock a silent holder would otherwise create has three escapes** — ask (`takeoverRequests`, uid-keyed so the id is the rate limit), take a released case, or take one stale past `STALE_HOLDER_DAYS = 14` — none of which needs a moderator. `caseOwnership` is also the first write path to reject anonymous callers outright, which a *new* surface can afford where #67 cannot. **Every action runs in a transaction**, because deciding from a plain read and then committing a batch takes no read lock and lets two simultaneous claims both win. **A declined request can be re-filed after a one-day cooldown** — permanence would be wrong (a case looks different two weeks on) but re-asking notifies the holder, so it has to cost something; the cooldown is only real because withdrawing is an *update* and the requester has no delete at all, otherwise withdraw-and-refile is an unlimited loop straight past it, and `onTakeoverRequested` is an `onDocumentWritten` because a re-file creates no document. `functions/src/signalRefs.ts` extracted from `moderation.ts` on its second caller. 251 rules tests, 234 Dart tests, 75 functions tests. §4.1, §4.6, §4.8, §5.1, §7.5, §9, §12, §14. **Rollout inverts the usual order** — functions, then the app release, then the rules — because the rules change narrows who may write `status`, and a released client that is neither reporter nor holder would otherwise get a bare `permission-denied`. |
+| 2026-08-20 | **Let moderators act on their own judgement, and stopped them acting on themselves** (§7.16, §14). Every moderator power was reachable only from a report: the action sheet took a non-nullable `reportId` and read each row's target out of the raw report document, and its one call site was the queue tile. So a moderator who came across a problem post while browsing had to report it — to themselves — before they could touch it, which master spec §18.3 never intended. Closed **client-side only**: `moderateAction` already treated `reportId` as optional and skipped the report half when absent, so no rules change, no new callable, no rules deploy. The sheet is now target-shaped (`ModerationTarget`, with `fromReport` keeping the never-default-`'signals'` and unknown-`targetType` safety properties), entered from a shield in the signal details app bar and from a Report/Delete chooser on a comment's long-press; "Dismiss report" renders only when there *is* a report. Hiding from the details screen returns `targetRemoved` so the screen leaves rather than reporting the signal as deleted. Added in the same pass, since the browsing entry point makes it reachable: **`requireNotOwnContent`**, refusing any action on the moderator's own signal or comment with `failed-precondition` — placed inside `moderation.ts`'s own `loadSignal` so no future moderator action can forget it, with `deleteComment` and `restoreSignal` calling it directly and `addNote` exempt. (That wrapper sits over the shared `signalRefs.loadSignal`, which case ownership also uses — the self-check deliberately does **not** live in the shared helper, because acting on your own case is `caseOwnership`'s normal path, not an abuse.) Guarded by a source-reading coverage test, because a new action that skipped the check would compile perfectly and fail silently. 234 Dart tests, 67 functions tests, 197 rules tests. **`moderateAction` deployed to help-a-paw-dev and device-verified on SM X205 + SM J610FN 2026-08-21** — six actions performed with an empty report queue, each audited with **no `reportId`**; lock/unlock and label set/clear round-tripped (the direction the queue path could never reach); hide popped to the map and restore skipped the fan-out; and a report filed against the moderator's *own* signal was refused `failed-precondition` with the signal left byte-identical. |
 | 2026-08-01 | Initial specification, written from the codebase at `6.0.1+125` (branch `dev`). |
 | 2026-08-01 | Investigated the `storage.rules` note: confirmed BUG-1 (avatar upload always denied), BUG-2 (test-mode signal photos denied) and BUG-3 (failed upload reported as success). Recorded the emulator's project-prefixed reference representation as a testing caveat. §5.2, §14. |
 | 2026-08-01 | Fixed all three, added `firestore-tests/storage.rules.test.js` (27 cases) and size/content-type limits (5 MB signal photos, 2 MB avatars, `image/*`). Client now declares `contentType` on every upload; avatar reads are public. **`storage.rules` deployed to production.** §5.2, §13.2, §14. |
@@ -2356,6 +2433,7 @@ silently breaks Auth/Firestore/FCM in release builds only.
 | 2026-08-04 | Enabled real `badge: N` in the fan-out (F-008 closed). Owner accepted the known consequence that pre-release iOS builds have no reset path, so their badge climbs monotonically. §7.13, §14. |
 | 2026-08-12 | **Built the help-tag system.** One nine-code vocabulary shared by signals (`helpNeededTags`, 1–3, mandatory) and users (`helperTags`, ≥1), plus `animalType` as an independent axis rather than species-crossed tags. The fan-out is now prioritise-then-backfill: all tag matches in radius are notified, then C→B→D nearest-first up to `MIN_RECIPIENTS` (lowered to 10 before release), with one widened re-scan at 250 km when the pool is thin — ranking extracted to `recipientSelection.ts` with 20 unit tests (the first tests `functions/` has had). Non-skippable onboarding gate implemented as a widget wrapper on the map route, not a router redirect; a failed preferences read renders the app rather than locking the user out. Settings now require ≥1 animal type and helper tag while enabled, and "Deselect all" is gone (stored empty `signalTypes` still means none and is never migrated). Rules validate the new fields but do **not** require them — tightening is a later, separate deploy. §4.1, §4.2, §4.7, §5.1, §7.4, §7.5, §7.6, §7.15, §9, §12. |
 | 2026-08-15 | **Built the signal timeline (master spec §4.6, "Case Timeline").** Status and urgency changes now require a mandatory update note and are written to a new `signals/{id}/events` subcollection instead of `comments` — the two differ in who may write them (later event types must be server-written) and who may delete them, and mixing them was also counting status changes as comments on the profile screen. The details screen merges both collections into one chronological history, opened by a synthetic "reported this signal" row derived from the signal document, with All/Events filter chips. Nothing is backfilled: legacy system entries stay in `comments` and keep rendering, and `handleCommentCreated`'s type guard stays with them. Rules validate a closed event vocabulary with a **required** 1–500 char note, deny updates, and (for now) still let the reporter delete events so the client-side delete cascade works — the tamper hole is recorded as a known gap, HelpAPaw/Flutter#68. No functions change. §4.1, §5.1, §7.5, §12, §14. |
+| 2026-08-19 | **Closed the restore gap** (§7.16, §14). A hidden signal could not be un-hidden from the app: `hideSignal` resolves its report, the queue lists only open reports, and the action sheet reached from that queue was the only entry point to any moderator action — the `restoreSignal` callable worked but nothing could reach it. Added a `listQuarantined` callable and a `Hidden` tab beside the report queue. **Deliberately not** by granting moderators a client read of `moderationQuarantine`: that would ship the withheld content and would make this the only moderator power that bypasses a callable, so instead the server projects each document to a summary and the collection stays denied to every client — the existing rules test asserting that is unchanged, and no rules deploy was needed. Hiding still resolves its report, because the report genuinely has been actioned; "currently hidden" is different state and the quarantine collection *is* that set, with no derivation. Also makes `ModerationService.restoreSignal` live, which the reuse review had flagged as dead code. §7.16, §9, §11, §14. |
 | 2026-08-17 | **Built the moderator role (master spec §3.6.1, §18)** — the first tier of the governance hierarchy, and the thing three separate code comments had been deferring to (`firestore.rules` on `isStatusOnlyUpdate`, the urgency picker, and §14 of this document). Role is a server-only `moderators/{uid}` **document, not an Auth custom claim**: a claim survives in the ID token until it expires, so a revoked moderator would keep every power for up to an hour, and it would be a second copy of the value. User reporting (`reports`, 12 reasons from §18.1) writes directly with a **deterministic document id as the rate limit** — `create` allowed, `update` denied, so one report per user per target needs no throttle collection. All eight moderator actions go through one `moderateAction` callable so the authorization check, the mandatory note, the unforgeable `moderationActions` audit entry and the report resolution cannot be skipped per-branch. **Hiding moves the signal document to `moderationQuarantine`** rather than setting a flag: subcollections survive a document delete, so a restore is lossless, and no client rule match means genuinely unreadable — where a `hidden: true` field would have needed a backfill of every signal plus an index, and hidden it from the app and nobody else. Two traps handled: restoring re-fires `onSignalCreated` (guarded on `moderation.restoredAt`), and the reporter could otherwise clear their own moderation (`isNotTouchingModeration` on both update branches). Invariant 5a came due — `moderateSetUrgency` is the first server-written event, so `functions/src/events.ts` and its parity test now exist. The plain-HTTPS callable transport (§7.14) was extracted to `services/callable_client.dart` on its third call site. 191 rules tests, 202 Dart tests, 48 functions tests. §4.1, §5.1, §6, §7.16, §9, §11, §12, §14. |
 | 2026-08-15 | **Folded `signalType` into the help-tag vocabulary.** Four of its seven values restated fields that now exist in their own right (Emergency = red urgency, Blood donation / Unneutered animals = tags, Wild animals = `animalType`), so reporters answered the same question twice and the answers could contradict. The deciding case was an injured animal, which master spec §5 makes the worked example of Red urgency and gives no category at all. `helpNeededTags[0]` is now the case's category (master spec §4.2); the vocabulary grew to 13 with `bloodDonation`, `neutering`, `lostFound` and `dangerWarning`. Push and inbox text is now urgency + the primary tag's "needed" form ("Urgent · Rescue needed — …"), as a second localized label per tag rather than a `+ " needed"` suffix, because Bulgarian does not build that phrase by suffixing. The `signalTypes` notification gate is gone — **removing the only negative filter users had** (§4.2), which cost nothing because no user had ever excluded a type. The map filter sheet swapped its type section for tag + species, closing the browse-vs-notify asymmetry. No migration: `signalType` is simply never read, and the four production signals predating tags were fixed by hand. §4.2, §4.4, §4.7, §5.1, §7.4, §7.13, §9, §12. |
 | 2026-08-16 | **Made the legacy category survive everywhere it is shown, not just in the push.** The retired-type table became a table of *tag codes* rather than of headline strings (`primarySignalTag`, with `signalHeadline` derived from it), so the mapping exists once instead of as a parallel list, and the public share page — the one thing people see before they have the app — stopped badging every pre-vocabulary signal "Rescue". §4.4, §12. |

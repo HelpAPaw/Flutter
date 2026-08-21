@@ -1668,6 +1668,15 @@ class AppLocalizationsEn extends AppLocalizations {
       'You no longer have moderator access.';
 
   @override
+  String get moderationSelfBlocked => 'You cannot moderate your own content.';
+
+  @override
+  String get moderationActionsLabel => 'Moderation actions';
+
+  @override
+  String get moderationCommentChooserTitle => 'This comment';
+
+  @override
   String get moderationHideSignal => 'Hide signal';
 
   @override
@@ -1712,4 +1721,28 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get moderationBadge => 'Moderator';
+
+  @override
+  String get moderationTabReports => 'Reports';
+
+  @override
+  String get moderationTabHidden => 'Hidden';
+
+  @override
+  String get moderationHiddenEmpty => 'No hidden signals.';
+
+  @override
+  String moderationHiddenBy(String name) {
+    return 'Hidden by $name';
+  }
+
+  @override
+  String get moderationRestoreTitle => 'Restore this signal?';
+
+  @override
+  String get moderationRestoreBody =>
+      'It goes back on the map for everyone. Its comments and history are still there.';
+
+  @override
+  String get moderationRestore => 'Restore';
 }

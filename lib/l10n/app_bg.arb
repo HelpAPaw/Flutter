@@ -609,6 +609,9 @@
   "moderationActionApplied": "Готово.",
   "moderationActionFailed": "Действието не бе изпълнено. Моля, опитайте отново.",
   "moderationPermissionDenied": "Вече нямате достъп на модератор.",
+  "moderationSelfBlocked": "Не можете да модерирате собственото си съдържание.",
+  "moderationActionsLabel": "Модераторски действия",
+  "moderationCommentChooserTitle": "Този коментар",
 
   "moderationHideSignal": "Скриване на сигнала",
   "moderationRestoreSignal": "Възстановяване на сигнала",
@@ -625,5 +628,13 @@
   "moderationLabelDuplicate": "Възможен дубликат",
   "moderationLabelDisputed": "Оспорван",
   "moderationCommentsLocked": "Модератор е заключил коментарите към този сигнал.",
-  "moderationBadge": "Модератор"
+  "moderationBadge": "Модератор",
+
+  "moderationTabReports": "Доклади",
+  "moderationTabHidden": "Скрити",
+  "moderationHiddenEmpty": "Няма скрити сигнали.",
+  "moderationHiddenBy": "Скрит от {name}",
+  "moderationRestoreTitle": "Възстановяване на сигнала?",
+  "moderationRestoreBody": "Сигналът се връща на картата за всички. Коментарите и историята му са запазени.",
+  "moderationRestore": "Възстановяване"
 }

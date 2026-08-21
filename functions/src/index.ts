@@ -45,7 +45,7 @@ admin.initializeApp();
 // self-contained privileged surface with its own authorization rule, and
 // keeping it out of this file makes "what can a moderator do" one place to
 // read. It must be imported AFTER initializeApp() — see the lazy `db()` there.
-export { moderateAction } from "./moderation";
+export { moderateAction, listQuarantined } from "./moderation";
 
 // Case ownership (master spec 4.5), re-exported for the same reasons and with
 // the same initializeApp() ordering constraint.

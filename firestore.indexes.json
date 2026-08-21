@@ -137,6 +137,20 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "moderationQuarantine",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "collection",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "hiddenAt",
+          "order": "DESCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [

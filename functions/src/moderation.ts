@@ -30,7 +30,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { buildEventData, SIGNAL_EVENT_FIELDS } from "./events";
 import {
   db,
-  loadSignal,
+  loadSignal as loadSignalDocument,
   requireId,
   requireNote as requireNoteShared,
   requireSignalCollection,
@@ -38,9 +38,12 @@ import {
 } from "./signalRefs";
 import { URGENCY_GREEN, URGENCY_RED } from "./urgency";
 
-// Signal addressing (`db`, the collection list, `requireId`, `loadSignal`, the
-// note bound) lives in ./signalRefs so `caseOwnership` uses the same
-// definitions. `requireId` is re-exported because this module's own test suite
+// Signal addressing (`db`, the collection list, `requireId`, the note bound, and
+// `loadSignal` — imported here as `loadSignalDocument`) lives in ./signalRefs so
+// `caseOwnership` uses the same definitions. The local `loadSignal` below wraps
+// it to add the self-moderation guard, which is a moderation concern and must
+// NOT move into the shared helper: acting on your own case is caseOwnership's
+// normal path. `requireId` is re-exported because this module's own test suite
 // imports it by that path, and because it is a moderation-era decision that
 // happens to be shared rather than a signalRefs-era one.
 export { requireId };
@@ -114,6 +117,69 @@ function requireNote(raw: unknown): string {
 /** Quarantine document id. Namespaced so both collections can share it. */
 function quarantineId(collection: SignalCollection, signalId: string): string {
   return `${collection}__${signalId}`;
+}
+
+/**
+ * Refuses an action whose target belongs to the moderator performing it.
+ *
+ * Moderator powers are for the community's content, not one's own. Without this
+ * a moderator could quietly clear a `disputed` label off their own case, lock
+ * comments on the thread criticising it, or downgrade someone's Red Alert about
+ * them — each one perfectly audited, and each one exactly the unchecked power
+ * master spec §3.6.1 says the role must not carry ("Moderators are the first
+ * line of community safeguarding, but they should not have unchecked power").
+ *
+ * Enforced here rather than in the client alone, because the client is only an
+ * affordance: the shield icon is hidden on your own signal, so an ordinary
+ * moderator never meets this error, and anyone who does was bypassing the UI.
+ *
+ * [owner] is the `reporter` / `author` field as stored — a `DocumentReference`
+ * into `users`. An absent or malformed owner does **not** trip the guard: it
+ * cannot equal a uid, and refusing to moderate ownerless content would leave
+ * exactly the legacy documents most likely to need moderating unmoderatable.
+ *
+ * `failed-precondition` rather than `permission-denied`: the caller *is* a
+ * moderator and the role is intact. It is this specific target that is out of
+ * bounds, and the two get different messages in the app.
+ */
+export function requireNotOwnContent(owner: unknown, uid: string): void {
+  const ownerId = (owner as FirebaseFirestore.DocumentReference | undefined)
+    ?.id;
+  if (ownerId !== undefined && ownerId === uid) {
+    throw new HttpsError(
+      "failed-precondition",
+      "You cannot moderate your own content."
+    );
+  }
+}
+
+/**
+ * Loads a signal for a MODERATOR action, refusing their own content.
+ *
+ * Wraps the shared addressing helper (`signalRefs.loadSignal`) rather than
+ * duplicating it, and adds the one thing that is a *moderation* concern rather
+ * than an addressing one.
+ *
+ * **Deliberately not pushed down into the shared helper**: `caseOwnership` uses
+ * it too, and there acting on your own case is the entire normal path — taking
+ * responsibility for a signal you reported is the default, not an abuse.
+ *
+ * The self-check is here rather than in each of the four callers, for the same
+ * reason the audit entry and the batch live in `moderateAction`: a check every
+ * branch has to remember is a check some future branch will forget.
+ */
+async function loadSignal(
+  uid: string,
+  data: Record<string, unknown>
+): Promise<{
+  collection: SignalCollection;
+  signalId: string;
+  ref: FirebaseFirestore.DocumentReference;
+  snapshot: FirebaseFirestore.DocumentSnapshot;
+}> {
+  const loaded = await loadSignalDocument(data);
+  requireNotOwnContent(loaded.snapshot.data()?.reporter, uid);
+  return loaded;
 }
 
 /** The `moderation` map on a loaded signal, or an empty one. */
@@ -230,11 +296,11 @@ async function runAction(
     case "restoreSignal":
       return restoreSignal(uid, note, data, batch);
     case "setCommentsLocked":
-      return setCommentsLocked(data, batch);
+      return setCommentsLocked(uid, data, batch);
     case "setUrgency":
       return setUrgency(uid, note, data, batch);
     case "deleteComment":
-      return deleteComment(data, batch);
+      return deleteComment(uid, data, batch);
     case "setLabel":
       return setLabel(uid, data, batch);
     case "resolveReport":
@@ -267,7 +333,7 @@ async function hideSignal(
   data: Record<string, unknown>,
   batch: FirebaseFirestore.WriteBatch
 ): Promise<ActionResult> {
-  const { collection, signalId, ref, snapshot } = await loadSignal(data);
+  const { collection, signalId, ref, snapshot } = await loadSignal(uid, data);
 
   batch.set(db().collection(QUARANTINE_COLLECTION).doc(quarantineId(collection, signalId)), {
     data: snapshot.data(),
@@ -330,6 +396,11 @@ async function restoreSignal(
   }
 
   const stored = (snapshot.data()?.data ?? {}) as Record<string, unknown>;
+  // Now that hiding your own signal is refused, the only way your own signal is
+  // in quarantine is that ANOTHER moderator hid it — and quietly putting it
+  // back is precisely the conflict of interest this guard exists to prevent.
+  // Escalating to an admin is the route, once that tier exists (spec §3.6.2).
+  requireNotOwnContent(stored.reporter, uid);
   const priorModeration = (stored.moderation ?? {}) as Record<string, unknown>;
 
   batch.set(signalRef, {
@@ -352,13 +423,14 @@ async function restoreSignal(
 
 /** Lock or unlock a signal's comments (spec 18.3). Enforced in the rules too. */
 async function setCommentsLocked(
+  uid: string,
   data: Record<string, unknown>,
   batch: FirebaseFirestore.WriteBatch
 ): Promise<ActionResult> {
   if (typeof data.locked !== "boolean") {
     throw new HttpsError("invalid-argument", "`locked` must be a boolean.");
   }
-  const { collection, signalId, ref, snapshot } = await loadSignal(data);
+  const { collection, signalId, ref, snapshot } = await loadSignal(uid, data);
   const before = moderationOf(snapshot).commentsLocked === true;
 
   batch.update(ref, { "moderation.commentsLocked": data.locked });
@@ -405,7 +477,7 @@ async function setUrgency(
     );
   }
 
-  const { collection, signalId, ref, snapshot } = await loadSignal(data);
+  const { collection, signalId, ref, snapshot } = await loadSignal(uid, data);
   const previous = snapshot.data()?.urgency;
   const oldValue = typeof previous === "number" ? previous : MIN_URGENCY;
 
@@ -440,6 +512,7 @@ async function setUrgency(
 
 /** Remove a single comment (spec 18.3, "Hide post" applied at comment level). */
 async function deleteComment(
+  uid: string,
   data: Record<string, unknown>,
   batch: FirebaseFirestore.WriteBatch
 ): Promise<ActionResult> {
@@ -456,6 +529,20 @@ async function deleteComment(
   if (!snapshot.exists) {
     throw new HttpsError("not-found", "That comment no longer exists.");
   }
+  // TWO owners to clear, because a comment has two.
+  //
+  // The author, so a moderator cannot delete a comment they wrote themselves —
+  // that is the reporter's cascade, not a moderation action.
+  requireNotOwnContent(snapshot.data()?.author, uid);
+  // And the signal's reporter, because deleting the comment criticising your
+  // own case is the same conflict of interest as locking the thread it sits in.
+  // Read directly rather than through `loadSignal`, whose `not-found` would
+  // break the one legitimate case where the parent is absent: a signal hidden
+  // earlier keeps its comments, since subcollections survive the document. An
+  // absent parent leaves the guard untripped, which is the right answer — the
+  // content is already withheld from everyone.
+  const parent = await db().collection(collection).doc(signalId).get();
+  requireNotOwnContent(parent.data()?.reporter, uid);
 
   batch.delete(ref);
 
@@ -480,7 +567,7 @@ async function setLabel(
     throw new HttpsError("invalid-argument", "Unknown moderation label.");
   }
 
-  const { collection, signalId, ref, snapshot } = await loadSignal(data);
+  const { collection, signalId, ref, snapshot } = await loadSignal(uid, data);
   const before = moderationOf(snapshot).label ?? null;
 
   batch.update(ref, {
@@ -552,3 +639,99 @@ async function addNote(data: Record<string, unknown>): Promise<ActionResult> {
       : { collection: requireSignalCollection(data.collection) }),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Reading quarantine (master spec 18.3 — hiding is "temporarily")
+// ---------------------------------------------------------------------------
+
+/** Most recently hidden signals returned in one page. Matches the queue's cap. */
+const QUARANTINE_PAGE_SIZE = 50;
+
+/**
+ * What the client is told about a hidden signal.
+ *
+ * A **summary, deliberately not the document.** `moderationQuarantine` holds the
+ * whole signal — description, photo URLs, contact phone — and the entire reason
+ * that collection has no client rule match is that its contents are withheld
+ * from readers. A moderator's actual need is "what did I hide, and put that one
+ * back", which title and reason answer. Shipping `data` would undo the hide for
+ * anyone with the moderator role and a crafted client.
+ */
+export interface QuarantineSummary {
+  quarantineId: string;
+  signalId: string;
+  collection: string;
+  title: string;
+  hiddenBy: string;
+  note: string;
+  /** Epoch millis — a Firestore Timestamp does not survive the JSON envelope. */
+  hiddenAtMillis: number | null;
+}
+
+/**
+ * Projects a quarantine document to its summary.
+ *
+ * Exported for its own test: this is where a serialization bug would hide, and
+ * the `hiddenAt` conversion in particular has no compile-time protection —
+ * returning the Timestamp itself yields `{_seconds, _nanoseconds}` on some
+ * transports and `{}` on others, both of which render as a blank date rather
+ * than failing.
+ */
+export function quarantineSummary(
+  id: string,
+  raw: Record<string, unknown> | undefined
+): QuarantineSummary {
+  const data = (raw?.data ?? {}) as Record<string, unknown>;
+  const hiddenAt = raw?.hiddenAt as FirebaseFirestore.Timestamp | undefined;
+  return {
+    quarantineId: id,
+    signalId: typeof raw?.signalId === "string" ? raw.signalId : "",
+    collection: typeof raw?.collection === "string" ? raw.collection : "",
+    title: typeof data.title === "string" ? data.title : "",
+    hiddenBy: typeof raw?.hiddenBy === "string" ? raw.hiddenBy : "",
+    note: typeof raw?.note === "string" ? raw.note : "",
+    hiddenAtMillis:
+      typeof hiddenAt?.toMillis === "function" ? hiddenAt.toMillis() : null,
+  };
+}
+
+/**
+ * Lists the signals currently in quarantine, for the moderator who wants to
+ * put one back.
+ *
+ * **A callable rather than a client read**, which is the whole design decision
+ * here. Letting a moderator read `moderationQuarantine` through the rules would
+ * have been less code and would have given live updates, but it would also ship
+ * the withheld content to the client and would mean the one moderator power
+ * that works by direct read — every other one goes through `moderateAction`
+ * precisely so it is authorized server-side. Keeping the collection denied to
+ * every client preserves the hide guarantee in its strongest form: a hidden
+ * signal is not readable by anyone, moderators included.
+ *
+ * Separate from `moderateAction` on purpose: that endpoint's contract is that
+ * every call carries a mandatory note and leaves an audit entry, and neither
+ * belongs on a read.
+ *
+ * Scoped by collection so a moderator in test mode sees the test-mode
+ * quarantine, matching how the report queue splits.
+ */
+export const listQuarantined = onCall(
+  { enforceAppCheck: true },
+  async (request) => {
+    await requireModerator(request.auth?.uid);
+
+    const data = (request.data ?? {}) as Record<string, unknown>;
+    const collection = requireSignalCollection(data.collection);
+
+    const snapshot = await db()
+      .collection(QUARANTINE_COLLECTION)
+      .where("collection", "==", collection)
+      .orderBy("hiddenAt", "desc")
+      .limit(QUARANTINE_PAGE_SIZE)
+      .get();
+
+    return {
+      items: snapshot.docs.map((doc) => quarantineSummary(doc.id, doc.data())),
+    };
+  }
+);
