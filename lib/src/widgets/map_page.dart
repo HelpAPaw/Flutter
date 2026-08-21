@@ -1,8 +1,8 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:adaptive_components/adaptive_components.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,6 +14,7 @@ import '../config/routes.dart';
 import '../repositories/repository_provider.dart';
 import '../repositories/signal_repository.dart';
 import '../services/app_preferences_service.dart';
+import '../services/auth_service.dart';
 import '../services/location_service.dart';
 import '../services/signal_navigator.dart';
 import '../state/map_state.dart';
@@ -173,14 +174,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       // background checks on the old mode's gate until the next launch.
       await LocationService().syncTestMode();
 
-      // Sync testMode flag to Firestore user document
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        FirebaseFirestore.instance.collection('users').doc(user.uid).set(
-          {'testMode': newTestMode},
-          SetOptions(merge: true),
-        ).catchError((_) {});
-      }
+      // Stamp the new mode on the account, through the same writer startup and
+      // sign-in use so there is one place that knows how `users/{uid}.testMode`
+      // is maintained — and so the write-avoidance cache behind it stays in
+      // step with what was actually written (#72).
+      unawaited(AuthService().syncTestMode());
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

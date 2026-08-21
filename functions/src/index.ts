@@ -1061,9 +1061,22 @@ async function handleSignalUpdated(
     const userId = userDoc.id;
     const userData = userDoc.data() as UserData;
 
-    // Skip users in the wrong mode
+    // Skip users in the wrong mode.
+    //
+    // Logged, because this is the one gate here that can drop a *subscriber* —
+    // somebody who asked to hear about this signal — and it takes their inbox
+    // entry with the push. An account whose `testMode` was never written reads
+    // as production and disappears from test traffic with no other trace
+    // (HelpAPaw/Flutter#72), which is indistinguishable from "nothing was due".
     const userTestMode = userData.testMode === true;
-    if (userTestMode !== isTestMode) continue;
+    if (userTestMode !== isTestMode) {
+      console.log(
+        `Skipping ${userId}: testMode ${userTestMode}${
+          userData.testMode === undefined ? " (field absent)" : ""
+        } != signal ${isTestMode}`
+      );
+      continue;
+    }
 
     // Skip the user who made the update
     if (updatedByRef && updatedByRef.id === userId) {
@@ -1229,9 +1242,22 @@ async function handleCommentCreated(
     const userId = userDoc.id;
     const userData = userDoc.data() as UserData;
 
-    // Skip users in the wrong mode
+    // Skip users in the wrong mode.
+    //
+    // Logged, because this is the one gate here that can drop a *subscriber* —
+    // somebody who asked to hear about this signal — and it takes their inbox
+    // entry with the push. An account whose `testMode` was never written reads
+    // as production and disappears from test traffic with no other trace
+    // (HelpAPaw/Flutter#72), which is indistinguishable from "nothing was due".
     const userTestMode = userData.testMode === true;
-    if (userTestMode !== isTestMode) continue;
+    if (userTestMode !== isTestMode) {
+      console.log(
+        `Skipping ${userId}: testMode ${userTestMode}${
+          userData.testMode === undefined ? " (field absent)" : ""
+        } != signal ${isTestMode}`
+      );
+      continue;
+    }
 
     // Skip the comment author
     if (authorRef && authorRef.id === userId) {
@@ -1332,7 +1358,18 @@ async function notifyOneUser(
   const userDoc = await db.collection("users").doc(uid).get();
   const userData = userDoc.data() as UserData | undefined;
   if (!userData) return;
-  if ((userData.testMode === true) !== isTestMode) return;
+  // Logged for the same reason as the fan-out loops: this drops an *addressed*
+  // notification and its inbox entry, and an account whose `testMode` was never
+  // written reads as production, so a test-mode recipient vanishes silently
+  // (HelpAPaw/Flutter#72).
+  if ((userData.testMode === true) !== isTestMode) {
+    console.log(
+      `notifyOneUser: skipping ${uid}: testMode ${userData.testMode === true}${
+        userData.testMode === undefined ? " (field absent)" : ""
+      } != ${isTestMode}`
+    );
+    return;
+  }
 
   const badgeByUid = await writeInboxEntries([uid], entry, isTestMode);
 

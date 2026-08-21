@@ -113,12 +113,39 @@ toggles test mode (`map_page.dart::_handleTitleTap`). Effects:
   `RepositoryProvider.resetSignalRepository()` rebuilds the repository.
 - The flag is mirrored to native prefs via `LocationService.syncTestMode()` so the
   Android background pre-filter keys its gate by mode.
-- `users/{uid}.testMode` is written so the server fan-out only matches same-mode users.
+- `users/{uid}.testMode` is written so the server fan-out only matches same-mode users,
+  through `AuthService.syncTestMode()` (§3.2.1) rather than inline.
 - The notification dedupe store and the nearby-check gate are namespaced per mode.
 - The app bar title renders `Help a Paw (TEST)`.
 
 Test mode isolates **data collections only** — rules, functions, auth and storage are
 shared with production.
+
+#### 3.2.1 Recording the mode on the account
+
+`AuthService.syncTestMode()` is the single writer of `users/{uid}.testMode`. It runs:
+
+- at launch, in `_bootstrapServices` right after the session is established — which also
+  backfills accounts that predate it;
+- inside `ensureAnonymousSession` when it actually mints a session, so a mid-session
+  sign-out's replacement uid is stamped without waiting for a relaunch;
+- at the top of `NotificationService.onUserLogin()`, **above** its
+  `_accountNotificationsEnabled` early return;
+- on the 7-tap toggle above.
+
+It is deliberately independent of notification preferences and of the FCM token. The
+field decides whether the server fan-out considers an account **at all** — the mode
+guard sits above the `inboxRecipients`/`userTokens` split (§9), so an unrecorded mode
+costs the inbox entry as well as the push, for a user whose only mistake was not
+enabling notifications. Absent reads as production, which is correct for every real user
+and silent for a test-mode one, so it must be written rather than inferred
+(HelpAPaw/Flutter#72). The mode guards log every drop for the same reason.
+
+Callers must **not** await it: a Firestore write's future only completes on server
+acknowledgement, so awaiting it hangs the caller for as long as the device is offline.
+`AppPreferencesService` caches the last (uid, mode) pair written, so the ordinary launch
+— same account, same mode — issues no write at all; the cache is only updated after a
+successful write and fails towards writing in every other case.
 
 ### 3.3 Platform targets
 
@@ -240,7 +267,7 @@ answering one is the `caseOwnership` callable's job.
 | `fcmTokens` | string[] | multi-device, maintained with `arrayUnion`/`arrayRemove` |
 | `tokenLastSaved` | Timestamp | changes here are what trigger `onUserTokensWritten` |
 | `isAnonymous` | bool | |
-| `testMode` | bool | fan-out only matches users in the same mode |
+| `testMode` | bool | fan-out only matches users in the same mode; written by `AuthService.syncTestMode()` (§3.2.1), absent reads as production |
 | `signalSubscriptions` | string[] | signal ids the user follows |
 | `notificationPreferences` | map | see §4.2 |
 | `displayName`, `name`, `phone`, `email` | string | profile |
@@ -1479,10 +1506,11 @@ Other rules of the service:
 - One shared Android channel, `help_a_paw_signals` (high importance), declared once as
   `NotificationService.signalsChannel` — Android ignores later redefinitions.
 - FCM tokens are stored with `arrayUnion` (multi-device) alongside `isAnonymous`,
-  `testMode`, `updatedAt` and `tokenLastSaved`. On iOS the APNs token is awaited first
+  `testMode`, `updatedAt` and `tokenLastSaved`. That `testMode` write is incidental —
+  §3.2.1 owns the field, because an account without a token needs it too. On iOS the APNs token is awaited first
   (5 × 2s), and failures retry with backoff (3 attempts).
-- `onUserLogin()` registers this device **only if the signed-in account already has
-  notifications enabled** — so enabling on one device works on the next device you sign
+- `onUserLogin()` syncs the account's test mode first (§3.2.1), then registers this
+  device **only if the signed-in account already has notifications enabled** — so enabling on one device works on the next device you sign
   in to, without requesting permission behind the user's back.
 - Tokens register on app start/foreground, not the instant the toggle flips.
 

@@ -257,6 +257,15 @@ Future<void> _bootstrapServices() async {
   await AuthService()
       .ensureAnonymousSession(timeout: const Duration(seconds: 15));
 
+  // Stamp which mode this device is in onto the account, whatever it is and
+  // whether or not it wants push (#72). Independent of the notification setup
+  // below on purpose: `users/{uid}.testMode` decides whether the server fan-out
+  // will even consider this account, and it was previously written only
+  // alongside the FCM token — so an account with notifications off had no mode
+  // recorded and lost its inbox entries as well as its pushes. This launch-time
+  // call is also what backfills accounts that predate the fix.
+  unawaited(AuthService().syncTestMode());
+
   // Repair accounts that signed in through a build which didn't carry Google's
   // name onto the Auth record (R5-001). A no-op for anonymous users and for
   // anyone who already has a name, so it costs nothing after the first launch.
