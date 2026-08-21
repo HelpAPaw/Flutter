@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../repositories/repository_provider.dart';
 import 'app_preferences_service.dart';
+import 'auth_service.dart';
 import 'nearby_signal_checker.dart';
 import 'notified_signals_store.dart';
 import 'signal_navigator.dart';
@@ -370,6 +371,14 @@ class NotificationService {
   Future<void> onUserLogin() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+
+    // Above the early return, and not part of the token registration: the
+    // account's test mode is a property of where it is being used, not of
+    // whether it wants push. Behind the return it was never written for an
+    // account that signed in with notifications off, which dropped it from
+    // every same-mode fan-out — inbox entries included (#72).
+    unawaited(AuthService().syncTestMode());
+
     if (!await _accountNotificationsEnabled(user.uid)) return;
 
     try {

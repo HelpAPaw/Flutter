@@ -12,6 +12,8 @@ class AppPreferencesService {
   static const String _onboardingDismissedKey = 'notification_onboarding_dismissed';
   static const String _testModeKey = 'test_mode_enabled';
   static const String _deferredLinkCheckedKey = 'deferred_link_checked';
+  static const String _testModeSyncedUidKey = 'test_mode_synced_uid';
+  static const String _testModeSyncedValueKey = 'test_mode_synced_value';
 
   /// Initialize SharedPreferences - must be called before using any other
   /// methods.
@@ -85,6 +87,33 @@ class AppPreferencesService {
   /// Enable or disable test mode
   Future<void> setTestMode(bool enabled) async {
     await _prefs?.setBool(_testModeKey, enabled);
+  }
+
+  /// Whether `users/{uid}.testMode` on the server is already known to match
+  /// [isTestMode] for [uid].
+  ///
+  /// Purely a write-avoidance cache for [AuthService.syncTestMode], which runs
+  /// on every launch and every sign-in. Steady state — same account, same mode
+  /// — costs nothing; a mismatch or an unknown account costs one write.
+  ///
+  /// Safe to lose: cleared prefs (a reinstall) also clear [isTestMode] itself,
+  /// so the pair is re-derived rather than stale. It is safe to *keep* because
+  /// every in-app flow that deletes a user document — the anonymous merge,
+  /// account deletion — also changes the uid, so the entry stops matching.
+  ///
+  /// The one case it cannot see is a document deleted underneath a live session
+  /// (a backend wipe): the uid is unchanged, so the cache still claims the mode
+  /// was written. Toggling test mode off and on re-writes it; a reinstall
+  /// clears everything.
+  bool isTestModeSyncedFor(String uid) {
+    return _prefs?.getString(_testModeSyncedUidKey) == uid &&
+        _prefs?.getBool(_testModeSyncedValueKey) == isTestMode();
+  }
+
+  /// Record that [uid]'s server document now carries [testMode].
+  Future<void> setTestModeSynced(String uid, bool testMode) async {
+    await _prefs?.setString(_testModeSyncedUidKey, uid);
+    await _prefs?.setBool(_testModeSyncedValueKey, testMode);
   }
 
   /// Returns the Firestore collection name based on test mode state

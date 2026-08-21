@@ -1,9 +1,12 @@
 
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 
+import 'app_preferences_service.dart';
 import 'callable_client.dart';
 import 'notification_service.dart';
 import 'public_profile_service.dart';
@@ -128,11 +131,77 @@ class AuthService {
     try {
       FirebaseCrashlytics.instance.log('Auth: Anonymous sign-in started');
       await _auth.signInAnonymously().timeout(timeout);
+      // A brand-new uid, so nothing on the server knows which mode this device
+      // is in. Signing out mid-session lands here, and without this the
+      // replacement account is invisible to the fan-out until the next launch.
+      //
+      // Not awaited: this method is time-boxed for callers holding up a tap,
+      // and a Firestore write's future does not complete until the server
+      // acknowledges it — offline it would hang past the timeout, which only
+      // covers the sign-in above.
+      unawaited(syncTestMode());
     } catch (e) {
       debugPrint('Anonymous sign-in failed: $e');
       FirebaseCrashlytics.instance.log('Auth: Anonymous sign-in failed');
     }
     return _auth.currentUser;
+  }
+
+  /// Record on the current account which mode this device is being used in.
+  ///
+  /// `users/{uid}.testMode` is what every server fan-out compares a recipient
+  /// against, and an absent field reads as production. It used to be written
+  /// only by the test-mode toggle (for whichever account was signed in at that
+  /// moment) and alongside the FCM token — so an account that arrived on a
+  /// test-mode device without notifications enabled had no `testMode` at all,
+  /// and every notification addressed to it was dropped by the mode guard
+  /// *before* the token/inbox split that is supposed to keep the inbox entry
+  /// working for people without push (HelpAPaw/Flutter#72).
+  ///
+  /// The toggle is not enough on its own because the device preference outlives
+  /// the session it was set in: signing out mints a new anonymous uid, and even
+  /// upgrading that one in place (same uid, everything else preserved) carries
+  /// no `testMode` forward, because there was never one to carry.
+  ///
+  /// Both directions matter. An account left stamped `true` that moves to a
+  /// production-mode device is invisible to the *production* fan-out until
+  /// something rewrites it, which is the same bug seen from the other side.
+  ///
+  /// Best-effort and deliberately cheap: [AppPreferencesService] remembers the
+  /// last (uid, mode) pair actually written, so the common launch — same
+  /// account, same mode — issues no write at all. Never throws into a caller:
+  /// this runs inside sign-in and startup, neither of which should fail because
+  /// a background flag could not be stamped.
+  ///
+  /// Call it fire-and-forget. The Firestore write's future does not complete
+  /// until the server acknowledges it, so awaiting this on a path the user is
+  /// waiting on hangs that path for as long as the device is offline.
+  Future<void> syncTestMode() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    final prefs = AppPreferencesService();
+    // Idempotent, and the reason this is awaited rather than assumed: every
+    // getter degrades to a default instead of throwing, so an uninitialized
+    // instance would report `false` and stamp a test-mode account as
+    // production — the exact failure this method exists to prevent.
+    await prefs.initialize();
+
+    if (prefs.isTestModeSyncedFor(user.uid)) return;
+    final testMode = prefs.isTestMode();
+
+    try {
+      await _db.collection('users').doc(user.uid).set(
+        {'testMode': testMode},
+        SetOptions(merge: true),
+      );
+      await prefs.setTestModeSynced(user.uid, testMode);
+      debugPrint('testMode synced to user doc: $testMode');
+    } catch (e) {
+      // Left unsynced on purpose — the cache is only written on success, so the
+      // next launch or sign-in retries.
+      debugPrint('Error syncing testMode to user doc: $e');
+    }
   }
 
   /// Ends the current session and returns the app to that baseline.
