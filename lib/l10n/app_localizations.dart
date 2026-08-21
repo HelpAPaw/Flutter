@@ -2816,6 +2816,24 @@ abstract class AppLocalizations {
   /// **'You no longer have moderator access.'**
   String get moderationPermissionDenied;
 
+  /// No description provided for @moderationSelfBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'You cannot moderate your own content.'**
+  String get moderationSelfBlocked;
+
+  /// No description provided for @moderationActionsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Moderation actions'**
+  String get moderationActionsLabel;
+
+  /// No description provided for @moderationCommentChooserTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This comment'**
+  String get moderationCommentChooserTitle;
+
   /// No description provided for @moderationHideSignal.
   ///
   /// In en, this message translates to:

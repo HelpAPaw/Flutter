@@ -13,7 +13,14 @@
  * `restoreSignal` could never find again.
  */
 
-import { quarantineSummary, requireId } from "../moderation";
+import * as fs from "fs";
+import * as path from "path";
+
+import {
+  quarantineSummary,
+  requireId,
+  requireNotOwnContent,
+} from "../moderation";
 
 /** Whether `requireId` accepts a value, as a boolean rather than a throw. */
 function accepts(raw: unknown): boolean {
@@ -127,5 +134,109 @@ describe("quarantineSummary", () => {
     expect(summary.signalId).toBe("");
     expect(summary.hiddenAtMillis).toBeNull();
     expect(quarantineSummary("id", undefined).quarantineId).toBe("id");
+  });
+});
+
+describe("requireNotOwnContent", () => {
+  /** A stored `reporter`/`author` field, which is a DocumentReference. */
+  const userRef = (id: string) => ({ id, path: `users/${id}` });
+
+  /** Whether the guard lets an action through, as a boolean rather than a throw. */
+  function allows(owner: unknown, uid: string): boolean {
+    try {
+      requireNotOwnContent(owner, uid);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  it("refuses content owned by the acting moderator", () => {
+    expect(allows(userRef("mod-uid"), "mod-uid")).toBe(false);
+  });
+
+  it("allows somebody else's content", () => {
+    expect(allows(userRef("someone-else"), "mod-uid")).toBe(true);
+  });
+
+  it("throws failed-precondition, not permission-denied", () => {
+    // The distinction is load-bearing: the app maps the two codes to different
+    // messages, and `permission-denied` there means "your role was revoked".
+    // Reporting a revoked role to a moderator who still has one would send them
+    // to the wrong person for help.
+    let code: string | undefined;
+    try {
+      requireNotOwnContent(userRef("mod-uid"), "mod-uid");
+    } catch (e) {
+      code = (e as { code?: string }).code;
+    }
+    expect(code).toBe("failed-precondition");
+  });
+
+  it("does not trip on ownerless or malformed content", () => {
+    // Refusing here would make exactly the legacy documents most likely to need
+    // moderating the ones nobody can moderate.
+    expect(allows(undefined, "mod-uid")).toBe(true);
+    expect(allows(null, "mod-uid")).toBe(true);
+    expect(allows({}, "mod-uid")).toBe(true);
+    expect(allows("mod-uid", "mod-uid")).toBe(true);
+  });
+});
+
+/**
+ * Every action that touches existing content must run the self-moderation
+ * guard, and there is no type that can enforce that — a new action added later
+ * would compile perfectly while skipping it.
+ *
+ * Asserted against the source, in the same spirit as the vocabulary guards: the
+ * failure this catches is silent and permanent (a moderator quietly acting on
+ * their own content, fully audited and looking legitimate), so it is worth a
+ * test that reads the file.
+ */
+describe("self-moderation guard coverage", () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, "..", "moderation.ts"),
+    "utf8"
+  );
+
+  /** The body of a top-level `async function <name>(` declaration. */
+  function bodyOf(name: string): string {
+    const start = source.indexOf(`async function ${name}(`);
+    expect(start).toBeGreaterThan(-1);
+    const next = source.indexOf("\nasync function ", start + 1);
+    return source.slice(start, next === -1 ? source.length : next);
+  }
+
+  it("guards the four signal actions via loadSignal", () => {
+    // These four never load a signal for themselves, so guarding `loadSignal`
+    // guards all of them at once.
+    expect(bodyOf("loadSignal")).toContain("requireNotOwnContent");
+    for (const action of [
+      "hideSignal",
+      "setCommentsLocked",
+      "setUrgency",
+      "setLabel",
+    ]) {
+      expect(bodyOf(action)).toContain("loadSignal(uid, data)");
+    }
+  });
+
+  it("guards the two actions that bypass loadSignal", () => {
+    // `deleteComment` reads the comment directly and `restoreSignal` reads the
+    // quarantine copy, so neither inherits loadSignal's check.
+    expect(bodyOf("restoreSignal")).toContain("requireNotOwnContent");
+    // Twice for a comment, which has two owners: its author, and the reporter
+    // of the signal it sits under. Deleting the comment criticising your own
+    // case is the same conflict of interest as locking the thread.
+    expect(bodyOf("deleteComment").match(/requireNotOwnContent/g)).toHaveLength(
+      2
+    );
+  });
+
+  it("leaves addNote unguarded, deliberately", () => {
+    // An internal note on your own content changes nothing and is exactly the
+    // context the audit log wants. If this ever starts failing, the exemption
+    // was removed on purpose or addNote grew a write it should not have.
+    expect(bodyOf("addNote")).not.toContain("requireNotOwnContent");
   });
 });

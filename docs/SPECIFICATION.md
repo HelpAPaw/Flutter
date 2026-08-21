@@ -1668,16 +1668,43 @@ transport quirk in §7.14, now shared via `services/callable_client.dart`). **Th
 mandatory** on every action, for the same reason it is on a status change: the audit log's
 value is the reasoning.
 
-| Action | Effect |
-|---|---|
-| `hideSignal` | moves the signal document to `moderationQuarantine` |
-| `restoreSignal` | writes it back with `moderation.restoredAt` |
-| `setCommentsLocked` | `moderation.commentsLocked`; also enforced in the rules |
-| `setUrgency` | §5.3 urgency correction — **writes an `events` row** |
-| `deleteComment` | deletes one comment |
-| `setLabel` | `moderation.label` — `unverified` / `duplicate` / `disputed` |
-| `resolveReport` | closes a report as actioned/dismissed |
-| `addNote` | audit-only internal note |
+| Action | Effect | Own content? |
+|---|---|---|
+| `hideSignal` | moves the signal document to `moderationQuarantine` | refused |
+| `restoreSignal` | writes it back with `moderation.restoredAt` | refused |
+| `setCommentsLocked` | `moderation.commentsLocked`; also enforced in the rules | refused |
+| `setUrgency` | §5.3 urgency correction — **writes an `events` row** | refused |
+| `deleteComment` | deletes one comment | refused |
+| `setLabel` | `moderation.label` — `unverified` / `duplicate` / `disputed` | refused |
+| `resolveReport` | closes a report as actioned/dismissed | n/a |
+| `addNote` | audit-only internal note | allowed |
+
+**`reportId` is optional on every action.** When present, the action also resolves that
+report; when absent, the moderator is acting on their own judgement on something they came
+across while browsing, and the server simply skips the report half. This is what lets the
+same sheet serve both entry points — see "Two entry points" below.
+
+**A moderator may not act on their own content.** `requireNotOwnContent` compares the
+stored `reporter` / `author` reference against the acting uid and throws
+`failed-precondition`. It lives inside `loadSignal`, which all four signal actions share,
+so a check every branch would otherwise have to remember cannot be forgotten by a branch
+added later; `deleteComment` and `restoreSignal` load their own documents and call it
+directly. `deleteComment` clears **two** owners — the comment's author, and the reporter of
+the signal it sits under, since deleting the comment criticising your own case is the same
+conflict of interest as locking the thread. It reads that parent directly rather than
+through `loadSignal`, whose `not-found` would break the one legitimate case where the parent
+is absent: a signal hidden earlier keeps its comments, because subcollections survive the
+document. Without it a moderator could clear a `disputed` label off their own case, lock
+the thread criticising it, or downgrade a Red Alert about them — each perfectly audited,
+and each exactly the unchecked power master spec §3.6.1 says the role must not carry.
+`addNote` is exempt: it changes nothing and is the context the audit log wants. An absent
+or malformed owner does *not* trip the guard, or the legacy documents most likely to need
+moderating would be the ones nobody could moderate. `failed-precondition` rather than
+`permission-denied` because the role is intact — the app maps the two to different
+messages, and reporting a revoked role to a moderator who still has one would send them to
+the wrong person for help. Guarded by `self-moderation guard coverage` in
+`functions/src/__tests__/moderation.test.ts`, which reads the source, because a new action
+that skipped the check would compile perfectly and fail silently.
 
 **Hiding moves the document; it does not set a flag.** Firestore keeps subcollections when
 a document is deleted, so `comments` and `events` stay where they are and a restore is
@@ -1698,6 +1725,35 @@ Two consequences:
    notification.
 2. **A hidden signal's photos stay publicly readable by URL**, because `storage.rules`
    grants signal photos `read: true` unconditionally. Recorded in §14.
+
+**Two entry points.** A moderator reaches the action sheet either from a **report** in the
+queue, or from the **shield in the signal details app bar** — and for a comment, from a
+chooser on the row's long-press offering *Report* or *Delete comment*. The second route is
+the one that lets a moderator act on their own judgement, which master spec §18.3 assumes
+throughout ("hide or escalate problematic posts" is a frontline power, not a response to
+paperwork). Until it existed the queue was the only way in, so a problem post found while
+browsing had to be reported first — by the moderator, to themselves — before they could
+touch it.
+
+The sheet is target-shaped rather than report-shaped: `ModerationTarget`
+(`models/moderation_target.dart`) carries the `targetType`, `collection`, `signalId` and
+`targetId` that used to be read straight out of a raw report map, with
+`ModerationTarget.fromReport` holding the decoding for the queue path. It keeps that
+decoding's two safety properties — **`collection` is never defaulted to `'signals'`**, so a
+report whose collection cannot be read offers no signal-targeting action rather than acting
+on production content, and an unknown `targetType` narrows the menu instead of guessing.
+Both are pinned in `test/models/moderation_target_test.dart`. The "Dismiss report" row
+renders only when a `reportId` is present.
+
+The shield is drawn only for a moderator who is **not** the reporter, and the comment
+chooser likewise only on a signal they did not report — both mirroring the server-side
+self-moderation guard, so nobody meets that error in ordinary use. The role comes from one
+`watchIsModerator()` subscription held by the details screen's State, since both the app bar
+and every comment row need the answer; the per-row capability is computed once for the whole
+list, not per row. Hiding from this screen returns
+`ModerationOutcome.targetRemoved` and the screen leaves via `_leaveScreen()` — the document
+has left `signals`, and the screen's empty branch would otherwise report it as *deleted*,
+which is both wrong and the opposite of the reversible thing that just happened.
 
 **Restoring a hidden signal: the Hidden tab.** Hiding resolves its originating
 report — correctly, it *has* been actioned — which drops it out of the queue, and
@@ -2108,7 +2164,8 @@ silently breaks Auth/Firestore/FCM in release builds only.
 | A hidden signal could not be restored from the app | **Fixed 2026-08-19** (§7.16). `hideSignal` resolves its report, which drops it out of the queue — and the queue was the only route to any moderator action, so the un-hide path disappeared with it. Closed with a `listQuarantined` callable and a Hidden tab, **not** by opening `moderationQuarantine` to client reads: the server projects each document to a summary, so the withheld content never reaches a client and the collection stays denied to everyone |
 | Moderator appointment is a terminal script | By design until the admin tier exists — spec §3.6 puts appointment above the moderator level. `functions/scripts/grant_moderator.js` |
 | `grant_moderator.js` is unverified | Open — it needs Application Default Credentials, which this machine has not set up (`gcloud auth application-default login`). The 2026-08-17 grants were made through the Firebase MCP instead, so the script's own code path has never run |
-| Moderator actions have no entry point outside the queue | Open — a moderator can only act on content someone has **reported**, not on anything they come across while browsing. Adding the action sheet to the signal details screen for moderators would close it |
+| Moderator actions have no entry point outside the queue | **Fixed 2026-08-20** (§7.16) — a shield in the signal details app bar and a chooser on a comment's long-press open the same action sheet with no `reportId`. The server already treated `reportId` as optional, so no rules change and no new callable were needed |
+| A moderator could moderate their own content | **Fixed 2026-08-20, deployed and device-verified 2026-08-21** (§7.16) — `requireNotOwnContent` inside `loadSignal` (plus `deleteComment` and `restoreSignal`, which load their own documents) refuses with `failed-precondition`. `addNote` and `resolveReport` are exempt, both confirmed on device. The client hides the affordance on your own content, so the queue path is the only way to reach the error |
 | No behaviour points, restrictions, bans or appeals | Deliberately out of scope for the first moderation slice (master spec §18.4–18.6) |
 | Moderator actions are not notified to the affected user | Open — master spec §18.7 says users are told when a behaviour flag is added. Nothing writes an inbox entry for a hide/lock/label yet |
 
@@ -2118,6 +2175,7 @@ silently breaks Auth/Firestore/FCM in release builds only.
 
 | Date | Change |
 |---|---|
+| 2026-08-20 | **Let moderators act on their own judgement, and stopped them acting on themselves** (§7.16, §14). Every moderator power was reachable only from a report: the action sheet took a non-nullable `reportId` and read each row's target out of the raw report document, and its one call site was the queue tile. So a moderator who came across a problem post while browsing had to report it — to themselves — before they could touch it, which master spec §18.3 never intended. Closed **client-side only**: `moderateAction` already treated `reportId` as optional and skipped the report half when absent, so no rules change, no new callable, no rules deploy. The sheet is now target-shaped (`ModerationTarget`, with `fromReport` keeping the never-default-`'signals'` and unknown-`targetType` safety properties), entered from a shield in the signal details app bar and from a Report/Delete chooser on a comment's long-press; "Dismiss report" renders only when there *is* a report. Hiding from the details screen returns `targetRemoved` so the screen leaves rather than reporting the signal as deleted. Added in the same pass, since the browsing entry point makes it reachable: **`requireNotOwnContent`**, refusing any action on the moderator's own signal or comment with `failed-precondition` — placed inside the shared `loadSignal` so no future action can forget it, with `deleteComment` and `restoreSignal` calling it directly and `addNote` exempt. Guarded by a source-reading coverage test, because a new action that skipped the check would compile perfectly and fail silently. 234 Dart tests, 67 functions tests, 197 rules tests. **`moderateAction` deployed to help-a-paw-dev and device-verified on SM X205 + SM J610FN 2026-08-21** — six actions performed with an empty report queue, each audited with **no `reportId`**; lock/unlock and label set/clear round-tripped (the direction the queue path could never reach); hide popped to the map and restore skipped the fan-out; and a report filed against the moderator's *own* signal was refused `failed-precondition` with the signal left byte-identical. |
 | 2026-08-01 | Initial specification, written from the codebase at `6.0.1+125` (branch `dev`). |
 | 2026-08-01 | Investigated the `storage.rules` note: confirmed BUG-1 (avatar upload always denied), BUG-2 (test-mode signal photos denied) and BUG-3 (failed upload reported as success). Recorded the emulator's project-prefixed reference representation as a testing caveat. §5.2, §14. |
 | 2026-08-01 | Fixed all three, added `firestore-tests/storage.rules.test.js` (27 cases) and size/content-type limits (5 MB signal photos, 2 MB avatars, `image/*`). Client now declares `contentType` on every upload; avatar reads are public. **`storage.rules` deployed to production.** §5.2, §13.2, §14. |

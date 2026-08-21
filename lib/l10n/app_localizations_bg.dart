@@ -1551,6 +1551,16 @@ class AppLocalizationsBg extends AppLocalizations {
   String get moderationPermissionDenied => 'Вече нямате достъп на модератор.';
 
   @override
+  String get moderationSelfBlocked =>
+      'Не можете да модерирате собственото си съдържание.';
+
+  @override
+  String get moderationActionsLabel => 'Модераторски действия';
+
+  @override
+  String get moderationCommentChooserTitle => 'Този коментар';
+
+  @override
   String get moderationHideSignal => 'Скриване на сигнала';
 
   @override
