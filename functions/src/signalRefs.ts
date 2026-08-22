@@ -3,7 +3,7 @@
  * signal id from a client.
  *
  * Extracted when `caseOwnership` arrived as the second such callable. These
- * four helpers are not "utilities" in the pejorative sense — each one encodes a
+ * helpers are not "utilities" in the pejorative sense — each one encodes a
  * decision that is wrong to make twice:
  *
  *  - which collections exist at all (`signals` and `signals_test`, and a caller
@@ -14,6 +14,9 @@
  *    starts writing;
  *  - that every action carries a note, because an audit trail or a timeline
  *    whose entries have no reasoning is just a list of timestamps.
+ *
+ * `withheldSignalId` joined them when signal *removal* arrived as the second
+ * thing that moves a signal document out of `signals`.
  *
  * `moderation.ts` owned all four first and still re-exports {@link requireId},
  * which its own test suite imports by that path.
@@ -43,6 +46,27 @@ export function requireSignalCollection(raw: unknown): SignalCollection {
     throw new HttpsError("invalid-argument", "Unknown signal collection.");
   }
   return raw as SignalCollection;
+}
+
+/**
+ * Document id for a signal held OUTSIDE `signals` — quarantine or removal.
+ *
+ * Two collections hold a signal document that has left `signals`:
+ * `moderationQuarantine` (a moderator hid it) and `removedSignals` (its
+ * reporter took it down). They stay separate because they differ on every axis
+ * that matters — who may read them, who may restore them, and whether they
+ * expire — but they key their documents the same way, and that format is the
+ * thing it would be quietly wrong to define twice: a restore looks the id up,
+ * so a drifted format would not error, it would simply never find the document.
+ *
+ * The namespace is the collection, so a production and a test-mode signal that
+ * somehow shared an id could not collide in either holding collection.
+ */
+export function withheldSignalId(
+  collection: SignalCollection,
+  signalId: string
+): string {
+  return `${collection}__${signalId}`;
 }
 
 /**

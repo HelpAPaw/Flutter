@@ -51,6 +51,12 @@ export { moderateAction, listQuarantined } from "./moderation";
 // the same initializeApp() ordering constraint.
 export { caseOwnership } from "./caseOwnership";
 
+// Removing a signal (HelpAPaw/Flutter#68) — the reporter's own delete, made
+// recoverable. Same module-per-privileged-surface reasoning and the same
+// initializeApp() ordering constraint as the two above.
+export { signalRemoval, purgeRemovedSignals } from "./removeSignal";
+import { purgeRemovalsFor } from "./removeSignal";
+
 const db = admin.firestore();
 
 /**
@@ -707,6 +713,51 @@ async function collectCandidates(
 }
 
 /**
+ * Credits a reporter with one posted signal (master spec 3.5.1).
+ *
+ * **Written to `publicProfiles/{uid}`, and that choice is the security of it.**
+ * The rules there already restrict the client to the `name` field alone — both
+ * `create` (`keys().hasOnly(['name'])`) and `update`
+ * (`affectedKeys().hasOnly(['name'])`) — so a counter written here through the
+ * Admin SDK is unforgeable without touching `firestore.rules` at all. The
+ * obvious alternative, `userCounters`, is exactly wrong for it: that document
+ * IS client-writable, by design, so a stat kept there would be a stat its
+ * subject could set.
+ *
+ * `publicProfiles` is also where these belong on their own terms — 3.5.1 is
+ * describing a public profile, and this document is the one every other user
+ * already reads to resolve a name.
+ *
+ * **Test-mode signals do not count.** They are written to `signals_test` so
+ * they cannot disturb production, and a statistic they inflated would be the
+ * one thing that leaked back out.
+ *
+ * Never allowed to fail the fan-out. A missed increment is a number that is one
+ * too low until the next backfill; a thrown error here would be a signal nobody
+ * gets notified about.
+ */
+async function recordSignalPosted(
+  reporterRef: admin.firestore.DocumentReference | undefined,
+  isTestMode: boolean
+): Promise<void> {
+  if (isTestMode || !reporterRef) return;
+  try {
+    await db
+      .collection("publicProfiles")
+      .doc(reporterRef.id)
+      .set(
+        { signalsPosted: admin.firestore.FieldValue.increment(1) },
+        { merge: true }
+      );
+  } catch (error) {
+    console.error(
+      `Failed to increment signalsPosted for ${reporterRef.id}:`,
+      error
+    );
+  }
+}
+
+/**
  * Shared handler for signal creation (used by both prod and test triggers)
  */
 async function handleSignalCreated(
@@ -735,6 +786,25 @@ async function handleSignalCreated(
     console.log(`Skipping fan-out for restored signal ${signalId}`);
     return;
   }
+
+  // Contribution statistics (master spec §3.5.1). Counted HERE, once, at the
+  // moment a signal is reported — never derived from the live collection.
+  //
+  // The profile used to run a `count()` over `signals` filtered by reporter,
+  // which meant the number was really "signals still visible", not "signals
+  // posted". Every way a signal can leave that collection took the credit with
+  // it: the reporter removing it, a moderator hiding it, and the ~6-month
+  // archive of master spec §4.10 when it arrives. §3.5.1 requires the
+  // opposite — "these stats remain even when old cases are deleted or
+  // archived" — so the count has to stop depending on the document.
+  //
+  // Placed after the restore guard on purpose: a restored signal is a *create*
+  // as far as this trigger is concerned, and counting it again would credit the
+  // reporter twice for one report.
+  await recordSignalPosted(
+    signalData.reporter as admin.firestore.DocumentReference | undefined,
+    isTestMode
+  );
 
   const signalLocation = signalData.location;
   const signalGeopoint = signalLocation?.geopoint as
@@ -1999,6 +2069,19 @@ export const deleteAccount = onCall(
           "data.phoneNumber": "",
         })
       );
+
+      // 1c. PURGE the user's removed signals outright (#68) — do not anonymize.
+      //
+      // The sweeps above anonymize rather than delete because a live or hidden
+      // signal is community content other people may still be acting on. A
+      // *removed* signal is content its author already took down, so nothing is
+      // lost by erasing it here and there is no fourth resting place for a
+      // phone number to survive account deletion — which is exactly the bug
+      // 1b had to be added to fix when hiding introduced the third.
+      //
+      // This also takes the photos and the subcollections with it, which the
+      // anonymizing sweeps deliberately leave alone.
+      await purgeRemovalsFor(userRef);
 
       // 2. Delete the notifications subcollection.
       const notifications = await userRef.collection("notifications").get();

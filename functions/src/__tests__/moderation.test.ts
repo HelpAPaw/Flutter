@@ -91,8 +91,38 @@ describe("quarantineSummary", () => {
       "note",
       "quarantineId",
       "signalId",
+      "source",
       "title",
     ]);
+  });
+
+  it("projects a removal with the same shape and no content", () => {
+    // `listQuarantined` also lists `removedSignals` (#68), whose documents say
+    // `removedBy`/`removedAt` where a quarantine document says
+    // `hiddenBy`/`hiddenAt`. One projection serves both, so this asserts the
+    // field mapping lands — and, more importantly, that the withheld half stays
+    // withheld whichever collection it came from.
+    const removal = {
+      data: {
+        title: "Injured cat behind the school",
+        description: "Bleeding from a front paw.",
+        contactPhone: "+359888123456",
+      },
+      collection: "signals",
+      signalId: "U9nLxygLCSRo642MwuVz",
+      removedBy: "reporter-uid",
+      removedAt: { toMillis: () => 1755000000000 },
+    } as unknown as Record<string, unknown>;
+
+    const summary = quarantineSummary("signals__U9nLx", removal, "removed");
+    expect(summary.source).toBe("removed");
+    expect(summary.hiddenBy).toBe("reporter-uid");
+    expect(summary.hiddenAtMillis).toBe(1755000000000);
+    expect(summary.title).toBe("Injured cat behind the school");
+    // A removal carries no note — nobody is asked to justify taking down their
+    // own signal — and an empty string is the right answer, not undefined.
+    expect(summary.note).toBe("");
+    expect(JSON.stringify(summary)).not.toContain("+359888123456");
   });
 
   it("never leaks the hidden content", () => {

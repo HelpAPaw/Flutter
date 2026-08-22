@@ -35,8 +35,10 @@ import {
   requireNote as requireNoteShared,
   requireSignalCollection,
   SignalCollection,
+  withheldSignalId,
 } from "./signalRefs";
 import { URGENCY_GREEN, URGENCY_RED } from "./urgency";
+import { REMOVED_COLLECTION } from "./removeSignal";
 
 // Signal addressing (`db`, the collection list, `requireId`, the note bound, and
 // `loadSignal` — imported here as `loadSignalDocument`) lives in ./signalRefs so
@@ -114,10 +116,7 @@ function requireNote(raw: unknown): string {
   );
 }
 
-/** Quarantine document id. Namespaced so both collections can share it. */
-function quarantineId(collection: SignalCollection, signalId: string): string {
-  return `${collection}__${signalId}`;
-}
+
 
 /**
  * Refuses an action whose target belongs to the moderator performing it.
@@ -335,7 +334,7 @@ async function hideSignal(
 ): Promise<ActionResult> {
   const { collection, signalId, ref, snapshot } = await loadSignal(uid, data);
 
-  batch.set(db().collection(QUARANTINE_COLLECTION).doc(quarantineId(collection, signalId)), {
+  batch.set(db().collection(QUARANTINE_COLLECTION).doc(withheldSignalId(collection, signalId)), {
     data: snapshot.data(),
     collection,
     signalId,
@@ -375,7 +374,7 @@ async function restoreSignal(
 
   const quarantineRef = db()
     .collection(QUARANTINE_COLLECTION)
-    .doc(quarantineId(collection, signalId));
+    .doc(withheldSignalId(collection, signalId));
   const signalRef = db().collection(collection).doc(signalId);
 
   const [snapshot, live] = await Promise.all([
@@ -666,7 +665,41 @@ export interface QuarantineSummary {
   note: string;
   /** Epoch millis — a Firestore Timestamp does not survive the JSON envelope. */
   hiddenAtMillis: number | null;
+  /**
+   * Which withheld-signal collection this came from.
+   *
+   * `moderationQuarantine` is a moderator hiding something; `removedSignals` is
+   * the reporter taking their own signal down (#68). The two are separate
+   * collections with separate lifecycles, and a moderator reading a list of
+   * them needs to know which they are looking at — "hidden by a colleague" and
+   * "the author withdrew it" call for very different next steps.
+   */
+  source: SignalWithholdingSource;
 }
+
+/** The two places a signal document goes when it leaves `signals`. */
+export const WITHHOLDING_SOURCES = ["quarantine", "removed"] as const;
+export type SignalWithholdingSource = (typeof WITHHOLDING_SOURCES)[number];
+
+/**
+ * Per-source field names.
+ *
+ * The two documents are the same shape with different words on it — `hiddenBy`
+ * / `hiddenAt` / `note` against `removedBy` / `removedAt` / (no note, because a
+ * user removing their own signal is not asked to justify it to anybody). One
+ * table beats two near-identical projection functions that drift.
+ */
+const SOURCE_FIELDS: Record<
+  SignalWithholdingSource,
+  { collection: string; actor: string; at: string }
+> = {
+  quarantine: {
+    collection: QUARANTINE_COLLECTION,
+    actor: "hiddenBy",
+    at: "hiddenAt",
+  },
+  removed: { collection: REMOVED_COLLECTION, actor: "removedBy", at: "removedAt" },
+};
 
 /**
  * Projects a quarantine document to its summary.
@@ -679,19 +712,22 @@ export interface QuarantineSummary {
  */
 export function quarantineSummary(
   id: string,
-  raw: Record<string, unknown> | undefined
+  raw: Record<string, unknown> | undefined,
+  source: SignalWithholdingSource = "quarantine"
 ): QuarantineSummary {
+  const fields = SOURCE_FIELDS[source];
   const data = (raw?.data ?? {}) as Record<string, unknown>;
-  const hiddenAt = raw?.hiddenAt as FirebaseFirestore.Timestamp | undefined;
+  const at = raw?.[fields.at] as FirebaseFirestore.Timestamp | undefined;
+  const actor = raw?.[fields.actor];
   return {
     quarantineId: id,
     signalId: typeof raw?.signalId === "string" ? raw.signalId : "",
     collection: typeof raw?.collection === "string" ? raw.collection : "",
     title: typeof data.title === "string" ? data.title : "",
-    hiddenBy: typeof raw?.hiddenBy === "string" ? raw.hiddenBy : "",
+    hiddenBy: typeof actor === "string" ? actor : "",
     note: typeof raw?.note === "string" ? raw.note : "",
-    hiddenAtMillis:
-      typeof hiddenAt?.toMillis === "function" ? hiddenAt.toMillis() : null,
+    hiddenAtMillis: typeof at?.toMillis === "function" ? at.toMillis() : null,
+    source,
   };
 }
 
@@ -714,6 +750,13 @@ export function quarantineSummary(
  *
  * Scoped by collection so a moderator in test mode sees the test-mode
  * quarantine, matching how the report queue splits.
+ *
+ * **`source` also covers `removedSignals`** (#68) — signals their own reporter
+ * took down. A moderator investigating an account needs to see what it
+ * withdrew, and the projection is what makes that safe to offer: a removal
+ * document holds the whole signal including the contact phone, and only title,
+ * actor and timestamp ever leave the server. The same reasoning that keeps
+ * `data` out of a quarantine summary keeps it out of this one.
  */
 export const listQuarantined = onCall(
   { enforceAppCheck: true },
@@ -723,15 +766,25 @@ export const listQuarantined = onCall(
     const data = (request.data ?? {}) as Record<string, unknown>;
     const collection = requireSignalCollection(data.collection);
 
+    // Absent means quarantine, so every already-released client keeps asking
+    // the question it has always asked and gets the answer it has always got.
+    const source = (data.source ?? "quarantine") as SignalWithholdingSource;
+    if (!WITHHOLDING_SOURCES.includes(source)) {
+      throw new HttpsError("invalid-argument", "Unknown withholding source.");
+    }
+    const fields = SOURCE_FIELDS[source];
+
     const snapshot = await db()
-      .collection(QUARANTINE_COLLECTION)
+      .collection(fields.collection)
       .where("collection", "==", collection)
-      .orderBy("hiddenAt", "desc")
+      .orderBy(fields.at, "desc")
       .limit(QUARANTINE_PAGE_SIZE)
       .get();
 
     return {
-      items: snapshot.docs.map((doc) => quarantineSummary(doc.id, doc.data())),
+      items: snapshot.docs.map((doc) =>
+        quarantineSummary(doc.id, doc.data(), source)
+      ),
     };
   }
 );

@@ -2732,29 +2732,11 @@ abstract class AppLocalizations {
   /// **'Edit Signal'**
   String get editSignal;
 
-  /// No description provided for @deleteSignal.
-  ///
-  /// In en, this message translates to:
-  /// **'Delete Signal'**
-  String get deleteSignal;
-
-  /// No description provided for @confirmDeleteSignal.
-  ///
-  /// In en, this message translates to:
-  /// **'Are you sure you want to delete this signal? This action cannot be undone.'**
-  String get confirmDeleteSignal;
-
   /// No description provided for @signalUpdatedSuccessfully.
   ///
   /// In en, this message translates to:
   /// **'Signal updated successfully'**
   String get signalUpdatedSuccessfully;
-
-  /// No description provided for @signalDeletedSuccessfully.
-  ///
-  /// In en, this message translates to:
-  /// **'Signal deleted successfully'**
-  String get signalDeletedSuccessfully;
 
   /// No description provided for @signalNoLongerAvailable.
   ///
@@ -2780,11 +2762,125 @@ abstract class AppLocalizations {
   /// **'Failed to update signal. Please try again.'**
   String get failedToUpdateSignal;
 
-  /// No description provided for @failedToDeleteSignal.
+  /// No description provided for @removeSignal.
   ///
   /// In en, this message translates to:
-  /// **'Failed to delete signal. Please try again.'**
-  String get failedToDeleteSignal;
+  /// **'Remove signal'**
+  String get removeSignal;
+
+  /// No description provided for @removeSignalCaseOpenTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Is this case resolved?'**
+  String get removeSignalCaseOpenTitle;
+
+  /// No description provided for @removeSignalCaseOpenBody.
+  ///
+  /// In en, this message translates to:
+  /// **'If the animal has been helped, mark the case Resolved instead. Your report and its history stay on the map for others to learn from, and it still counts towards your profile.'**
+  String get removeSignalCaseOpenBody;
+
+  /// No description provided for @markAsResolved.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark as resolved'**
+  String get markAsResolved;
+
+  /// No description provided for @removeAnyway.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove anyway'**
+  String get removeAnyway;
+
+  /// No description provided for @confirmRemoveSignal.
+  ///
+  /// In en, this message translates to:
+  /// **'This signal will be taken off the map. You can restore it from My Signals for the next {days} days, after which it is deleted permanently.'**
+  String confirmRemoveSignal(int days);
+
+  /// No description provided for @remove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get remove;
+
+  /// No description provided for @signalRemovedSuccessfully.
+  ///
+  /// In en, this message translates to:
+  /// **'Signal removed'**
+  String get signalRemovedSuccessfully;
+
+  /// No description provided for @failedToRemoveSignal.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to remove signal. Please try again.'**
+  String get failedToRemoveSignal;
+
+  /// No description provided for @signalUnderReview.
+  ///
+  /// In en, this message translates to:
+  /// **'This signal is being reviewed and cannot be removed right now.'**
+  String get signalUnderReview;
+
+  /// No description provided for @activeSignals.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get activeSignals;
+
+  /// No description provided for @removedSignals.
+  ///
+  /// In en, this message translates to:
+  /// **'Removed'**
+  String get removedSignals;
+
+  /// No description provided for @noRemovedSignals.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing here. Signals you remove can be restored from this list.'**
+  String get noRemovedSignals;
+
+  /// No description provided for @restoreSignalAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore'**
+  String get restoreSignalAction;
+
+  /// No description provided for @signalRestored.
+  ///
+  /// In en, this message translates to:
+  /// **'Signal restored'**
+  String get signalRestored;
+
+  /// No description provided for @failedToRestoreSignal.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to restore signal. Please try again.'**
+  String get failedToRestoreSignal;
+
+  /// No description provided for @deletePermanently.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete permanently'**
+  String get deletePermanently;
+
+  /// No description provided for @confirmDeletePermanently.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this signal and its photos, comments and history for good? This cannot be undone.'**
+  String get confirmDeletePermanently;
+
+  /// No description provided for @signalDeletedPermanently.
+  ///
+  /// In en, this message translates to:
+  /// **'Signal deleted permanently'**
+  String get signalDeletedPermanently;
+
+  /// No description provided for @restorableUntil.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted permanently on {date}'**
+  String restorableUntil(String date);
 
   /// No description provided for @contactPhone.
   ///

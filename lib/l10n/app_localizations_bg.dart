@@ -1520,17 +1520,7 @@ class AppLocalizationsBg extends AppLocalizations {
   String get editSignal => 'Редактирай сигнал';
 
   @override
-  String get deleteSignal => 'Изтрий сигнал';
-
-  @override
-  String get confirmDeleteSignal =>
-      'Сигурни ли сте, че искате да изтриете този сигнал? Това действие не може да бъде отменено.';
-
-  @override
   String get signalUpdatedSuccessfully => 'Сигналът е обновен успешно';
-
-  @override
-  String get signalDeletedSuccessfully => 'Сигналът е изтрит успешно';
 
   @override
   String get signalNoLongerAvailable => 'Този сигнал вече не е наличен';
@@ -1547,8 +1537,74 @@ class AppLocalizationsBg extends AppLocalizations {
       'Неуспешно обновяване на сигнала. Моля, опитайте отново.';
 
   @override
-  String get failedToDeleteSignal =>
-      'Неуспешно изтриване на сигнала. Моля, опитайте отново.';
+  String get removeSignal => 'Премахни сигнала';
+
+  @override
+  String get removeSignalCaseOpenTitle => 'Случаят решен ли е?';
+
+  @override
+  String get removeSignalCaseOpenBody =>
+      'Ако животното е получило помощ, отбележете случая като Решен. Сигналът и неговата история остават на картата, за да послужат на другите, и продължават да се броят в профила ви.';
+
+  @override
+  String get markAsResolved => 'Отбележи като решен';
+
+  @override
+  String get removeAnyway => 'Все пак премахни';
+
+  @override
+  String confirmRemoveSignal(int days) {
+    return 'Сигналът ще бъде премахнат от картата. Можете да го възстановите от „Моите сигнали“ през следващите $days дни, след което се изтрива окончателно.';
+  }
+
+  @override
+  String get remove => 'Премахни';
+
+  @override
+  String get signalRemovedSuccessfully => 'Сигналът е премахнат';
+
+  @override
+  String get failedToRemoveSignal =>
+      'Неуспешно премахване на сигнала. Моля, опитайте отново.';
+
+  @override
+  String get signalUnderReview =>
+      'Този сигнал се преглежда и в момента не може да бъде премахнат.';
+
+  @override
+  String get activeSignals => 'Активни';
+
+  @override
+  String get removedSignals => 'Премахнати';
+
+  @override
+  String get noRemovedSignals =>
+      'Тук няма нищо. Сигналите, които премахнете, може да бъдат възстановени от този списък.';
+
+  @override
+  String get restoreSignalAction => 'Възстанови';
+
+  @override
+  String get signalRestored => 'Сигналът е възстановен';
+
+  @override
+  String get failedToRestoreSignal =>
+      'Неуспешно възстановяване на сигнала. Моля, опитайте отново.';
+
+  @override
+  String get deletePermanently => 'Изтрий окончателно';
+
+  @override
+  String get confirmDeletePermanently =>
+      'Да се изтрият ли окончателно този сигнал и неговите снимки, коментари и история? Действието е необратимо.';
+
+  @override
+  String get signalDeletedPermanently => 'Сигналът е изтрит окончателно';
+
+  @override
+  String restorableUntil(String date) {
+    return 'Окончателно изтриване на $date';
+  }
 
   @override
   String get contactPhone => 'Телефон за връзка';

@@ -25,9 +25,11 @@ import {
   doc,
   getDoc,
   getDocs,
+  query,
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
 } from 'firebase/firestore';
 
 const REPORTER = 'reporter-uid';
@@ -1884,6 +1886,107 @@ describe('moderationActions audit log', () => {
         action: 'hideSignal',
         moderatorId: MOD,
         createdAt: new Date(),
+      }),
+    );
+  });
+});
+
+describe('removedSignals', () => {
+  beforeEach(() => testEnv.clearFirestore());
+
+  /** Seeds a removal document owned by `uid`, as `signalRemoval` writes it. */
+  async function seedRemoval(uid, signalId = 'signal-1', collectionName = 'signals') {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, 'removedSignals', `${collectionName}__${signalId}`), {
+        data: signalDoc(db, uid),
+        collection: collectionName,
+        signalId,
+        removedBy: uid,
+        removedAt: new Date(),
+      });
+    });
+  }
+
+  it('lets the reporter read their own removed signal', async () => {
+    // The opposite of quarantine, deliberately. A hidden signal is withheld
+    // FROM its readers; a removed one is the reader's own content in their own
+    // bin, and they have to see what is in there to decide what to restore.
+    await seedRemoval(REPORTER);
+    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    await assertSucceeds(getDoc(doc(db, 'removedSignals', 'signals__signal-1')));
+  });
+
+  it('lets the reporter list their own, filtered by reporter', async () => {
+    await seedRemoval(REPORTER);
+    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    await assertSucceeds(
+      getDocs(
+        query(
+          collection(db, 'removedSignals'),
+          where('data.reporter', '==', doc(db, 'users', REPORTER)),
+        ),
+      ),
+    );
+  });
+
+  it('denies an unfiltered list', async () => {
+    // The filter is not a nicety — it is what makes the rule enforceable on a
+    // query. Without it the collection is an enumeration of everything anyone
+    // has ever taken down, contact phone numbers included.
+    await seedRemoval(REPORTER);
+    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    await assertFails(getDocs(collection(db, 'removedSignals')));
+  });
+
+  it('denies another user, by id and by query', async () => {
+    await seedRemoval(REPORTER);
+    const db = testEnv.authenticatedContext(OTHER).firestore();
+    await assertFails(getDoc(doc(db, 'removedSignals', 'signals__signal-1')));
+    await assertFails(
+      getDocs(
+        query(
+          collection(db, 'removedSignals'),
+          where('data.reporter', '==', doc(db, 'users', REPORTER)),
+        ),
+      ),
+    );
+  });
+
+  it('gives a moderator no special access', async () => {
+    // A moderator reads these through `listQuarantined`, which projects each
+    // document to a summary. Opening the collection to them here would ship the
+    // whole withheld signal — description, photos, contact phone — which is the
+    // same mistake the quarantine list exists to avoid.
+    await seedRemoval(REPORTER);
+    await seedModerator();
+    const db = testEnv.authenticatedContext(MOD).firestore();
+    await assertFails(getDoc(doc(db, 'removedSignals', 'signals__signal-1')));
+  });
+
+  it('denies an unauthenticated caller', async () => {
+    await seedRemoval(REPORTER);
+    const db = testEnv.unauthenticatedContext().firestore();
+    await assertFails(getDoc(doc(db, 'removedSignals', 'signals__signal-1')));
+  });
+
+  it('is unwritable by every client, the reporter included', async () => {
+    // Server-only, like the moderation collections. A client that could write
+    // here could restore a signal without the `moderation.restoredAt` marker
+    // that stops `onSignalCreated` re-notifying a whole city, or forge a
+    // removal of a signal that was never theirs.
+    await seedRemoval(REPORTER);
+    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const ref = doc(db, 'removedSignals', 'signals__signal-1');
+    await assertFails(updateDoc(ref, { signalId: 'somewhere-else' }));
+    await assertFails(deleteDoc(ref));
+    await assertFails(
+      setDoc(doc(db, 'removedSignals', 'signals__forged'), {
+        data: signalDoc(db, REPORTER),
+        collection: 'signals',
+        signalId: 'forged',
+        removedBy: REPORTER,
+        removedAt: new Date(),
       }),
     );
   });

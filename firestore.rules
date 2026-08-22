@@ -644,7 +644,19 @@ service cloud.firestore {
       match /comments/{commentId} {
         allow read: if true;  // Public read
         allow create: if isCommentCreate('signals', signalId);
-        // The signal's reporter may delete comments (enables delete-signal cascade)
+        // The signal's reporter may delete comments (enables delete-signal cascade).
+        //
+        // **The worse half of the #68 gap, and not an audit problem.** There is
+        // no author-delete rule anywhere on this collection, so the standing
+        // effect is that a comment's own author cannot delete their comment but
+        // the signal's reporter can delete ANYONE's — quietly, one at a time,
+        // with no audit row. Removing every critical comment on your own case
+        // is the power master spec §18.3 deliberately routes through
+        // `moderateAction.deleteComment`, which demands a note, writes an audit
+        // entry and refuses your own content.
+        //
+        // Retired together with the two rules below — see the events block for
+        // why the flip is a separate deploy. Tracking: HelpAPaw/Flutter#68.
         allow delete: if request.auth != null
                       && isParentSignalReporter('signals', signalId);
       }
@@ -656,13 +668,29 @@ service cloud.firestore {
         allow create: if isSignalEventCreate();
         // An event is a record of what happened; nobody edits history.
         allow update: if false;
-        // KNOWN GAP: the reporter can delete individual events, so the history
-        // is tamper-evident at best. This exists only because the delete-signal
-        // cascade runs on the CLIENT — it has to be able to empty the
-        // subcollection, or deleting a signal orphans it forever. The fix is to
-        // move deletion server-side (Admin SDK recursive delete, like
-        // deleteAccount), after which this becomes `if false`.
-        // Tracking: HelpAPaw/Flutter#68.
+        // KNOWN GAP, now with a fix built and waiting on a deploy order.
+        //
+        // The reporter can delete individual events, so the history is
+        // tamper-evident at best. This only ever existed because the
+        // delete-signal cascade ran on the CLIENT and had to be able to empty
+        // the subcollection, or deleting a signal orphaned it forever.
+        //
+        // **That cascade is gone.** `signalRemoval` (functions/src/removeSignal.ts)
+        // moves the document server-side and `purgeRemoval` erases the
+        // descendants with an Admin SDK `recursiveDelete`, which bypasses these
+        // rules entirely. Nothing in the new client deletes an event.
+        //
+        // So this becomes `allow delete: if false` — but NOT in the same deploy
+        // as the rest of #68, and this is a DEPLOY ORDER, not a code change.
+        // Every already-released build still runs the old cascade, whose one
+        // batch covers all three subcollections; denying it makes that batch
+        // fail atomically, so nothing is deleted and the user gets that
+        // build's own `failedToDeleteSignal` (a string this branch has since
+        // renamed) on any signal that has history. Clean — no half-deleted
+        // signal — but still a broken Delete button until they update. Flip this, and the
+        // two rules below it, and `isParentSignalReporter`, only once the
+        // release carrying `signalRemoval` is on the installed base — the same
+        // sequencing #67 and #71 are waiting on. Tracking: HelpAPaw/Flutter#68.
         allow delete: if request.auth != null
                       && isParentSignalReporter('signals', signalId);
       }
@@ -699,6 +727,10 @@ service cloud.firestore {
         // behind when the parent goes is orphaned forever. The REQUESTER has no
         // delete: withdrawing is isTakeoverWithdraw() above, because a delete
         // would free the uid slot and walk straight past the cooldown.
+        //
+        // The third of the three cascade-only deletes #68 retires; see the
+        // events block above for why the flip waits on an app release. The
+        // requester's own side of this rule is unaffected and stays as it is.
         allow delete: if request.auth != null
                       && isParentSignalReporter('signals', signalId);
       }
@@ -730,6 +762,7 @@ service cloud.firestore {
         allow read: if true;
         allow create: if isSignalEventCreate();
         allow update: if false;
+        // Retired with its production twin — see the #68 deploy-order note there.
         allow delete: if request.auth != null
                       && isParentSignalReporter('signals_test', signalId);
       }
@@ -903,5 +936,35 @@ service cloud.firestore {
     // document is deleted), which is what makes a restore lossless — and also
     // means those remain publicly readable to anyone holding the signal id.
     // Recorded in docs/SPECIFICATION.md §14.
+
+    // Removed signals — where a signal its own REPORTER took down goes (#68).
+    //
+    // The same move-not-a-flag shape as quarantine above, and a separate
+    // collection for three reasons: these expire after
+    // REMOVED_RETENTION_DAYS and quarantine does not, the reporter restores
+    // these where only a moderator restores quarantine, and `listQuarantined`
+    // is a 50-item moderator worklist that ordinary removals would swamp.
+    //
+    // Unlike quarantine, this one IS readable — but only by the person whose
+    // signal it is. Quarantine is denied to everyone because its whole purpose
+    // is withholding content from readers; a removal is the opposite, content
+    // its own author put in the bin, and they have to be able to see what is in
+    // there to get it back out. Everyone else, moderators included, is denied
+    // here and reads the projected summary through `listQuarantined` instead.
+    //
+    // `list` works because My Signals queries this filtered by
+    // `data.reporter`, so every document the query can return already
+    // satisfies the rule. A query without that filter is denied outright,
+    // which is the point.
+    //
+    // Writes are server-only. `signalRemoval` moves documents in and out
+    // through the Admin SDK, exactly like the moderation callables — a client
+    // that could write here could restore a signal without the fan-out guard,
+    // or forge one that was never theirs.
+    match /removedSignals/{removalId} {
+      allow get, list: if request.auth != null
+                       && resource.data.data.reporter == userDoc();
+      allow create, update, delete: if false;
+    }
   }
 }

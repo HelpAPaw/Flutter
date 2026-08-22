@@ -1,5 +1,21 @@
 import 'package:flutter/foundation.dart';
 
+/// The two places a signal document goes when it leaves `signals`.
+///
+/// Mirrors `WITHHOLDING_SOURCES` in `functions/src/moderation.ts`.
+enum QuarantineSource {
+  /// A moderator hid it (`moderationQuarantine`).
+  quarantine('quarantine'),
+
+  /// Its own reporter took it down (`removedSignals`).
+  removed('removed');
+
+  const QuarantineSource(this.wireName);
+
+  /// What the callable expects and returns. Stable — never localize this.
+  final String wireName;
+}
+
 /// A signal currently in moderation quarantine (master spec §18.3).
 ///
 /// **A summary, not the signal.** The server deliberately returns only these
@@ -22,6 +38,7 @@ class QuarantinedSignal {
     required this.hiddenBy,
     required this.note,
     this.hiddenAt,
+    this.source = QuarantineSource.quarantine,
   });
 
   /// Document id in `moderationQuarantine`, `{collection}__{signalId}`.
@@ -44,6 +61,16 @@ class QuarantinedSignal {
 
   final DateTime? hiddenAt;
 
+  /// Which withheld-signal collection this row came from.
+  ///
+  /// `listQuarantined` can also list `removedSignals` — signals their own
+  /// reporter took down (#68) — so a moderator investigating an account can see
+  /// what it withdrew. "A colleague hid this" and "the author withdrew it" call
+  /// for very different next steps, and only [restoreSignal] applies to the
+  /// first: putting back something its author removed is not a moderator's
+  /// call.
+  final QuarantineSource source;
+
   /// Decodes one item of the callable's `items` array.
   ///
   /// Every field is defaulted: these documents are server-written, so a missing
@@ -63,6 +90,11 @@ class QuarantinedSignal {
       hiddenAt: millis is num
           ? DateTime.fromMillisecondsSinceEpoch(millis.toInt())
           : null,
+      // Absent means quarantine, matching the server's own default — an older
+      // server that does not send the field is answering about quarantine.
+      source: json['source'] == 'removed'
+          ? QuarantineSource.removed
+          : QuarantineSource.quarantine,
     );
   }
 }

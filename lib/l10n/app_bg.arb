@@ -550,15 +550,43 @@
   "completeNotificationSetup": "Завършете настройката на известията",
 
   "editSignal": "Редактирай сигнал",
-  "deleteSignal": "Изтрий сигнал",
-  "confirmDeleteSignal": "Сигурни ли сте, че искате да изтриете този сигнал? Това действие не може да бъде отменено.",
   "signalUpdatedSuccessfully": "Сигналът е обновен успешно",
-  "signalDeletedSuccessfully": "Сигналът е изтрит успешно",
   "signalNoLongerAvailable": "Този сигнал вече не е наличен",
   "signalNoLongerAvailableHint": "Възможно е да е изтрит от човека, който го е подал.",
   "backToMap": "Обратно към картата",
   "failedToUpdateSignal": "Неуспешно обновяване на сигнала. Моля, опитайте отново.",
-  "failedToDeleteSignal": "Неуспешно изтриване на сигнала. Моля, опитайте отново.",
+
+  "removeSignal": "Премахни сигнала",
+  "removeSignalCaseOpenTitle": "Случаят решен ли е?",
+  "removeSignalCaseOpenBody": "Ако животното е получило помощ, отбележете случая като Решен. Сигналът и неговата история остават на картата, за да послужат на другите, и продължават да се броят в профила ви.",
+  "markAsResolved": "Отбележи като решен",
+  "removeAnyway": "Все пак премахни",
+  "confirmRemoveSignal": "Сигналът ще бъде премахнат от картата. Можете да го възстановите от „Моите сигнали“ през следващите {days} дни, след което се изтрива окончателно.",
+  "@confirmRemoveSignal": {
+    "placeholders": {
+      "days": {"type": "int"}
+    }
+  },
+  "remove": "Премахни",
+  "signalRemovedSuccessfully": "Сигналът е премахнат",
+  "failedToRemoveSignal": "Неуспешно премахване на сигнала. Моля, опитайте отново.",
+  "signalUnderReview": "Този сигнал се преглежда и в момента не може да бъде премахнат.",
+
+  "activeSignals": "Активни",
+  "removedSignals": "Премахнати",
+  "noRemovedSignals": "Тук няма нищо. Сигналите, които премахнете, може да бъдат възстановени от този списък.",
+  "restoreSignalAction": "Възстанови",
+  "signalRestored": "Сигналът е възстановен",
+  "failedToRestoreSignal": "Неуспешно възстановяване на сигнала. Моля, опитайте отново.",
+  "deletePermanently": "Изтрий окончателно",
+  "confirmDeletePermanently": "Да се изтрият ли окончателно този сигнал и неговите снимки, коментари и история? Действието е необратимо.",
+  "signalDeletedPermanently": "Сигналът е изтрит окончателно",
+  "restorableUntil": "Окончателно изтриване на {date}",
+  "@restorableUntil": {
+    "placeholders": {
+      "date": {"type": "String"}
+    }
+  },
   "contactPhone": "Телефон за връзка",
 
   "errorAddingComment": "Неуспешно добавяне на коментар. Моля, опитайте отново.",
