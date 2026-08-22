@@ -562,7 +562,9 @@
 - [ ] A **newly created** signal stores `caseHolder == reporter` — check the document
 - [ ] Exactly **one** affordance is shown at a time. Walk all four audiences on the same signal:
   - [ ] **the holder** sees "You are responsible for this case", **I can no longer do this** (release), and any pending offers
-  - [ ] **the reporter, not holding** sees who holds it — and **no** Hand over / Decline buttons (answering an offer is the holder's, not the reporter's)
+  - [ ] **the reporter, not holding** sees who holds it **and the pending offers, read-only** — the rows show each volunteer's name and note, with **no** Hand over / Decline buttons. Answering stays the holder's; seeing is the reporter's, because otherwise a reporter watching their case go quiet has no way to know somebody is trying to pick it up.
+  - [ ] Confirm the reporter's read-only list **updates live** as offers arrive and are answered, and disappears when the last one is resolved
+  - [ ] A reporter who **still holds** the case sees the ordinary answerable list — the read-only variant only exists once they have handed it on or released it
   - [ ] **anyone else, case held** sees **Offer to take over** — or "You have offered to take this over" once they have
   - [ ] **anyone else, case released** sees **Take responsibility**
 - [ ] A **released** case shows "Nobody has taken this case on yet" and is claimable by anyone — including, deliberately, by the reporter again
@@ -1235,7 +1237,7 @@
 - [ ] A **withdrawal** is an update, and `resolvedAt` is pinned to `request.time` — a client-chosen timestamp is denied (a timestamp the requester picks is a cooldown they skip)
 - [ ] **Re-filing before the one-day cooldown is denied**; after it, allowed
 - [ ] A re-file must also satisfy the **create** validator — re-filing directly as `approved` is denied
-- [ ] Only the **holder** may approve or decline; the reporter (when not holding) cannot
+- [ ] Only the **holder** may approve or decline; the reporter (when not holding) cannot — verify by calling `caseOwnership` directly as the reporter, not just by the absent buttons. The app now shows them the offer list, so this is the only thing separating seeing from answering.
 - [ ] `holderActiveAt` cannot be written by a client — staleness needs a server clock
 - [ ] The reporter's delete on the subcollection stays unconditional **until deploy-gates step 5**, because the old client's delete cascade has to be able to empty it
 
@@ -1581,7 +1583,7 @@
 - [ ] `cd firestore-tests && npm ci && npm test` — Firestore **and** Storage rules suites pass, **including the new `events` cases**. Required before **every** rules deploy; device testing cannot validate undeployed rules because `help-a-paw-dev` is production.
 - [ ] `cd functions && npm ci && npm test` — covers `recipientSelection` tier ranking and the floor, the legacy headline shims (`displayTagsOf` / `signalHeadline`), the `events` encoder parity, and now `moderation`, `caseOwnership` and `removeSignal`. Every failure mode here is silent in production.
 - [ ] **The self-moderation guard coverage test passes.** It *reads the source* of `functions/src/moderation.ts` — a new moderator action that skipped `requireNotOwnContent` would compile perfectly and fail silently, so this is the only thing that catches it (§16.7).
-- [ ] Expected suite sizes on this branch: **258 rules tests, 260 Dart tests, 107 functions tests**. A sharp drop means a suite stopped being discovered, not that it got faster.
+- [ ] Expected suite sizes on this branch: **258 rules tests, 260 Dart tests, 112 functions tests**. A sharp drop means a suite stopped being discovered, not that it got faster.
 - [ ] Kotlin: `android/app/src/test/.../GeohashTest.kt` passes (guards the Dart↔Kotlin geohash parity the fan-out depends on)
 - [ ] Swift: `ios/RunnerTests/GeohashTest.swift` passes — and afterwards, restore/verify `build/native_assets/ios/objective_c.framework` before any device build
 - [ ] `cd functions && npm run build` — TypeScript compiles

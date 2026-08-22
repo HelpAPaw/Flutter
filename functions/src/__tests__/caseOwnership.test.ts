@@ -12,6 +12,8 @@
  *    case whose timestamps are unusual;
  *  - {@link requireRealAccount} is the only thing standing between an
  *    unreachable anonymous account and responsibility for a live animal;
+ *  - {@link requireCurrentHolder} is what keeps answering an offer the holder's
+ *    decision once the app shows that offer to the reporter as well;
  *  - the ownership encoder writing a wrong key is accepted by the Admin SDK,
  *    stored, and then silently dropped by the Dart decoder.
  */
@@ -19,9 +21,11 @@
 import { Timestamp } from "firebase-admin/firestore";
 
 import {
+  ActionContext,
   holderActiveAtOf,
   isHolderStale,
   optionalStatus,
+  requireCurrentHolder,
   requireRealAccount,
   STALE_HOLDER_DAYS,
 } from "../caseOwnership";
@@ -197,5 +201,52 @@ describe("buildOwnershipEventData", () => {
     const { oldKey, newKey } = SIGNAL_EVENT_KEYS.ownership_transfer;
     expect(oldKey).toBe("oldHolder");
     expect(newKey).toBe("newHolder");
+  });
+});
+
+describe("requireCurrentHolder", () => {
+  // Only the two fields the check reads. Building a whole ActionContext would
+  // need a transaction and a live document, which is the thing this file exists
+  // to stay clear of.
+  const ctx = (uid: string, currentHolder: { id: string } | null) =>
+    ({ uid, currentHolder } as unknown as ActionContext);
+
+  const message = "Only the current case holder can decline a request.";
+
+  it("lets the current holder through", () => {
+    expect(() => requireCurrentHolder(ctx("holder-uid", holder), message))
+      .not.toThrow();
+  });
+
+  // The derived holder, so a signal written before case ownership passes for
+  // its reporter — `caseHolderOf` has already resolved the absent field by the
+  // time the context is built, which is why this check reads one value and not
+  // two.
+  it("lets a legacy signal's reporter through, since they are the derived holder", () => {
+    expect(() => requireCurrentHolder(ctx("reporter-uid", reporter), message))
+      .not.toThrow();
+  });
+
+  // The one this is really for. The app now shows the pending offers to the
+  // reporter as well as the holder, read-only — so the next person to touch
+  // that block will be tempted to wire up Hand over / Decline for them too.
+  // Answering an offer moves responsibility for an animal, and the person
+  // currently carrying it is the one who decides; a holder who has gone quiet
+  // is what staleness is for.
+  it("refuses the reporter once they have handed the case on", () => {
+    expect(() => requireCurrentHolder(ctx("reporter-uid", holder), message))
+      .toThrow(message);
+  });
+
+  it("refuses a stranger", () => {
+    expect(() => requireCurrentHolder(ctx("someone-else", holder), message))
+      .toThrow(message);
+  });
+
+  // A released case is held by nobody, so nobody may answer an offer on it —
+  // the way to take it is `claim`, which is open to anyone.
+  it("refuses everyone on a released case", () => {
+    expect(() => requireCurrentHolder(ctx("reporter-uid", null), message))
+      .toThrow(message);
   });
 });
