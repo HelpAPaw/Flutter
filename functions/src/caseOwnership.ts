@@ -228,7 +228,7 @@ export const caseOwnership = onCall({ enforceAppCheck: true }, async (request) =
   return { ok: true, ...result };
 });
 
-interface ActionContext {
+export interface ActionContext {
   action: OwnershipAction;
   uid: string;
   note: string;
@@ -455,8 +455,16 @@ async function declineRequest(ctx: ActionContext): Promise<OwnershipResult> {
  * Note this is the *derived* holder, so on a signal written before case
  * ownership the reporter passes — which is correct, and is why the derivation
  * lives in `caseHolderOf` rather than being inlined per call site.
+ *
+ * **A reporter who has handed the case on does NOT pass**, and that is the
+ * point of the check rather than an oversight. The app shows them the pending
+ * offers read-only, so the temptation to "finish the job" by wiring up Hand
+ * over / Decline for them lands here first; answering an offer moves
+ * responsibility for an animal, and the person who currently carries it is the
+ * one who gets to say. A holder who has gone quiet is what staleness is for.
+ * Exported so that stays pinned by a test.
  */
-function requireCurrentHolder(ctx: ActionContext, message: string): void {
+export function requireCurrentHolder(ctx: ActionContext, message: string): void {
   if (ctx.currentHolder?.id !== ctx.uid) {
     throw new HttpsError("permission-denied", message);
   }

@@ -41,7 +41,7 @@ typedef GuardedRunner = Future<void> Function(Future<void> Function() body);
 /// | viewer | sees |
 /// |---|---|
 /// | the holder | who they are, plus Release and any offers to answer |
-/// | the reporter, not holding | who holds it, and nothing to press |
+/// | the reporter, not holding | who holds it, and any offers — read-only |
 /// | anyone else, case held | Offer to take over (or their pending offer) |
 /// | anyone else, released or stale | Take responsibility |
 class CaseHolderBlock extends StatelessWidget {
@@ -81,6 +81,14 @@ class CaseHolderBlock extends StatelessWidget {
   final VoidCallback onSignInRequired;
 
   bool get _isHolder => signal.isHeldBy(uid);
+
+  /// The person who filed the report, whether or not they still hold the case.
+  ///
+  /// Only ever differs from [_isHolder] once the case has moved: the derivation
+  /// makes the reporter the holder of every signal that has never been handed
+  /// on, so this distinction exists exactly for the reporter who released it or
+  /// gave it away.
+  bool get _isReporter => uid != null && signal.reporter.id == uid;
 
   /// Offers to take this case over, split by audience.
   ///
@@ -136,13 +144,20 @@ class CaseHolderBlock extends StatelessWidget {
           ),
         ),
         _buildActions(context),
-        // HOLDER ONLY, matching `requireCurrentHolder` in the callable. The
-        // reporter can do almost everything else on their own signal, but
-        // `approveRequest`/`declineRequest` are the holder's — so showing them
-        // Hand over / Decline would be offering buttons that always fail with a
-        // generic error. A holder who has gone quiet is what staleness is for,
-        // not what the reporter is for.
-        if (_isHolder) _buildPendingOffers(context),
+        // The holder and the reporter both see the offers; only the holder can
+        // answer them.
+        //
+        // Answering stays `requireCurrentHolder`'s, so the reporter gets no
+        // Hand over / Decline — those would be buttons that always fail with a
+        // generic error, and a holder who has gone quiet is what staleness is
+        // for, not what the reporter is for. But *seeing* them is the
+        // reporter's business: it is their report, the offers name people
+        // volunteering to take their animal's case on, and a reporter watching
+        // a case go quiet has no other way to know that somebody is trying to
+        // pick it up. The read costs nothing new — the rules already allow any
+        // signed-in user to read this subcollection.
+        if (_isHolder || _isReporter)
+          _buildPendingOffers(context, answerable: _isHolder),
       ],
     );
   }
@@ -257,8 +272,12 @@ class CaseHolderBlock extends StatelessWidget {
     );
   }
 
-  /// Pending offers, each answerable in place.
-  Widget _buildPendingOffers(BuildContext context) {
+  /// Pending offers — answerable in place for the holder, read-only for the
+  /// reporter who no longer holds the case.
+  Widget _buildPendingOffers(
+    BuildContext context, {
+    required bool answerable,
+  }) {
     final l10n = AppLocalizations.of(context);
 
     return StreamBuilder<List<TakeoverRequest>>(
@@ -298,25 +317,26 @@ class CaseHolderBlock extends StatelessWidget {
                           maxLines: 1,
                         ),
                         if (request.note.isNotEmpty) Text(request.note),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            TextButton(
-                              onPressed: busy
-                                  ? null
-                                  : () => _answer(context, request,
-                                      approve: false),
-                              child: Text(l10n.caseHolderDecline),
-                            ),
-                            FilledButton(
-                              onPressed: busy
-                                  ? null
-                                  : () =>
-                                      _answer(context, request, approve: true),
-                              child: Text(l10n.caseHolderHandOver),
-                            ),
-                          ],
-                        ),
+                        if (answerable)
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              TextButton(
+                                onPressed: busy
+                                    ? null
+                                    : () => _answer(context, request,
+                                        approve: false),
+                                child: Text(l10n.caseHolderDecline),
+                              ),
+                              FilledButton(
+                                onPressed: busy
+                                    ? null
+                                    : () => _answer(context, request,
+                                        approve: true),
+                                child: Text(l10n.caseHolderHandOver),
+                              ),
+                            ],
+                          ),
                       ],
                     ),
                   ),

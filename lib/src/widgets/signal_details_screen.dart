@@ -1640,20 +1640,6 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// [maxLines] for the places the name shares a row with the date: it is
   /// user-supplied and capped at 100 chars, so it has to shrink rather than
   /// overflow.
-  /// Who is responsible for this case, and what this viewer can do about it
-  /// (master spec §4.5).
-  ///
-  /// Four audiences in one block, which is deliberate — the alternative was four
-  /// conditionals scattered through `build()`, and the thing a reader needs to
-  /// see at a glance is that exactly one affordance is offered at a time:
-  ///
-  /// | viewer | sees |
-  /// |---|---|
-  /// | the holder | who they are, plus Release and any offers to answer |
-  /// | the reporter, not holding | who holds it, plus the offers |
-  /// | anyone else, case held | Offer to take over (or their pending offer) |
-  /// | anyone else, case released | Take responsibility |
-
   Widget _actorText(
     String uid,
     String Function(String name) sentence, {
