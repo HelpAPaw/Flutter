@@ -18,8 +18,21 @@
 > | **Helper-tag onboarding gate** | A non-skippable full-screen picker on the map route for any account without `helperTags` — **including existing accounts**. | **§6.8 NEW** |
 > | **Fan-out rework** | Prioritise-then-backfill: tag matches in radius always notified, then C→B→D nearest-first to a floor of 10, with one widened 250 km re-scan. Candidates with no usable position are dropped. | §6.7 (rewritten) |
 > | **Notification settings** | Per-type checkboxes and Select all/Deselect all are gone; species + helper tags with a ≥1-of-each requirement while enabled, and a load-failure state that refuses to render an editor. | §6.4 |
-> | **Backend** | Functions on **Node 24**, nodemailer 9, first-ever `functions/` unit tests (jest). `ignore-scripts=true` in both npm trees. The dead CI workflow was deleted. | §16.1 |
+> | **Backend** | Functions on **Node 24**, nodemailer 9, first-ever `functions/` unit tests (jest). `ignore-scripts=true` in both npm trees. The dead CI workflow was deleted. | §17.1 |
 > | **Draft loss + photo race** | A finished draft no longer vanishes on one back press from the map; a mid-submit discard no longer drops the photo while reporting success. | §3.1 |
+>
+> **Added since this table was first written — five more merges landed in `dev`, and
+> they are the largest additions in the release.** Everything below is *new surface*, not
+> a change to existing surface, and three of them are already deployed to production
+> backend-side while no released app calls them:
+>
+> | Area | What changed | Where |
+> |---|---|---|
+> | **Signal removal replaces deletion** | Delete is gone. **Remove** moves the signal server-side to `removedSignals`, keeps its comments/events/photos, and is restorable for **30 days** from a new **Removed** tab in My Signals. An *open* case is asked "Is this case resolved?" first. Removal is **refused while an open report names the signal**. | **§3.7 (rewritten), §3.5b NEW** |
+> | **Contribution stats** | The profile's signal count is now a server-written `publicProfiles.signalsPosted` that **never decrements**, with a live-`count()` fallback for accounts that predate it. Test-mode signals do not count. | §1.6 |
+> | **Case ownership** | New `caseHolder` axis. Status/urgency/tags become **reporter-or-holder**; a non-holder gets **claim-to-act**. Three escapes from a silent holder: offer, released case, stale case (14 days). Transfers go through the `caseOwnership` callable, which **rejects anonymous callers**. | **§3.9 NEW** |
+> | **Moderation & reporting** | Report any signal or comment (12 reasons, one report per user per target). A `moderators/{uid}` **document** grants a drawer entry, a Reports queue, a **Hidden** tab, and eight actions behind one `moderateAction` callable — reachable both from the queue and **in-context** from the signal app bar / comment long-press. A moderator **cannot act on their own content**. | **§16 NEW** |
+> | **Test mode on the account (#72)** | `users/{uid}.testMode` gets a single writer (`AuthService.syncTestMode`) that runs at launch, on a new anonymous session, on sign-in and on the toggle — **independently of notification preferences**. An unrecorded mode used to cost the account its inbox entry as well as its push. | §12.1 |
 
 > ## 🚀 Deploy gates — ⚠️ NOT CLEAR. One must be done before the device pass
 >
@@ -41,16 +54,46 @@
 >       merged branch and re-read the live ruleset afterwards — `events`, `helpNeededTags`,
 >       `animalType`, `urgency` **and** `isModerator`/`isCommentsLocked` all present.
 > - [ ] 🔴 **Version is still `6.0.2+129` in `pubspec.yaml`.** Bump before building, or
->       the upgrade-path test in §16.4 has nothing to upgrade *to* and Crashlytics
+>       the upgrade-path test in §17.4 has nothing to upgrade *to* and Crashlytics
 >       attributes new crashes to the old build.
 > - [ ] **Functions deployed** from this branch — the fan-out, `recipientSelection`, the
 >       urgency/tag headline shims and the share-page badge all changed. Confirm the
 >       deployed runtime reports **Node 24**.
-> - [ ] `cd firestore-tests && npm test` and `cd functions && npm test` both pass (§16.1)
-> - [ ] **Rules and functions go out BEFORE the app build**, never after (§16.1). The
+> - [ ] `cd firestore-tests && npm test` and `cd functions && npm test` both pass (§17.1)
+> - [ ] **Rules and functions go out BEFORE the app build**, never after (§17.1). The
 >       reverse order is harmless; this order is not.
 > - [x] Indexes, Storage rules, Hosting, TTL policy, App Links — verified 2026-08-05, no
 >       change this release. Re-confirm the ruleset after the re-deploy above.
+>
+> **What has since been deployed to `help-a-paw-dev` (production), 2026-08-21.** Three
+> merges shipped their backend halves ahead of the app, which is the intended order for
+> two of them and an *inverted* order for the third. Re-read the live ruleset and the
+> deployed function list before the device pass — do not assume the checkout matches:
+>
+> - [x] ✅ **Moderation** — `moderateAction` and `listQuarantined` deployed; the rules
+>       carry `isModerator`, `isCommentsLocked`, `isNotTouchingModeration`, `reports` and
+>       `moderationActions`. Device-verified on SM X205 + SM J610FN.
+> - [x] ✅ **Case ownership** — `caseOwnership` + `onTakeoverRequested` deployed **and the
+>       rules narrowing went out with them**. Device-verified 2026-08-21.
+> - [x] ✅ **Signal removal (#68) steps 1 and 3** — `signalRemoval` and
+>       `purgeRemovedSignals` created (nothing deleted — checked by diffing the deployed
+>       export list against the built one), the additive `removedSignals` rules block and
+>       three new indexes built to READY, and the `notifications` TTL policy survived.
+>       Device-verified in test mode on both Android devices.
+> - [ ] 🔴 **#68 step 2 — `functions/scripts/backfill_signals_posted.js` has NOT run.**
+>       It needs Application Default Credentials (`gcloud auth application-default login`)
+>       this machine does not have. It **must run before the app release**: it counts the
+>       live `signals` collection, so once people start removing signals the source it
+>       counts from is already gone and it writes numbers *lower* than the ones it exists
+>       to restore. Dry run first, then `--apply`.
+> - [ ] ⏸ **#68 step 5 is deliberately NOT deployed and must not be** — flipping
+>       `comments`, `events` and `takeoverRequests` to `allow delete: if false` waits until
+>       the release carrying `signalRemoval` is on the installed base, because every
+>       already-released build still runs the old client cascade and denying it makes that
+>       batch fail atomically. Third item queued behind a release, with #67 and #71.
+> - [ ] **Before any further rules deploy:** the live ruleset is now `dev`'s **plus**
+>       moderation, case ownership and `removedSignals`. Merge first, deploy from the
+>       merged branch, re-read the live rules afterwards (§11.5, §11.11).
 
 > ## ⚠️ Pre-Release Blockers & Open Items (resolve before shipping)
 >
@@ -60,7 +103,11 @@
 > - [ ] **Legacy signals are a live path, not a migration.** Builds in the field keep writing `signalType` with no tags for months. §3.8 covers what they must look like; one known gap is recorded there.
 > - [ ] **iOS background relaunch is UNVERIFIED.** The whole premise of §7.2 — iOS waking a *terminated* app on a significant location change — has never been observed on a device. It cannot be tested on a debug build. See §7.2 and `BACKGROUND_LOCATION_PENDING_TESTS.md` §1.
 > - [ ] **M-1 is only half done.** Firestore rules still allow **anonymous** users to create signals/comments; the server-side `email_verified` gate is held back until the token-refresh fix (`633da3b`) ships in a released build. Client-side guards are the only thing enforcing it today. Tracking: `HelpAPaw/Flutter#67`. See §11.5.
-> - [ ] **Signal history is tamper-*evident*, not tamper-proof.** The reporter can delete individual `events`, because the delete cascade runs on the client. Tracked as `HelpAPaw/Flutter#68`.
+> - [ ] **Signal history is tamper-*evident*, not tamper-proof — the fix is built but its rules step is held back.** `signalRemoval` moved removal server-side, so nothing in the *new* client deletes a subcollection document; the reporter can still delete individual `events` until step 5 of the deploy gates flips those three rules, which waits for the release. Tracked as `HelpAPaw/Flutter#68`.
+> - [ ] 🔴 **#71 — the case-ownership regression window is OPEN.** The rules that narrow `status`/`urgency`/tag writes to *reporter or holder* are **already deployed**, and no released build knows about claim-to-act. So a released client that is neither reporter nor holder gets a bare `permission-denied` on the status dropdown until the app release lands. Deliberate (the rollout inverts the usual order), but it is live user-facing breakage for the duration — confirm the window is understood before scheduling the release, and re-test §3.3 on **129** as well as on the new build.
+> - [ ] 🔴 **The 30-day retention window is not disclosed anywhere users can read it.** "Restorable for 30 days" is the whole basis for removal being a bin rather than indefinite retention, and `privacy_policy_page.dart` is a **WebView onto `https://www.helpapaw.org/privacypolicy`** — so this is an edit on the site, by somebody outside this repo, not a code change. Verify the live page states the window before shipping (§3.7).
+> - [ ] **The moderator role has no verified grant path on this machine.** `functions/scripts/grant_moderator.js` needs the same Application Default Credentials the backfill does, and has never been run. §16 cannot be tested at all until at least one test account holds a `moderators/{uid}` document — arrange that first (§17.0-C).
+> - [ ] **Contribution stats under-report, permanently, for accounts that already deleted signals.** The backfill counts the live collection, so anything erased under the old hard-delete path is not there to count. Not fixable; do not file it again (§1.6).
 > - [ ] **Light theme only.** No dark theme is defined; verify rendering under OS dark mode. See §14.1.
 > - [ ] **Debug assetlinks fingerprint is still published.** `hosting/public/.well-known/assetlinks.json` lists a machine-local debug keystore alongside the release one. Decide whether to strip it before the release deploy (§15.1).
 
@@ -125,6 +172,20 @@
 - [ ] Shows email verification status ("Yes"/"No") with "Verify" button if unverified
 - [ ] Shows "Member Since" date
 - [ ] Shows statistics: total signals created, total comments made
+
+**Contribution stats — now server-counted (NEW)**
+> The signal count used to be a live `count()` over `signals`, which measured *signals
+> still visible*: every removal, every moderator hide, and the future archive took the
+> credit with it. It is now `publicProfiles/{uid}.signalsPosted`, written by the server
+> at the moment a signal is reported and **never decremented**.
+- [ ] Report a signal, then **remove** it (§3.7) — the profile count **stays the same**. This is the whole point of the change; a count that drops back is the bug.
+- [ ] Have a moderator **hide** one of the account's signals (§16) — the count stays the same
+- [ ] Delete one permanently from the Removed tab — the count **still** stays the same
+- [ ] The count does **not** move when a signal's status changes, or when a comment is posted
+- [ ] **Test-mode signals do not count.** Create one in test mode and confirm the number is unchanged — the isolation is precisely so test activity cannot leak into production, and an inflated statistic would be the one thing that did.
+- [ ] **The fallback is the migration, not an error path.** An account whose `publicProfiles` doc has **no** `signalsPosted` falls back to the old live count — check one by hand in Firestore: the profile must show a real number, never a proud **0** to someone who has reported for years.
+- [ ] After `backfill_signals_posted.js` has run (deploy gates step 2), a previously-unbacked account shows the **stored** value and no longer runs the live count
+- [ ] The client cannot write it: attempt a client update of `publicProfiles/{uid}.signalsPosted` and confirm `PERMISSION_DENIED` (rules restrict clients to `name` — §11.6)
 - [ ] Edit mode toggle via AppBar button
 - [ ] Can edit display name and phone number
 - [ ] **Name field capped at 100 chars, single-line** (same as §1.5)
@@ -151,6 +212,8 @@
 - [ ] Comments by the user resolve to "Deleted user"
 - [ ] `users/{uid}/notifications` subcollection removed; profile photo deleted from Storage
 - [ ] `userCounters/{uid}` (the unread/badge counter) is removed
+- [ ] **`removedSignals` for that uid are PURGED outright, not anonymized** (NEW) — a removal holds a whole copy of the signal under `data`, contact phone included, so anonymizing it would leave a fourth place a phone number survives. Remove a signal, then delete the account, then check the collection: nothing for that uid.
+- [ ] Any `takeoverRequests` the account filed are cleaned up, and a case it held is left in a state someone else can take on
 - [ ] `publicProfiles/{uid}` is tombstoned so the name resolves to "Deleted user" everywhere, and the tombstone **cannot be cleared by a client** (rules restrict client writes to `name`)
 - [ ] Stored live location removed: `userLocations/{uid}` document is deleted (location PII no longer lives on the user doc)
 - [ ] Background location monitoring stops on that device (no further `userLocations` writes after deletion)
@@ -187,7 +250,7 @@
 - [ ] No re-query loop / flicker: the map settles and does not keep panning or repeatedly rebuilding markers
 - [ ] Near-pin taps are unaffected (window opens once, no double-show flicker)
 - [ ] Changing a filter while an info window is open re-asserts the window if the signal still matches, and dismisses it cleanly if it no longer does
-- [ ] A signal deleted by another device while its window is open dismisses cleanly — no `PlatformException: Invalid markerId`, and the ghost tap target does not navigate (§10.2)
+- [ ] A signal **removed or hidden** by another device while its window is open dismisses cleanly — no `PlatformException: Invalid markerId`, and the ghost tap target does not navigate (§10.2)
 
 ### 2.3 Real-Time Updates
 - [ ] New signals from other users appear on the map in real time (Firestore stream)
@@ -292,6 +355,11 @@
 - [ ] Sharing works for a signal with no coordinates (the location line is simply omitted)
 - [ ] The shared link round-trips: sending it to another device opens that signal (§15.2)
 - [ ] Navigating from this signal to another (e.g. via a shared link) shows the **new** signal's data — photos, comments and reporter must not be carried over from the previous one
+- [ ] **Who is responsible** block is present, showing exactly one affordance for this viewer (§3.9)
+- [ ] A **moderator warning label** (Unverified / Possible duplicate / Disputed), when set, renders as a banner (§16.6)
+- [ ] With comments **locked**, the input is replaced by "A moderator has locked comments on this signal." (§16.6)
+- [ ] A **shield** appears in the app bar for a moderator who is not this signal's reporter (§16.5)
+- [ ] **Remove signal** replaces Delete for the reporter (§3.7)
 
 ### 3.3 Signal Status Management (update note is NEW)
 > ⚠️ **Nothing in this section can pass unless the `events` rules block is deployed**
@@ -311,10 +379,12 @@
 - [ ] User auto-subscribed to signal on status change
 - [ ] Subscribers receive a `status_change` push; the actor does not
 - [ ] Cannot change to same status (no-op)
+- [ ] **A non-holder is offered claim-to-act, not an error.** The dropdown stays live for anyone signed in; choosing a status offers to take the case on first (§3.9). On a **129** install the same action gets a bare `permission-denied` — that is the #71 window, not a new bug.
+- [ ] The reporter and the current holder both change status **without** being asked to claim anything
 
-### 3.3b Urgency Change — reporter only (NEW)
-- [ ] **Only the signal's reporter** sees the urgency picker; everyone else sees a read-only chip
-- [ ] A non-reporter cannot change urgency by any route (the rules exclude `urgency` from the status-only allow-list — §11.5)
+### 3.3b Urgency Change — reporter **or case holder** (NEW; CHANGED by §3.9)
+- [ ] **The reporter AND the current case holder** see the urgency picker; everyone else sees a read-only chip (CHANGED — case ownership, §3.9)
+- [ ] A user who is **neither reporter nor holder** cannot change urgency by any route — the enforcement moved from the field allow-list into `isCaseHolder()`, so `urgency` is now *in* that list and is still safe (§11.5). Verify by direct write, not just by the UI.
 - [ ] Changing urgency asks for an update note, exactly as status does
 - [ ] **Escalating to Red: the Red-Alert confirm comes FIRST, then the note dialog** — confirm the intent, then explain it
 - [ ] The picker is **disabled while the write is in flight** — a double-tap must not post two timeline entries or two pushes
@@ -358,7 +428,7 @@
 - [ ] Leading/trailing whitespace is trimmed before the write
 - [ ] Posting a comment does **not** count as a status change on the profile screen's statistics (mixing the two was one reason events moved out of `comments`)
 
-### 3.5 My Signals Page
+### 3.5 My Signals Page — now TWO tabs (**Active** / **Removed**)
 - [ ] Lists all signals created by current user
 - [ ] Ordered by creation date (newest first)
 - [ ] Card-based layout with status colour indicator and **the primary help tag's icon** (no signal-type icon any more)
@@ -366,6 +436,29 @@
 - [ ] Tap card navigates to Signal Details
 - [ ] Requires authentication — shows sign-in prompt if not logged in
 - [ ] Empty state message when no signals exist
+- [ ] **Two tabs are present: Active and Removed** — and the Active tab behaves exactly as the single list used to
+
+### 3.5b Removed tab (NEW — this is what makes removal a bin rather than a delete)
+> Without somewhere to see removed signals, *"you can restore it for 30 days"* is a
+> promise the app never keeps: the user taps Remove, the signal vanishes, and nothing they
+> can reach says otherwise. Everything here is a **server round trip** (`signalRemoval`),
+> not a local write.
+
+- [ ] Removing a signal (§3.7) makes it appear here, and it is **gone from the Active tab and from the map**
+- [ ] Empty state reads "Nothing here. Signals you remove can be restored from this list."
+- [ ] Each row shows **the purge date, not the removal date** — "Deleted permanently on {date}". What the user needs from this screen is how long they still have.
+- [ ] The purge date is **removal + 30 days**; check one against the stored `removedAt` in Firestore. A date the app shows that the server does not honour is the failure `test/removal_retention_guard_test.dart` exists to prevent (§17.1)
+- [ ] Each row offers **Restore** and **Delete permanently**
+- [ ] **Restore** puts the signal back on the map, at its original id, with **its comments, events and photos intact** — check the details screen's history, not just the marker
+- [ ] **Restore does NOT re-notify.** Restoring writes the document back, which is a *create*, so the fan-out would otherwise push a months-old signal to everyone in range again. Confirm on a second device that no push arrives, and look for `Skipping fan-out for restored signal` in the function logs.
+- [ ] The restored signal keeps its **original `createdAt`**, so it does not jump to the top of the map's time filter
+- [ ] **Delete permanently** asks for confirmation ("...and its photos, comments and history for good? This cannot be undone.")
+- [ ] After Delete permanently: the `removedSignals` document is gone, **`signals/{id}/comments` and `/events` are gone** (check Firestore directly — this is the orphaning the old client cascade could never finish), and the Storage objects under the signal's photo prefix are gone
+- [ ] **Double-tap Restore on the same row.** The row must disable itself while the call is in flight — a second write at the same id comes back `already-exists` and would report a failure for something that in fact succeeded. Same for Delete permanently.
+- [ ] The tab renders for an **anonymous** account with **no permission error** — the list query is `data.reporter ==` the signed-in user, which is the only shape the rules permit
+- [ ] **Another user's removals are not visible and not queryable** — see §11.10
+- [ ] Failure paths: restore failure shows "Failed to restore signal. Please try again." and leaves the row in place
+- [ ] Deleting the account (§1.8) **purges** the user's removals outright rather than anonymizing them — after deletion, `removedSignals` holds nothing for that uid (there must be no fourth place a phone number survives)
 
 ### 3.6 Signal Editing (Author Only)
 - [ ] Edit (pencil) icon appears in Signal Details AppBar **only for the signal's creator**
@@ -382,14 +475,53 @@
 - [ ] Photos are **not** edited here (managed on the Details screen — see §3.2)
 - [ ] Edited fields reflect immediately on the Details screen and on the map marker
 
-### 3.7 Signal Deletion (Author Only)
-- [ ] Delete (trash) icon appears in Signal Details AppBar **only for the signal's creator**
-- [ ] Tapping it shows a confirmation dialog before deleting
-- [ ] Cancel aborts; confirm deletes the signal document
-- [ ] After deletion, user is navigated away from the (now-gone) details screen
-- [ ] Deleted signal's marker disappears on the map for all users (real-time)
-- [ ] Verify cascade behavior: comments subcollection, Storage photos, and subscriber records are cleaned up (or document expected orphaning)
-- [ ] ⚠️ **The `events` subcollection is deleted too.** Delete a signal that has status/urgency history, then check Firestore directly: `signals/{id}/events` must be **empty**. Firestore keeps subcollection documents when the parent is deleted and nothing can reach them afterwards — missing this orphans them silently.
+### 3.7 Signal Removal (Author Only) — REWRITTEN, replaces Deletion
+> **Delete is gone from the details screen.** It was a client-side cascade — best-effort
+> Storage deletes plus one batch emptying `comments`, `events` and `takeoverRequests`
+> *by name* — that could not be finished: an app killed mid-cascade orphaned the
+> subcollections permanently. **Remove** calls the `signalRemoval` function, which moves
+> the document to `removedSignals` and leaves the subcollections and photos exactly where
+> they are, so a restore is lossless. The old cascade's checks below are therefore
+> **inverted**: after a removal those subcollections must still be **present**.
+>
+> ⚠️ Two devices are needed for most of this, and a moderator account for the
+> under-review case. Removal is a server round trip — nothing is applied locally first.
+
+**The resolve-first dialog — the reason this was built**
+> Reporters were reaching for Delete to mean "this case is finished". That threw away the
+> outcome others could have learned from, and (while stats were a live count) the credit
+> for reporting it at all.
+- [ ] **Remove signal** replaces Delete in the details screen for the reporter, and is still hidden for everyone else
+- [ ] On an **open** case, the first dialog is *"Is this case resolved?"* with **Mark as resolved** as the primary action and **Remove anyway** as the secondary
+- [ ] **Mark as resolved** asks for the **same mandatory update note** the status dropdown does, and writes the **same `status_change` event** — resolving from the Remove button must not produce a different kind of history from resolving the normal way (compare the two rows in §3.4)
+- [ ] Choosing Mark as resolved as a **non-holder** offers claim-to-act exactly as the dropdown does (§3.9)
+- [ ] On an **already-resolved** case the first dialog is **skipped** — the user is not nagged
+- [ ] Backing out of either dialog writes nothing at all
+
+**The removal**
+- [ ] The confirmation names the window: "You can restore it from My Signals for the next **30** days, after which it is deleted permanently"
+- [ ] Confirm → "Signal removed", and the user is navigated away from the details screen
+- [ ] The marker disappears from the map for **all** users in real time (check the second device)
+- [ ] It appears in **My Signals → Removed** (§3.5b) and is gone from Active
+- [ ] ⚠️ **Inverted from the old cascade:** check Firestore directly — `signals/{id}/comments` and `signals/{id}/events` are **still there**, and the Storage objects under the photo prefix are **still there**. That is what makes the restore lossless; their absence is the bug now.
+- [ ] `removedSignals/{collection}__{signalId}` holds the whole signal under `data`, plus `collection`, `signalId`, `removedBy`, `removedAt`
+- [ ] The signal is removable **whether or not** it has history, photos, or takeover requests
+
+**Refusal while under review — the one abuse a recoverable removal invites**
+> Post something harmful, take it down before a moderator reaches the queue, and the
+> evidence is gone.
+- [ ] With an **open** `report` naming the signal, Remove is refused and the user sees **"This signal is being reviewed and cannot be removed right now."** (`signalUnderReview`, from `failed-precondition`)
+- [ ] The signal is left **byte-identical** after a refused removal — nothing partial, no `removedSignals` document
+- [ ] Once the report is **resolved or dismissed** by a moderator (§16), the same removal succeeds
+- [ ] Any other failure shows "Failed to remove signal. Please try again." — not the under-review message
+
+**Screen behaviour during the call**
+- [ ] While the removal is in flight, the still-live listener reports the document missing the moment the write lands — the screen must show the **success** message and leave, **not** the other user's "this signal is no longer available" (R6-002; the exit is claimed before the call)
+- [ ] If the call **throws**, the claim is released: the screen stays put and shows the error, and a second attempt still works
+- [ ] Removing a signal whose **map info window is open** does not leave a stale window behind (the guard from the earlier round still holds)
+
+**Old builds (129) — what the released client still does**
+- [ ] On **129**, Delete still runs the old client-side cascade and still works. The three subcollection delete rules are deliberately left permissive until the release ships (deploy gates, step 5) — if Delete on 129 fails with `failedToRemoveSignal` on a signal with history, someone has flipped step 5 early.
 
 ### 3.8 Legacy signals — signals written by builds already in the field (NEW)
 > `signalType` is retired, but **this is a live path, not a migration**: a phased release
@@ -411,6 +543,76 @@
 - [ ] **Arrival catch-up says the same thing too** (fixed 2026-08-18; this used to be a known gap, expected to read "Rescue needed"). Hardest of the set to stage: travel >3 km with >30 min since the last check, into range of a legacy signal created while you were away. Check **both** halves — the local notification on the lock screen *and* the inbox row it writes must both say Blood donation, matching the push a user in range at creation time would have got.
 - [ ] Editing a legacy signal (which requires choosing tags) **does not** rewrite or drop its stored `signalType` — check the document afterwards
 - [ ] The map's **category filter** files it under **Rescue** — deliberate, so the map and the fan-out agree about what an untagged signal asks for
+
+### 3.9 Case Ownership — who is responsible right now (NEW)
+> Master spec §4.5. A new axis on every signal: `caseHolder`. **Its three states are the
+> whole design** — *absent* means the signal predates ownership and its **reporter** holds
+> it by derivation; a **reference** means held; an explicit **`null`** means *released*,
+> held by nobody and claimable by anyone. Nothing is backfilled, ever, so an absent field
+> is a permanent live path, exactly like a missing `urgency` (§3.8).
+>
+> ⚠️ **The rules for this are already deployed and no released build knows about them**
+> (#71 — see the blockers). Test §3.3 on a **129** install too: a signed-in user who is
+> neither reporter nor holder gets a bare `permission-denied` there.
+>
+> Needs **three** accounts: A (reporter), B (a volunteer), C (a second volunteer).
+
+**The three states, and what each viewer is offered**
+- [ ] A **legacy** signal (write one by hand with **no** `caseHolder` field): its **reporter** can still change status, urgency and tags. If the reporter is locked out, the absent→null collapse has happened and every pre-ownership signal is affected.
+- [ ] A **newly created** signal stores `caseHolder == reporter` — check the document
+- [ ] Exactly **one** affordance is shown at a time. Walk all four audiences on the same signal:
+  - [ ] **the holder** sees "You are responsible for this case", **I can no longer do this** (release), and any pending offers
+  - [ ] **the reporter, not holding** sees who holds it — and **no** Hand over / Decline buttons (answering an offer is the holder's, not the reporter's)
+  - [ ] **anyone else, case held** sees **Offer to take over** — or "You have offered to take this over" once they have
+  - [ ] **anyone else, case released** sees **Take responsibility**
+- [ ] A **released** case shows "Nobody has taken this case on yet" and is claimable by anyone — including, deliberately, by the reporter again
+
+**Who may change what (the rules are the enforcement — §11.5)**
+- [ ] **Status, urgency and help tags**: reporter ✔, holder ✔, anyone else must claim first
+- [ ] **Title, description, photos, contact phone**: reporter only — the holder cannot edit them (the reporter's account of what they saw stays theirs). Confirm the Edit pencil is absent for a non-reporter holder.
+- [ ] **Removing the signal**: reporter only (§3.7); a holder who is not the reporter has no Remove
+- [ ] **`caseHolder` itself is writable by nobody** — attempt a direct client write of the field as reporter, as holder and as a stranger; all three must be `PERMISSION_DENIED`. The callable is the only writer.
+
+**Claim-to-act — one tap, one note, one notification**
+- [ ] As B (neither reporter nor holder), open the status dropdown: it stays **live**, and choosing a status offers to take the case on ("Take responsibility for this case?" → **Take it on**)
+- [ ] Exactly **one** confirmation and **one** note — not two round trips
+- [ ] The transfer **and** the status change land together: the signal shows B as holder *and* the new status, or neither
+- [ ] **One tap produces ONE push**, not two. Check the second device: a single notification that says both things ("{name} is now responsible", carrying the status). Two pushes for one tap is what trains people to mute a signal that matters.
+- [ ] The timeline shows an **`ownership_transfer`** row with B's note, alongside the `status_change` (§3.4)
+- [ ] **Two devices claiming the same released case in the same second**: exactly one wins. The loser gets an error, **not** a success message for a case they do not hold, and the timeline carries **one** transfer, not two. (Every action runs in a transaction for this reason — a batch takes no read lock.)
+- [ ] Declining the confirmation writes nothing and leaves the dropdown showing the stored status
+
+**Offering, answering, and the cooldown**
+- [ ] As B on a **held** case: **Offer to take over** → "Your offer was sent to the person responsible."
+- [ ] The holder gets a push ("{name} asked to take responsibility") and sees the offer under **Offers to take over**
+- [ ] Offering **twice** is refused: "You have already offered to take this over." (the request is keyed by uid — the document id *is* the rate limit)
+- [ ] Holder taps **Hand over** → B becomes holder, both are told, and an `ownership_transfer` row appears
+- [ ] Holder taps **Decline** → B is told, and B is shown **"You can offer again after {when}"**
+- [ ] **The cooldown is one day and it must actually bite.** Immediately after a decline, B cannot re-offer. Fast-forward the stored `resolvedAt` by hand to confirm the offer becomes available again after a day.
+- [ ] **Withdraw does not reset the cooldown.** Withdraw an offer, then try to re-file: it must cost the same wait. (Withdrawing is an *update*; freeing the slot with a delete would make withdraw → re-file → withdraw an unlimited loop that pushes to the holder every time.)
+- [ ] B has **no delete** on their own request — attempt one directly and confirm `PERMISSION_DENIED`
+- [ ] A **re-filed** request cannot arrive in a shape a fresh one could not: attempt to re-file directly as already-`approved` and confirm the write is denied
+- [ ] `resolvedAt` cannot be chosen by the requester — a withdrawal with a client-supplied timestamp is denied (it is pinned to `request.time`, or the cooldown is skippable)
+- [ ] A **re-file notifies the holder** even though no document was created (the trigger is on *write*, not create — a create trigger would leave the holder with an offer nobody told them about)
+- [ ] An approve, a decline and a withdrawal do **not** each fire a fresh "someone offered" push
+
+**Release, and the three escapes from a silent holder**
+- [ ] Holder taps **I can no longer do this** → the case is **released** (explicit `null`, not absent — check the document), everyone following is told ("This case needs someone" / "Nobody is responsible for this case now"), and anyone may now take it
+- [ ] A released case does **not** hand itself back to the reporter automatically
+- [ ] **Stale takeover**: on a case whose `holderActiveAt` is older than **14 days**, the button reads **Take responsibility**, not *Offer to take over* — and the claim succeeds. Without this the only affordance is an offer sent to somebody who by definition is not reading it, and the escape hatch is unreachable.
+- [ ] The displaced holder is told when a stale case is taken from them
+- [ ] The banner "Nobody has updated this case in a while." appears on a stale case
+- [ ] **A signal with no usable holder timestamp reads as NOT stale** — the safe direction is "you have to ask", never "anyone may take this". Write one by hand with no `holderActiveAt` and confirm only *Offer to take over* is shown.
+- [ ] `holderActiveAt` cannot be set by a client — attempt a direct write and confirm it is denied
+
+**Anonymous users**
+- [ ] **`caseOwnership` rejects anonymous callers outright** — the only write path in the app that does. Signed out (anonymous), every ownership affordance either is hidden or fails cleanly with a sign-in prompt; nothing produces an unexplained error.
+
+**Failure and copy**
+- [ ] Any failed ownership action shows "Could not change who is responsible." and leaves the stored holder unchanged
+- [ ] All of the above renders in **Bulgarian** (§9) — the ownership strings are new this release
+- [ ] The timeline sentences read correctly with real names: "{name} took responsibility for this case", "{name} handed this case to {other}", "{name} stepped down from this case"
+- [ ] A transfer involving a **deleted** account resolves to "Deleted user" rather than a blank
 
 ---
 
@@ -506,6 +708,16 @@
 - [ ] **New comment** (`new_comment`): received when a comment is posted on a subscribed signal (body truncated to 50 chars)
 - [ ] ⚠️ **The update note is NOT in the push or the inbox body** — a status-change push still reads `{signalTitle}: {status}`. Expected, recorded as a known gap; don't file it.
 
+**Ownership notifications (NEW — §3.9)**
+- [ ] **Someone took responsibility** — subscribers are told when a case changes hands ("{name} is now responsible")
+- [ ] **This case needs someone** — sent when a holder **releases** a case ("Nobody is responsible for this case now")
+- [ ] **Someone offered to take over** — sent to the **holder** only ("{name} asked to take responsibility")
+- [ ] **A re-filed offer notifies the holder too**, even though no new document was created
+- [ ] **You are now responsible for a case** / **Your offer was declined** — sent to the requester on approve / decline
+- [ ] **A claim-with-status sends ONE push, not two** — the ownership message carries the status change with it (§3.9). Two pushes for one tap is the regression to watch for here.
+- [ ] The displaced holder is told when a **stale** case is taken from them
+- [ ] Each of these also lands in the **in-app inbox** (§6.6) — including for a recipient with notifications off, which is exactly what #72 broke (§12.1)
+
 ### 6.3 Notification Handling by App State
 - [ ] **Foreground**: Shows local notification (high priority Android, sound+badge iOS)
 - [ ] **Background**: Device processes push notification
@@ -585,6 +797,8 @@
 - [ ] The actor (reporter / status-changer / comment author) gets **no** entry for their own action
 - [ ] **A user with notifications disabled or no FCM token still receives inbox entries** (the recipient split — this is the main reason the inbox exists)
 - [ ] Entries are not duplicated if a trigger retries (deterministic ids `sig_`/`st_`/`cmt_`/`nb_`)
+- [ ] **Ownership events write inbox entries too** (§3.9): a transfer, a release, an offer, an approval and a decline each land in the right recipient's inbox
+- [ ] ⚠️ **The regression #72 was found through:** a recipient whose `users/{uid}.testMode` was never recorded is dropped **before** the split between inbox and push recipients, so they lose the **inbox entry as well as** the push, with nothing logged. Re-run the ownership notification with a notifications-off account on a test-mode device and confirm the row arrives (§12.1).
 
 **Localization**
 - [ ] On a Bulgarian device, rows render in Bulgarian — help-tag name, urgency, status label and all titles — even though the push text stored on the document is English
@@ -784,6 +998,10 @@
 - [ ] **Our Site** — opens website (shows a launch status message)
 - [ ] **About** — version, build, logo, description, links (Website, Facebook, GitHub), Open Source Licenses
 - [ ] **Share App** — shares iOS App Store + Android Play Store links + website
+- [ ] **Moderation** (NEW) — a **Reports** entry appears in the drawer **only** for an account holding a `moderators/{uid}` document (§16)
+- [ ] **Granting or revoking the role takes effect without a restart.** The entry is fed by a live stream, not a token claim: write the `moderators/{uid}` document while the app is open and the entry appears; delete it and the entry disappears. (This is exactly why the role is a document — a custom claim would leave a revoked moderator with every power until their ID token expired, up to an hour.)
+- [ ] **The drawer must be opened at least once for this to be observable** — a closed drawer does not build its child, so a role change while it has never been opened is not a bug
+- [ ] For a non-moderator the entry is absent, and navigating to `/moderation` directly shows "You do not have moderator access." rather than a queue
 
 ### 8.2 About Screen
 - [ ] Shows app version and build number (from `package_info_plus`)
@@ -829,6 +1047,10 @@
 - [ ] **Onboarding gate** (§6.8): title, explanation, save button, error state
 - [ ] `signInWithGoogle`, `googleSignInFailed` (§1.3)
 - [ ] `pleaseEnterValidEmail` (§8.3)
+- [ ] **Case ownership** (§3.9) — the responsible-for block's four states, Take responsibility / Offer to take over / Hand over / Decline / I can no longer do this, all five confirmation dialogs, the "You can offer again after {when}" line, the stale banner, and the three timeline sentences (`tookResponsibility`, `handedCaseTo`, `releasedCase`)
+- [ ] **Removal** (§3.7, §3.5b) — the "Is this case resolved?" dialog, the confirmation naming the 30-day window, `signalUnderReview`, the Active/Removed tab labels, the empty state, and **"Deleted permanently on {date}"** with a Bulgarian-formatted date
+- [ ] **Reporting** (§16.2) — all 12 reasons plus the dialog copy
+- [ ] **Moderation** (§16) — the eight action labels, the three warning labels, "Why are you doing this? (required)", "You cannot moderate your own content.", "You no longer have moderator access.", the Reports/Hidden tab labels and both empty states
 - [ ] `locationAlwaysPermissionRequired` (§6.4) — long string, check it doesn't overflow the snackbar
 - [ ] `signalNearbyNotificationTitle` — the **catch-up notification** title, rendered from a **headless isolate** with no `BuildContext` (it looks up the device locale directly). Verify a Bulgarian device gets a Bulgarian notification.
 - [ ] Inbox row strings: `notificationNewSignalTitle/Body`, `notificationStatusChangeTitle/Body`, `notificationNewCommentTitle`, `notificationNearbySignalBody` — rendered from structured fields, **not** from the English `title`/`body` stored on the document (§6.6)
@@ -849,8 +1071,10 @@
 ### 10.2 Data Synchronization
 - [ ] Signal creation on Device A visible on Device B in real time (Firestore streams)
 - [ ] Signal **edits** (title/description/type/phone) on Device A propagate to Device B's details view and map marker
-- [ ] Signal **deletion** on Device A removes the marker and closes the details view on Device B
-- [ ] Signal **deletion** on Device A while its **info window/overlay is open on the map** on Device B: the marker disappears and the open info window + invisible tap target are dismissed cleanly — no crash (`PlatformException: Invalid markerId`) and tapping where the window was does **not** navigate to the deleted signal
+- [ ] Signal **removal** on Device A removes the marker and closes the details view on Device B (§3.7) — and **restoring** it from Device A brings the marker back on B, live
+- [ ] A moderator **hiding** a signal on Device A removes it from Device B's map the same way (§16.6)
+- [ ] Signal **removal** on Device A while its **info window/overlay is open on the map** on Device B: the marker disappears and the open info window + invisible tap target are dismissed cleanly — no crash (`PlatformException: Invalid markerId`) and tapping where the window was does **not** navigate to the removed signal
+- [ ] **Case ownership changes propagate live**: a claim on Device A updates the responsible-for block on Device B without a reload
 - [ ] Status changes propagate across all devices viewing the same signal
 - [ ] Comments appear in real time on all devices viewing the signal
 - [ ] Profile edits (name, phone, photo) sync via Firestore across devices
@@ -902,7 +1126,7 @@
 - [ ] **Regression watch on the new build** — confirm these known issues do not recur: `add2187e` (`SignInHubActivity` NPE, §1.3), `d98a1898` / `6fb193a6` ("Bad state: No element" at bootstrap, fixed by `71a45ae`), `a8072678` (forgot-password `setState` after dispose — **still open**, `firebase_ui_auth` 3.0.1)
 
 ### 11.5 Firestore Rules — Signals, Events & Comments (NEW)
-> Run the emulator suite first (§16.1). These are the on-device confirmations that the deployed rules behave.
+> Run the emulator suite first (§17.1). These are the on-device confirmations that the deployed rules behave.
 > ⚠️ **Re-read the LIVE ruleset before starting** — the `events` block was deployed and
 > then silently reverted once already (see Deploy gates). Rules deploys replace the whole
 > ruleset, so an older checkout deploying `--only firestore:rules` drops newer blocks
@@ -914,8 +1138,10 @@
 - [ ] **`note` is required, 1–500 chars** — a note-less event is denied, which is why the client cannot write one without the dialog
 - [ ] Level fields are bounded 0–2
 - [ ] **Updates are denied outright** — a delivered event cannot be rewritten
-- [ ] The parent signal's **reporter** can delete events (this is what makes the client-side delete cascade work); a third party cannot
-- [ ] ⚠️ Recorded, not a finding: this makes the history tamper-**evident**, not tamper-proof (`HelpAPaw/Flutter#68`)
+- [ ] The parent signal's **reporter** can still delete events — **deliberately, and only until the release ships**. Removal moved server-side (§3.7), so the *new* client never deletes a subcollection document, but every already-released build still runs the old cascade and denying it would break their Delete button. Flipping these three to `if false` is **step 5 of the deploy gates**.
+- [ ] ⚠️ Recorded, not a finding: until that flip, the history stays tamper-**evident**, not tamper-proof (`HelpAPaw/Flutter#68`)
+- [ ] ⚠️ The worse half is `comments`: there is **no author-delete rule at all**, so a comment's author cannot delete their own comment while the signal's reporter can delete anyone's, unaudited. That power is what `moderateAction.deleteComment` exists to route properly (§16)
+- [ ] **`ownership_transfer` must be ABSENT from the accepted event vocabulary.** Attempt to write one from a client: it must be **denied**. It is server-only precisely so nobody can forge a timeline entry claiming they took responsibility for a case — and `test/signal_event_vocabulary_guard_test.dart` asserts the absence so the "types match" test cannot be made green by adding it here (§17.1)
 - [ ] The same holds for **`signals_test`**
 - [ ] **Deploy-order check:** on rules *without* the events block, a status change fails **entirely** (atomic batch) — confirm you see `errorUpdatingStatus` and no partial write. That is the symptom to recognise if the revert happens again.
 
@@ -925,11 +1151,14 @@
 - [ ] **New field bounds**: `helpNeededTags` 1–3 strings, `animalType` a known code, `urgency` an int 0–2 — out-of-range values are denied
 - [ ] ⚠️ The new fields are **bounded but not required** — a create without them is still accepted, deliberately, so a shipped build's writes keep working (§3.8)
 - [ ] A retired `signalType` on create is **neither required nor rejected** — a retired field must not be able to refuse an old client's write
-- [ ] **`urgency` is reporter-only**: a non-reporter changing urgency is denied, because it is absent from the status-only allow-list (§3.3b)
+- [ ] **`urgency` is reporter-or-holder** (CHANGED — case ownership, §3.9). It used to be reporter-only *by being omitted from the status-only allow-list*; that omission was the entire enforcement of "only the case holder may mark a signal Red". The load-bearing clause has moved into `isCaseHolder()`, so `urgency` is now **in** the list and is still safe. Confirm: reporter ✔, holder ✔, a stranger denied (§3.3b, §11.12)
 - [ ] **Reporter-only edits**: only the signal's author can change title/description/tags/species/phone/photos (§3.6)
-- [ ] **Status-only volunteer path**: another signed-in user can change **only** `status` (0–2) and must self-stamp `lastUpdatedBy` — attempting to change any other field in the same write is denied
+- [ ] **The status-only volunteer path is GONE — this is the #71 breaking change.** `isStatusOnlyUpdate` became `isCaseHolderUpdate`: an arbitrary signed-in user can **no longer** change a stranger's status. Only the **reporter** or the **case holder** can, and everyone else must claim the case first (§3.9). A stranger's direct status write must be **denied**.
+- [ ] The allowed fields for that path are `status`, `urgency` and the help tags, and the caller must still self-stamp `lastUpdatedBy` — any other field in the same write is denied
+- [ ] ⚠️ **These rules are already deployed and the released build predates them.** On a **129** install, a signed-in non-reporter changing status gets a bare `permission-denied`. Expected for the duration of the #71 window; record it, do not file it.
 - [ ] `lastUpdatedBy` cannot be spoofed to a different user
-- [ ] **Delete** is reporter-only (§3.7); a non-author's delete is denied
+- [ ] **Delete** is reporter-only (§3.7); a non-author's delete is denied. The holder, if not the reporter, cannot delete.
+- [ ] **`caseHolder` is writable by no client at all** — reporter, holder and stranger are each denied. The `caseOwnership` callable (Admin SDK) is the only writer (§3.9)
 - [ ] **Comment create binding**: `author` must equal the caller; text (when present) 1–2000 chars
 - [ ] A `status_change` comment (no `text` field) is accepted
 - [ ] A signal's reporter can delete comments on their own signal (enables the delete cascade); a third party cannot
@@ -973,6 +1202,43 @@
 - [ ] Comment-photo paths remain read-only (feature doesn't exist; default-deny is intentional)
 - [ ] ⚠️ Emulator caveat: the Storage emulator project-prefixes cross-service DocumentReferences, so the real `storage.rules` deny every upload **there**. That is an emulator artefact, not a prod bug — see `firestore-tests/storage.rules.test.js`.
 
+### 11.10 Firestore Rules — `removedSignals` (NEW)
+> The reporter's own bin (§3.5b). **Unlike quarantine it is readable — by exactly one
+> person.** Quarantine withholds content from readers; a removal is the reader's own
+> content in their own bin, and they have to see what is in there to decide what to
+> bring back.
+- [ ] **No client may write it at all** — create, update and delete are denied for the reporter, for a moderator and for a stranger. `signalRemoval` moves documents in and out through the Admin SDK.
+- [ ] A user **can** read their own removals — the rule is `resource.data.data.reporter == <their user doc>`
+- [ ] **Another user's removal is denied on read**, even with the exact document id
+- [ ] **An unfiltered `list` is denied outright.** Only a query filtered on `data.reporter` is permitted — which is also why My Signals filters that way and applies the test-mode split **in memory** rather than as a second `where` (one composite index is enough)
+- [ ] A query filtered on **someone else's** `data.reporter` is denied
+- [ ] The two composite indexes exist and are **READY**: `data.reporter ASC, removedAt DESC` and `collection ASC, removedAt DESC`
+- [ ] ⚠️ Recorded, not a finding: a removed signal's **comments, events and photos stay readable** to anyone holding the signal id until the purge — `signalRemoval` moves only the document, and both `comments`/`events` (`read: if true`) and signal photos (Storage `read: true`) are unconditional. The same two gaps hiding already has, now reachable more often.
+
+### 11.11 Firestore Rules — Reports, Moderation & Quarantine (NEW)
+- [ ] **`moderationQuarantine` has no client rule match at all** — a moderator reading it directly is **denied**, exactly like everyone else. That is what makes hiding real: the withheld content never reaches a client, and moderators see only the projected summary through `listQuarantined` (§17.4)
+- [ ] **`moderationActions` (the audit log) is not client-writable.** A forged audit entry is denied — a client-written audit log is a forgeable one, and this is the entire reason moderator powers are functions rather than a widened ruleset.
+- [ ] **`reports`: create allowed, update denied.** The document id is deterministic per (reporter, target), so **one report per user per target** needs no throttle collection. Reporting the same target twice shows "You have already reported this." rather than writing a second document.
+- [ ] A report must be created with `status == 'open'` — any other initial status is denied
+- [ ] A client cannot resolve its own report (update denied); only `moderateAction` closes one
+- [ ] The `reporter` on a report is pinned to the caller — a forged reporter is denied
+- [ ] **`moderators/{uid}` is not client-writable** — a user cannot grant themselves the role
+- [ ] **The reporter cannot undo moderation.** Attempt a client write touching the signal's `moderation` map, on **both** the reporter branch and the holder/status branch: both must be denied. This is load-bearing, not defensive — the reporter branch otherwise accepts *any* field, and a patched client would clear its own comment lock.
+- [ ] **A comment lock is enforced in the rules, not just the UI.** With `moderation.commentsLocked` set, a direct comment create is denied.
+- [ ] All of the above hold identically for **`signals_test`**
+
+### 11.12 Firestore Rules — Case ownership & takeover requests (NEW)
+- [ ] **`isCaseHolder()` resolves an ABSENT `caseHolder` to the reporter.** Write a signal by hand with no `caseHolder` and confirm its reporter can still change status — if they cannot, absent has been collapsed into null and **every** pre-ownership signal is locked from its own reporter.
+- [ ] **An explicit `null` resolves to nobody**, and anyone may claim — confirm a released case does *not* silently hand itself back to the reporter. The two errors are silent and opposite; this is invariant §12.5d.
+- [ ] `takeoverRequests/{uid}`: the document id **is** the rate limit — a request keyed to another uid is denied
+- [ ] **The requester has no delete**, unconditionally — freeing the uid-keyed slot would make `create` unconstrained again and turn withdraw → re-file into an unlimited loop that pushes to the holder every time
+- [ ] A **withdrawal** is an update, and `resolvedAt` is pinned to `request.time` — a client-chosen timestamp is denied (a timestamp the requester picks is a cooldown they skip)
+- [ ] **Re-filing before the one-day cooldown is denied**; after it, allowed
+- [ ] A re-file must also satisfy the **create** validator — re-filing directly as `approved` is denied
+- [ ] Only the **holder** may approve or decline; the reporter (when not holding) cannot
+- [ ] `holderActiveAt` cannot be written by a client — staleness needs a server clock
+- [ ] The reporter's delete on the subcollection stays unconditional **until deploy-gates step 5**, because the old client's delete cascade has to be able to empty it
+
 ---
 
 ## 12. Special / Hidden Features
@@ -992,6 +1258,21 @@
 - [ ] The **in-app inbox is mode-filtered**: test-mode entries never appear in the production inbox and vice versa (§6.6)
 - [ ] Signal **photos** upload correctly in test mode (§11.9)
 - [ ] The public share page resolves ids in **both** `signals` and `signals_test` (§15.3)
+
+**The account's own record of the mode (#72 — NEW, and it is not the same thing as the toggle)**
+> `users/{uid}.testMode` decides whether the server fan-out considers an account **at
+> all** — the mode guard sits *above* the split between inbox recipients and push
+> recipients, so an unrecorded mode costs the account its **inbox entry** as well as its
+> push, for a user whose only mistake was leaving notifications off. **Absent reads as
+> production**, which is right for every real user and silent for a test one.
+- [ ] **The bug this closes:** put a test-mode device into the state that used to break it — sign in to an account with notifications **off**, on a device already in test mode. `users/{uid}.testMode` must be `true` **without** ever enabling notifications and without an FCM token existing.
+- [ ] That account then **receives its inbox entry** for a test-mode signal/comment/ownership event (§6.6) — this is the case where a `takeover_approved` notification and its inbox row both vanished with nothing logged
+- [ ] **Launch backfills.** Take an account with **no** `testMode` field at all (delete it by hand), relaunch on a test-mode device, and confirm the field is written.
+- [ ] **A new anonymous session is stamped without a relaunch.** Sign out mid-session (which mints a new anonymous uid) and confirm the *new* uid gets `testMode` — the device preference outlives the session it was set in, so this does not come for free.
+- [ ] **The reverse direction is covered too.** Take an account stamped `testMode: true`, turn test mode **off** on the device, relaunch, and confirm the field flips to `false` — an account left stamped `true` is invisible to the **production** fan-out, which is the silent failure in the other direction.
+- [ ] **The ordinary launch costs no write.** Launch twice with no change of account or mode and confirm no repeated write to `users/{uid}` (a `(uid, mode)` cache) — but a *changed* uid or mode must always write. The cache is required to fail **towards** writing.
+- [ ] **Launch is not blocked by it.** The sync is deliberately not awaited (a Firestore write's future only completes on server ack) — confirm the app reaches the map offline, and that the write lands once connectivity returns.
+- [ ] **The function logs say what they drop.** With logging deployed, a fan-out that skips a user for mode reasons logs it, and distinguishes **absent** from **false** — without that, this class of bug is indistinguishable from "no notification was due" (§17.2).
 
 ---
 
@@ -1129,9 +1410,110 @@
 
 ---
 
-## 16. Release Gates — Automated Tests, Backend Jobs & Upgrade Path (NEW)
+## 16. Moderation & Reporting (NEW — master spec §3.6.1, §18)
 
-### 16.0 Pre-test setup — do these in order, before anything else
+> The first tier of the governance hierarchy: reporting, a queue, a Hidden tab, and eight
+> actions. Behaviour points, restrictions/bans, appeals and the admin tier are **not**
+> built — do not file them as gaps.
+>
+> ⚠️ **Prerequisite: at least one test account must hold a `moderators/{uid}` document.**
+> `functions/scripts/grant_moderator.js` needs Application Default Credentials this
+> machine does not have and has never been run — arrange the grant before the device pass
+> or none of §16 is testable (see the blockers).
+>
+> Needs **two** accounts minimum: M (moderator) and A (an ordinary user whose content M
+> can act on — M **cannot** act on their own).
+
+### 16.1 The role
+- [ ] The role is a **`moderators/{uid}` document, not an auth claim** — grant it and the drawer entry appears without a restart; revoke it and the entry disappears (§8.1). A claim would leave a revoked moderator with every power until their token expired, up to an hour.
+- [ ] A **Moderator** badge is shown where the app draws one
+- [ ] A revoked moderator's next action fails with "You no longer have moderator access." rather than silently doing nothing
+- [ ] The role is **purely additive** — a moderator's own signals, comments, status changes and case ownership behave exactly as any other user's
+
+### 16.2 Reporting (any user)
+- [ ] A **flag** appears in the signal details app bar for **non-authors**; the author does not see it on their own signal
+- [ ] **Long-press a comment** offers Report (and, for a moderator, a Report / Delete comment chooser — §16.5)
+- [ ] The report dialog asks *"What is wrong with this?"* with **12 reasons**: fraud/scam, animal abuse or neglect, harassment, false information, dangerous advice, puts an animal in danger, graphic content, spam, shares private details, public accusation about a person, duplicate of another signal, something else
+- [ ] **A reason is required**; free-text detail is **optional** (demanding an explanation is what stops people reporting at all)
+- [ ] On submit: "Thank you. A moderator will review this."
+- [ ] **Reporting the same target twice** shows "You have already reported this." and writes **no** second document — the deterministic id *is* the rate limit (§11.11)
+- [ ] Reporting while signed out prompts to sign in ("Please sign in to report content.")
+- [ ] Failure shows "Could not send the report. Please try again."
+- [ ] The FAQ's "report an inappropriate answer" question now points at something that exists
+- [ ] All 12 reasons and the dialog copy render in **Bulgarian**
+
+### 16.3 The Reports queue
+- [ ] Drawer → **Reports** opens the queue for a moderator; a non-moderator sees "You do not have moderator access."
+- [ ] Open reports are listed; **"Reported {count} times"** aggregates multiple reporters of the same target
+- [ ] Empty state reads "No open reports."
+- [ ] **Open** on a tile navigates to the reported content
+- [ ] Acting on a report **resolves** it and it leaves the queue; a resolved report does not come back. (If handled reports keep reappearing, the report-status vocabulary has drifted — that is what `test/report_status_vocabulary_guard_test.dart` guards, §17.1.)
+- [ ] **Dismiss report** closes it without acting on the content
+- [ ] ⚠️ A report whose target **collection cannot be read** offers **no** signal-targeting action rather than defaulting to `signals` — a default there would act on production content. An **unknown `targetType`** narrows the menu instead of guessing.
+
+### 16.4 The Hidden tab — restoring a hidden signal
+> Hiding **resolves** its originating report (correctly — it *has* been actioned), which
+> drops it out of the queue. Until this tab existed, and the queue was the only route to
+> any action, hiding was a **one-way door**.
+- [ ] A **Hidden** tab sits beside **Reports** on the moderation page
+- [ ] A hidden signal appears there with its title, **"Hidden by {name}"** and the moderator's note
+- [ ] Empty state reads "No hidden signals."
+- [ ] **Restore** asks "Restore this signal? It goes back on the map for everyone. Its comments and history are still there." — and it does
+- [ ] After a restore the signal's **comments and events are intact** (subcollections survive the document's move — that is what makes it lossless)
+- [ ] **Restoring does NOT re-notify.** Check a second device in range: no push. `handleSignalCreated` early-returns on `moderation.restoredAt` — without it, writing the document back is a *create* and pushes a months-old signal to everyone in range again.
+- [ ] The restored signal keeps its **original `createdAt`**
+- [ ] ⚠️ **The list is a summary, not the content.** The tab shows only projected fields — never the description, photos or contact phone of a hidden signal. If withheld content is visible here, the callable has been replaced by a client read and the whole point of hiding is gone.
+- [ ] The `hiddenAt` timestamp renders as a real date (it crosses the callable boundary as epoch millis — a raw Firestore `Timestamp` does not survive the JSON envelope)
+- [ ] ⚠️ Recorded, not a finding: **removed** signals (§3.7) do **not** appear in this tab. The callable supports it; no tab renders it, deliberately.
+
+### 16.5 In-context actions — acting without a report
+> Every moderator power used to be reachable **only** from a report, so a problem post
+> found while browsing had to be reported — by the moderator, to themselves — before they
+> could touch it. Master spec §18.3 never intended that.
+- [ ] A **shield** appears in the signal details app bar for a moderator who is **not** that signal's reporter
+- [ ] **Long-press a comment** as a moderator offers a chooser: **Report** or **Delete comment**
+- [ ] The action sheet opened this way carries **no report**, and **"Dismiss report" is absent** from it
+- [ ] Actions taken this way are audited with **no `reportId`** — check `moderationActions`
+- [ ] **Hiding from the details screen leaves the screen** with the moderation outcome, **not** the "this signal is no longer available" message an ordinary reader would get for a deleted signal. The signal has been hidden, which is the reversible opposite of deleted.
+- [ ] The role is fetched **once per screen**, not once per comment row — a signal with many comments must not fire a lookup each
+
+### 16.6 The eight actions
+> All eight go through **one** `moderateAction` callable, so authorization, the mandatory
+> note, the unforgeable audit entry and the report resolution cannot be skipped per-branch.
+- [ ] **The note is mandatory on every action.** "Why are you doing this? (required)" — an empty or whitespace-only note is refused with "A note is required." and nothing is written.
+- [ ] **Hide signal** — the signal leaves the map for everyone in real time and becomes unreadable (§16.4)
+- [ ] **Restore signal** — §16.4
+- [ ] **Lock comments** / **Unlock comments** — both directions round-trip. With comments locked, readers see "A moderator has locked comments on this signal." and the input is gone; a **direct** comment write is denied by the rules too (§11.11)
+- [ ] **Correct urgency** — changes the level **and writes an `events` row** that appears in the signal history (§3.4). This is the first server-written event: a wrong type or key name there is accepted by the Admin SDK, stored, and then silently dropped by the app's decoder — the correction just never appears (invariant §12.5a).
+- [ ] **Delete comment** — the comment is gone for everyone
+- [ ] **Add warning label** / **Remove warning label** — `unverified`, `duplicate`, `disputed`. Each renders a banner on the signal; clearing it removes the banner. ⚠️ A label the server accepts but the app cannot render is **silent** — the moderator believes the signal is annotated and every reader sees an unannotated one (`test/moderation_label_vocabulary_guard_test.dart`, §17.1).
+- [ ] **Dismiss report** — closes the report, content untouched
+- [ ] **Add internal note** — audit-only, changes nothing user-visible
+- [ ] Every action writes a `moderationActions` entry with the actor, the target, the note and a **small before/after summary** — never a whole document copy (the audit log must not become a permanently readable copy of content that was hidden precisely so it would not be read)
+- [ ] Success shows "Done."; failure shows "That did not work. Please try again."
+
+### 16.7 Self-moderation is refused
+> Without this, a moderator could clear a `disputed` label off their own case, lock the
+> thread criticising it, or downgrade a Red Alert about them — each perfectly audited, and
+> each exactly the unchecked power master spec §3.6.1 says the role must not carry.
+- [ ] Every action on **the moderator's own signal** is refused with **"You cannot moderate your own content."** (`failed-precondition` — a *different* message from the revoked-role one, deliberately: telling a moderator who still has the role that they have lost it sends them to the wrong person for help)
+- [ ] Every action on **the moderator's own comment** is refused the same way
+- [ ] **Deleting a comment clears TWO owners**: the comment's author **and** the reporter of the signal it sits under. A moderator must not be able to delete the comment criticising their own case.
+- [ ] **`addNote` is exempt** — a moderator may add an internal note on their own content
+- [ ] The signal is left **byte-identical** after a refused action
+- [ ] The **UI mirrors the server**: the shield is not drawn for the signal's own reporter, and the comment chooser is not offered on a signal they reported — so nobody meets this error in ordinary use
+- [ ] ⚠️ A signal or comment with an **absent or malformed owner** does **not** trip the guard — otherwise the legacy documents most likely to need moderating would be the ones nobody could moderate. Test one written by hand with no `reporter`.
+
+### 16.8 Known gaps — record, do not re-file
+- [ ] **A hidden signal's photos stay readable by URL.** `storage.rules` grants signal photos `read: true` unconditionally, so anyone holding a photo URL keeps it. Closing it costs a cross-service `firestore.get` on every photo load.
+- [ ] **A hidden signal's comments and events stay readable** to anyone holding the signal id — the flip side of what makes a restore lossless.
+- [ ] Behaviour points, restrictions/bans, appeals and the admin tier are **not built**.
+
+---
+
+## 17. Release Gates — Automated Tests, Backend Jobs & Upgrade Path (NEW)
+
+### 17.0 Pre-test setup — do these in order, before anything else
 
 **A. Release-mode smoke test — DO THIS FIRST, it can invalidate everything else**
 > These are the first release builds tested in a while. Release mode swaps App Check from debug providers to **Play Integrity / App Attest**, and uses the **release** API keys. A missing API on the release key silently breaks Auth, Firestore and FCM with no useful error — historically very hard to diagnose. Ten minutes here saves days.
@@ -1141,7 +1523,7 @@
 - [x] Map renders Google Maps tiles — ✅ both
 - [x] Signals load from Firestore — ✅ same "Solved" marker renders on both
 - [x] An FCM token is written to `users/{uid}.fcmTokens` — ✅ tablet on launch 1; 🟡 Android 10 only on launch 2 (see SMOKE-01)
-- [ ] Sign in with **email/password** on one device — proves Token Service + Identity Toolkit *(not yet run — needs the test accounts from §16.0-C)*
+- [ ] Sign in with **email/password** on one device — proves Token Service + Identity Toolkit *(not yet run — needs the test accounts from §17.0-C)*
 - [ ] **iOS/iPad**: repeat all of the above manually
 - [ ] If **any** of the above fails, check the release API key restrictions before proceeding: Token Service, Firebase Installations, FCM, Identity Toolkit, Firebase App Check, Maps SDK
 
@@ -1167,11 +1549,15 @@
 - [ ] **Enable test mode on every device** (tap the title 7×, each tap within 2s) before creating any signal — `help-a-paw-dev` is production
 - [ ] Grant notifications on all three; on the **Android 14** device this is a real runtime prompt (§14.2)
 - [ ] Grant location **Always** on the iPad (iOS never offers Always on the first prompt — Settings → Privacy & Security → Location Services → Help a Paw → Always)
-- [ ] Decide which Android device is the **clean-install** device for §16.4 and uninstall there
-- [ ] ⚠️ **Do not let the upgrade happen unobserved** — that is what spoiled the 125→126 run on both Android devices. Pause Play auto-updates on the observation device, establish the 129 state in §16.4 Phase 1 **first**, and only then update.
+- [ ] Decide which Android device is the **clean-install** device for §17.4 and uninstall there
+- [ ] ⚠️ **Do not let the upgrade happen unobserved** — that is what spoiled the 125→126 run on both Android devices. Pause Play auto-updates on the observation device, establish the 129 state in §17.4 Phase 1 **first**, and only then update.
 - [ ] Keep **one account with no helper tags** in reserve for §6.8 — completing the gate is not undoable from inside the app.
+- [ ] **Grant the moderator role to one test account** — write a `moderators/{uid}` document. Nothing in §16 is testable without it, and `grant_moderator.js` needs credentials this machine does not have.
+- [ ] **A third and fourth account are now needed for §3.9** — case ownership walks reporter / holder / second volunteer, and the transfer, decline and stale paths each need a distinct actor.
+- [ ] Keep **one account whose content the moderator did NOT create** — every moderator action is refused on their own content (§16.7), so a single-account run tests nothing.
+- [ ] Keep **one signal with an open report** in reserve for the §3.7 under-review refusal, and be ready to resolve it to confirm the removal then succeeds.
 
-### 16.1 Automated suites (run before the device pass)
+### 17.1 Automated suites (run before the device pass)
 > **Deploy order for this release: rules → functions → app build.** Never the reverse.
 > The app's status and urgency writes are atomic batches that include an `events`
 > create, so a build shipped ahead of its rules has a **broken** status dropdown, not a
@@ -1186,15 +1572,23 @@
   - `test/urgency_derivation_guard_test.dart` — the legacy urgency fallback
   - `test/map_filter_state_test.dart` — the "all selected" default sets; a new tag missing from them is invisible on the map from the moment it exists
   - `test/firestore_settings_guard_test.dart` — assigning custom Firestore `Settings` in Dart silently breaks the Android headless isolate's geo query, and reports as "no signals nearby"
+  - `test/report_status_vocabulary_guard_test.dart` — the report status is a **query filter** (`where('status', isEqualTo: 'open')`), so a drift means handled reports never leave the queue or filed reports never enter it, with no error on either side (§16.3)
+  - `test/moderation_label_vocabulary_guard_test.dart` — a label only the server knows is stored, renders nothing, and the moderator believes the signal is annotated (§16.6)
+  - `test/takeover_cooldown_guard_test.dart` — the re-ask cooldown **and** `STALE_HOLDER_DAYS`. The staleness half is the one that matters: the button it draws is the only way a case escapes a holder who stopped answering (§3.9)
+  - `test/removal_retention_guard_test.dart` — the 30-day window in two languages. Dart *longer* than the server is the worse direction: the app promises time the user does not have, and a bin that empties early is a delete with extra steps (§3.5b)
+  - `test/signal_event_vocabulary_guard_test.dart` also asserts that **`ownership_transfer` is ABSENT from the rules** — do not "fix" a failure there by adding it, which would make a timeline entry claiming responsibility forgeable (§11.5)
+- [ ] **New unit suites pass**: `test/models/case_holder_test.dart` (the absent / ref / null derivation — §11.12), `test/models/moderation_target_test.dart` (never defaults `collection` to `signals`; narrows on an unknown `targetType` — §16.3), `test/signal_doc_state_test.dart` (the details-screen state machine; R5-004/R6-001/R6-002 each broke in a shipped build), `test/test_mode_sync_cache_test.dart` (the write-avoidance cache **fails towards writing** — §12.1)
 - [ ] `cd firestore-tests && npm ci && npm test` — Firestore **and** Storage rules suites pass, **including the new `events` cases**. Required before **every** rules deploy; device testing cannot validate undeployed rules because `help-a-paw-dev` is production.
-- [ ] `cd functions && npm ci && npm test` — **NEW**: the first unit tests `functions/` has ever had. Covers `recipientSelection` tier ranking and the floor, and the legacy headline shims (`displayTagsOf` / `signalHeadline`). Every failure mode here is silent in production.
+- [ ] `cd functions && npm ci && npm test` — covers `recipientSelection` tier ranking and the floor, the legacy headline shims (`displayTagsOf` / `signalHeadline`), the `events` encoder parity, and now `moderation`, `caseOwnership` and `removeSignal`. Every failure mode here is silent in production.
+- [ ] **The self-moderation guard coverage test passes.** It *reads the source* of `functions/src/moderation.ts` — a new moderator action that skipped `requireNotOwnContent` would compile perfectly and fail silently, so this is the only thing that catches it (§16.7).
+- [ ] Expected suite sizes on this branch: **258 rules tests, 260 Dart tests, 107 functions tests**. A sharp drop means a suite stopped being discovered, not that it got faster.
 - [ ] Kotlin: `android/app/src/test/.../GeohashTest.kt` passes (guards the Dart↔Kotlin geohash parity the fan-out depends on)
 - [ ] Swift: `ios/RunnerTests/GeohashTest.swift` passes — and afterwards, restore/verify `build/native_assets/ios/objective_c.framework` before any device build
 - [ ] `cd functions && npm run build` — TypeScript compiles
 - [ ] **`npm ci`, never `npm install`** in either node tree, and confirm `ignore-scripts=true` is still present in `functions/.npmrc` and `firestore-tests/.npmrc`
 - [ ] Deployed functions report the **Node 24** runtime
 
-### 16.2 Post-deploy backend verification
+### 17.2 Post-deploy backend verification
 - [ ] Function logs show the geohash fan-out selecting recipients (not a full scan) — compare read counts against `COST_ANALYSIS.md` expectations
 - [ ] **The per-fan-out structured line is present and readable**: candidates scanned, eligible count, whether widening fired, the four tier sizes, backfilled count. §6.7 cannot be tested without it, and `MIN_RECIPIENTS` / `WIDEN_RADIUS_KM` cannot be tuned against anything else.
 - [ ] Create one signal and read that line end-to-end: tier A ⊆ recipients, backfill stopped at the floor of 10 (or ran out of candidates), reporter excluded
@@ -1204,9 +1598,19 @@
 - [ ] `signalLink` responds for a valid id, an unknown id, and a malformed id (§15.3)
 - [ ] Places caches (`vetClinicCache`, `vetClinicDetails`) still show cache hits (§5.3)
 - [ ] `onCommentCreated` does **not** throw on a **status-change** comment (which carries no `.text`) — this was R3-002; re-verify on the deployed build
+
+**New functions this release**
+- [ ] The deployed export list contains **`signalRemoval`, `purgeRemovedSignals`, `caseOwnership`, `onTakeoverRequested`, `moderateAction`, `listQuarantined`** — and **nothing was deleted**. Diff the deployed list against the built one: a blanket deploy from a branch missing one of these *removes* it, which is the near-miss `listQuarantined` had during the ownership deploy.
+- [ ] `recordSignalPosted` increments `publicProfiles/{uid}.signalsPosted` on a real (non-test-mode) signal create, and does **not** on a test-mode one (§1.6)
+- [ ] `signalRemoval` logs a refusal when an open report names the signal, rather than failing opaquely (§3.7)
+- [ ] Restoring — by the reporter **or** by a moderator — logs **`Skipping fan-out for restored signal`**. That line is the only evidence the re-notification guard fired (§3.5b, §16.4).
+- [ ] `caseOwnership` rejects an **anonymous** caller with a clean error, and each action runs in a transaction (two simultaneous claims → one winner, §3.9)
+- [ ] **The mode guards log every drop, and distinguish absent from false** (#72). Without that line, a user silently dropped from the fan-out is indistinguishable from "no notification was due" — this is the logging that made #72 findable at all, and it is **not yet deployed** (§12.1).
+- [ ] `moderateAction` writes a `moderationActions` entry for every action, including ones taken with **no `reportId`** (§16.5)
+- [ ] The `removedSignals` indexes and the `reports` index are **READY**, and the `notifications` TTL policy survived the deploy (a deploy can report an unmanaged field override; without `--force` it leaves it alone)
 - [ ] No new unhandled errors in the functions log after 24 h of live traffic
 
-### 16.3 Scheduled jobs
+### 17.3 Scheduled jobs
 - [ ] `cleanupAnonymousUsers` is deployed and scheduled (Sun 03:00 UTC), and `ANON_CLEANUP_DRY_RUN` is **false** for the real run
 - [ ] Trigger it manually once and read the summary log: `scanned N, found M stale anonymous (> 90d inactive), deleted K`
 - [ ] It deletes only accounts with **no** linked providers and >90 days since last token refresh — verify an active anonymous session survives
@@ -1214,7 +1618,15 @@
 - [ ] Auth deletion happens **only after** the Firestore cleanup succeeded (a failed cleanup is left for the next run)
 - [ ] The **notifications TTL policy** actually expires entries older than 90 days
 
-### 16.4 Upgrade path `6.0.2+129` → this build — OBSERVED PROCEDURE (dedicated device)
+**`purgeRemovedSignals` (NEW — `0 4 * * 0` UTC)**
+- [ ] It is deployed and scheduled
+- [ ] Trigger it manually against a removal aged past **30 days** (backdate `removedAt` by hand) and confirm it erases the signal's **subcollections**, its **Storage objects by prefix**, and then the removal record
+- [ ] **The removal record is deleted LAST.** Interrupt a run and confirm it is *resumable* — a record deleted first would strand the descendants with nothing left pointing at them.
+- [ ] A removal **inside** the window is left alone
+- [ ] It reaches for `signals/{id}/…`, never for anything under `removedSignals` — only the document moved, so anything cleaning up after a removal that looks in the wrong place silently erases nothing
+- [ ] Read the summary log for a real run and confirm the counts match what was actually there
+
+### 17.4 Upgrade path `6.0.2+129` → this build — OBSERVED PROCEDURE (dedicated device)
 
 > **Most of this release's risk lives here, and more of it than last time.** An existing
 > install carries an account with **no helper tags**, signals with **no urgency, tags or
@@ -1238,6 +1650,9 @@
 - [ ] **Change one signal's status and post a comment**, so there is history stored the *old* way (status changes as comments)
 - [ ] Receive at least one push, and **leave it unread**
 - [ ] **Record all of it** — uid, exact radius, which types are deselected, token value, badge number, signal ids **and their types**. Without this baseline, "survived the upgrade" is unfalsifiable.
+- [ ] **Leave the 129 signals with NO `caseHolder` field.** 129 does not write one, and nothing is ever backfilled — these are the permanent legacy-ownership corpus and cannot be manufactured afterwards. Check one document to confirm the field is genuinely absent, not null.
+- [ ] **Record the profile's signal count on 129** (it is a live `count()` there). It is the number the new build must not silently reduce, and the number the backfill exists to restore.
+- [ ] **Delete one signal on 129, through the old client cascade**, and note that it is gone. That account's count is now permanently under-reported — the backfill counts the live collection and cannot recover it. Confirming that is expected, not a finding, is worth more than filing it twice.
 
 #### Phase 2 — Upgrade in place (do NOT uninstall)
 
@@ -1280,3 +1695,15 @@
 - [ ] The catch-up dedupe store from 129 (`notified_signals`) doesn't cause a missed **or** duplicated notification
 - [ ] Fresh-install path tested **separately** on a different device — both must pass independently
 - [ ] **Mixed-version check (the one only two devices can do):** with one device on 129 and one on the new build, create a signal on each. Each must render sensibly on the other, and the push each generates must announce the right category on both.
+
+**New this release — the paths a clean install never touches**
+- [ ] **A legacy signal's own reporter can still change its status and urgency.** The `caseHolder` field is absent on every 129 signal, and the rules must derive the reporter from that absence. If the reporter is locked out of their own signal, absent has been collapsed into null and **every** pre-ownership signal is affected (§3.9, §11.12).
+- [ ] A legacy signal shows a sensible ownership block — not a blank, and not "Nobody has taken this case on yet"
+- [ ] **Claim-to-act works on a legacy signal**: as a different account, choosing a status offers to take the case on, and the transfer lands
+- [ ] **The profile's signal count survives the upgrade** and matches the Phase 1 number (allowing for the deliberately-deleted one). Before the backfill has run it comes from the live-count fallback; after, from the stored value — check **both** if the backfill runs between passes.
+- [ ] **`users/{uid}.testMode` is written on the first launch of the new build** even though this account never toggled anything on it (#72 backfills at launch — §12.1)
+- [ ] **Remove a legacy signal** (created on 129, with its status history stored as *comments*): it moves to the Removed tab, restores losslessly, and its old comment-shaped history still renders afterwards (§3.4)
+- [ ] **The 129 device's Delete still works** while the new build's Remove does too — the three subcollection delete rules stay permissive until deploy-gates step 5, and this mixed state is the entire reason that step waits
+- [ ] **Report something from the 129 device.** Reporting did not exist there, so the flag/long-press is absent — confirm the old build degrades by simply not offering it, rather than erroring
+- [ ] A signal **hidden** by a moderator disappears from the 129 device's map too (it is a document move, so no client support is needed)
+- [ ] A signal whose **comments are locked** blocks a comment from the 129 device as well — the lock is enforced in the rules, not only in the new UI (§11.11)
