@@ -1007,6 +1007,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get failedToSaveSettings => 'Failed to save settings';
 
   @override
+  String get locationBackgroundInactiveTitle =>
+      'Only updating while the app is open';
+
+  @override
+  String get locationBackgroundInactiveBody =>
+      'Location access is not set to \"Allow all the time\", so we cannot check for nearby signals once you close the app.';
+
+  @override
+  String get openSettings => 'Open settings';
+
+  @override
   String get locationPermissionRequired =>
       'Location permission is required for this feature';
 

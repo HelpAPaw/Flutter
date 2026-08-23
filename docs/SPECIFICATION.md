@@ -1721,6 +1721,15 @@ versions may use Jetpack DataStore, so a native read breaks silently.
 - `initialize()` runs on **every launch** and restores tracking if
   `locationTrackingEnabled` is true and permission is already held. It **checks, never
   requests**. A failed preference read leaves tracking off for that launch.
+- `isBackgroundTrackingActive()` asks the native monitors whether background delivery is
+  *really* armed, which the stored preference cannot answer: revoking the permission in
+  system Settings never changes it, so the toggle keeps reading on while nothing is
+  written and the fan-out drops the account as having no usable position. The settings
+  screen renders a persistent warning (with an **Open settings** action) whenever the
+  preference is on and this is false — the flip-time snackbar is gone in seconds, the
+  mismatch is not. `rearmBackgroundTrackingIfPermitted()` runs on resume and starts
+  tracking if the permission was granted while the user was away, still **never
+  prompting**.
 - Lifecycle observer (registered only while tracking): on resume, refresh the position
   and run the catch-up check — the geolocator stream only fires on movement.
 - `stopLocationTracking()` tears down foreground + native monitoring **and deletes

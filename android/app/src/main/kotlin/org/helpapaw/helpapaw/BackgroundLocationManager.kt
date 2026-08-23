@@ -124,6 +124,20 @@ object BackgroundLocationManager {
         }
     }
 
+    /**
+     * Whether background deliveries can actually happen right now.
+     *
+     * [start] answers the same question once, at the moment the user flips the
+     * toggle, and a snackbar is all the user ever hears about it. But the
+     * permission can be revoked in system Settings afterwards, and the stored
+     * preference does not change when it is — leaving the in-app toggle reading
+     * "on" while nothing is delivered, `userLocations/{uid}` is never written,
+     * and the notification fan-out silently drops the account for having no
+     * usable position. This is what lets the settings screen say so.
+     */
+    fun isBackgroundActive(context: Context): Boolean =
+        isEnabledInPreferences(context) && hasBackgroundPermission(context)
+
     private fun pendingIntent(context: Context): PendingIntent {
         val intent = Intent(context, LocationUpdateReceiver::class.java).apply {
             action = LocationUpdateReceiver.ACTION_LOCATION_UPDATE

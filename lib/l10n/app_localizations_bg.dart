@@ -1022,6 +1022,17 @@ class AppLocalizationsBg extends AppLocalizations {
   String get failedToSaveSettings => 'Неуспешно запазване на настройките';
 
   @override
+  String get locationBackgroundInactiveTitle =>
+      'Обновява се само докато приложението е отворено';
+
+  @override
+  String get locationBackgroundInactiveBody =>
+      'Достъпът до местоположението не е зададен на „Винаги“, затова не можем да проверяваме за сигнали наблизо, след като затворите приложението.';
+
+  @override
+  String get openSettings => 'Отвори настройките';
+
+  @override
   String get locationPermissionRequired =>
       'За тази функционалност е необходимо разрешение за местоположение';
 

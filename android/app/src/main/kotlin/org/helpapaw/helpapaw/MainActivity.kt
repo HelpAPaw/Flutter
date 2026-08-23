@@ -24,6 +24,12 @@ class MainActivity : FlutterActivity() {
                 "start" ->
                     result.success(BackgroundLocationManager.start(appContext))
 
+                // Whether background delivery is really armed, as opposed to
+                // what the user's stored preference claims. The two drift apart
+                // whenever the permission is revoked in system Settings.
+                "isBackgroundActive" ->
+                    result.success(BackgroundLocationManager.isBackgroundActive(appContext))
+
                 "stop" -> {
                     BackgroundLocationManager.stop(appContext)
                     result.success(null)

@@ -74,6 +74,20 @@ final class BackgroundLocationManager: NSObject {
     UserDefaults.standard.set(enabled, forKey: Self.enabledKey)
   }
 
+  /// Whether background deliveries can actually happen right now.
+  ///
+  /// `start()` answers the same question once, when the user flips the toggle,
+  /// and a snackbar is all they ever hear about it. Authorization can be
+  /// downgraded in Settings afterwards without the stored preference changing,
+  /// which leaves the in-app toggle reading "on" while nothing is delivered and
+  /// the notification fan-out drops the account for having no usable position.
+  /// This is what lets the settings screen say so.
+  var isBackgroundActive: Bool {
+    isEnabledInPreferences
+      && CLLocationManager.significantLocationChangeMonitoringAvailable()
+      && authorizationStatus == .authorizedAlways
+  }
+
   /// Starts monitoring. Returns false when authorization is insufficient.
   ///
   /// Significant-change delivery in the background requires *Always*

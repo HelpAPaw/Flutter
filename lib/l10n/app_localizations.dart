@@ -1880,6 +1880,24 @@ abstract class AppLocalizations {
   /// **'Failed to save settings'**
   String get failedToSaveSettings;
 
+  /// No description provided for @locationBackgroundInactiveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Only updating while the app is open'**
+  String get locationBackgroundInactiveTitle;
+
+  /// No description provided for @locationBackgroundInactiveBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Location access is not set to \"Allow all the time\", so we cannot check for nearby signals once you close the app.'**
+  String get locationBackgroundInactiveBody;
+
+  /// No description provided for @openSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Open settings'**
+  String get openSettings;
+
   /// No description provided for @locationPermissionRequired.
   ///
   /// In en, this message translates to:

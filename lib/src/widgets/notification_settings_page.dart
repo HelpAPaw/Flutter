@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -20,7 +22,8 @@ class NotificationSettingsPage extends StatefulWidget {
   State<NotificationSettingsPage> createState() => _NotificationSettingsPageState();
 }
 
-class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
+class _NotificationSettingsPageState extends State<NotificationSettingsPage>
+    with WidgetsBindingObserver {
   bool _notificationsEnabled = false;
   bool _locationTrackingEnabled = false;
   double _locationRadiusKm = 10.0;
@@ -40,10 +43,51 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   /// reject it, which reads as the app being broken rather than offline.
   bool _loaded = false;
 
+  /// Whether the native background monitor is actually armed.
+  ///
+  /// [_locationTrackingEnabled] is the user's stored *wish*; this is what is
+  /// really happening. They part company whenever the OS permission is revoked
+  /// in system Settings, which the app is never told about — and the failure is
+  /// entirely silent: no location is written, so the notification fan-out drops
+  /// the account for having no usable position while the toggle still reads on.
+  ///
+  /// Starts true so the warning can only ever appear once it has been checked.
+  bool _backgroundTrackingActive = true;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadPreferences();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Granting the permission happens in system Settings, and coming back is the
+  /// only moment the app can find out that it did.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshBackgroundTracking());
+    }
+  }
+
+  /// Re-arms if the OS now allows it, then records what is really running.
+  ///
+  /// The re-arm is the reason this is not a plain read: a user who followed the
+  /// warning to Settings and granted "Allow all the time" comes back to an app
+  /// that would otherwise stay dormant until the next launch, still writing
+  /// nothing.
+  Future<void> _refreshBackgroundTracking() async {
+    if (!_locationTrackingEnabled) return;
+
+    final active = await LocationService().rearmBackgroundTrackingIfPermitted();
+    if (!mounted || active == _backgroundTrackingActive) return;
+    setState(() => _backgroundTrackingActive = active);
   }
 
   Future<void> _loadPreferences() async {
@@ -95,6 +139,11 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
     }
 
     setState(() => _isLoading = false);
+
+    // Only now that the stored wish is known: the check is what tells the user
+    // their tracking is not really running, and it has nothing to compare
+    // against until the preference is loaded.
+    unawaited(_refreshBackgroundTracking());
   }
 
   /// The reason a save is being refused, or null if it can go ahead.
@@ -221,9 +270,12 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
               duration: const Duration(seconds: 6),
             ),
           );
+          // The snackbar is gone in six seconds and the toggle then reads on
+          // forever, which is the whole reason the persistent warning exists.
+          _backgroundTrackingActive = false;
 
         case LocationTrackingResult.full:
-          break;
+          _backgroundTrackingActive = true;
       }
     } else {
       await LocationService().stopLocationTracking();
@@ -382,6 +434,8 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
           value: _locationTrackingEnabled,
           onChanged: _notificationsEnabled ? _toggleLocationTracking : null,
         ),
+        if (_locationTrackingEnabled && !_backgroundTrackingActive)
+          _buildBackgroundLocationWarning(l10n),
         if (_locationTrackingEnabled) ...[
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -478,6 +532,71 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
 
         const SizedBox(height: 32),
       ],
+    );
+  }
+
+  /// Says out loud that tracking is on but not running.
+  ///
+  /// Deliberately not a snackbar: the mismatch outlives any transient message —
+  /// it survives restarts, and the user's next visit to this screen is exactly
+  /// when they are wondering why they hear about nothing. iOS already explains
+  /// this at the moment the toggle is flipped; this is the part that was
+  /// missing afterwards, on both platforms.
+  Widget _buildBackgroundLocationWarning(AppLocalizations l10n) {
+    final theme = Theme.of(context);
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: theme.colorScheme.errorContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.location_off,
+                  size: 20,
+                  color: theme.colorScheme.onErrorContainer,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.locationBackgroundInactiveTitle,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: theme.colorScheme.onErrorContainer,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        l10n.locationBackgroundInactiveBody,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onErrorContainer,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              // The permission cannot be re-requested in-app once refused, so
+              // the OS settings page is the only route left. Coming back from it
+              // is picked up by [didChangeAppLifecycleState].
+              child: TextButton(
+                onPressed: () => LocationService().openSystemAppSettings(),
+                child: Text(l10n.openSettings),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

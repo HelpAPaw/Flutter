@@ -466,6 +466,9 @@
   "clearRegion": "Clear Region",
   "settingsSaved": "Settings saved",
   "failedToSaveSettings": "Failed to save settings",
+  "locationBackgroundInactiveTitle": "Only updating while the app is open",
+  "locationBackgroundInactiveBody": "Location access is not set to \"Allow all the time\", so we cannot check for nearby signals once you close the app.",
+  "openSettings": "Open settings",
   "locationPermissionRequired": "Location permission is required for this feature",
 
   "mySignals": "My Signals",

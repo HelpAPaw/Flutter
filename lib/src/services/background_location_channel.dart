@@ -90,6 +90,20 @@ class BackgroundLocationChannel {
   /// background delivery on either platform.
   Future<bool> start() async => await _invoke<bool>('start') ?? false;
 
+  /// Whether native background monitoring is armed *right now*.
+  ///
+  /// Distinct from the user's stored `locationTrackingEnabled`: the OS
+  /// permission behind it can be revoked in system Settings long after the
+  /// toggle was flipped, and nothing tells the app when that happens. The
+  /// preference then keeps claiming tracking is on while no location is ever
+  /// written and the fan-out drops the account for having no usable position.
+  ///
+  /// Defaults to **true** when the platform cannot answer (no native monitor,
+  /// or the call failed). The only thing this drives is a warning, and a
+  /// warning shown on a guess is worse than none.
+  Future<bool> isBackgroundActive() async =>
+      await _invoke<bool>('isBackgroundActive') ?? true;
+
   /// Stops native background monitoring.
   Future<void> stop() => _invoke<void>('stop');
 
