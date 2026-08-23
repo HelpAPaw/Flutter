@@ -1202,6 +1202,42 @@ abstract class AppLocalizations {
   /// **'Changing to: {level}'**
   String updateNoteChangingTo(String level);
 
+  /// No description provided for @updateNoteTakingCase.
+  ///
+  /// In en, this message translates to:
+  /// **'Taking responsibility for this case'**
+  String get updateNoteTakingCase;
+
+  /// No description provided for @updateNoteTakingCaseAndChangingTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Taking responsibility, and changing to: {level}'**
+  String updateNoteTakingCaseAndChangingTo(String level);
+
+  /// No description provided for @updateNoteSteppingDown.
+  ///
+  /// In en, this message translates to:
+  /// **'Stepping down from this case'**
+  String get updateNoteSteppingDown;
+
+  /// No description provided for @updateNoteHandingOver.
+  ///
+  /// In en, this message translates to:
+  /// **'Handing this case over'**
+  String get updateNoteHandingOver;
+
+  /// No description provided for @updateNoteDecliningOffer.
+  ///
+  /// In en, this message translates to:
+  /// **'Declining this offer'**
+  String get updateNoteDecliningOffer;
+
+  /// No description provided for @updateNoteOfferingTakeover.
+  ///
+  /// In en, this message translates to:
+  /// **'Offering to take this case on'**
+  String get updateNoteOfferingTakeover;
+
   /// No description provided for @updateNoteHint.
   ///
   /// In en, this message translates to:

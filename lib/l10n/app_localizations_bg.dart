@@ -623,6 +623,26 @@ class AppLocalizationsBg extends AppLocalizations {
   }
 
   @override
+  String get updateNoteTakingCase => 'Поемате отговорност за този случай';
+
+  @override
+  String updateNoteTakingCaseAndChangingTo(String level) {
+    return 'Поемате отговорност и променяте на: $level';
+  }
+
+  @override
+  String get updateNoteSteppingDown => 'Отказвате се от този случай';
+
+  @override
+  String get updateNoteHandingOver => 'Предавате случая';
+
+  @override
+  String get updateNoteDecliningOffer => 'Отказвате предложението';
+
+  @override
+  String get updateNoteOfferingTakeover => 'Предлагате да поемете този случай';
+
+  @override
   String get updateNoteHint =>
       'Добавете кратка бележка към историята на сигнала';
 

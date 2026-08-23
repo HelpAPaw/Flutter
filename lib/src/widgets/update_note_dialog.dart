@@ -19,24 +19,33 @@ import '../models/signal_event.dart';
 /// Shown *after* [showRedAlertConfirmationDialog] on the urgency path — confirm
 /// the intent first, then explain it. Returns the trimmed note, or null if the
 /// user backed out, in which case the caller must not write anything.
+///
+/// [headline] is the finished sentence shown above the field, and it must name
+/// the state the signal is moving *to* — "Changing to: Resolved", "Taking
+/// responsibility for this case". Callers on the status and urgency paths build
+/// it with `l10n.updateNoteChangingTo`; the ownership paths have their own
+/// strings. It takes a whole sentence rather than a label precisely so it
+/// cannot be handed a button verb: passing `confirmLabel` here once produced
+/// "Changing to: Take it on", which names the button the user just pressed
+/// instead of what is about to happen.
 Future<String?> showUpdateNoteDialog(
   BuildContext context, {
-  required String levelLabel,
-  required Widget levelBadge,
+  required String headline,
+  required Widget badge,
 }) =>
     showDialog<String>(
       context: context,
       builder: (context) => _UpdateNoteDialog(
-        levelLabel: levelLabel,
-        levelBadge: levelBadge,
+        headline: headline,
+        badge: badge,
       ),
     );
 
 class _UpdateNoteDialog extends StatefulWidget {
-  const _UpdateNoteDialog({required this.levelLabel, required this.levelBadge});
+  const _UpdateNoteDialog({required this.headline, required this.badge});
 
-  final String levelLabel;
-  final Widget levelBadge;
+  final String headline;
+  final Widget badge;
 
   @override
   State<_UpdateNoteDialog> createState() => _UpdateNoteDialogState();
@@ -76,11 +85,11 @@ class _UpdateNoteDialogState extends State<_UpdateNoteDialog> {
         children: [
           Row(
             children: [
-              widget.levelBadge,
+              widget.badge,
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  l10n.updateNoteChangingTo(widget.levelLabel),
+                  widget.headline,
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),

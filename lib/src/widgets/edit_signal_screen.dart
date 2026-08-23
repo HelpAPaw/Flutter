@@ -125,8 +125,8 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
       final urgency = SignalUrgency.fromCode(_urgency);
       note = await showUpdateNoteDialog(
         context,
-        levelLabel: urgency.label(l10n),
-        levelBadge: urgencyBadge(urgency),
+        headline: l10n.updateNoteChangingTo(urgency.label(l10n)),
+        badge: urgencyBadge(urgency),
       );
       // Backing out of the note abandons the whole save, including the title,
       // description, phone and tag edits made alongside it. That is the right

@@ -356,6 +356,7 @@ class CaseHolderBlock extends StatelessWidget {
       title: l10n.releaseConfirmTitle,
       body: l10n.releaseConfirmBody,
       confirmLabel: l10n.caseHolderRelease,
+      noteHeadline: l10n.updateNoteSteppingDown,
       busy: busy,
       onSignInRequired: onSignInRequired,
     );
@@ -384,6 +385,9 @@ class CaseHolderBlock extends StatelessWidget {
       // wrong here: the holder is handing the case to somebody else.
       body: approve ? l10n.handOverConfirmBody : l10n.declineConfirmBody,
       confirmLabel: approve ? l10n.caseHolderHandOver : l10n.caseHolderDecline,
+      noteHeadline: approve
+          ? l10n.updateNoteHandingOver
+          : l10n.updateNoteDecliningOffer,
       busy: busy,
       onSignInRequired: onSignInRequired,
     );
@@ -417,8 +421,8 @@ class CaseHolderBlock extends StatelessWidget {
 
     final note = await showUpdateNoteDialog(
       context,
-      levelLabel: l10n.caseHolderRequestTakeover,
-      levelBadge: const Icon(Icons.pan_tool_alt_outlined, size: 16),
+      headline: l10n.updateNoteOfferingTakeover,
+      badge: const Icon(Icons.pan_tool_alt_outlined, size: 16),
     );
     if (note == null) return;
 
@@ -460,6 +464,7 @@ Future<String?> askOwnershipNote(
   required String title,
   required String body,
   required String confirmLabel,
+  required String noteHeadline,
   required bool busy,
   required VoidCallback onSignInRequired,
   bool canModifyData = true,
@@ -490,10 +495,13 @@ Future<String?> askOwnershipNote(
   );
   if (confirmed != true || !context.mounted) return null;
 
+  // Deliberately NOT `confirmLabel`: that is the verb on the button the user
+  // has just pressed, and the note dialog asks what the signal is changing *to*.
+  // Passing it here read as "Changing to: Take it on".
   return showUpdateNoteDialog(
     context,
-    levelLabel: confirmLabel,
-    levelBadge: const Icon(Icons.volunteer_activism, size: 16),
+    headline: noteHeadline,
+    badge: const Icon(Icons.volunteer_activism, size: 16),
   );
 }
 

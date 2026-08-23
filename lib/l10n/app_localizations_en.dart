@@ -616,6 +616,26 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get updateNoteTakingCase => 'Taking responsibility for this case';
+
+  @override
+  String updateNoteTakingCaseAndChangingTo(String level) {
+    return 'Taking responsibility, and changing to: $level';
+  }
+
+  @override
+  String get updateNoteSteppingDown => 'Stepping down from this case';
+
+  @override
+  String get updateNoteHandingOver => 'Handing this case over';
+
+  @override
+  String get updateNoteDecliningOffer => 'Declining this offer';
+
+  @override
+  String get updateNoteOfferingTakeover => 'Offering to take this case on';
+
+  @override
   String get updateNoteHint => 'Add a short note for the signal history';
 
   @override
