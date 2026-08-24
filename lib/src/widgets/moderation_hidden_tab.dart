@@ -7,6 +7,7 @@ import '../models/quarantined_signal.dart';
 import '../services/app_preferences_service.dart';
 import '../services/callable_client.dart';
 import '../services/moderation_service.dart';
+import '../services/public_profile_service.dart';
 
 /// The signals a moderator has hidden, and the way to put one back
 /// (master spec §18.3 — hiding is "temporarily", which requires reversibility).
@@ -52,6 +53,14 @@ class _ModerationHiddenTabState extends State<ModerationHiddenTab> {
   /// already succeeded, so the failure was a red screen over completed work.
   final TextEditingController _noteController = TextEditingController();
 
+  /// Display names for the `hiddenBy` uids, resolved once per load.
+  ///
+  /// Filled by [_refresh] and read synchronously by [_row] rather than through a
+  /// per-row `FutureBuilder`, for the same reason the list itself is: a builder
+  /// on this screen did not reliably re-run. There are at most a handful of
+  /// moderators, so this is a couple of reads per refresh, not one per row.
+  Map<String, String> _hiddenByNames = const {};
+
   /// The collection this moderator is looking at, fixed for the tab's life so a
   /// refresh cannot silently switch which quarantine is listed.
   final String _collection = AppPreferencesService().signalsCollectionName;
@@ -73,9 +82,11 @@ class _ModerationHiddenTabState extends State<ModerationHiddenTab> {
     try {
       final items = await ModerationService.instance
           .listQuarantined(collection: _collection);
+      final names = await _resolveHiddenByNames(items);
       if (!mounted) return;
       setState(() {
         _hidden = items;
+        _hiddenByNames = names;
         _loading = false;
         _failed = false;
       });
@@ -87,6 +98,31 @@ class _ModerationHiddenTabState extends State<ModerationHiddenTab> {
         _failed = true;
       });
     }
+  }
+
+  /// Looks up the display name behind each distinct `hiddenBy` uid.
+  ///
+  /// Names that do not resolve are simply absent, and [_row] falls back to
+  /// "Unknown" — the same fallback the signal timeline uses for an account with
+  /// no `publicProfiles` document. Never the raw uid: it is unreadable, and it
+  /// is the only place in the app that showed one.
+  Future<Map<String, String>> _resolveHiddenByNames(
+    List<QuarantinedSignal> items,
+  ) async {
+    final uids = {
+      for (final item in items)
+        if (item.hiddenBy.isNotEmpty) item.hiddenBy,
+    };
+
+    final entries = await Future.wait(uids.map((uid) async {
+      final name = await PublicProfileService.getName(uid);
+      return MapEntry(uid, name);
+    }));
+
+    return {
+      for (final entry in entries)
+        if (entry.value != null) entry.key: entry.value!,
+    };
   }
 
   Future<void> _confirmRestore(QuarantinedSignal signal) async {
@@ -230,7 +266,9 @@ class _ModerationHiddenTabState extends State<ModerationHiddenTab> {
                     .add_jm()
                     .format(hiddenAt),
               if (signal.hiddenBy.isNotEmpty)
-                l10n.moderationHiddenBy(signal.hiddenBy),
+                l10n.moderationHiddenBy(
+                  _hiddenByNames[signal.hiddenBy] ?? l10n.unknown,
+                ),
             ].join(' · '),
             style: const TextStyle(fontSize: 12),
           ),
