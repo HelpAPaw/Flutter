@@ -136,6 +136,11 @@ import UserNotifications
       switch call.method {
       case "start":
         result(BackgroundLocationManager.shared.start())
+      // Whether background delivery is really armed, as opposed to what the
+      // user's stored preference claims. The two drift apart whenever
+      // authorization is downgraded in Settings.
+      case "isBackgroundActive":
+        result(BackgroundLocationManager.shared.isBackgroundActive)
       case "stop":
         BackgroundLocationManager.shared.stop()
         result(nil)

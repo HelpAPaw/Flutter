@@ -1884,6 +1884,14 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       title: l10n.takeoverConfirmTitle,
       body: l10n.takeoverConfirmBody,
       confirmLabel: l10n.takeoverConfirmAction,
+      // The claim-with-status path changes two things at once and the note
+      // explains both, so the headline has to name both — naming only the
+      // ownership change left the status the user picked unmentioned anywhere.
+      noteHeadline: newStatus == null
+          ? l10n.updateNoteTakingCase
+          : l10n.updateNoteTakingCaseAndChangingTo(
+              SignalStatus.fromCode(newStatus).label(l10n),
+            ),
       busy: _isApplyingLevelChange,
       onSignInRequired: _showSignInDialog,
       canModifyData: RepositoryProvider.instance.userRepository.canModifyData,
@@ -1974,8 +1982,8 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     // confirmation: confirm the intent first, then explain it.
     final note = await showUpdateNoteDialog(
       context,
-      levelLabel: levelLabel,
-      levelBadge: levelBadge,
+      headline: AppLocalizations.of(context).updateNoteChangingTo(levelLabel),
+      badge: levelBadge,
     );
     if (note == null || !mounted) return;
     // Re-checked after the dialog, not just before it: writing the note can take

@@ -260,6 +260,17 @@
       "level": {"type": "String"}
     }
   },
+  "updateNoteTakingCase": "Taking responsibility for this case",
+  "updateNoteTakingCaseAndChangingTo": "Taking responsibility, and changing to: {level}",
+  "@updateNoteTakingCaseAndChangingTo": {
+    "placeholders": {
+      "level": {"type": "String"}
+    }
+  },
+  "updateNoteSteppingDown": "Stepping down from this case",
+  "updateNoteHandingOver": "Handing this case over",
+  "updateNoteDecliningOffer": "Declining this offer",
+  "updateNoteOfferingTakeover": "Offering to take this case on",
   "updateNoteHint": "Add a short note for the signal history",
   "updateNoteRequired": "Please say what changed — everyone following this signal sees it.",
   "changedStatusTo": "{name} changed the status to {status}",
@@ -455,6 +466,9 @@
   "clearRegion": "Clear Region",
   "settingsSaved": "Settings saved",
   "failedToSaveSettings": "Failed to save settings",
+  "locationBackgroundInactiveTitle": "Only updating while the app is open",
+  "locationBackgroundInactiveBody": "Location access is not set to \"Allow all the time\", so we cannot check for nearby signals once you close the app.",
+  "openSettings": "Open settings",
   "locationPermissionRequired": "Location permission is required for this feature",
 
   "mySignals": "My Signals",

@@ -14,9 +14,8 @@ class FirebaseSignalRepository implements SignalRepository {
 
   FirebaseSignalRepository({
     FirebaseFirestore? firestore,
-    String collectionName = 'signals',
-  })  : collectionName = collectionName,
-        _firestore = firestore ?? FirebaseFirestore.instance,
+    this.collectionName = 'signals',
+  })  : _firestore = firestore ?? FirebaseFirestore.instance,
         _signalsRef = (firestore ?? FirebaseFirestore.instance).collection(collectionName);
 
   @override

@@ -22,8 +22,8 @@ void main() {
             onPressed: () async {
               result.note = await showUpdateNoteDialog(
                 context,
-                levelLabel: 'Resolved',
-                levelBadge: const SizedBox.shrink(),
+                headline: 'Changing to: Resolved',
+                badge: const SizedBox.shrink(),
               );
               result.returned = true;
             },

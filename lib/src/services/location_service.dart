@@ -255,6 +255,34 @@ class LocationService with WidgetsBindingObserver {
         : LocationTrackingResult.foregroundOnly;
   }
 
+  /// Whether background delivery is really running, asked of the native
+  /// monitors rather than inferred from the stored preference.
+  Future<bool> isBackgroundTrackingActive() =>
+      BackgroundLocationChannel().isBackgroundActive();
+
+  /// Re-arm background tracking if the OS now allows it, **without prompting**.
+  ///
+  /// The permission can be granted from system Settings, where nothing tells
+  /// the app about it — so a screen that has just been resumed has to ask.
+  /// Returns whether background delivery is running afterwards.
+  ///
+  /// Never requests permission, for the reason [initialize] does not either: a
+  /// system dialog must follow a tap, not a resume. If the permission is still
+  /// short of "always" this reports false and leaves the user to grant it.
+  Future<bool> rearmBackgroundTrackingIfPermitted() async {
+    if (await isBackgroundTrackingActive()) return true;
+
+    if (await Geolocator.checkPermission() != LocationPermission.always) {
+      return false;
+    }
+
+    return await startLocationTracking() == LocationTrackingResult.full;
+  }
+
+  /// Opens the OS settings page for this app, which is the only place the
+  /// "Allow all the time" permission can be granted once it has been refused.
+  Future<bool> openSystemAppSettings() => Geolocator.openAppSettings();
+
   /// Cancels only the foreground position stream.
   Future<void> _cancelPositionStream() async {
     await _positionSubscription?.cancel();

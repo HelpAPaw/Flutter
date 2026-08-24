@@ -623,6 +623,26 @@ class AppLocalizationsBg extends AppLocalizations {
   }
 
   @override
+  String get updateNoteTakingCase => 'Поемате отговорност за този случай';
+
+  @override
+  String updateNoteTakingCaseAndChangingTo(String level) {
+    return 'Поемате отговорност и променяте на: $level';
+  }
+
+  @override
+  String get updateNoteSteppingDown => 'Отказвате се от този случай';
+
+  @override
+  String get updateNoteHandingOver => 'Предавате случая';
+
+  @override
+  String get updateNoteDecliningOffer => 'Отказвате предложението';
+
+  @override
+  String get updateNoteOfferingTakeover => 'Предлагате да поемете този случай';
+
+  @override
   String get updateNoteHint =>
       'Добавете кратка бележка към историята на сигнала';
 
@@ -1000,6 +1020,17 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get failedToSaveSettings => 'Неуспешно запазване на настройките';
+
+  @override
+  String get locationBackgroundInactiveTitle =>
+      'Обновява се само докато приложението е отворено';
+
+  @override
+  String get locationBackgroundInactiveBody =>
+      'Достъпът до местоположението не е зададен на „Винаги“, затова не можем да проверяваме за сигнали наблизо, след като затворите приложението.';
+
+  @override
+  String get openSettings => 'Отвори настройките';
 
   @override
   String get locationPermissionRequired =>
