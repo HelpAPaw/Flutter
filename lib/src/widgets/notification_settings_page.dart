@@ -390,10 +390,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage>
                 const SizedBox(height: 4),
                 Text(
                   l10n.signUpToKeepSettings,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Theme.of(context).colorScheme.onPrimaryContainer,
-                  ),
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(color: Theme.of(context).colorScheme.onPrimaryContainer),
                 ),
               ],
             ),

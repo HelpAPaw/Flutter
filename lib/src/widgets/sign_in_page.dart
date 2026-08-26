@@ -473,13 +473,12 @@ class _SignInPageState extends State<SignInPage> {
                             const SizedBox(height: 4),
                             Text(
                               AppLocalizations.of(context).helpAPaw,
-                              style: const TextStyle(
-                                  fontSize: 16, fontWeight: FontWeight.bold),
+                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               AppLocalizations.of(context).signInSubtitle,
-                              style: const TextStyle(fontSize: 12),
+                              style: Theme.of(context).textTheme.bodySmall,
                               textAlign: TextAlign.center,
                             ),
                           ],
@@ -496,7 +495,7 @@ class _SignInPageState extends State<SignInPage> {
                             const SizedBox(height: 20),
                             Text(
                               AppLocalizations.of(context).signInSideMessage,
-                              style: const TextStyle(fontSize: 18),
+                              style: Theme.of(context).textTheme.titleMedium,
                               textAlign: TextAlign.center,
                             ),
                           ],

@@ -184,7 +184,7 @@ class _ModerationQueuePageState extends State<ModerationQueuePage> {
                     .add_jm()
                     .format(createdAt),
             ].join(' · '),
-            style: const TextStyle(fontSize: 12),
+            style: Theme.of(context).textTheme.bodySmall,
           ),
           if (details.isNotEmpty)
             Text(

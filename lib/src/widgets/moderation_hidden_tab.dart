@@ -270,7 +270,7 @@ class _ModerationHiddenTabState extends State<ModerationHiddenTab> {
                   _hiddenByNames[signal.hiddenBy] ?? l10n.unknown,
                 ),
             ].join(' · '),
-            style: const TextStyle(fontSize: 12),
+            style: Theme.of(context).textTheme.bodySmall,
           ),
           if (signal.note.isNotEmpty)
             Text(signal.note, maxLines: 2, overflow: TextOverflow.ellipsis),

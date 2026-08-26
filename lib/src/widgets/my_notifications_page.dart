@@ -430,10 +430,7 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
                             const SizedBox(height: 4),
                             Text(
                               timeStr,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              ),
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                             ),
                           ],
                         ),

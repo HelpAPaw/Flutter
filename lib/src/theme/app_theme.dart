@@ -126,6 +126,31 @@ abstract final class AppTheme {
   // Build
   // ---------------------------------------------------------------------
 
+  /// The app's type scale.
+  ///
+  /// These are the sizes the app already used — the point is not to change how
+  /// anything looks, it is that there was no scale at all: ~59 hardcoded
+  /// `fontSize` values against 21 uses of `textTheme`, so the same kind of text
+  /// was 16 on one screen and 18 on the next and nothing recorded which was
+  /// intended. Sizes are named by role here so a screen asks for "body" rather
+  /// than for a number.
+  ///
+  /// M3's own scale is deliberately not adopted wholesale: it would move
+  /// almost every size in the app at once, which is a redesign, not a cleanup.
+  static const _textTheme = TextTheme(
+    displaySmall: TextStyle(fontSize: 28, fontWeight: FontWeight.w400),
+    headlineSmall: TextStyle(fontSize: 24, fontWeight: FontWeight.w400),
+    titleLarge: TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
+    titleMedium: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+    titleSmall: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+    bodyLarge: TextStyle(fontSize: 16),
+    bodyMedium: TextStyle(fontSize: 14),
+    bodySmall: TextStyle(fontSize: 12),
+    labelLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+    labelMedium: TextStyle(fontSize: 13),
+    labelSmall: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+  );
+
   static ThemeData _build(ColorScheme scheme, Brightness brightness) {
     final isLight = brightness == Brightness.light;
 
@@ -140,6 +165,7 @@ abstract final class AppTheme {
       useMaterial3: true,
       colorScheme: scheme,
       scaffoldBackgroundColor: scheme.surface,
+      textTheme: _textTheme,
 
       // ---- Brand as a surface -------------------------------------------
       //

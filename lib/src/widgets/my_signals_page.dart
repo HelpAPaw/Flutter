@@ -214,8 +214,7 @@ class _ActiveSignalsTabState extends State<_ActiveSignalsTab> {
                           label: SignalStatus.fromCode(signal.status).label(l10n),
                         ),
                         Text(dateStr,
-                            style: TextStyle(
-                                fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                       ],
                     ),
                   ],
@@ -394,8 +393,7 @@ class _RemovedSignalsTabState extends State<_RemovedSignalsTab> {
                           Text(
                             l10n.restorableUntil(
                                 _formatDate(context, purgeAt)),
-                            style: TextStyle(
-                                fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                           ),
                       ],
                     ),

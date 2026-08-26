@@ -172,12 +172,12 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
                         const SizedBox(height: 16),
                         Text(
                           l10n.completeYourProfile,
-                          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           l10n.helpUsPersonalize,
-                          style: TextStyle(fontSize: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                           textAlign: TextAlign.center,
                         ),
                       ],
@@ -254,7 +254,7 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
                           )
                         : Text(
                             l10n.completeProfile,
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
                           ),
                   ),
                   const SizedBox(height: 16),

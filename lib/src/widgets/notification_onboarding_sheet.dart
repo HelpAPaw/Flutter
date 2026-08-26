@@ -312,7 +312,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
                   )
                 : Text(
                     l10n.enableNotifications,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
                   ),
           ),
         ),
@@ -321,10 +321,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
           onPressed: _isProcessing ? null : widget.onDismiss,
           child: Text(
             l10n.maybeLater,
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              fontSize: 16,
-            ),
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
         ),
       ],
@@ -378,7 +375,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
                   )
                 : Text(
                     l10n.enableLocation,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
                   ),
           ),
         ),
@@ -387,10 +384,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
           onPressed: _isProcessing ? null : _handleSkipLocation,
           child: Text(
             l10n.skipForNow,
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              fontSize: 16,
-            ),
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
         ),
       ],
@@ -436,7 +430,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
             ),
             child: Text(
               l10n.selectRegion,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
         ),
@@ -445,10 +439,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
           onPressed: _handleSkipRegion,
           child: Text(
             l10n.skipForNow,
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              fontSize: 16,
-            ),
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
         ),
       ],

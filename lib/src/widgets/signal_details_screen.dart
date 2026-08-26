@@ -617,10 +617,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                                             const SizedBox(height: 16),
                                                             Text(
                                                               l10n.uploadingPhoto,
-                                                              style: TextStyle(
-                                                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                                                fontSize: 14,
-                                                              ),
+                                                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                                                             ),
                                                           ],
                                                         )
@@ -635,19 +632,12 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                                             const SizedBox(height: 8),
                                                             Text(
                                                               signal.photoUrls.isEmpty ? l10n.addPhoto : l10n.addAnotherPhoto,
-                                                              style: TextStyle(
-                                                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                                                fontSize: 16,
-                                                                fontWeight: FontWeight.bold,
-                                                              ),
+                                                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.bold),
                                                             ),
                                                             const SizedBox(height: 4),
                                                             Text(
                                                               l10n.photosCount(signal.photoUrls.length, 5),
-                                                              style: TextStyle(
-                                                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                                                fontSize: 12,
-                                                              ),
+                                                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                                                             ),
                                                           ],
                                                         ),
@@ -2463,7 +2453,7 @@ class _FullScreenPhotoGalleryState extends State<_FullScreenPhotoGallery> {
                       color: Colors.white,  // theme-independent: fullscreen photo viewer
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                    ),  // theme-independent: fullscreen photo viewer
+                    ),
                   ),
                 ),
               ),

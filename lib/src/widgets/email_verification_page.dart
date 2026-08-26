@@ -236,21 +236,21 @@ class _EmailVerificationPageState extends State<EmailVerificationPage>
 
                         Text(
                           l10n.verifyYourEmail,
-                          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 16),
 
                         Text(
                           l10n.verificationEmailSentTo,
-                          style: TextStyle(fontSize: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 8),
 
                         Text(
                           user?.email ?? '',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 24),
@@ -266,12 +266,12 @@ class _EmailVerificationPageState extends State<EmailVerificationPage>
                             children: [
                               Text(
                                 l10n.instructions,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(height: 8),
                               Text(
                                 l10n.instructionsSteps,
-                                style: const TextStyle(fontSize: 14),
+                                style: Theme.of(context).textTheme.bodyMedium,
                               ),
                               if (_isChecking)
                                 Padding(
@@ -355,7 +355,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage>
                         onPressed: () => context.push(Routes.completeProfile),
                         child: Text(
                           l10n.skipDevOnly,
-                          style: const TextStyle(color: Colors.red, fontSize: 12),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.red),
                         ),
                       ),
                   ],

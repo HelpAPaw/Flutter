@@ -171,18 +171,12 @@ class _FeedbackPageState extends State<FeedbackPage> {
             children: [
               Text(
                 l10n.weLoveToHear,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               Text(
                 l10n.feedbackHelpsImprove,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: 24),
               SectionHeader(l10n.feedbackType),
@@ -229,10 +223,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
               const SizedBox(height: 8),
               Text(
                 l10n.provideEmailForFollowUp,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: 24),
               SectionHeader(l10n.yourFeedback),
@@ -258,10 +249,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                 title: Text(l10n.includeDeviceInfo),
                 subtitle: Text(
                   l10n.helpsUsDiagnose,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
                 value: _includeDeviceInfo,
                 onChanged: (value) => setState(() => _includeDeviceInfo = value ?? true),
@@ -295,10 +283,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                   children: [
                     Text(
                       l10n.otherWaysToReach,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                     const SizedBox(height: 8),
                     TextButton.icon(

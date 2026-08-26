@@ -116,10 +116,7 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
                   // Clinic Name
                   Text(
                     _clinic!.name,
-                    style: const TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: Theme.of(context).textTheme.displaySmall?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
 
@@ -131,7 +128,7 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
                         const SizedBox(width: 4),
                         Text(
                           _clinic!.rating!.toStringAsFixed(1),
-                          style: const TextStyle(fontSize: 16),
+                          style: Theme.of(context).textTheme.bodyLarge,
                         ),
                         const SizedBox(width: 8),
                         TextButton(
@@ -151,15 +148,12 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
                       const SizedBox(width: 8),
                       Text(
                         l10n.address,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text(_clinic!.address, style: const TextStyle(fontSize: 16)),
+                  Text(_clinic!.address, style: Theme.of(context).textTheme.bodyLarge),
                   const SizedBox(height: 12),
 
                   // Navigate Button
@@ -184,15 +178,12 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
                         const SizedBox(width: 8),
                         Text(
                           l10n.phone,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text(_clinic!.phoneNumber!, style: const TextStyle(fontSize: 16)),
+                    Text(_clinic!.phoneNumber!, style: Theme.of(context).textTheme.bodyLarge),
                     const SizedBox(height: 12),
 
                     // Call Button
@@ -218,10 +209,7 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
                         const SizedBox(width: 8),
                         Text(
                           l10n.openingHours,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                         ),
                       ],
                     ),
@@ -229,7 +217,7 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
                     ...(_clinic!.openingHours!.weekdayDescriptions.map(
                       (hours) => Padding(
                         padding: const EdgeInsets.symmetric(vertical: 2),
-                        child: Text(hours, style: const TextStyle(fontSize: 14)),
+                        child: Text(hours, style: Theme.of(context).textTheme.bodyMedium),
                       ),
                     )),
                     const SizedBox(height: 16),

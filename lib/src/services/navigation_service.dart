@@ -44,10 +44,7 @@ class NavigationService {
                   padding: const EdgeInsets.all(16.0),
                   child: Text(
                     l10n.chooseNavigationApp,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                   ),
                 ),
                 ...availableMaps.map((map) => ListTile(

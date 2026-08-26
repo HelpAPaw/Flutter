@@ -76,10 +76,7 @@ class _FilterBottomSheetContent extends ConsumerWidget {
                       children: [
                         Text(
                           l10n.filterSignals,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                         ),
                         Wrap(
                           children: [
