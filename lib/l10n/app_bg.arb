@@ -653,5 +653,7 @@
   "couldNotLoadSignalsHint": "Проверете връзката си и опитайте отново.",
   "couldNotLoadNotifications": "Известията ви не можаха да се заредят",
   "couldNotLoadPrivacyPolicy": "Политиката за поверителност не можа да се зареди",
-  "couldNotLoadPrivacyPolicyHint": "Проверете връзката си и опитайте отново или я прочетете на helpapaw.org/privacypolicy."
+  "couldNotLoadPrivacyPolicyHint": "Проверете връзката си и опитайте отново или я прочетете на helpapaw.org/privacypolicy.",
+  "notificationDeleted": "Известието е изтрито",
+  "undo": "Отмени"
 }

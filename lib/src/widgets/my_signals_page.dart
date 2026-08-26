@@ -17,6 +17,7 @@ import '../services/signal_removal_service.dart';
 import '../utils/nav_extensions.dart';
 import 'app_bar_title.dart';
 import 'status_view.dart';
+import 'escape_leading.dart';
 
 
 Color _urgencyColor(int urgency) => SignalUrgency.fromCode(urgency).color;
@@ -42,10 +43,11 @@ class MySignalsPage extends StatelessWidget {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => context.popOrHome(),
-          ),
+          leading: escapeLeading(
+              context,
+              label: AppLocalizations.of(context).back,
+              onLeave: () => context.popOrHome(),
+            ),
           title: AppBarTitle(l10n.mySignals),
           bottom: TabBar(
             // On the brand app bar, so the ink is onPrimary — white in light,

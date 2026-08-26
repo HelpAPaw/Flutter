@@ -27,6 +27,7 @@ import 'map/new_signal_location_bar.dart';
 import 'notification_onboarding_button.dart';
 import 'helper_tags_gate.dart';
 import 'notification_onboarding_sheet.dart';
+import 'sign_in_required_dialog.dart';
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -413,31 +414,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
 
-  void _showSignInDialog() {
-    final l10n = AppLocalizations.of(context);
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(l10n.signInRequired),
-          content: Text(l10n.signInToCreateSignals),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(l10n.cancel),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                context.push(Routes.signIn);
-              },
-              child: Text(l10n.signIn),
-            ),
-          ],
-        );
-      },
-    );
-  }
+  void _showSignInDialog() => showSignInRequiredDialog(
+        context,
+        reason: AppLocalizations.of(context).signInToCreateSignals,
+      );
 
   /// Convert a [ScreenCoordinate] to logical pixels.
   /// Android returns physical pixels; iOS returns logical points.

@@ -14,6 +14,7 @@ import '../services/notification_inbox_service.dart';
 import '../utils/nav_extensions.dart';
 import 'app_bar_title.dart';
 import 'status_view.dart';
+import 'escape_leading.dart';
 
 /// The in-app notification inbox.
 ///
@@ -255,10 +256,11 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.popOrHome(),
-        ),
+        leading: escapeLeading(
+            context,
+            label: AppLocalizations.of(context).back,
+            onLeave: () => context.popOrHome(),
+          ),
         title: AppBarTitle(l10n.myNotifications),
         actions: [
           if (user != null)
@@ -363,6 +365,14 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
                         child: const Icon(Icons.delete, color: Colors.white),  // theme-independent: on the red swipe-to-delete background
                       ),
                       onDismissed: (_) async {
+                        // A swipe deleted the document outright, with no way
+                        // back — while a signal the user removes sits in a
+                        // 30-day bin. The gesture is easy to trigger by
+                        // accident and the two were wildly out of proportion,
+                        // so the row's data is kept in hand and Undo writes it
+                        // back at the same id.
+                        final restore = Map<String, dynamic>.from(data);
+
                         // Surfaced rather than swallowed: a denied delete makes
                         // the row reappear on the next rebuild, which reads as a
                         // glitch unless the failure is stated.
@@ -372,7 +382,27 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
                           messenger.showSnackBar(
                             SnackBar(content: Text(l10n.errorGeneric)),
                           );
+                          return;
                         }
+
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text(l10n.notificationDeleted),
+                            action: SnackBarAction(
+                              label: l10n.undo,
+                              onPressed: () async {
+                                try {
+                                  await doc.reference.set(restore);
+                                } catch (_) {
+                                  messenger.showSnackBar(
+                                    SnackBar(
+                                        content: Text(l10n.errorGeneric)),
+                                  );
+                                }
+                              },
+                            ),
+                          ),
+                        );
                       },
                       child: ListTile(
                         leading: CircleAvatar(

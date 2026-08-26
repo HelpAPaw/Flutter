@@ -9,6 +9,8 @@ import 'dart:io' show Platform;
 import '../utils/nav_extensions.dart';
 import 'app_bar_title.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'section_header.dart';
+import 'escape_leading.dart';
 
 /// Where feedback that does not go through the form ends up.
 const _contactEmail = 'contact@helpapaw.org';
@@ -155,10 +157,11 @@ class _FeedbackPageState extends State<FeedbackPage> {
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
         appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => context.popOrHome(),
-          ),
+          leading: escapeLeading(
+              context,
+              label: AppLocalizations.of(context).back,
+              onLeave: () => context.popOrHome(),
+            ),
           title: AppBarTitle(l10n.sendFeedback),
         ),
         body: SingleChildScrollView(
@@ -182,13 +185,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                 ),
               ),
               const SizedBox(height: 24),
-              Text(
-                l10n.feedbackType,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+              SectionHeader(l10n.feedbackType),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -216,13 +213,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                 ],
               ),
               const SizedBox(height: 24),
-              Text(
-                l10n.yourEmailOptional,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+              SectionHeader(l10n.yourEmailOptional),
               const SizedBox(height: 8),
               TextField(
                 controller: _emailController,
@@ -244,13 +235,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                 ),
               ),
               const SizedBox(height: 24),
-              Text(
-                l10n.yourFeedback,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+              SectionHeader(l10n.yourFeedback),
               const SizedBox(height: 8),
               TextField(
                 controller: _feedbackController,

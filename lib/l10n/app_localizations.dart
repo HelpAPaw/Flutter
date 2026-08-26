@@ -3421,6 +3421,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Check your connection and try again, or read it at helpapaw.org/privacypolicy.'**
   String get couldNotLoadPrivacyPolicyHint;
+
+  /// No description provided for @notificationDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Notification deleted'**
+  String get notificationDeleted;
+
+  /// No description provided for @undo.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get undo;
 }
 
 class _AppLocalizationsDelegate

@@ -50,6 +50,7 @@ import 'section_header.dart';
 import '../services/public_profile_service.dart';
 import 'app_bar_title.dart';
 import 'status_view.dart';
+import 'sign_in_required_dialog.dart';
 
 class SignalDetailsScreen extends StatefulWidget {
   const SignalDetailsScreen({super.key, required this.signalId});
@@ -778,8 +779,21 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                   const SizedBox(height: 8),
                                 ],
                               ),
-                            Text(signal.title, style: const TextStyle(fontSize: 30), textAlign: TextAlign.center,),
-                            Text(signal.description, style: const TextStyle(fontSize: 20), textAlign: TextAlign.center,),
+                            // Left-aligned, and on the type scale. The title
+                            // and description used to be centred at a
+                            // hardcoded 30/20 while every value below them —
+                            // urgency, status, history — was left-aligned, so
+                            // the page stopped centring halfway down. Obvious
+                            // on a phone, glaring at 800dp on a tablet.
+                            Text(
+                              signal.title,
+                              style: Theme.of(context).textTheme.headlineSmall,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              signal.description,
+                              style: Theme.of(context).textTheme.bodyLarge,
+                            ),
                             // No type line: what the signal needs is shown as the
                             // help-tag chips below, which carry the same
                             // information with more precision.
@@ -848,7 +862,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                   ),
                               ],
                             ),
-                            Text(' ${l10n.urgency}'),
+                            SectionHeader(l10n.urgency),
                             // Master spec §5.2 restricts marking a case Red to
                             // "the original poster/case holder, a moderator or an
                             // admin". Until case ownership existed the reporter
@@ -904,7 +918,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                   canCoordinate)
                                 Row(
                                   children: [
-                                    Text(' ${l10n.helpNeeded}'),
+                                    SectionHeader(l10n.helpNeeded),
                                     const Spacer(),
                                     if (canCoordinate)
                                       TextButton.icon(
@@ -960,7 +974,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                               onSignInRequired: _showSignInDialog,
                             ),
                             const SizedBox(height: 8),
-                            Text(' ${l10n.status}'),
+                            SectionHeader(l10n.status),
                             DropdownButton<int>(
                               itemHeight: 64,
                               isExpanded: true,
@@ -1188,7 +1202,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
 
     return Column(
       children: [
-        Text(l10n.signalHistory),
+        SectionHeader(l10n.signalHistory),
         // Exactly one source failed. The list below is missing rows and would
         // otherwise look complete — the silent-failure shape this codebase
         // keeps getting bitten by. A Firestore listener ends on error and never
@@ -2328,33 +2342,10 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     return downloadUrl;
   }
 
-  void _showSignInDialog() {
-    final l10n = AppLocalizations.of(context);
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(l10n.signInRequired),
-          content: Text(l10n.signInToComment),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              child: Text(l10n.cancel),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                context.push(Routes.signIn);
-              },
-              child: Text(l10n.signIn),
-            ),
-          ],
-        );
-      },
-    );
-  }
+  void _showSignInDialog() => showSignInRequiredDialog(
+        context,
+        reason: AppLocalizations.of(context).signInToComment,
+      );
 }
 
 class _FullScreenPhotoGallery extends StatefulWidget {

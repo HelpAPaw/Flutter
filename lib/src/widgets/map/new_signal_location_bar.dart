@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../models/new_signal_step.dart';
+import '../new_signal/new_signal_progress.dart';
 
 /// Step 1 of the create-a-signal wizard, rendered over the live map.
 ///
@@ -43,24 +44,7 @@ class NewSignalLocationBar extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  l10n.newSignalStepCounter(
-                    step.displayNumber,
-                    NewSignalStep.count,
-                  ),
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                ),
-                const SizedBox(height: 6),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(2),
-                  child: LinearProgressIndicator(
-                    value: step.displayNumber / NewSignalStep.count,
-                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                    minHeight: 4,
-                  ),
-                ),
+                NewSignalProgress(step: step),
                 const SizedBox(height: 12),
                 Text(
                   step.question(l10n),

@@ -6,6 +6,7 @@ import 'package:help_a_paw/l10n/app_localizations.dart';
 import '../utils/nav_extensions.dart';
 import 'app_bar_title.dart';
 import 'status_view.dart';
+import 'escape_leading.dart';
 
 /// The privacy policy, loaded from the site.
 ///
@@ -69,10 +70,11 @@ class _PrivacyPolicyPageState extends State<PrivacyPolicyPage> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.popOrHome(),
-        ),
+        leading: escapeLeading(
+            context,
+            label: AppLocalizations.of(context).back,
+            onLeave: () => context.popOrHome(),
+          ),
         // Was `const Text('Privacy Policy')` — the app's only untranslated
         // string, on the one screen a Bulgarian user is most likely to be
         // sent to by a consent prompt.

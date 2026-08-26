@@ -1903,4 +1903,10 @@ class AppLocalizationsBg extends AppLocalizations {
   @override
   String get couldNotLoadPrivacyPolicyHint =>
       'Проверете връзката си и опитайте отново или я прочетете на helpapaw.org/privacypolicy.';
+
+  @override
+  String get notificationDeleted => 'Известието е изтрито';
+
+  @override
+  String get undo => 'Отмени';
 }

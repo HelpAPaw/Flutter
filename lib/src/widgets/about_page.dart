@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../utils/nav_extensions.dart';
 import 'app_bar_title.dart';
+import 'escape_leading.dart';
 
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
@@ -49,10 +50,11 @@ class _AboutPageState extends State<AboutPage> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.popOrHome(),
-        ),
+        leading: escapeLeading(
+            context,
+            label: AppLocalizations.of(context).back,
+            onLeave: () => context.popOrHome(),
+          ),
         title: AppBarTitle(l10n.aboutTitle),
       ),
       body: SingleChildScrollView(

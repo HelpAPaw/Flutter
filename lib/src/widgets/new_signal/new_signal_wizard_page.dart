@@ -7,6 +7,7 @@ import '../../utils/nav_extensions.dart';
 import '../../viewmodels/map_view_model.dart';
 import 'new_signal_step_views.dart';
 import '../app_bar_title.dart';
+import 'new_signal_progress.dart';
 
 /// The create-a-signal wizard: one question per screen.
 ///
@@ -78,19 +79,16 @@ class _NewSignalWizardPageState extends ConsumerState<NewSignalWizardPage> {
               onPressed: formState.isSubmitting ? null : _leave,
             ),
           ),
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(4),
-            child: LinearProgressIndicator(
-              value: step.displayNumber / NewSignalStep.count,
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              valueColor:
-                  AlwaysStoppedAnimation<Color>(Theme.of(context).colorScheme.onPrimary),
-              minHeight: 4,
-            ),
-          ),
         ),
         body: Column(
           children: [
+            // In the body, matching step 1 on the map. On the app bar this was
+            // white on pale orange and read as a seam, so progress looked like
+            // it disappeared the moment the wizard opened.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: NewSignalProgress(step: step),
+            ),
             Expanded(
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 200),

@@ -15,6 +15,7 @@ import 'dart:io';
 import '../config/routes.dart';
 import '../utils/nav_extensions.dart';
 import 'app_bar_title.dart';
+import 'escape_leading.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -303,10 +304,11 @@ class _ProfilePageState extends State<ProfilePage> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.popOrHome(),
-        ),
+        leading: escapeLeading(
+            context,
+            label: AppLocalizations.of(context).back,
+            onLeave: () => context.popOrHome(),
+          ),
         title: AppBarTitle(l10n.profile),
         actions: [
           if (!_isEditing)

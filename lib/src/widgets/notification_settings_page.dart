@@ -15,6 +15,7 @@ import '../services/location_service.dart';
 import '../services/notification_service.dart';
 import 'help_tag_selector.dart';
 import 'app_bar_title.dart';
+import 'section_header.dart';
 
 class NotificationSettingsPage extends StatefulWidget {
   const NotificationSettingsPage({super.key});
@@ -601,16 +602,13 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage>
     );
   }
 
+  /// Kept as a wrapper only for the padding this screen's rows expect — the
+  /// heading itself is the shared [SectionHeader], so it cannot drift from the
+  /// other three implementations again.
   Widget _buildSectionHeader(String title) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-              fontWeight: FontWeight.bold,
-            ),
-      ),
+      child: SectionHeader(title),
     );
   }
 }

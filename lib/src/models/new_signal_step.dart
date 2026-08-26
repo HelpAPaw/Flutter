@@ -48,7 +48,11 @@ enum NewSignalStep {
   /// How many steps the progress indicator counts to.
   static int get count => values.length;
 
-  /// 1-based position, for "Step 3 of 8".
+  /// 1-based position, for "Step 3 of 7" — [count] steps, not a fixed number.
+  ///
+  /// The doc used to say "of 8" while there were seven, which is the kind of
+  /// thing that gets copied into a string. Anything rendering this must read
+  /// the total from [count].
   int get displayNumber => index + 1;
 
   /// The location is picked on the live map rather than on a wizard page, so

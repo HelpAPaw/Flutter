@@ -1872,4 +1872,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get couldNotLoadPrivacyPolicyHint =>
       'Check your connection and try again, or read it at helpapaw.org/privacypolicy.';
+
+  @override
+  String get notificationDeleted => 'Notification deleted';
+
+  @override
+  String get undo => 'Undo';
 }
