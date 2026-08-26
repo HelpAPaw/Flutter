@@ -8,6 +8,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'app_bar_title.dart';
+import 'map/map_style_builder.dart';
 
 class RegionSelectionPage extends StatefulWidget {
   const RegionSelectionPage({super.key});
@@ -131,8 +132,10 @@ class _RegionSelectionPageState extends State<RegionSelectionPage> {
       ),
       body: Stack(
         children: [
-          GoogleMap(
-            onMapCreated: _onMapCreated,
+          MapStyleBuilder(
+            builder: (context, mapStyle) => GoogleMap(
+              style: mapStyle,
+              onMapCreated: _onMapCreated,
             initialCameraPosition: const CameraPosition(
               target: _defaultCenter,
               zoom: 10,
@@ -143,6 +146,7 @@ class _RegionSelectionPageState extends State<RegionSelectionPage> {
             myLocationEnabled: true,
             myLocationButtonEnabled: true,
             zoomControlsEnabled: false,
+          ),
           ),
           // Instructions overlay
           if (_isPlacingCenter)

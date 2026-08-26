@@ -27,6 +27,7 @@ import 'notification_onboarding_button.dart';
 import 'helper_tags_gate.dart';
 import 'notification_onboarding_sheet.dart';
 import 'sign_in_required_dialog.dart';
+import 'map/map_style_builder.dart';
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -680,7 +681,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         resizeToAvoidBottomInset: false,
         body: Stack(
             children: [
-              GoogleMap(
+              MapStyleBuilder(
+                builder: (context, mapStyle) => GoogleMap(
+                style: mapStyle,
                 initialCameraPosition: CameraPosition(
                   bearing: 0.0,
                   target: LatLng(
@@ -714,6 +717,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 myLocationEnabled: mapState.hasLocationPermission,
                 markers: allMarkers,
                 clusterManagers: _clusterManagers,
+              ),
               ),
               // Invisible tap target over the native InfoWindow.
               // The native InfoWindow renders & tracks the marker perfectly,
