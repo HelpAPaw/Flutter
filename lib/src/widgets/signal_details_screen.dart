@@ -278,8 +278,6 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   AppBar _appBar(AppLocalizations l10n, {List<Widget>? actions}) {
     return AppBar(
       title: Text(l10n.signalDetails),
-      backgroundColor: Colors.orange,
-      foregroundColor: Colors.white,
       leading: escapeLeading(
         context,
         label: l10n.backToMap,

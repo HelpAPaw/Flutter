@@ -62,8 +62,6 @@ class _NewSignalWizardPageState extends ConsumerState<NewSignalWizardPage> {
       child: Scaffold(
         appBar: AppBar(
           title: Text(step.title(l10n)),
-          backgroundColor: Colors.orange,
-          foregroundColor: Colors.white,
           leading: Semantics(
             identifier: 'newSignal.close',
             button: true,
@@ -194,8 +192,6 @@ class _NewSignalWizardPageState extends ConsumerState<NewSignalWizardPage> {
                 enabled: canAdvance && !isSubmitting,
                 child: FilledButton(
                   style: FilledButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    foregroundColor: Colors.white,
                     minimumSize: const Size.fromHeight(48),
                   ),
                   onPressed: (!canAdvance || isSubmitting)

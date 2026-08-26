@@ -206,8 +206,6 @@ class _EmailVerificationPageState extends State<EmailVerificationPage>
       child: Scaffold(
         appBar: AppBar(
           title: Text(l10n.verifyEmail),
-          backgroundColor: Colors.orange,
-          foregroundColor: Colors.white,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: () => _exitVerification(),
@@ -315,8 +313,6 @@ class _EmailVerificationPageState extends State<EmailVerificationPage>
                                 : l10n.resendVerificationEmail,
                           ),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.orange,
-                            foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),

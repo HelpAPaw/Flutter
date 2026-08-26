@@ -61,8 +61,6 @@ class _ModerationQueuePageState extends State<ModerationQueuePage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.moderationQueue),
-        backgroundColor: Colors.orange,
-        foregroundColor: Colors.white,
         // A deep link can cold-launch onto any route, leaving no back
         // affordance at all (R6-003).
         leading: escapeLeading(

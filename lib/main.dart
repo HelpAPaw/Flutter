@@ -18,6 +18,7 @@ import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/src/config/firebase_options.dart';
 import 'package:help_a_paw/src/config/routes.dart';
+import 'package:help_a_paw/src/theme/app_theme.dart';
 import 'package:help_a_paw/src/widgets/about_page.dart';
 import 'package:help_a_paw/src/widgets/email_verification_page.dart';
 import 'package:help_a_paw/src/widgets/faqs_page.dart';
@@ -523,7 +524,7 @@ class _HelpAPawState extends State<HelpAPaw> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      theme: ThemeData(primarySwatch: Colors.orange, useMaterial3: true),
+      theme: AppTheme.light,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       routerConfig: _router,

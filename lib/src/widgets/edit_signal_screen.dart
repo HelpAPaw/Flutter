@@ -237,8 +237,6 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.editSignal),
-        backgroundColor: Colors.orange,
-        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: _isSaving

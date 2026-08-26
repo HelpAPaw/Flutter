@@ -297,8 +297,6 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
           child: ElevatedButton(
             onPressed: _isProcessing ? null : _handleEnableNotifications,
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-              foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -366,8 +364,6 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
           child: ElevatedButton(
             onPressed: _isProcessing ? null : _handleEnableLocation,
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-              foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -435,8 +431,6 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
           child: ElevatedButton(
             onPressed: _handleSelectRegion,
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-              foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),

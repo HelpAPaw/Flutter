@@ -58,8 +58,6 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
   AppBar _appBar(AppLocalizations l10n) {
     return AppBar(
       title: Text(l10n.clinicDetails),
-      backgroundColor: Colors.orange,
-      foregroundColor: Colors.white,
       leading: escapeLeading(
         context,
         label: l10n.returnToMap,
@@ -170,10 +168,9 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       onPressed: _navigateToClinic,
-                      icon: const Icon(Icons.directions, color: Colors.white),
-                      label: Text(l10n.navigate, style: const TextStyle(color: Colors.white)),
+                      icon: const Icon(Icons.directions),
+                      label: Text(l10n.navigate),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                     ),
@@ -204,10 +201,9 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
                       width: double.infinity,
                       child: ElevatedButton.icon(
                         onPressed: _callClinic,
-                        icon: const Icon(Icons.phone, color: Colors.white),
-                        label: Text(l10n.call, style: const TextStyle(color: Colors.white)),
+                        icon: const Icon(Icons.phone),
+                        label: Text(l10n.call),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                       ),

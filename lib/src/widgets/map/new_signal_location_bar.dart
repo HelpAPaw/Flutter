@@ -96,8 +96,6 @@ class NewSignalLocationBar extends ConsumerWidget {
                         button: true,
                         child: FilledButton(
                           style: FilledButton.styleFrom(
-                            backgroundColor: Colors.orange,
-                            foregroundColor: Colors.white,
                             minimumSize: const Size.fromHeight(44),
                           ),
                           onPressed: onContinue,

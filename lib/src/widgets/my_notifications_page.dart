@@ -244,8 +244,6 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.orange,
-        foregroundColor: Colors.white,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.popOrHome(),

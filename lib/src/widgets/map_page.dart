@@ -795,11 +795,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   right: 0,
                   child: Center(
                     child: ElevatedButton.icon(
-                      icon: const Icon(Icons.search, color: Colors.white),
-                      label: Text(l10n.searchThisArea,
-                          style: const TextStyle(color: Colors.white)),
+                      icon: const Icon(Icons.search),
+                      label: Text(l10n.searchThisArea),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange,
                         elevation: 6,
                         padding: const EdgeInsets.symmetric(
                             horizontal: 20, vertical: 12),
@@ -864,8 +862,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               ref.watch(testModeProvider) ? 'Help a Paw (TEST)' : 'Help a Paw',
             ),
           ),
-          backgroundColor: Colors.orange,
-          foregroundColor: Colors.white,
           actions: <Widget>[
             Semantics(
               label: l10n.filterSignals,
@@ -931,8 +927,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 button: true,
                 enabled: true,
                 child: FloatingActionButton(
-                  backgroundColor: Colors.orange,
-                  foregroundColor: Colors.white,
                   elevation: 6,
                   enableFeedback: true,
                   shape: const CircleBorder(),
