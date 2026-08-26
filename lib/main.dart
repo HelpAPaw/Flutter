@@ -525,6 +525,8 @@ class _HelpAPawState extends State<HelpAPaw> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return MaterialApp.router(
       theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: ThemeMode.system,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       routerConfig: _router,

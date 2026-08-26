@@ -344,7 +344,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.cloud_off, size: 48, color: Colors.grey),
+            Icon(Icons.cloud_off, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
             const SizedBox(height: 16),
             Text(l10n.settingsLoadFailed, textAlign: TextAlign.center),
             const SizedBox(height: 16),
@@ -367,13 +367,13 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage>
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.orange.shade50,
+        color: Theme.of(context).colorScheme.primaryContainer,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.orange.shade200),
+        border: Border.all(color: Theme.of(context).colorScheme.primary),
       ),
       child: Row(
         children: [
-          Icon(Icons.info_outline, color: Colors.orange.shade700),
+          Icon(Icons.info_outline, color: Theme.of(context).colorScheme.onPrimaryContainer),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -383,7 +383,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage>
                   l10n.createAnAccount,
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: Colors.orange.shade900,
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -391,7 +391,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage>
                   l10n.signUpToKeepSettings,
                   style: TextStyle(
                     fontSize: 13,
-                    color: Colors.orange.shade800,
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
                   ),
                 ),
               ],

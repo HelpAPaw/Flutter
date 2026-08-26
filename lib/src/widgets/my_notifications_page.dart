@@ -87,34 +87,39 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
   bool _isRedAlert(Map<String, dynamic> data) =>
       (data['urgency'] as int?) == SignalUrgency.red.code;
 
-  /// Row accent color.
+  /// Row accent colour.
   ///
-  /// Urgency rows take the color of the level they announce rather than a
-  /// fixed one, so the inbox agrees with the map about what red means.
+  /// The inbox used to run six accents — blue, green, orange, grey and two
+  /// different reds. `nearby_signal` was `Colors.red` and a Red Alert was
+  /// `SignalUrgency.red.color`, so the one colour in the app that is supposed
+  /// to mean "this animal may die" also meant "a signal exists near you".
+  ///
+  /// Same rule as everywhere else now: colour means urgency, and rows that do
+  /// not announce an urgency do not get one. The icon already says what kind
+  /// of row it is — see [_getNotificationIcon] — so nothing is lost by making
+  /// the rest neutral, and the red rows now stand out because they are the
+  /// only coloured thing in the list.
   Color _getNotificationColor(String type, Map<String, dynamic> data) {
+    final neutral = Theme.of(context).colorScheme.onSurfaceVariant;
+
     switch (type) {
+      // Announces a signal: coloured only when that signal is a Red Alert.
       case 'new_signal':
-        return _isRedAlert(data) ? SignalUrgency.red.color : Colors.blue;
-      case 'new_comment':
-        return Colors.green;
-      case 'status_change':
-        return Colors.orange;
-      case 'urgency_change':
-        // No null special-case: fromCode already resolves an unknown/missing
-        // level to amber, and inventing a red default here would contradict
-        // the fallback the rest of the feature relies on.
-        return SignalUrgency.fromCode(data['urgency'] as int? ?? -1).color;
       case 'nearby_signal':
-        return Colors.red;
-      // The same blue the case-holder block and its timeline rows use, so
-      // ownership reads as one thread across the app.
-      case 'ownership_change':
-      case 'takeover_request':
-      case 'takeover_approved':
-      case 'takeover_declined':
-        return Colors.blue;
+        return _isRedAlert(data) ? SignalUrgency.red.color : neutral;
+
+      // Announces an urgency change, so it is the urgency by definition.
+      //
+      // No null special-case: fromCode already resolves an unknown/missing
+      // level to amber, and inventing a red default here would contradict
+      // the fallback the rest of the feature relies on.
+      case 'urgency_change':
+        return SignalUrgency.fromCode(data['urgency'] as int? ?? -1).color;
+
+      // Comments, status changes and everything about case ownership are
+      // progress, not severity.
       default:
-        return Colors.grey;
+        return neutral;
     }
   }
 
@@ -355,7 +360,7 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
                         alignment: Alignment.centerRight,
                         padding: const EdgeInsets.only(right: 20),
                         color: Colors.red,
-                        child: const Icon(Icons.delete, color: Colors.white),
+                        child: const Icon(Icons.delete, color: Colors.white),  // theme-independent: on the red swipe-to-delete background
                       ),
                       onDismissed: (_) async {
                         // Surfaced rather than swallowed: a denied delete makes
@@ -397,7 +402,7 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
                               timeStr,
                               style: TextStyle(
                                 fontSize: 12,
-                                color: Colors.grey[500],
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -406,8 +411,8 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
                             ? Container(
                                 width: 8,
                                 height: 8,
-                                decoration: const BoxDecoration(
-                                  color: Colors.orange,
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primary,
                                   shape: BoxShape.circle,
                                 ),
                               )

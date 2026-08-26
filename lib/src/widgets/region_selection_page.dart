@@ -69,8 +69,8 @@ class _RegionSelectionPageState extends State<RegionSelectionPage> {
         circleId: const CircleId('region'),
         center: _centerPoint!,
         radius: _radiusKm * 1000, // Convert km to meters
-        fillColor: Colors.orange.withAlpha(51),
-        strokeColor: Colors.orange,
+        fillColor: Theme.of(context).colorScheme.primary.withAlpha(51),
+        strokeColor: Theme.of(context).colorScheme.primary,
         strokeWidth: 2,
       ),
     };
@@ -155,7 +155,7 @@ class _RegionSelectionPageState extends State<RegionSelectionPage> {
                   padding: const EdgeInsets.all(12),
                   child: Row(
                     children: [
-                      const Icon(Icons.touch_app, color: Colors.orange),
+                      Icon(Icons.touch_app, color: Theme.of(context).colorScheme.primary),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
@@ -175,7 +175,7 @@ class _RegionSelectionPageState extends State<RegionSelectionPage> {
               left: 0,
               right: 0,
               child: Container(
-                color: Colors.white,
+                color: Colors.white,  // theme-independent: over the map
                 padding: const EdgeInsets.all(16),
                 child: SafeArea(
                   top: false,
@@ -184,7 +184,7 @@ class _RegionSelectionPageState extends State<RegionSelectionPage> {
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.radio_button_checked, color: Colors.orange),
+                          Icon(Icons.radio_button_checked, color: Theme.of(context).colorScheme.primary),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
@@ -198,7 +198,7 @@ class _RegionSelectionPageState extends State<RegionSelectionPage> {
                                   '${_radiusKm.toStringAsFixed(1)} ${l10n.km}',
                                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                                         fontWeight: FontWeight.bold,
-                                        color: Colors.orange,
+                                        color: Theme.of(context).colorScheme.primary,
                                       ),
                                 ),
                               ],
@@ -222,7 +222,7 @@ class _RegionSelectionPageState extends State<RegionSelectionPage> {
                       Text(
                         l10n.dragMarkerToReposition,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.grey,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                       ),
                     ],

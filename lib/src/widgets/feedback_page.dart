@@ -178,7 +178,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                 l10n.feedbackHelpsImprove,
                 style: TextStyle(
                   fontSize: 14,
-                  color: Colors.grey[600],
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
               const SizedBox(height: 24),
@@ -231,7 +231,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                   hintText: l10n.emailPlaceholder,
                   border: const OutlineInputBorder(),
                   filled: true,
-                  fillColor: Colors.grey[50],
+                  fillColor: Theme.of(context).colorScheme.surfaceContainer,
                   prefixIcon: const Icon(Icons.email_outlined),
                 ),
               ),
@@ -240,7 +240,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                 l10n.provideEmailForFollowUp,
                 style: TextStyle(
                   fontSize: 12,
-                  color: Colors.grey[600],
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
               const SizedBox(height: 24),
@@ -264,7 +264,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                           : l10n.generalFeedbackHint,
                   border: const OutlineInputBorder(),
                   filled: true,
-                  fillColor: Colors.grey[50],
+                  fillColor: Theme.of(context).colorScheme.surfaceContainer,
                 ),
               ),
               const SizedBox(height: 16),
@@ -275,7 +275,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                   l10n.helpsUsDiagnose,
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.grey[600],
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
                 value: _includeDeviceInfo,
@@ -291,12 +291,12 @@ class _FeedbackPageState extends State<FeedbackPage> {
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                   child: _isSubmitting
-                      ? const SizedBox(
+                      ? SizedBox(
                           height: 20,
                           width: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.onPrimary,
                           ),
                         )
                       : Text(l10n.submitFeedback),
@@ -312,7 +312,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                       l10n.otherWaysToReach,
                       style: TextStyle(
                         fontSize: 14,
-                        color: Colors.grey[600],
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                     const SizedBox(height: 8),

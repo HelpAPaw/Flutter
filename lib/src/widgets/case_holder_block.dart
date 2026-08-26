@@ -123,7 +123,7 @@ class CaseHolderBlock extends StatelessWidget {
                 size: 18,
                 // A case nobody holds is the one thing in this block worth
                 // drawing the eye to: it is an ask, not a status.
-                color: holder == null ? Colors.orange : null,
+                color: holder == null ? Theme.of(context).colorScheme.primary : null,
               ),
               const SizedBox(width: 6),
               Expanded(

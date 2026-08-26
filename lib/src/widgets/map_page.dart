@@ -384,7 +384,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(l10n.noVetClinicsFound),
-              backgroundColor: Colors.grey,
               duration: const Duration(seconds: 3),
             ),
           );
@@ -772,8 +771,26 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               // Crosshair for new signal placement
               if (mapState.isAddingNewSignal)
                 IgnorePointer(
-                  child: const Center(
-                    child: Icon(Icons.gps_fixed, size: 50.0),
+                  child: Center(
+                    // Default black on a map is unreadable wherever the map is
+                    // dark — it lands on the navy "10+" cluster bubble at the
+                    // zoom this mode opens at. White glyph over a dark halo
+                    // reads on every tile: satellite, park green, motorway.
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Icon(
+                          Icons.gps_fixed,
+                          size: 54.0,
+                          color: Colors.black.withAlpha(120),
+                        ),
+                        const Icon(
+                          Icons.gps_fixed,
+                          size: 50.0,
+                          color: Colors.white,  // theme-independent: over the map
+                        ),  // theme-independent: over the map
+                      ],
+                    ),
                   ),
                 ),
               // Step 1 of the new-signal wizard. The remaining steps live on
@@ -822,12 +839,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
+                        color: Colors.white,  // theme-independent: over the map
+                        borderRadius: BorderRadius.circular(8),  // theme-independent: over the map
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.2),
-                            blurRadius: 8,
+                            color: Colors.black.withValues(alpha: 0.2),  // theme-independent: over the map
+                            blurRadius: 8,  // theme-independent: over the map
                             offset: const Offset(0, 2),
                           ),
                         ],

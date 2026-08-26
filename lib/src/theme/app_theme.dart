@@ -41,10 +41,16 @@ abstract final class AppTheme {
   /// Dark theme — the same brand orange on black, with the ink on it flipped
   /// from white to black (2.16:1 becomes 9.74:1).
   ///
-  /// **Not yet wired up.** `MaterialApp` deliberately does not pass a
-  /// `darkTheme`/`themeMode` while widgets still hardcode light-mode colours;
-  /// a half-migrated dark mode is worse than none. Enable it once the literals
-  /// are gone (review finding THEME-3).
+  /// The one colour that does not move between the two themes is the brand
+  /// itself, which is why this works: `#FF9800` is simultaneously the worst
+  /// foreground on white and one of the best on black.
+  ///
+  /// Two things are deliberately still light-only, because they are content
+  /// rather than chrome: the fullscreen photo viewer (black ground, white ink,
+  /// in both themes — a photo does not want a theme) and the Google Map
+  /// itself, which keeps rendering daylight tiles. A dark map needs a
+  /// `setMapStyle` JSON asset and pins drawn for it; until then a bright map
+  /// under a dark app is the honest state, not a regression.
   static ThemeData get dark => _build(_darkScheme, Brightness.dark);
 
   // ---------------------------------------------------------------------

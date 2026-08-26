@@ -102,8 +102,7 @@ class _ModerationQueuePageState extends State<ModerationQueuePage> {
       child: Column(
         children: [
           TabBar(
-            labelColor: Colors.orange,
-            indicatorColor: Colors.orange,
+            indicatorColor: Theme.of(context).colorScheme.primary,
             tabs: [
               Tab(text: l10n.moderationTabReports),
               Tab(text: l10n.moderationTabHidden),
@@ -218,7 +217,7 @@ class _ModerationQueuePageState extends State<ModerationQueuePage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 80, color: Colors.grey),
+            Icon(icon, size: 80, color: Theme.of(context).colorScheme.onSurfaceVariant),
             const SizedBox(height: 16),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),

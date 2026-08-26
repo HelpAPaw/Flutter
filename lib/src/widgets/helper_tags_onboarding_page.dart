@@ -157,7 +157,7 @@ class _HelperTagsOnboardingPageState extends State<HelperTagsOnboardingPage> {
                     const SizedBox(height: 8),
                     Text(
                       l10n.helperTagsOnboardingIntro,
-                      style: TextStyle(color: Colors.grey.shade700),
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                     const SizedBox(height: 20),
                     SectionHeader(l10n.helperTagsOnboardingHelpSection),

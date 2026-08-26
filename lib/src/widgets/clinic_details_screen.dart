@@ -85,7 +85,7 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, size: 64, color: Colors.grey),
+              Icon(Icons.error_outline, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
               const SizedBox(height: 16),
               Text(l10n.clinicNotFound),
               const SizedBox(height: 16),
@@ -129,7 +129,7 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
                   if (_clinic!.rating != null)
                     Row(
                       children: [
-                        const Icon(Icons.star, color: Colors.orange, size: 20),
+                        Icon(Icons.star, color: Theme.of(context).colorScheme.primary, size: 20),
                         const SizedBox(width: 4),
                         Text(
                           _clinic!.rating!.toStringAsFixed(1),
@@ -149,7 +149,7 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      const Icon(Icons.location_on, color: Colors.orange),
+                      Icon(Icons.location_on, color: Theme.of(context).colorScheme.primary),
                       const SizedBox(width: 8),
                       Text(
                         l10n.address,
@@ -182,7 +182,7 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
                   if (_clinic!.phoneNumber != null) ...[
                     Row(
                       children: [
-                        const Icon(Icons.phone, color: Colors.orange),
+                        Icon(Icons.phone, color: Theme.of(context).colorScheme.primary),
                         const SizedBox(width: 8),
                         Text(
                           l10n.phone,
@@ -216,7 +216,7 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
                   if (_clinic!.openingHours != null) ...[
                     Row(
                       children: [
-                        const Icon(Icons.schedule, color: Colors.orange),
+                        Icon(Icons.schedule, color: Theme.of(context).colorScheme.primary),
                         const SizedBox(width: 8),
                         Text(
                           l10n.openingHours,
@@ -245,11 +245,10 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       onPressed: _viewInGoogleMaps,
-                      icon: const Icon(Icons.open_in_new, color: Colors.orange),
+                      icon: Icon(Icons.open_in_new, color: Theme.of(context).colorScheme.primary),
                       label: Text(l10n.viewInGoogleMaps),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.orange,
-                        side: const BorderSide(color: Colors.orange),
+                        side: BorderSide(color: Theme.of(context).colorScheme.primary),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                     ),

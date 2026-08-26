@@ -134,7 +134,7 @@ class _FaqSection extends StatelessWidget {
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: Colors.orange[800],
+              color: Theme.of(context).colorScheme.primary,
             ),
           ),
         ),
@@ -170,7 +170,7 @@ class _FaqItem extends StatelessWidget {
             child: Text(
               answer,
               style: TextStyle(
-                color: Colors.grey[700],
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
                 height: 1.5,
               ),
             ),

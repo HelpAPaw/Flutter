@@ -245,8 +245,7 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      strokeWidth: 2
                     ),
                   )
                 : const Icon(Icons.check),
@@ -257,7 +256,6 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
       body: _isLoading
           ? const Center(
               child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
               ),
             )
           : SingleChildScrollView(

@@ -299,7 +299,7 @@ class _ModerationHiddenTabState extends State<ModerationHiddenTab> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, size: 80, color: Colors.grey),
+                Icon(icon, size: 80, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 const SizedBox(height: 16),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 32),

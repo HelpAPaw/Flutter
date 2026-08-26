@@ -399,7 +399,6 @@ class _SignInPageState extends State<SignInPage> {
         body: _preparingSession
             ? const Center(
                 child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
                 ),
               )
             : Stack(

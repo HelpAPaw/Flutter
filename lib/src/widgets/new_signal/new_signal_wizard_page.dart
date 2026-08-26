@@ -82,9 +82,9 @@ class _NewSignalWizardPageState extends ConsumerState<NewSignalWizardPage> {
             preferredSize: const Size.fromHeight(4),
             child: LinearProgressIndicator(
               value: step.displayNumber / NewSignalStep.count,
-              backgroundColor: Colors.orange.shade200,
+              backgroundColor: Theme.of(context).colorScheme.primary,
               valueColor:
-                  const AlwaysStoppedAnimation<Color>(Colors.white),
+                  AlwaysStoppedAnimation<Color>(Theme.of(context).colorScheme.onPrimary),
               minHeight: 4,
             ),
           ),
@@ -199,13 +199,13 @@ class _NewSignalWizardPageState extends ConsumerState<NewSignalWizardPage> {
                       ? null
                       : (isLast ? _submit : _advance),
                   child: isSubmitting
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 20,
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
                             valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white),
+                                AlwaysStoppedAnimation<Color>(Theme.of(context).colorScheme.onPrimary),
                           ),
                         )
                       : Text(label),
@@ -309,7 +309,7 @@ class _NewSignalWizardPageState extends ConsumerState<NewSignalWizardPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(l10n.signalCreatedPhotoFailed),
-            backgroundColor: Colors.orange,
+            backgroundColor: Theme.of(context).colorScheme.primary,
           ),
         );
       }

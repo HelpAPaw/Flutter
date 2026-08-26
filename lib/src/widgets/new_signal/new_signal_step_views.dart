@@ -62,7 +62,7 @@ class NewSignalStepBody extends StatelessWidget {
               style: Theme.of(context)
                   .textTheme
                   .bodyMedium
-                  ?.copyWith(color: Colors.grey.shade700),
+                  ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           ],
           const SizedBox(height: 24),
@@ -108,8 +108,8 @@ class _NewSignalPhotoStepState extends ConsumerState<NewSignalPhotoStep> {
                 label: Text(l10n.newSignalAddPhoto),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size.fromHeight(120),
-                  foregroundColor: Colors.orange.shade800,
-                  side: BorderSide(color: Colors.orange.shade200, width: 2),
+                  foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                  side: BorderSide(color: Theme.of(context).colorScheme.primary, width: 2),
                 ),
                 onPressed: _showImageSourceBottomSheet,
               ),
@@ -139,7 +139,7 @@ class _NewSignalPhotoStepState extends ConsumerState<NewSignalPhotoStep> {
             label: l10n.removePhoto,
             button: true,
             child: IconButton(
-              icon: const Icon(Icons.close, color: Colors.white),
+              icon: const Icon(Icons.close, color: Colors.white),  // theme-independent: over a photo
               style: IconButton.styleFrom(backgroundColor: Colors.black54),
               onPressed: () =>
                   ref.read(mapViewModelProvider.notifier).clearFormImage(),
@@ -163,7 +163,7 @@ class _NewSignalPhotoStepState extends ConsumerState<NewSignalPhotoStep> {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: const Icon(Icons.camera_alt, color: Colors.orange),
+                leading: Icon(Icons.camera_alt, color: Theme.of(context).colorScheme.primary),
                 title: Text(l10n.takePhoto),
                 onTap: () {
                   Navigator.pop(context);
@@ -171,7 +171,7 @@ class _NewSignalPhotoStepState extends ConsumerState<NewSignalPhotoStep> {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.photo_library, color: Colors.orange),
+                leading: Icon(Icons.photo_library, color: Theme.of(context).colorScheme.primary),
                 title: Text(l10n.chooseFromGallery),
                 onTap: () {
                   Navigator.pop(context);

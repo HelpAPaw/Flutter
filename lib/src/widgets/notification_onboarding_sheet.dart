@@ -222,7 +222,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
             height: 4,
             margin: const EdgeInsets.only(bottom: 16),
             decoration: BoxDecoration(
-              color: Colors.grey[300],
+              color: Theme.of(context).colorScheme.outlineVariant,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -273,7 +273,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
         Icon(
           Icons.notifications_active,
           size: 64,
-          color: Colors.orange[600],
+          color: Theme.of(context).colorScheme.primary,
         ),
         const SizedBox(height: 24),
         Text(
@@ -287,7 +287,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
         Text(
           l10n.stayInformedSubtitle,
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-            color: Colors.grey[600],
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
           textAlign: TextAlign.center,
         ),
@@ -307,8 +307,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
                     height: 20,
                     width: 20,
                     child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      strokeWidth: 2
                     ),
                   )
                 : Text(
@@ -323,7 +322,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
           child: Text(
             l10n.maybeLater,
             style: TextStyle(
-              color: Colors.grey[600],
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
               fontSize: 16,
             ),
           ),
@@ -340,7 +339,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
         Icon(
           Icons.location_on,
           size: 64,
-          color: Colors.orange[600],
+          color: Theme.of(context).colorScheme.primary,
         ),
         const SizedBox(height: 24),
         Text(
@@ -354,7 +353,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
         Text(
           l10n.enableLocationSubtitle,
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-            color: Colors.grey[600],
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
           textAlign: TextAlign.center,
         ),
@@ -374,8 +373,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
                     height: 20,
                     width: 20,
                     child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      strokeWidth: 2
                     ),
                   )
                 : Text(
@@ -390,7 +388,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
           child: Text(
             l10n.skipForNow,
             style: TextStyle(
-              color: Colors.grey[600],
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
               fontSize: 16,
             ),
           ),
@@ -407,7 +405,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
         Icon(
           Icons.map,
           size: 64,
-          color: Colors.orange[600],
+          color: Theme.of(context).colorScheme.primary,
         ),
         const SizedBox(height: 24),
         Text(
@@ -421,7 +419,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
         Text(
           l10n.chooseRegionSubtitle,
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-            color: Colors.grey[600],
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
           textAlign: TextAlign.center,
         ),
@@ -448,7 +446,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
           child: Text(
             l10n.skipForNow,
             style: TextStyle(
-              color: Colors.grey[600],
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
               fontSize: 16,
             ),
           ),
@@ -464,7 +462,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
       height: 8,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: isActive ? Colors.orange : Colors.grey[300],
+        color: isActive ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.outlineVariant,
       ),
     );
   }

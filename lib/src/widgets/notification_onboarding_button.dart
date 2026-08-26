@@ -73,9 +73,13 @@ class _NotificationOnboardingButtonState extends State<NotificationOnboardingBut
 
   @override
   Widget build(BuildContext context) {
+    // Left, not right. At bottom:100/right:16 this sat exactly on top of the
+    // map's native zoom controls, and put a second orange circle immediately
+    // beside the FAB — two identical-looking primary actions, one of which
+    // was blocking a control the user could no longer reach.
     return Positioned(
-      bottom: 100,
-      right: 16,
+      bottom: 16,
+      left: 16,
       child: Semantics(
         label: AppLocalizations.of(context).completeNotificationSetup,
         button: true,
@@ -91,7 +95,7 @@ class _NotificationOnboardingButtonState extends State<NotificationOnboardingBut
           child: Material(
             elevation: 8,
             shape: const CircleBorder(),
-            color: Colors.orange,
+            color: Theme.of(context).colorScheme.primary,
             child: InkWell(
               onTap: widget.onTap,
               customBorder: const CircleBorder(),
@@ -102,7 +106,7 @@ class _NotificationOnboardingButtonState extends State<NotificationOnboardingBut
                 child: const Icon(
                   Icons.notifications_active,
                   size: 28,
-                  color: Colors.white,
+                  color: Colors.white,  // theme-independent: on the brand orange circle
                 ),
               ),
             ),

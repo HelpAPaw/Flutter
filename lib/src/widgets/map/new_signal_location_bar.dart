@@ -49,7 +49,7 @@ class NewSignalLocationBar extends ConsumerWidget {
                     NewSignalStep.count,
                   ),
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: Colors.grey.shade700,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                 ),
                 const SizedBox(height: 6),
@@ -57,9 +57,7 @@ class NewSignalLocationBar extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(2),
                   child: LinearProgressIndicator(
                     value: step.displayNumber / NewSignalStep.count,
-                    backgroundColor: Colors.orange.shade100,
-                    valueColor:
-                        const AlwaysStoppedAnimation<Color>(Colors.orange),
+                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
                     minHeight: 4,
                   ),
                 ),
@@ -75,7 +73,7 @@ class NewSignalLocationBar extends ConsumerWidget {
                 Text(
                   step.hint(l10n)!,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.grey.shade700,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                 ),
                 const SizedBox(height: 12),

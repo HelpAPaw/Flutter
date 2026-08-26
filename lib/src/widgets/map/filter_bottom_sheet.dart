@@ -105,24 +105,28 @@ class _FilterBottomSheetContent extends ConsumerWidget {
                       spacing: 8,
                       children: [
                         _buildTimeRangeChip(
+                        context: context,
                           label: l10n.last24Hours,
                           value: TimeRange.last24Hours,
                           selected: filterState.selectedTimeRange,
                           onSelected: (range) => viewModel.setTimeRange(range),
                         ),
                         _buildTimeRangeChip(
+                        context: context,
                           label: l10n.last7Days,
                           value: TimeRange.last7Days,
                           selected: filterState.selectedTimeRange,
                           onSelected: (range) => viewModel.setTimeRange(range),
                         ),
                         _buildTimeRangeChip(
+                        context: context,
                           label: l10n.last30Days,
                           value: TimeRange.last30Days,
                           selected: filterState.selectedTimeRange,
                           onSelected: (range) => viewModel.setTimeRange(range),
                         ),
                         _buildTimeRangeChip(
+                        context: context,
                           label: l10n.allTime,
                           value: TimeRange.allTime,
                           selected: filterState.selectedTimeRange,
@@ -245,7 +249,6 @@ class _FilterBottomSheetContent extends ConsumerWidget {
                 Flexible(child: Text(label)),
               ],
             ),
-      activeColor: Colors.orange,
       controlAffinity: ListTileControlAffinity.leading,
       contentPadding: EdgeInsets.zero,
     );
@@ -267,6 +270,7 @@ class _FilterBottomSheetContent extends ConsumerWidget {
       ];
 
   Widget _buildTimeRangeChip({
+    required BuildContext context,
     required String label,
     required TimeRange value,
     required TimeRange selected,
@@ -276,8 +280,8 @@ class _FilterBottomSheetContent extends ConsumerWidget {
       label: Text(label),
       selected: selected == value,
       onSelected: (_) => onSelected(value),
-      selectedColor: Colors.orange.shade100,
-      checkmarkColor: Colors.orange.shade800,
+      selectedColor: Theme.of(context).colorScheme.primaryContainer,
+      checkmarkColor: Theme.of(context).colorScheme.onPrimaryContainer,
     );
   }
 }

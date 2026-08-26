@@ -296,7 +296,6 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       appBar: _appBar(AppLocalizations.of(context)),
       body: const Center(
         child: CircularProgressIndicator(
-          valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
         ),
       ),
     );
@@ -601,10 +600,10 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                               onTap: _isUploadingPhoto ? null : _showImageSourceDialog,
                                               child: Container(
                                                 decoration: BoxDecoration(
-                                                  color: Colors.grey[200],
+                                                  color: Theme.of(context).colorScheme.surfaceContainerHigh,
                                                   borderRadius: BorderRadius.circular(12),
                                                   border: Border.all(
-                                                    color: Colors.orange,
+                                                    color: Theme.of(context).colorScheme.primary,
                                                     width: 2,
                                                     style: BorderStyle.solid,
                                                   ),
@@ -615,13 +614,12 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                                           mainAxisAlignment: MainAxisAlignment.center,
                                                           children: [
                                                             const CircularProgressIndicator(
-                                                              valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
                                                             ),
                                                             const SizedBox(height: 16),
                                                             Text(
                                                               l10n.uploadingPhoto,
                                                               style: TextStyle(
-                                                                color: Colors.grey[600],
+                                                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                                                                 fontSize: 14,
                                                               ),
                                                             ),
@@ -630,16 +628,16 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                                       : Column(
                                                           mainAxisAlignment: MainAxisAlignment.center,
                                                           children: [
-                                                            const Icon(
+                                                            Icon(
                                                               Icons.add_photo_alternate,
                                                               size: 48,
-                                                              color: Colors.orange,
+                                                              color: Theme.of(context).colorScheme.primary,
                                                             ),
                                                             const SizedBox(height: 8),
                                                             Text(
                                                               signal.photoUrls.isEmpty ? l10n.addPhoto : l10n.addAnotherPhoto,
                                                               style: TextStyle(
-                                                                color: Colors.grey[600],
+                                                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                                                                 fontSize: 16,
                                                                 fontWeight: FontWeight.bold,
                                                               ),
@@ -648,7 +646,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                                             Text(
                                                               l10n.photosCount(signal.photoUrls.length, 5),
                                                               style: TextStyle(
-                                                                color: Colors.grey[500],
+                                                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                                                                 fontSize: 12,
                                                               ),
                                                             ),
@@ -684,20 +682,21 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                                     width: double.infinity,
                                                     fit: BoxFit.cover,
                                                     placeholder: (context, url) => Container(
-                                                      color: Colors.grey[200],
+                                                      color: Theme.of(context).colorScheme.surfaceContainerHigh,
                                                       child: const Center(
                                                         child: CircularProgressIndicator(),
                                                       ),
                                                     ),
                                                     errorWidget: (context, url, error) => Container(
-                                                      color: Colors.grey[200],
+                                                      color: Theme.of(context).colorScheme.surfaceContainerHigh,
                                                       child: Center(
                                                         child: Column(
                                                           mainAxisAlignment: MainAxisAlignment.center,
                                                           children: [
-                                                            const Icon(Icons.broken_image, size: 48, color: Colors.grey),
+                                                            Icon(Icons.broken_image, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
                                                             const SizedBox(height: 8),
-                                                            Text(l10n.failedToLoadImage, style: const TextStyle(color: Colors.grey)),
+                                                            Text(l10n.failedToLoadImage,
+                                                                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                                                           ],
                                                         ),
                                                       ),
@@ -713,7 +712,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                                       button: true,
                                                       enabled: true,
                                                       child: IconButton(
-                                                        icon: const Icon(Icons.delete, color: Colors.white),
+                                                        icon: const Icon(Icons.delete, color: Colors.white),  // theme-independent: over a photo
                                                         style: IconButton.styleFrom(
                                                           backgroundColor: Colors.red,
                                                         ),
@@ -733,7 +732,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                                     child: Text(
                                                       '${index + 1}/${signal.photoUrls.length}',
                                                       style: const TextStyle(
-                                                        color: Colors.white,
+                                                        color: Colors.white,  // theme-independent: over a photo
                                                         fontSize: 12,
                                                         fontWeight: FontWeight.bold,
                                                       ),
@@ -765,8 +764,12 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                             decoration: BoxDecoration(
                                               shape: BoxShape.circle,
                                               color: _currentPhotoPage == index
-                                                  ? Colors.orange
-                                                  : Colors.grey[400],
+                                                  ? Theme.of(context)
+                                                      .colorScheme
+                                                      .primary
+                                                  : Theme.of(context)
+                                                      .colorScheme
+                                                      .outline,
                                             ),
                                           ),
                                         ),
@@ -821,10 +824,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                   },
                                   icon: const Icon(Icons.directions),
                                   label: Text(l10n.navigateMe),
-                                  style: ButtonStyle(
-                                    foregroundColor: WidgetStateProperty.all<Color>(Colors.white),
-                                    backgroundColor: WidgetStateProperty.all<Color>(Colors.orange),
-                                  )
+                                  // Colours come from elevatedButtonTheme.
                                 ),
                                 if (signal.contactPhone.isNotEmpty)
                                   TextButton.icon(
@@ -844,10 +844,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                     },
                                     icon: const Icon(Icons.phone),
                                     label: Text(signal.contactPhone),
-                                    style: ButtonStyle(
-                                      foregroundColor: WidgetStateProperty.all<Color>(Colors.white),
-                                      backgroundColor: WidgetStateProperty.all<Color>(Colors.orange),
-                                    )
+                                    // Colours come from elevatedButtonTheme.
                                   ),
                               ],
                             ),
@@ -1035,14 +1032,17 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                         child: signal.commentsLocked
                             ? Row(
                                 children: [
-                                  const Icon(Icons.lock_outline,
-                                      size: 20, color: Colors.grey),
+                                  Icon(Icons.lock_outline,
+                                      size: 20,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
                                       l10n.moderationCommentsLocked,
-                                      style: const TextStyle(
-                                        color: Colors.grey,
+                                      style: TextStyle(
+                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                                         fontStyle: FontStyle.italic,
                                       ),
                                     ),
@@ -1343,8 +1343,8 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     final l10n = AppLocalizations.of(context);
     return ListTile(
       title: _historyCard(
-        background: Colors.grey.shade100,
-        border: Colors.grey.shade300,
+        background: Theme.of(context).colorScheme.surfaceContainer,
+        border: Theme.of(context).colorScheme.outline,
         child: Row(
           children: [
             const Icon(Icons.flag_outlined, size: 20),
@@ -1372,8 +1372,8 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
 
     return ListTile(
       title: _historyCard(
-        background: Colors.orange.shade50,
-        border: Colors.orange.shade200,
+        background: Theme.of(context).colorScheme.primaryContainer,
+        border: Theme.of(context).colorScheme.primary,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1537,8 +1537,8 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                     ),
                   ),
       title: _historyCard(
-        background: Colors.white,
-        border: Colors.grey,
+        background: Theme.of(context).colorScheme.surface,
+        border: Theme.of(context).colorScheme.outline,
         child: Text(entry.text ?? ''),
       ),
       subtitle: Row(
@@ -2167,7 +2167,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: const Icon(Icons.camera_alt, color: Colors.orange),
+                leading: Icon(Icons.camera_alt, color: Theme.of(context).colorScheme.primary),
                 title: Text(l10n.takePhoto),
                 onTap: () {
                   Navigator.pop(context);
@@ -2175,7 +2175,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.photo_library, color: Colors.orange),
+                leading: Icon(Icons.photo_library, color: Theme.of(context).colorScheme.primary),
                 title: Text(l10n.chooseFromGallery),
                 onTap: () {
                   Navigator.pop(context);
@@ -2391,10 +2391,10 @@ class _FullScreenPhotoGalleryState extends State<_FullScreenPhotoGallery> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Colors.black,  // theme-independent: fullscreen photo viewer
       body: Stack(
         children: [
-          PhotoViewGallery.builder(
+          PhotoViewGallery.builder(  // theme-independent: fullscreen photo viewer
             pageController: _pageController,
             itemCount: widget.photoUrls.length,
             builder: (context, index) {
@@ -2407,14 +2407,14 @@ class _FullScreenPhotoGalleryState extends State<_FullScreenPhotoGallery> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.broken_image, size: 64, color: Colors.white),
+                        const Icon(Icons.broken_image, size: 64, color: Colors.white),  // theme-independent: fullscreen photo viewer
                         const SizedBox(height: 16),
                         Text(
-                          l10n.failedToLoadImage,
-                          style: const TextStyle(color: Colors.white),
+                          l10n.failedToLoadImage,  // theme-independent: fullscreen photo viewer
+                          style: const TextStyle(color: Colors.white),  // theme-independent: fullscreen photo viewer
                         ),
                       ],
-                    ),
+                    ),  // theme-independent: fullscreen photo viewer
                   );
                 },
               );
@@ -2425,18 +2425,18 @@ class _FullScreenPhotoGalleryState extends State<_FullScreenPhotoGallery> {
               });
             },
             backgroundDecoration: const BoxDecoration(
-              color: Colors.black,
+              color: Colors.black,  // theme-independent: fullscreen photo viewer
             ),
             loadingBuilder: (context, event) {
-              return Center(
+              return Center(  // theme-independent: fullscreen photo viewer
                 child: CircularProgressIndicator(
                   value: event == null
                       ? 0
                       : event.cumulativeBytesLoaded / (event.expectedTotalBytes ?? 1),
-                  color: Colors.white,
+                  color: Colors.white,  // theme-independent: fullscreen photo viewer
                 ),
               );
-            },
+            },  // theme-independent: fullscreen photo viewer
           ),
           SafeArea(
             child: Padding(
@@ -2449,10 +2449,10 @@ class _FullScreenPhotoGalleryState extends State<_FullScreenPhotoGallery> {
                     button: true,
                     enabled: true,
                     child: IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                      icon: const Icon(Icons.close, color: Colors.white, size: 30),  // theme-independent: fullscreen photo viewer
                       onPressed: () => Navigator.pop(context),
                     ),
-                  ),
+                  ),  // theme-independent: fullscreen photo viewer
                 ],
               ),
             ),
@@ -2472,10 +2472,10 @@ class _FullScreenPhotoGalleryState extends State<_FullScreenPhotoGallery> {
                   child: Text(
                     l10n.photoOf(_currentIndex + 1, widget.photoUrls.length),
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: Colors.white,  // theme-independent: fullscreen photo viewer
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                    ),
+                    ),  // theme-independent: fullscreen photo viewer
                   ),
                 ),
               ),

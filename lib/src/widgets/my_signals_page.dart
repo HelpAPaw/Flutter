@@ -48,9 +48,11 @@ class MySignalsPage extends StatelessWidget {
           ),
           title: AppBarTitle(l10n.mySignals),
           bottom: TabBar(
-            indicatorColor: Colors.white,
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white70,
+            // On the brand app bar, so the ink is onPrimary — white in light,
+            // black in dark — not a hardcoded white.
+            indicatorColor: Theme.of(context).colorScheme.onPrimary,
+            labelColor: Theme.of(context).colorScheme.onPrimary,
+            unselectedLabelColor: Theme.of(context).colorScheme.onPrimary.withAlpha(178),
             tabs: [
               // "Active", not "My Signals" — the app bar already says whose
               // these are, and a tab repeating the screen title tells the user
@@ -71,7 +73,7 @@ class MySignalsPage extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.pin_drop, size: 80, color: Colors.grey),
+                    Icon(Icons.pin_drop, size: 80, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     const SizedBox(height: 16),
                     Text(l10n.pleaseSignInToViewSignals),
                     const SizedBox(height: 16),
@@ -211,7 +213,7 @@ class _ActiveSignalsTabState extends State<_ActiveSignalsTab> {
                         ),
                         Text(dateStr,
                             style: TextStyle(
-                                fontSize: 12, color: Colors.grey[500])),
+                                fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                       ],
                     ),
                   ],
@@ -366,8 +368,8 @@ class _RemovedSignalsTabState extends State<_RemovedSignalsTab> {
                 children: [
                   ListTile(
                     leading: CircleAvatar(
-                      backgroundColor: Colors.grey.withAlpha(51),
-                      child: Icon(signal.primaryTag.icon, color: Colors.grey),
+                      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
+                      child: Icon(signal.primaryTag.icon, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                     title: Text(
                       signal.title.isNotEmpty
@@ -391,7 +393,7 @@ class _RemovedSignalsTabState extends State<_RemovedSignalsTab> {
                             l10n.restorableUntil(
                                 _formatDate(context, purgeAt)),
                             style: TextStyle(
-                                fontSize: 12, color: Colors.grey[600]),
+                                fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                           ),
                       ],
                     ),

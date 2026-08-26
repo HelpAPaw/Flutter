@@ -177,7 +177,7 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
                         const SizedBox(height: 8),
                         Text(
                           l10n.helpUsPersonalize,
-                          style: const TextStyle(fontSize: 16, color: Colors.grey),
+                          style: TextStyle(fontSize: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
                           textAlign: TextAlign.center,
                         ),
                       ],
@@ -191,12 +191,7 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
                     decoration: InputDecoration(
                       labelText: l10n.fullNameRequired,
                       hintText: l10n.enterFullName,
-                      prefixIcon: const Icon(Icons.person, color: Colors.orange),
-                      border: const OutlineInputBorder(),
-                      focusedBorder: const OutlineInputBorder(
-                        borderSide: BorderSide(color: Colors.orange, width: 2),
-                      ),
-                      labelStyle: const TextStyle(color: Colors.orange),
+                      prefixIcon: Icon(Icons.person, color: Theme.of(context).colorScheme.primary),
                     ),
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
@@ -225,12 +220,7 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
                     decoration: InputDecoration(
                       labelText: l10n.phoneNumberOptional,
                       hintText: l10n.enterPhoneNumber,
-                      prefixIcon: const Icon(Icons.phone, color: Colors.orange),
-                      border: const OutlineInputBorder(),
-                      focusedBorder: const OutlineInputBorder(
-                        borderSide: BorderSide(color: Colors.orange, width: 2),
-                      ),
-                      labelStyle: const TextStyle(color: Colors.orange),
+                      prefixIcon: Icon(Icons.phone, color: Theme.of(context).colorScheme.primary),
                     ),
                     keyboardType: TextInputType.phone,
                     validator: (value) {
@@ -259,8 +249,7 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
                             height: 20,
                             width: 20,
                             child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              strokeWidth: 2
                             ),
                           )
                         : Text(
@@ -300,7 +289,7 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
                     },
                     child: Text(
                       l10n.skipForNowProfile,
-                      style: const TextStyle(color: Colors.grey),
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                   ),
                 ],

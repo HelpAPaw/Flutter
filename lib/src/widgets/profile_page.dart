@@ -326,7 +326,7 @@ class _ProfilePageState extends State<ProfilePage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.account_circle, size: 80, color: Colors.grey),
+                  Icon(Icons.account_circle, size: 80, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   const SizedBox(height: 16),
                   Text(l10n.pleaseSignInToViewProfile),
                   const SizedBox(height: 16),
@@ -358,9 +358,9 @@ class _ProfilePageState extends State<ProfilePage> {
                           bottom: 0,
                           right: 0,
                           child: CircleAvatar(
-                            backgroundColor: Colors.orange,
+                            backgroundColor: Theme.of(context).colorScheme.primary,
                             child: IconButton(
-                              icon: const Icon(Icons.camera_alt, color: Colors.white),
+                              icon: const Icon(Icons.camera_alt, color: Colors.white),  // theme-independent: over the avatar photo
                               onPressed: _isLoading ? null : _pickAndUploadPhoto,
                             ),
                           ),
@@ -409,7 +409,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                 width: 20,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  color: Colors.white,
+                                  color: Colors.white,  // theme-independent: over the avatar photo
                                 ),
                               )
                             : Text(l10n.saveChanges),
@@ -428,7 +428,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       user.email ?? '',
                       style: TextStyle(
                         fontSize: 16,
-                        color: Colors.grey[600],
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                     const SizedBox(height: 32),
@@ -527,7 +527,7 @@ class _StatCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
         child: Column(
           children: [
-            Icon(icon, size: 32, color: Colors.orange),
+            Icon(icon, size: 32, color: Theme.of(context).colorScheme.primary),
             const SizedBox(height: 8),
             Text(
               value,
@@ -540,7 +540,7 @@ class _StatCard extends StatelessWidget {
               label,
               style: TextStyle(
                 fontSize: 14,
-                color: Colors.grey[600],
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
           ],

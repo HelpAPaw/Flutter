@@ -114,7 +114,7 @@ class UrgencyPicker extends StatelessWidget {
                                   urgency.description(l10n),
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: Colors.grey.shade700,
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                               ),

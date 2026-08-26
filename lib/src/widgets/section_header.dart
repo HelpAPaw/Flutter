@@ -38,7 +38,7 @@ class SectionHeader extends StatelessWidget {
             style: Theme.of(context)
                 .textTheme
                 .bodySmall
-                ?.copyWith(color: Colors.grey.shade700),
+                ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
             overflow: TextOverflow.ellipsis,
           ),
         ),

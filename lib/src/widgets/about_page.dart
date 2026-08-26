@@ -77,7 +77,7 @@ class _AboutPageState extends State<AboutPage> {
               l10n.version(version, build),
               style: TextStyle(
                 fontSize: 16,
-                color: Colors.grey[600],
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 24),
@@ -147,7 +147,7 @@ class _AboutPageState extends State<AboutPage> {
               l10n.copyright(year),
               style: TextStyle(
                 fontSize: 12,
-                color: Colors.grey[500],
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 20),

@@ -227,10 +227,10 @@ class _EmailVerificationPageState extends State<EmailVerificationPage>
                         Image.asset('assets/logo.png', height: 80),
                         const SizedBox(height: 40),
 
-                        const Icon(
+                        Icon(
                           Icons.email_outlined,
                           size: 80,
-                          color: Colors.orange,
+                          color: Theme.of(context).colorScheme.primary,
                         ),
                         const SizedBox(height: 24),
 
@@ -243,7 +243,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage>
 
                         Text(
                           l10n.verificationEmailSentTo,
-                          style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                          style: TextStyle(fontSize: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 8),
@@ -258,9 +258,9 @@ class _EmailVerificationPageState extends State<EmailVerificationPage>
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: Colors.orange.withValues(alpha: 0.1),
+                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                            border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)),
                           ),
                           child: Column(
                             children: [
@@ -303,8 +303,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage>
                                   width: 20,
                                   height: 20,
                                   child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                    strokeWidth: 2
                                   ),
                                 )
                               : const Icon(Icons.refresh),
@@ -347,7 +346,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage>
                       onPressed: () => _exitVerification(),
                       child: Text(
                         l10n.cancelAndSignOut,
-                        style: const TextStyle(color: Colors.grey),
+                        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                       ),
                     ),
                     // Development bypass (remove in production)
