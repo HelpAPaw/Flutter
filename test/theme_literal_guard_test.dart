@@ -14,7 +14,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// The allowances below are content, not chrome, and are correct in both
 /// themes — a photo viewer's black ground, an overlay scrim on top of an
 /// image. Add to them only for something genuinely theme-independent, and say
-/// why in [_allowed].
+/// why in [allowed].
 void main() {
   /// Colours that must never be written literally in `lib/`: they encode an
   /// assumption about the background behind them.
@@ -26,7 +26,7 @@ void main() {
   ];
 
   /// Files exempt, with the reason.
-  const _allowed = <String, String>{
+  const allowed = <String, String>{
     // The one source of truth for every literal in the app.
     'lib/src/theme/app_colors.dart': 'defines the palette',
     'lib/src/theme/app_theme.dart': 'builds the ThemeData',
@@ -54,7 +54,7 @@ void main() {
       if (entity is! File || !entity.path.endsWith('.dart')) continue;
       // Generated localisations are not hand-written UI.
       if (entity.path.contains('/l10n/')) continue;
-      if (_allowed.containsKey(entity.path)) continue;
+      if (allowed.containsKey(entity.path)) continue;
 
       final lines = entity.readAsLinesSync();
       for (var i = 0; i < lines.length; i++) {
