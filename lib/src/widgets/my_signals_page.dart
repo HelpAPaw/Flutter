@@ -16,6 +16,7 @@ import '../models/removed_signal.dart';
 import '../services/signal_removal_service.dart';
 import '../utils/nav_extensions.dart';
 import 'app_bar_title.dart';
+import 'status_view.dart';
 
 
 Color _urgencyColor(int urgency) => SignalUrgency.fromCode(urgency).color;
@@ -24,27 +25,6 @@ String _formatDate(BuildContext context, DateTime date) => DateFormat(
       'MMM d, yyyy',
       Localizations.localeOf(context).languageCode,
     ).format(date);
-
-/// An empty-state block: icon, headline, hint.
-Widget _emptyState(IconData icon, String headline, String hint) => Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 80, color: Colors.grey[400]),
-          const SizedBox(height: 16),
-          Text(headline,
-              style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-              textAlign: TextAlign.center),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Text(hint,
-                style: TextStyle(fontSize: 14, color: Colors.grey[500]),
-                textAlign: TextAlign.center),
-          ),
-        ],
-      ),
-    );
 
 class MySignalsPage extends StatelessWidget {
   const MySignalsPage({super.key});
@@ -124,27 +104,44 @@ class MySignalsPage extends StatelessWidget {
 }
 
 /// The signals still on the map.
-class _ActiveSignalsTab extends StatelessWidget {
+class _ActiveSignalsTab extends StatefulWidget {
   const _ActiveSignalsTab({required this.uid});
 
   final String uid;
+
+  @override
+  State<_ActiveSignalsTab> createState() => _ActiveSignalsTabState();
+}
+
+class _ActiveSignalsTabState extends State<_ActiveSignalsTab> {
+  /// Bumped by Retry. Keying the StreamBuilder on it tears the failed listen
+  /// down and starts a fresh one — without it "Try again" would rebuild the
+  /// same dead stream and change nothing.
+  int _attempt = 0;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
 
     return StreamBuilder<QuerySnapshot>(
+      key: ValueKey(_attempt),
       stream: FirebaseFirestore.instance
           .collection(AppPreferencesService().signalsCollectionName)
           .where('reporter',
               isEqualTo:
-                  FirebaseFirestore.instance.collection('users').doc(uid))
+                  FirebaseFirestore.instance.collection('users').doc(widget.uid))
           .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return Center(
-            child: Text(l10n.errorWithMessage(snapshot.error.toString())),
+          // The exception is for us, not for the reader — "PERMISSION_DENIED:
+          // Missing or insufficient permissions" is a fact about our rules
+          // that nobody can act on.
+          debugPrint('My Signals stream failed: ${snapshot.error}');
+          return StatusView.error(
+            title: l10n.couldNotLoadSignals,
+            hint: l10n.couldNotLoadSignalsHint,
+            onRetry: () => setState(() => _attempt++),
           );
         }
 
@@ -155,8 +152,11 @@ class _ActiveSignalsTab extends StatelessWidget {
         final docs = snapshot.data?.docs ?? [];
 
         if (docs.isEmpty) {
-          return _emptyState(Icons.pin_drop_outlined, l10n.noSignalsYet,
-              l10n.submittedSignalsAppearHere);
+          return StatusView.empty(
+            icon: Icons.pin_drop_outlined,
+            title: l10n.noSignalsYet,
+            hint: l10n.submittedSignalsAppearHere,
+          );
         }
 
         return ListView.builder(
@@ -241,6 +241,9 @@ class _RemovedSignalsTab extends StatefulWidget {
 }
 
 class _RemovedSignalsTabState extends State<_RemovedSignalsTab> {
+  /// Bumped by Retry — see [_ActiveSignalsTabState._attempt].
+  int _attempt = 0;
+
   final _service = SignalRemovalService();
 
   /// The removals stream, subscribed **once**.
@@ -321,11 +324,15 @@ class _RemovedSignalsTabState extends State<_RemovedSignalsTab> {
     final l10n = AppLocalizations.of(context);
 
     return StreamBuilder<List<RemovedSignal>>(
+      key: ValueKey(_attempt),
       stream: _removals,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return Center(
-            child: Text(l10n.errorWithMessage(snapshot.error.toString())),
+          debugPrint('Removed signals stream failed: ${snapshot.error}');
+          return StatusView.error(
+            title: l10n.couldNotLoadSignals,
+            hint: l10n.couldNotLoadSignalsHint,
+            onRetry: () => setState(() => _attempt++),
           );
         }
 
@@ -336,8 +343,11 @@ class _RemovedSignalsTabState extends State<_RemovedSignalsTab> {
         final removals = snapshot.data ?? const <RemovedSignal>[];
 
         if (removals.isEmpty) {
-          return _emptyState(Icons.delete_outline, l10n.removedSignals,
-              l10n.noRemovedSignals);
+          return StatusView.empty(
+            icon: Icons.delete_outline,
+            title: l10n.removedSignals,
+            hint: l10n.noRemovedSignals,
+          );
         }
 
         return ListView.builder(

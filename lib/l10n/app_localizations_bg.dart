@@ -1884,4 +1884,23 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get feedbackEmailSubject => 'Help a Paw — обратна връзка';
+
+  @override
+  String get couldNotLoadSignals => 'Сигналите ви не можаха да се заредят';
+
+  @override
+  String get couldNotLoadSignalsHint =>
+      'Проверете връзката си и опитайте отново.';
+
+  @override
+  String get couldNotLoadNotifications =>
+      'Известията ви не можаха да се заредят';
+
+  @override
+  String get couldNotLoadPrivacyPolicy =>
+      'Политиката за поверителност не можа да се зареди';
+
+  @override
+  String get couldNotLoadPrivacyPolicyHint =>
+      'Проверете връзката си и опитайте отново или я прочетете на helpapaw.org/privacypolicy.';
 }

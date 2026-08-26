@@ -49,6 +49,7 @@ import 'moderation_action_sheet.dart';
 import 'section_header.dart';
 import '../services/public_profile_service.dart';
 import 'app_bar_title.dart';
+import 'status_view.dart';
 
 class SignalDetailsScreen extends StatefulWidget {
   const SignalDetailsScreen({super.key, required this.signalId});
@@ -322,37 +323,30 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: _appBar(l10n),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 64, color: Colors.grey[400]),
-              const SizedBox(height: 16),
-              Text(
-                title,
-                style: const TextStyle(fontSize: 20),
-                textAlign: TextAlign.center,
-              ),
-              if (hint != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  hint,
-                  style: TextStyle(color: Colors.grey[600]),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: _leaveScreen,
-                child: Text(l10n.backToMap),
-              ),
-              if (onRetry != null)
-                TextButton(onPressed: onRetry, child: Text(l10n.retry)),
-            ],
+      // The shape of this block is now shared with My Signals and the inbox
+      // (see StatusView); what stays local is the way out, because this screen
+      // is the one a cold deep link can strand you on.
+      body: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Expanded(
+            child: onRetry != null
+                ? StatusView.error(
+                    icon: icon,
+                    title: title,
+                    hint: hint,
+                    onRetry: onRetry,
+                  )
+                : StatusView.empty(icon: icon, title: title, hint: hint),
           ),
-        ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 32),
+            child: ElevatedButton(
+              onPressed: _leaveScreen,
+              child: Text(l10n.backToMap),
+            ),
+          ),
+        ],
       ),
     );
   }

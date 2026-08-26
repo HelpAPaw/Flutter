@@ -13,6 +13,7 @@ import '../services/app_badge_service.dart';
 import '../services/notification_inbox_service.dart';
 import '../utils/nav_extensions.dart';
 import 'app_bar_title.dart';
+import 'status_view.dart';
 
 /// The in-app notification inbox.
 ///
@@ -28,6 +29,10 @@ class MyNotificationsPage extends StatefulWidget {
 }
 
 class _MyNotificationsPageState extends State<MyNotificationsPage> {
+  /// Bumped by Retry, and used as the inbox StreamBuilder's key so a failed
+  /// listen is torn down and restarted rather than rebuilt as-is.
+  int _attempt = 0;
+
   // Memoized so a rebuild doesn't hand StreamBuilder a fresh Stream instance,
   // which would cancel and re-listen — flashing the spinner and re-reading up
   // to `pageSize` documents each time. Same `??=` shape as
@@ -286,27 +291,22 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
         ],
       ),
       body: user == null || stream == null
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.notifications_off, size: 80, color: Colors.grey),
-                  const SizedBox(height: 16),
-                  Text(l10n.pleaseSignInToViewNotifications),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => context.push(Routes.signIn),
-                    child: Text(l10n.signIn),
-                  ),
-                ],
-              ),
+          ? StatusView.empty(
+              icon: Icons.notifications_off,
+              title: l10n.pleaseSignInToViewNotifications,
             )
           : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              key: ValueKey(_attempt),
               stream: stream,
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
-                  return Center(
-                    child: Text(l10n.errorWithMessage(snapshot.error.toString())),
+                  // Logged, not shown: a raw Firebase exception is a fact
+                  // about our rules, not something a reader can act on.
+                  debugPrint('Inbox stream failed: ${snapshot.error}');
+                  return StatusView.error(
+                    title: l10n.couldNotLoadNotifications,
+                    hint: l10n.couldNotLoadSignalsHint,
+                    onRetry: () => setState(() => _attempt++),
                   );
                 }
 
@@ -319,33 +319,10 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
                 final docs = snapshot.data?.docs ?? [];
 
                 if (docs.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.notifications_none,
-                          size: 80,
-                          color: Colors.grey[400],
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          l10n.noNotifications,
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          l10n.notifiedAboutSignalUpdates,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[500],
-                          ),
-                        ),
-                      ],
-                    ),
+                  return StatusView.empty(
+                    icon: Icons.notifications_none,
+                    title: l10n.noNotifications,
+                    hint: l10n.notifiedAboutSignalUpdates,
                   );
                 }
 

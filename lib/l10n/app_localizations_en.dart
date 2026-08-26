@@ -1856,4 +1856,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get feedbackEmailSubject => 'Help a Paw — feedback';
+
+  @override
+  String get couldNotLoadSignals => 'Couldn\'t load your signals';
+
+  @override
+  String get couldNotLoadSignalsHint => 'Check your connection and try again.';
+
+  @override
+  String get couldNotLoadNotifications => 'Couldn\'t load your notifications';
+
+  @override
+  String get couldNotLoadPrivacyPolicy => 'Couldn\'t load the privacy policy';
+
+  @override
+  String get couldNotLoadPrivacyPolicyHint =>
+      'Check your connection and try again, or read it at helpapaw.org/privacypolicy.';
 }

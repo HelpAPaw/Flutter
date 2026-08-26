@@ -933,5 +933,10 @@
       }
     }
   },
-  "feedbackEmailSubject": "Help a Paw — feedback"
+  "feedbackEmailSubject": "Help a Paw — feedback",
+  "couldNotLoadSignals": "Couldn't load your signals",
+  "couldNotLoadSignalsHint": "Check your connection and try again.",
+  "couldNotLoadNotifications": "Couldn't load your notifications",
+  "couldNotLoadPrivacyPolicy": "Couldn't load the privacy policy",
+  "couldNotLoadPrivacyPolicyHint": "Check your connection and try again, or read it at helpapaw.org/privacypolicy."
 }

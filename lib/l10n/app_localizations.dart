@@ -3391,6 +3391,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Help a Paw — feedback'**
   String get feedbackEmailSubject;
+
+  /// No description provided for @couldNotLoadSignals.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load your signals'**
+  String get couldNotLoadSignals;
+
+  /// No description provided for @couldNotLoadSignalsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Check your connection and try again.'**
+  String get couldNotLoadSignalsHint;
+
+  /// No description provided for @couldNotLoadNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load your notifications'**
+  String get couldNotLoadNotifications;
+
+  /// No description provided for @couldNotLoadPrivacyPolicy.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the privacy policy'**
+  String get couldNotLoadPrivacyPolicy;
+
+  /// No description provided for @couldNotLoadPrivacyPolicyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Check your connection and try again, or read it at helpapaw.org/privacypolicy.'**
+  String get couldNotLoadPrivacyPolicyHint;
 }
 
 class _AppLocalizationsDelegate
