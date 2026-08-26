@@ -12,6 +12,7 @@ import '../models/signal_urgency.dart';
 import '../services/app_badge_service.dart';
 import '../services/notification_inbox_service.dart';
 import '../utils/nav_extensions.dart';
+import 'app_bar_title.dart';
 
 /// The in-app notification inbox.
 ///
@@ -248,7 +249,7 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.popOrHome(),
         ),
-        title: Text(l10n.myNotifications),
+        title: AppBarTitle(l10n.myNotifications),
         actions: [
           if (user != null)
             PopupMenuButton<String>(

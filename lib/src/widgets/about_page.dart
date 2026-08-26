@@ -4,6 +4,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../utils/nav_extensions.dart';
+import 'app_bar_title.dart';
 
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
@@ -52,7 +53,7 @@ class _AboutPageState extends State<AboutPage> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.popOrHome(),
         ),
-        title: Text(l10n.aboutTitle),
+        title: AppBarTitle(l10n.aboutTitle),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),

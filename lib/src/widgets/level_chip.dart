@@ -40,12 +40,21 @@ class LevelChip extends StatelessWidget {
             Image.asset(iconAsset!, width: 14, height: 14),
             const SizedBox(width: 6),
           ],
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+          // Flexible, not bare: these labels are whole sentences, and the
+          // Bulgarian amber label ("Оранжево — нужна е помощ скоро") lays out
+          // at 403px — wider than a 411dp phone. An unconstrained Row inside a
+          // Wrap will happily overflow, and a release build clips it with no
+          // overflow stripe to notice, so the chip has to be able to give.
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],

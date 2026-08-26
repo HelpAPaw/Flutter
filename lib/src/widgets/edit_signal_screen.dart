@@ -14,6 +14,7 @@ import 'package:help_a_paw/src/widgets/level_badge.dart';
 import 'package:help_a_paw/src/widgets/section_header.dart';
 import 'package:help_a_paw/src/widgets/update_note_dialog.dart';
 import 'package:help_a_paw/src/widgets/urgency_picker.dart';
+import 'app_bar_title.dart';
 
 class EditSignalScreen extends StatefulWidget {
   const EditSignalScreen({
@@ -236,7 +237,7 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(l10n.editSignal),
+        title: AppBarTitle(l10n.editSignal),
         actions: [
           IconButton(
             icon: _isSaving

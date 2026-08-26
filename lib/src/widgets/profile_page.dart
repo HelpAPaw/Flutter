@@ -14,6 +14,7 @@ import 'dart:io';
 
 import '../config/routes.dart';
 import '../utils/nav_extensions.dart';
+import 'app_bar_title.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -306,7 +307,7 @@ class _ProfilePageState extends State<ProfilePage> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.popOrHome(),
         ),
-        title: Text(l10n.profile),
+        title: AppBarTitle(l10n.profile),
         actions: [
           if (!_isEditing)
             IconButton(

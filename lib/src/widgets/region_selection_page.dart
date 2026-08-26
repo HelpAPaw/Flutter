@@ -7,6 +7,7 @@ import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'app_bar_title.dart';
 
 class RegionSelectionPage extends StatefulWidget {
   const RegionSelectionPage({super.key});
@@ -120,7 +121,7 @@ class _RegionSelectionPageState extends State<RegionSelectionPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(l10n.selectRegionTitle),
+        title: AppBarTitle(l10n.selectRegionTitle),
         actions: [
           TextButton(
             onPressed: _centerPoint != null ? _saveRegion : null,

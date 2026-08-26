@@ -14,6 +14,7 @@ import '../utils/nav_extensions.dart';
 import 'escape_leading.dart';
 import 'moderation_action_sheet.dart';
 import 'moderation_hidden_tab.dart';
+import 'app_bar_title.dart';
 
 /// The moderator's queue of open reports (master spec §18).
 ///
@@ -60,7 +61,7 @@ class _ModerationQueuePageState extends State<ModerationQueuePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(l10n.moderationQueue),
+        title: AppBarTitle(l10n.moderationQueue),
         // A deep link can cold-launch onto any route, leaving no back
         // affordance at all (R6-003).
         leading: escapeLeading(

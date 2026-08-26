@@ -14,6 +14,7 @@ import '../models/notification_preferences.dart';
 import '../services/location_service.dart';
 import '../services/notification_service.dart';
 import 'help_tag_selector.dart';
+import 'app_bar_title.dart';
 
 class NotificationSettingsPage extends StatefulWidget {
   const NotificationSettingsPage({super.key});
@@ -325,7 +326,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage>
     final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: Text(l10n.notificationSettings),
+        title: AppBarTitle(l10n.notificationSettings),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())

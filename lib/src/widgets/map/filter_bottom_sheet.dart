@@ -49,8 +49,17 @@ class _FilterBottomSheetContent extends ConsumerWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    // A Row here pushed "Clear All" off-screen entirely in
+                    // Bulgarian at 411dp — the title, "Избери всички" and
+                    // "Изчисти всички" do not fit on one line, and a Row
+                    // silently overflows rather than reflowing. Unreachable,
+                    // with no way to undo a filter. Wrap moves the buttons to
+                    // their own line instead.
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 4,
                       children: [
                         Text(
                           l10n.filterSignals,
@@ -59,7 +68,7 @@ class _FilterBottomSheetContent extends ConsumerWidget {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        Row(
+                        Wrap(
                           children: [
                             TextButton(
                               onPressed: () => viewModel.selectAllFilters(),

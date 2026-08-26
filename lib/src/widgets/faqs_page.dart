@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 
 import '../utils/nav_extensions.dart';
+import 'app_bar_title.dart';
 
 class FaqsPage extends StatelessWidget {
   const FaqsPage({super.key});
@@ -15,7 +16,7 @@ class FaqsPage extends StatelessWidget {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.popOrHome(),
         ),
-        title: Text(l10n.faqsTitle),
+        title: AppBarTitle(l10n.faqsTitle),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),

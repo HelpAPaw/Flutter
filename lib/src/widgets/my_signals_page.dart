@@ -15,6 +15,7 @@ import '../config/routes.dart';
 import '../models/removed_signal.dart';
 import '../services/signal_removal_service.dart';
 import '../utils/nav_extensions.dart';
+import 'app_bar_title.dart';
 
 Color _statusColor(int status) => SignalStatus.fromCode(status).color;
 
@@ -66,7 +67,7 @@ class MySignalsPage extends StatelessWidget {
             icon: const Icon(Icons.arrow_back),
             onPressed: () => context.popOrHome(),
           ),
-          title: Text(l10n.mySignals),
+          title: AppBarTitle(l10n.mySignals),
           bottom: TabBar(
             indicatorColor: Colors.white,
             labelColor: Colors.white,

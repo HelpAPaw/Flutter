@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../config/routes.dart';
 import '../services/auth_service.dart';
 import '../utils/nav_extensions.dart';
+import 'app_bar_title.dart';
 
 class EmailVerificationPage extends StatefulWidget {
   const EmailVerificationPage({super.key});
@@ -205,7 +206,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage>
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(l10n.verifyEmail),
+          title: AppBarTitle(l10n.verifyEmail),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: () => _exitVerification(),

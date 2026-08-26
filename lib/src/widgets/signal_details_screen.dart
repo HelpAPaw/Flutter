@@ -48,6 +48,7 @@ import '../services/signal_removal_service.dart';
 import 'moderation_action_sheet.dart';
 import 'section_header.dart';
 import '../services/public_profile_service.dart';
+import 'app_bar_title.dart';
 
 class SignalDetailsScreen extends StatefulWidget {
   const SignalDetailsScreen({super.key, required this.signalId});
@@ -277,7 +278,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// keeps a cold deep link from being a dead end — see [escapeLeading].
   AppBar _appBar(AppLocalizations l10n, {List<Widget>? actions}) {
     return AppBar(
-      title: Text(l10n.signalDetails),
+      title: AppBarTitle(l10n.signalDetails),
       leading: escapeLeading(
         context,
         label: l10n.backToMap,

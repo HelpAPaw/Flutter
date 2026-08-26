@@ -7,6 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'dart:io' show Platform;
 
 import '../utils/nav_extensions.dart';
+import 'app_bar_title.dart';
 
 class FeedbackPage extends StatefulWidget {
   const FeedbackPage({super.key});
@@ -124,7 +125,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
             icon: const Icon(Icons.arrow_back),
             onPressed: () => context.popOrHome(),
           ),
-          title: Text(l10n.sendFeedback),
+          title: AppBarTitle(l10n.sendFeedback),
         ),
         body: SingleChildScrollView(
           padding: const EdgeInsets.all(24),

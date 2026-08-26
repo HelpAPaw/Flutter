@@ -6,6 +6,7 @@ import '../../models/new_signal_step.dart';
 import '../../utils/nav_extensions.dart';
 import '../../viewmodels/map_view_model.dart';
 import 'new_signal_step_views.dart';
+import '../app_bar_title.dart';
 
 /// The create-a-signal wizard: one question per screen.
 ///
@@ -61,7 +62,7 @@ class _NewSignalWizardPageState extends ConsumerState<NewSignalWizardPage> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(step.title(l10n)),
+          title: AppBarTitle(step.title(l10n)),
           leading: Semantics(
             identifier: 'newSignal.close',
             button: true,

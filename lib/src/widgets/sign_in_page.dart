@@ -16,6 +16,7 @@ import '../config/routes.dart';
 import '../services/auth_service.dart';
 import '../services/notification_service.dart';
 import '../utils/nav_extensions.dart';
+import 'app_bar_title.dart';
 
 /// Handle merging anonymous user data after sign-in
 Future<void> _handleAnonymousDataMerge(
@@ -393,7 +394,7 @@ class _SignInPageState extends State<SignInPage> {
             icon: const Icon(Icons.arrow_back),
             onPressed: () => context.popOrHome(),
           ),
-          title: Text(AppLocalizations.of(context).signIn),
+          title: AppBarTitle(AppLocalizations.of(context).signIn),
         ),
         body: _preparingSession
             ? const Center(

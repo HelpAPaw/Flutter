@@ -11,6 +11,7 @@ import 'package:adaptive_components/adaptive_components.dart';
 
 import '../models/vet_clinic.dart';
 import '../services/vet_clinic_service.dart';
+import 'app_bar_title.dart';
 
 class ClinicDetailsScreen extends StatefulWidget {
   const ClinicDetailsScreen({super.key, required this.clinicId});
@@ -57,7 +58,7 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
   /// would leave no way out at all without an explicit leading (R6-003).
   AppBar _appBar(AppLocalizations l10n) {
     return AppBar(
-      title: Text(l10n.clinicDetails),
+      title: AppBarTitle(l10n.clinicDetails),
       leading: escapeLeading(
         context,
         label: l10n.returnToMap,
