@@ -1832,4 +1832,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get moderationRestore => 'Restore';
+
+  @override
+  String get mapLegend => 'What the pins mean';
+
+  @override
+  String get mapLegendUrgencyNote =>
+      'Pin colour shows urgency — how serious it gets if nobody acts. Red signals are never grouped into a cluster, so they stay visible at every zoom.';
+
+  @override
+  String get mapLegendVetClinic => 'Vet clinic';
 }

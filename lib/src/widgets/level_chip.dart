@@ -1,36 +1,66 @@
 import 'package:flutter/material.dart';
 
-/// A small coloured pill naming one level of a signal — its urgency or its
-/// status.
+/// A small pill naming one level of a signal — its urgency or its status.
 ///
-/// One widget for both because they render side by side in the same row (My
-/// Signals, the details header). While the status chip was built inline and
-/// the urgency chip was a widget, they had already drifted on padding and font
-/// weight; two pills that disagree about their own shape read as a bug in a
-/// feature whose whole point is that colour means one specific thing.
+/// The two look deliberately *unalike*, and that is the whole point. They sit
+/// side by side in the same row (My Signals, the details header), and while
+/// both were traffic-light coloured a reader had two colour scales to hold at
+/// once, running in opposite directions: red urgency means "act now", red
+/// status means "nobody has acted". Green+red, red+green, green+green and
+/// red+red all appear on one list.
+///
+/// So the app keeps one colour axis:
+///
+/// * [LevelChip.urgency] is **coloured and filled**, and carries the map pin —
+///   the same vocabulary the map uses, because it is the same fact.
+/// * [LevelChip.status] is **neutral and outlined**, and carries a progress
+///   glyph. It reads as a state, not as a severity.
+///
+/// The shape alone tells you which axis you are looking at before you have
+/// read either label, which matters most in Bulgarian, where the labels are
+/// near-homographs.
 class LevelChip extends StatelessWidget {
-  /// Accent colour — `SignalUrgency.color` or `SignalStatus.color`.
-  final Color color;
-
-  final String label;
-
-  /// Optional leading icon. Urgency passes its map pin (the map is where that
-  /// colour is defined); status has no pin by design — see [SignalStatus].
-  final String? iconAsset;
-
-  const LevelChip({
+  /// The coloured, filled variant — severity.
+  const LevelChip.urgency({
     super.key,
     required this.color,
     required this.label,
     this.iconAsset,
-  });
+  })  : icon = null,
+        _filled = true;
+
+  /// The neutral, outlined variant — progress.
+  const LevelChip.status({
+    super.key,
+    required this.label,
+    required this.icon,
+  })  : color = null,
+        iconAsset = null,
+        _filled = false;
+
+  /// Accent colour. Urgency only; status has none by design.
+  final Color? color;
+
+  final String label;
+
+  /// Leading image. Urgency passes its map pin.
+  final String? iconAsset;
+
+  /// Leading glyph. Status passes its progress icon.
+  final IconData? icon;
+
+  final bool _filled;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final ink = _filled ? color! : scheme.onSurfaceVariant;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withAlpha(51),
+        color: _filled ? ink.withAlpha(51) : null,
+        border: _filled ? null : Border.all(color: scheme.outline),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -38,6 +68,9 @@ class LevelChip extends StatelessWidget {
         children: [
           if (iconAsset != null) ...[
             Image.asset(iconAsset!, width: 14, height: 14),
+            const SizedBox(width: 6),
+          ] else if (icon != null) ...[
+            Icon(icon, size: 14, color: ink),
             const SizedBox(width: 6),
           ],
           // Flexible, not bare: these labels are whole sentences, and the
@@ -51,7 +84,7 @@ class LevelChip extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: color,
+                color: ink,
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),

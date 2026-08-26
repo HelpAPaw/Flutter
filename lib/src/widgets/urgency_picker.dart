@@ -142,7 +142,7 @@ class UrgencyChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final level = SignalUrgency.fromCode(urgency);
-    return LevelChip(
+    return LevelChip.urgency(
       color: level.color,
       label: level.label(AppLocalizations.of(context)),
       iconAsset: level.pinAsset,

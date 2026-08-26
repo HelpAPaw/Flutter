@@ -3349,6 +3349,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Restore'**
   String get moderationRestore;
+
+  /// No description provided for @mapLegend.
+  ///
+  /// In en, this message translates to:
+  /// **'What the pins mean'**
+  String get mapLegend;
+
+  /// No description provided for @mapLegendUrgencyNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin colour shows urgency — how serious it gets if nobody acts. Red signals are never grouped into a cluster, so they stay visible at every zoom.'**
+  String get mapLegendUrgencyNote;
+
+  /// No description provided for @mapLegendVetClinic.
+  ///
+  /// In en, this message translates to:
+  /// **'Vet clinic'**
+  String get mapLegendVetClinic;
 }
 
 class _AppLocalizationsDelegate

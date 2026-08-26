@@ -1,6 +1,5 @@
 {
   "@@locale": "en",
-
   "signIn": "Sign In",
   "signOut": "Sign Out",
   "signUp": "Sign Up",
@@ -15,11 +14,9 @@
   "error": "Error",
   "loading": "Loading...",
   "somethingWentWrong": "Something went wrong",
-
   "statusNeedsHelp": "Needs help",
   "statusInProgress": "In progress",
   "statusResolved": "Resolved",
-
   "urgency": "Urgency",
   "urgencyGreen": "Green — under control",
   "urgencyGreenDescription": "Not in immediate danger, or the situation is being managed.",
@@ -32,17 +29,18 @@
   "changedUrgencyTo": "{name} changed the urgency to {urgency}",
   "@changedUrgencyTo": {
     "placeholders": {
-      "name": {"type": "String"},
-      "urgency": {"type": "String"}
+      "name": {
+        "type": "String"
+      },
+      "urgency": {
+        "type": "String"
+      }
     }
   },
-
   "redAlertConfirmTitle": "Publish as a Red Alert?",
   "redAlertConfirmBody": "Red Alert is only for critical cases where the animal may die, disappear, be seriously harmed, or remain in immediate danger if help does not happen now.\n\nMisusing Red Alert reduces trust in the system and may affect your account.",
   "redAlertConfirmCheckbox": "I understand and confirm this is an immediate critical case",
   "redAlertConfirmAction": "Confirm Red Alert",
-
-
   "helpTagRescue": "Rescue",
   "helpTagVetCare": "Vet care",
   "helpTagBloodDonation": "Blood donation",
@@ -56,7 +54,6 @@
   "helpTagFundraising": "Fundraising",
   "helpTagLostFound": "Lost / found",
   "helpTagDangerWarning": "Local danger",
-
   "helpTagRescueHelper": "I can go to an animal in need",
   "helpTagVetCareHelper": "I can help with a vet visit or treatment",
   "helpTagBloodDonationHelper": "My pet can donate blood, or I can help arrange a donor",
@@ -70,7 +67,6 @@
   "helpTagFundraisingHelper": "I can help raise or share funds",
   "helpTagLostFoundHelper": "Tell me about lost and found pets near me — I will keep an eye out",
   "helpTagDangerWarningHelper": "Tell me about hazards in my area, such as poison bait or traps",
-
   "helpTagRescueNeeded": "Rescue needed",
   "helpTagVetCareNeeded": "Vet care needed",
   "helpTagBloodDonationNeeded": "Blood donation needed",
@@ -82,11 +78,9 @@
   "helpTagNeuteringNeeded": "Neutering needed",
   "helpTagBabyCareNeeded": "Newborn care needed",
   "helpTagFundraisingNeeded": "Fundraising needed",
-
   "animalTypeCat": "Cat",
   "animalTypeDog": "Dog",
   "animalTypeOther": "Other animal",
-
   "helpNeeded": "Help needed",
   "animalType": "Animal",
   "animalTypes": "Animals",
@@ -96,10 +90,11 @@
   "helpTagLimitReached": "You can choose up to {count} kinds of help",
   "@helpTagLimitReached": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
-
   "helperTagsOnboardingTitle": "How can you help?",
   "helperTagsOnboardingIntro": "Pick what you can realistically do, and which animals you can help. We use this to send you the cases you can actually act on — you can change it any time in settings.",
   "helperTagsOnboardingHelpSection": "What can you help with?",
@@ -107,10 +102,8 @@
   "helperTagsOnboardingContinue": "Continue",
   "helperTagsSaveFailed": "Could not save your choices. Please try again.",
   "settingsLoadFailed": "Your settings could not be loaded. Check your connection and try again — nothing has been changed.",
-
   "selectAtLeastOneAnimalType": "Choose at least one animal, or turn notifications off",
   "selectAtLeastOneHelperTag": "Choose at least one way you can help",
-
   "filterSignals": "Filter Signals",
   "toggleVetClinics": "Toggle veterinary clinics",
   "selectAll": "Select All",
@@ -129,17 +122,19 @@
   "phoneNumber": "Phone Number",
   "submitSignal": "Submit signal",
   "addNewSignal": "Add new signal",
-
   "next": "Next",
   "back": "Back",
   "skip": "Skip",
   "change": "Change",
-
   "newSignalStepCounter": "Step {current} of {total}",
   "@newSignalStepCounter": {
     "placeholders": {
-      "current": {"type": "int"},
-      "total": {"type": "int"}
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
     }
   },
   "newSignalStepLocation": "Location",
@@ -149,7 +144,6 @@
   "newSignalStepUrgency": "Urgency",
   "newSignalStepHelp": "Help needed",
   "newSignalStepReview": "Review",
-
   "newSignalQuestionLocation": "Where is the animal?",
   "newSignalQuestionPhoto": "Can you add a photo?",
   "newSignalQuestionDetails": "What is happening?",
@@ -157,7 +151,6 @@
   "newSignalQuestionUrgency": "How urgent is it?",
   "newSignalQuestionHelp": "What does it need?",
   "newSignalQuestionReview": "Ready to send?",
-
   "newSignalHintLocation": "Move the map so the pin sits where the animal is.",
   "newSignalHintPhoto": "A photo helps volunteers recognise the animal. You can skip this.",
   "newSignalHintDetails": "A short title and a few sentences are enough.",
@@ -166,10 +159,11 @@
   "newSignalHintHelp": "Choose up to {count}, most important first.",
   "@newSignalHintHelp": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
-
   "newSignalAddPhoto": "Add a photo",
   "newSignalNoPhoto": "No photo",
   "newSignalNotProvided": "Not provided",
@@ -178,7 +172,6 @@
   "newSignalDiscardMessage": "Everything you have entered will be lost.",
   "newSignalDiscardConfirm": "Discard",
   "newSignalDiscardKeep": "Keep editing",
-
   "pleaseSelectLocation": "Please place the pin where the animal is",
   "pleaseEnterTitle": "Please enter a title for the signal",
   "pleaseEnterDescription": "Please enter a description for the signal",
@@ -193,32 +186,32 @@
   "noVetClinicsFound": "No veterinary clinics found in this area",
   "failedToLoadVetClinics": "Failed to load vet clinics",
   "tooManySearches": "Too many searches. Please wait a moment and try again.",
-
   "takePhoto": "Take Photo",
   "chooseFromGallery": "Choose from Gallery",
   "removePhoto": "Remove Photo",
   "errorAccessingCamera": "Error accessing camera: {error}",
   "@errorAccessingCamera": {
     "placeholders": {
-      "error": {"type": "String"}
+      "error": {
+        "type": "String"
+      }
     }
   },
   "errorAccessingGallery": "Error accessing gallery: {error}",
   "@errorAccessingGallery": {
     "placeholders": {
-      "error": {"type": "String"}
+      "error": {
+        "type": "String"
+      }
     }
   },
-
   "signInSubtitle": "Sign in to report and help animals in need",
   "signInSideMessage": "Join our community of animal lovers",
   "signInWithGoogle": "Sign in with Google",
   "googleSignInFailed": "Google sign-in failed. Please try again.",
-
   "signInRequired": "Sign in required",
   "signInToCreateSignals": "You need to sign in to create signals",
   "signInToComment": "You need to sign in to comment",
-
   "signalDetails": "Signal Details",
   "uploadingPhoto": "Uploading photo...",
   "addPhoto": "Add Photo",
@@ -226,8 +219,12 @@
   "photosCount": "{current}/{max} photos",
   "@photosCount": {
     "placeholders": {
-      "current": {"type": "int"},
-      "max": {"type": "int"}
+      "current": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
     }
   },
   "failedToLoadImage": "Failed to load image",
@@ -237,7 +234,9 @@
   "cannotCall": "Cannot call {phone}, please try to connect manually.",
   "@cannotCall": {
     "placeholders": {
-      "phone": {"type": "String"}
+      "phone": {
+        "type": "String"
+      }
     }
   },
   "comments": "Comments",
@@ -249,7 +248,9 @@
   "reportedThisSignal": "{name} reported this signal",
   "@reportedThisSignal": {
     "placeholders": {
-      "name": {"type": "String"}
+      "name": {
+        "type": "String"
+      }
     }
   },
   "updateNoteTitle": "What changed?",
@@ -257,14 +258,18 @@
   "updateNoteChangingTo": "Changing to: {level}",
   "@updateNoteChangingTo": {
     "placeholders": {
-      "level": {"type": "String"}
+      "level": {
+        "type": "String"
+      }
     }
   },
   "updateNoteTakingCase": "Taking responsibility for this case",
   "updateNoteTakingCaseAndChangingTo": "Taking responsibility, and changing to: {level}",
   "@updateNoteTakingCaseAndChangingTo": {
     "placeholders": {
-      "level": {"type": "String"}
+      "level": {
+        "type": "String"
+      }
     }
   },
   "updateNoteSteppingDown": "Stepping down from this case",
@@ -276,12 +281,15 @@
   "changedStatusTo": "{name} changed the status to {status}",
   "@changedStatusTo": {
     "placeholders": {
-      "name": {"type": "String"},
-      "status": {"type": "String"}
+      "name": {
+        "type": "String"
+      },
+      "status": {
+        "type": "String"
+      }
     }
   },
   "someone": "Someone",
-
   "caseHolder": "Responsible",
   "caseHolderNobody": "Nobody has taken this case on yet",
   "caseHolderIsYou": "You are responsible for this case",
@@ -309,27 +317,37 @@
   "takeoverAskAgainAfter": "You can offer again after {when}.",
   "@takeoverAskAgainAfter": {
     "placeholders": {
-      "when": {"type": "String"}
+      "when": {
+        "type": "String"
+      }
     }
   },
   "errorChangingCaseHolder": "Could not change who is responsible.",
   "tookResponsibility": "{name} took responsibility for this case",
   "@tookResponsibility": {
     "placeholders": {
-      "name": {"type": "String"}
+      "name": {
+        "type": "String"
+      }
     }
   },
   "handedCaseTo": "{name} handed this case to {other}",
   "@handedCaseTo": {
     "placeholders": {
-      "name": {"type": "String"},
-      "other": {"type": "String"}
+      "name": {
+        "type": "String"
+      },
+      "other": {
+        "type": "String"
+      }
     }
   },
   "releasedCase": "{name} stepped down from this case",
   "@releasedCase": {
     "placeholders": {
-      "name": {"type": "String"}
+      "name": {
+        "type": "String"
+      }
     }
   },
   "notificationOwnershipChangeTitle": "Someone took responsibility",
@@ -337,7 +355,9 @@
   "notificationOwnershipChangeBody": "{name} is now responsible",
   "@notificationOwnershipChangeBody": {
     "placeholders": {
-      "name": {"type": "String"}
+      "name": {
+        "type": "String"
+      }
     }
   },
   "notificationOwnershipReleasedBody": "Nobody is responsible for this case now",
@@ -345,38 +365,46 @@
   "notificationTakeoverRequestBody": "{name} asked to take responsibility",
   "@notificationTakeoverRequestBody": {
     "placeholders": {
-      "name": {"type": "String"}
+      "name": {
+        "type": "String"
+      }
     }
   },
   "notificationTakeoverApprovedTitle": "You are now responsible for a case",
   "notificationTakeoverApprovedBody": "The case is yours",
   "notificationTakeoverDeclinedTitle": "Your offer was declined",
   "notificationTakeoverDeclinedBody": "The current holder is keeping this case",
-
-  "deletePhoto": "Delete Photo",
+  "deletePhoto": "Delete photo",
   "confirmDeletePhoto": "Are you sure you want to delete this photo?",
   "photoAddedSuccessfully": "Photo added successfully!",
   "photoDeletedSuccessfully": "Photo deleted successfully",
   "failedToUploadPhoto": "Failed to upload photo: {error}",
   "@failedToUploadPhoto": {
     "placeholders": {
-      "error": {"type": "String"}
+      "error": {
+        "type": "String"
+      }
     }
   },
   "failedToDeletePhoto": "Failed to delete photo: {error}",
   "@failedToDeletePhoto": {
     "placeholders": {
-      "error": {"type": "String"}
+      "error": {
+        "type": "String"
+      }
     }
   },
   "photoOf": "{current} of {total}",
   "@photoOf": {
     "placeholders": {
-      "current": {"type": "int"},
-      "total": {"type": "int"}
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
     }
   },
-
   "profile": "Profile",
   "pleaseSignInToViewProfile": "Please sign in to view your profile",
   "displayName": "Display Name",
@@ -392,24 +420,29 @@
   "errorUpdatingProfile": "Error updating profile: {error}",
   "@errorUpdatingProfile": {
     "placeholders": {
-      "error": {"type": "String"}
+      "error": {
+        "type": "String"
+      }
     }
   },
   "photoUpdatedSuccessfully": "Photo updated successfully",
   "errorUploadingPhoto": "Error uploading photo: {error}",
   "@errorUploadingPhoto": {
     "placeholders": {
-      "error": {"type": "String"}
+      "error": {
+        "type": "String"
+      }
     }
   },
   "errorLoadingStatistics": "Error loading statistics: {error}",
   "@errorLoadingStatistics": {
     "placeholders": {
-      "error": {"type": "String"}
+      "error": {
+        "type": "String"
+      }
     }
   },
   "saveChanges": "Save Changes",
-
   "sendFeedback": "Send Feedback",
   "weLoveToHear": "We'd love to hear from you!",
   "feedbackHelpsImprove": "Your feedback helps us improve Help a Paw for everyone.",
@@ -434,11 +467,12 @@
   "errorSubmittingFeedback": "Error submitting feedback: {error}",
   "@errorSubmittingFeedback": {
     "placeholders": {
-      "error": {"type": "String"}
+      "error": {
+        "type": "String"
+      }
     }
   },
   "otherWaysToReach": "Other ways to reach us",
-
   "notificationSettings": "Notification Settings",
   "createAnAccount": "Create an account",
   "signUpToKeepSettings": "Sign up to keep your settings across devices",
@@ -451,7 +485,9 @@
   "notificationRadiusKm": "Notification radius: {radius} km",
   "@notificationRadiusKm": {
     "placeholders": {
-      "radius": {"type": "String"}
+      "radius": {
+        "type": "String"
+      }
     }
   },
   "regionOfInterest": "Region of Interest",
@@ -459,7 +495,9 @@
   "radiusKm": "Radius: {radius} km",
   "@radiusKm": {
     "placeholders": {
-      "radius": {"type": "String"}
+      "radius": {
+        "type": "String"
+      }
     }
   },
   "tapToSelectArea": "Tap to select an area on the map",
@@ -470,7 +508,6 @@
   "locationBackgroundInactiveBody": "Location access is not set to \"Allow all the time\", so we cannot check for nearby signals once you close the app.",
   "openSettings": "Open settings",
   "locationPermissionRequired": "Location permission is required for this feature",
-
   "mySignals": "My Signals",
   "pleaseSignInToViewSignals": "Please sign in to view your signals",
   "noSignalsYet": "No signals yet",
@@ -479,10 +516,11 @@
   "errorWithMessage": "Error: {error}",
   "@errorWithMessage": {
     "placeholders": {
-      "error": {"type": "String"}
+      "error": {
+        "type": "String"
+      }
     }
   },
-
   "navigationDrawer": "Navigation Drawer",
   "ourSite": "Our Site",
   "about": "About",
@@ -494,81 +532,68 @@
   "snapshotError": "Snapshot Error: {error}",
   "@snapshotError": {
     "placeholders": {
-      "error": {"type": "String"}
+      "error": {
+        "type": "String"
+      }
     }
   },
-
   "faqsTitle": "FAQs",
   "faqSectionGeneral": "General",
   "faqSectionCreatingSignals": "Creating Signals",
   "faqSectionHelpingAnimals": "Helping Animals",
   "faqSectionNotifications": "Notifications",
   "faqSectionPrivacySafety": "Privacy & Safety",
-
   "faqWhatIsHelpAPaw": "What is Help a Paw?",
   "faqWhatIsHelpAPawAnswer": "Help a Paw is a mobile application that helps connect people who spot animals in distress with volunteers who can provide assistance. By creating signals on the map, you can alert the community about animals that need help.",
-
   "faqNeedAccount": "Do I need to create an account?",
   "faqNeedAccountAnswer": "You can browse signals without an account, but to create new signals or leave comments, you'll need to sign in. This helps us maintain the quality of reports and allows you to track your contributions.",
-
   "faqIsFree": "Is the app free to use?",
   "faqIsFreeAnswer": "Yes, Help a Paw is completely free to use. We are a non-profit initiative dedicated to helping animals in need.",
-
   "faqHowCreateSignal": "How do I create a signal?",
   "faqHowCreateSignalAnswer": "Tap the \"+\" button on the map, select the location where you spotted the animal, choose the signal type (Emergency, Lost/Found, etc.), add a description, and optionally include photos. Your signal will be visible to other users in the area.",
-
   "faqWhatTypesSignals": "What types of signals can I create?",
   "faqWhatTypesSignalsAnswer": "You can create signals for: Emergency situations, Lost or Found animals, Blood donation needs, Homeless animals, Unneutered animals, Wild animals, and Other situations.",
-
   "faqCanEditDelete": "Can I edit or delete my signal?",
   "faqCanEditDeleteAnswer": "Yes, you can edit or delete signals that you've created. Go to \"My Signals\" from the menu, select the signal you want to modify, and use the edit or delete options.",
-
   "faqWhatIncludeDescription": "What should I include in a signal description?",
   "faqWhatIncludeDescriptionAnswer": "Include details like: the type and condition of the animal, exact location landmarks, any urgent needs (food, medical attention), your availability to help, and a contact number if you're comfortable sharing it.",
-
   "faqHowHelp": "How can I help with a signal?",
   "faqHowHelpAnswer": "When you see a signal on the map, tap it to view details. You can leave a comment to coordinate with others, update the signal status if you're helping, or contact the person who created the signal.",
-
   "faqWhatStatusesMean": "What do the signal statuses mean?",
   "faqWhatStatusesMeanAnswer": "Needs help: Nobody has taken this on yet.\nIn progress: Someone is working on helping.\nResolved: The animal has received help or the situation is resolved.\n\nStatus is about how far along the response is. It is separate from urgency, which is what the pin colour shows.",
   "faqWhatUrgencyMeans": "What do the pin colours mean?",
   "faqWhatUrgencyMeansAnswer": "Pin colour shows urgency — how serious things are if nobody acts:\n\nGreen (Under control): The animal is not in immediate danger, or the situation is being managed.\nAmber (Support needed ASAP): Help is needed quickly, but it is not life-or-death within hours.\nRed (Immediate critical help): The animal may die, disappear or be seriously harmed if help does not happen now.\n\nOnly the person who created a signal can change its urgency. Please keep Red for genuine emergencies — if it is overused it stops meaning anything and help gets pulled away from animals truly at risk.",
-
   "faqCantHelpDirectly": "I'm not able to help directly. What can I do?",
   "faqCantHelpDirectlyAnswer": "You can share the signal with friends who might be able to help, leave helpful comments with advice or contacts of local animal rescue organizations, or simply spread awareness about the app to grow our community of helpers.",
-
   "faqHowNotificationsWork": "How do notifications work?",
   "faqHowNotificationsWorkAnswer": "You'll receive notifications when: a new signal appears in your area, someone comments on your signal, or the status of a signal you're following changes. You can customize notification settings in the app.",
-
   "faqChangeNotificationRadius": "How do I change my notification radius?",
   "faqChangeNotificationRadiusAnswer": "Go to Notification Settings > Location Tracking > Notification radius and adjust the slider. You can set it from 1km to 50km depending on how far you're willing to help.",
-
   "faqPersonalInfoSafe": "Is my personal information safe?",
   "faqPersonalInfoSafeAnswer": "We take privacy seriously. Your email is only used for account management. Phone numbers shared in signals are optional and at your discretion. Location data is only used to show relevant signals.",
-
   "faqReportInappropriate": "How do I report inappropriate content?",
   "faqReportInappropriateAnswer": "If you see a signal that contains inappropriate content, spam, or false information, please use the report function on the signal or contact us through the Feedback option in the menu.",
-
   "stayInformedTitle": "Stay Informed About Animals in Need",
   "stayInformedSubtitle": "Get notified when signals appear near you or in your area of interest.",
   "maybeLater": "Maybe Later",
-
   "enableLocationTitle": "Enable Location Tracking",
   "enableLocationSubtitle": "Get alerts for animals in need within 10km of your location.",
   "enableLocation": "Enable Location",
   "skipForNow": "Skip for Now",
-
   "chooseRegionTitle": "Choose Your Region of Interest",
   "chooseRegionSubtitle": "Select a specific area you care about and get notified of signals there.",
   "selectRegion": "Select Region",
-
   "aboutTitle": "About",
   "helpAPaw": "Help a Paw",
   "version": "Version {version} ({build})",
   "@version": {
     "placeholders": {
-      "version": {"type": "String"},
-      "build": {"type": "String"}
+      "version": {
+        "type": "String"
+      },
+      "build": {
+        "type": "String"
+      }
     }
   },
   "appDescription": "Send emergency signals about animals in need",
@@ -578,13 +603,14 @@
   "facebook": "Facebook",
   "gitHub": "GitHub",
   "openSourceLicenses": "Open Source Licenses",
-  "copyright": "\u00a9 {year} Help a Paw",
+  "copyright": "© {year} Help a Paw",
   "@copyright": {
     "placeholders": {
-      "year": {"type": "int"}
+      "year": {
+        "type": "int"
+      }
     }
   },
-
   "verifyEmail": "Verify Email",
   "verifyYourEmail": "Verify Your Email",
   "verificationEmailSentTo": "We sent a verification email to:",
@@ -597,26 +623,31 @@
   "unexpectedErrorWithMessage": "Unexpected error: {error}",
   "@unexpectedErrorWithMessage": {
     "placeholders": {
-      "error": {"type": "String"}
+      "error": {
+        "type": "String"
+      }
     }
   },
   "errorWithCode": "Error: {message}",
   "@errorWithCode": {
     "placeholders": {
-      "message": {"type": "String"}
+      "message": {
+        "type": "String"
+      }
     }
   },
   "resendInSeconds": "Resend in {seconds}s",
   "@resendInSeconds": {
     "placeholders": {
-      "seconds": {"type": "int"}
+      "seconds": {
+        "type": "int"
+      }
     }
   },
   "resendVerificationEmail": "Resend Verification Email",
   "iveVerifiedMyEmail": "I've verified my email",
   "cancelAndSignOut": "Cancel and sign out",
   "skipDevOnly": "Skip (Dev Only)",
-
   "myNotifications": "Notifications",
   "pleaseSignInToViewNotifications": "Please sign in to view notifications",
   "markAllAsRead": "Mark all as read",
@@ -628,22 +659,27 @@
   "minutesAgo": "{minutes}m ago",
   "@minutesAgo": {
     "placeholders": {
-      "minutes": {"type": "int"}
+      "minutes": {
+        "type": "int"
+      }
     }
   },
   "hoursAgo": "{hours}h ago",
   "@hoursAgo": {
     "placeholders": {
-      "hours": {"type": "int"}
+      "hours": {
+        "type": "int"
+      }
     }
   },
   "daysAgo": "{days}d ago",
   "@daysAgo": {
     "placeholders": {
-      "days": {"type": "int"}
+      "days": {
+        "type": "int"
+      }
     }
   },
-
   "notificationNewSignalTitle": "New signal nearby",
   "notificationNewRedAlertTitle": "Red Alert nearby",
   "@notificationNewSignalTitle": {
@@ -652,23 +688,35 @@
   "notificationNewSignalBody": "{headline} — {signalTitle}",
   "@notificationNewSignalBody": {
     "placeholders": {
-      "headline": {"type": "String"},
-      "signalTitle": {"type": "String"}
+      "headline": {
+        "type": "String"
+      },
+      "signalTitle": {
+        "type": "String"
+      }
     }
   },
   "notificationNewSignalBodyUrgent": "Urgent · {headline} — {signalTitle}",
   "@notificationNewSignalBodyUrgent": {
     "placeholders": {
-      "headline": {"type": "String"},
-      "signalTitle": {"type": "String"}
+      "headline": {
+        "type": "String"
+      },
+      "signalTitle": {
+        "type": "String"
+      }
     }
   },
   "notificationStatusChangeTitle": "Signal status updated",
   "notificationStatusChangeBody": "{signalTitle}: {status}",
   "@notificationStatusChangeBody": {
     "placeholders": {
-      "signalTitle": {"type": "String"},
-      "status": {"type": "String"}
+      "signalTitle": {
+        "type": "String"
+      },
+      "status": {
+        "type": "String"
+      }
     }
   },
   "notificationUrgencyChangeTitle": "Signal urgency raised",
@@ -676,17 +724,22 @@
   "notificationUrgencyChangeBody": "{signalTitle}: {urgency}",
   "@notificationUrgencyChangeBody": {
     "placeholders": {
-      "signalTitle": {"type": "String"},
-      "urgency": {"type": "String"}
+      "signalTitle": {
+        "type": "String"
+      },
+      "urgency": {
+        "type": "String"
+      }
     }
   },
   "notificationNewCommentTitle": "New comment on: {signalTitle}",
   "@notificationNewCommentTitle": {
     "placeholders": {
-      "signalTitle": {"type": "String"}
+      "signalTitle": {
+        "type": "String"
+      }
     }
   },
-
   "completeYourProfile": "Complete Your Profile",
   "helpUsPersonalize": "Help us personalize your experience",
   "fullNameRequired": "Full Name *",
@@ -701,10 +754,11 @@
   "errorSavingProfile": "Error saving profile: {error}",
   "@errorSavingProfile": {
     "placeholders": {
-      "error": {"type": "String"}
+      "error": {
+        "type": "String"
+      }
     }
   },
-
   "clinicDetails": "Clinic Details",
   "clinicNotFound": "Clinic not found",
   "returnToMap": "Return to Map",
@@ -718,28 +772,25 @@
   "cannotOpenNavigationApp": "Cannot open navigation app",
   "cannotMakePhoneCalls": "Cannot make phone calls on this device",
   "cannotOpenGoogleMaps": "Cannot open Google Maps",
-
   "selectRegionTitle": "Select Region",
   "tapToSetCenterPoint": "Please tap on the map to set a center point",
   "tapMapInstruction": "Tap on the map to set the center of your region of interest",
   "regionRadius": "Region radius",
   "km": "km",
   "dragMarkerToReposition": "Drag the marker to reposition the center",
-
   "shareSignal": "Share signal",
-  "deletePhoto": "Delete photo",
   "sendComment": "Send comment",
   "closePhotoViewer": "Close photo viewer",
   "uploadPhoto": "Upload photo",
-
   "couldNotOpenUrl": "Could not open {url}",
   "@couldNotOpenUrl": {
     "placeholders": {
-      "url": {"type": "String"}
+      "url": {
+        "type": "String"
+      }
     }
   },
   "completeNotificationSetup": "Complete notification setup",
-
   "editSignal": "Edit Signal",
   "signalUpdatedSuccessfully": "Signal updated successfully",
   "signalNoLongerAvailable": "This signal is no longer available",
@@ -754,14 +805,15 @@
   "confirmRemoveSignal": "This signal will be taken off the map. You can restore it from My Signals for the next {days} days, after which it is deleted permanently.",
   "@confirmRemoveSignal": {
     "placeholders": {
-      "days": {"type": "int"}
+      "days": {
+        "type": "int"
+      }
     }
   },
   "remove": "Remove",
   "signalRemovedSuccessfully": "Signal removed",
   "failedToRemoveSignal": "Failed to remove signal. Please try again.",
   "signalUnderReview": "This signal is being reviewed and cannot be removed right now.",
-
   "activeSignals": "Active",
   "removedSignals": "Removed",
   "noRemovedSignals": "Nothing here. Signals you remove can be restored from this list.",
@@ -774,21 +826,20 @@
   "restorableUntil": "Deleted permanently on {date}",
   "@restorableUntil": {
     "placeholders": {
-      "date": {"type": "String"}
+      "date": {
+        "type": "String"
+      }
     }
   },
   "contactPhone": "Contact Phone",
-
   "errorAddingComment": "Failed to add comment. Please try again.",
   "errorUpdatingStatus": "Failed to update status. Please try again.",
   "errorGeneric": "Something went wrong. Please try again.",
-
   "deleteAccount": "Delete Account",
   "deleteAccountConfirmTitle": "Delete account?",
   "deleteAccountConfirmBody": "This permanently deletes your account and personal data and cannot be undone. Your past reports will remain but will no longer be linked to you.",
   "deleteAccountSuccess": "Your account has been deleted.",
   "deleteAccountError": "Failed to delete account. Please try again.",
-
   "signalNearbyNotificationTitle": "An animal needs help nearby",
   "@signalNearbyNotificationTitle": {
     "description": "Title of the local notification shown when the user travels into range of an open signal they were not near when it was reported"
@@ -797,7 +848,6 @@
   "@locationAlwaysPermissionRequired": {
     "description": "Shown when the user grants only while-in-use location permission but background monitoring needs always-on access"
   },
-
   "reportSignal": "Report this signal",
   "reportComment": "Report this comment",
   "reportTitle": "Report",
@@ -808,7 +858,6 @@
   "reportAlreadySubmitted": "You have already reported this.",
   "reportFailed": "Could not send the report. Please try again.",
   "reportSignInRequired": "Please sign in to report content.",
-
   "reportReasonFraud": "Fraud or scam",
   "reportReasonAbuse": "Animal abuse or neglect",
   "reportReasonHarassment": "Harassment",
@@ -821,14 +870,17 @@
   "reportReasonDefamationRisk": "Public accusation about a person",
   "reportReasonDuplicateCase": "Duplicate of another signal",
   "reportReasonOther": "Something else",
-
   "moderation": "Moderation",
   "moderationQueue": "Reports",
   "moderationQueueEmpty": "No open reports.",
   "moderationNotAModerator": "You do not have moderator access.",
   "moderationReportedBy": "Reported {count} times",
   "@moderationReportedBy": {
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "moderationOpenTarget": "Open",
   "moderationNoteLabel": "Why are you doing this? (required)",
@@ -839,7 +891,6 @@
   "moderationSelfBlocked": "You cannot moderate your own content.",
   "moderationActionsLabel": "Moderation actions",
   "moderationCommentChooserTitle": "This comment",
-
   "moderationHideSignal": "Hide signal",
   "moderationRestoreSignal": "Restore signal",
   "moderationLockComments": "Lock comments",
@@ -850,21 +901,26 @@
   "moderationClearLabel": "Remove warning label",
   "moderationDismissReport": "Dismiss report",
   "moderationAddNote": "Add internal note",
-
   "moderationLabelUnverified": "Unverified",
   "moderationLabelDuplicate": "Possible duplicate",
   "moderationLabelDisputed": "Disputed",
   "moderationCommentsLocked": "A moderator has locked comments on this signal.",
   "moderationBadge": "Moderator",
-
   "moderationTabReports": "Reports",
   "moderationTabHidden": "Hidden",
   "moderationHiddenEmpty": "No hidden signals.",
   "moderationHiddenBy": "Hidden by {name}",
   "@moderationHiddenBy": {
-    "placeholders": { "name": { "type": "String" } }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "moderationRestoreTitle": "Restore this signal?",
   "moderationRestoreBody": "It goes back on the map for everyone. Its comments and history are still there.",
-  "moderationRestore": "Restore"
+  "moderationRestore": "Restore",
+  "mapLegend": "What the pins mean",
+  "mapLegendUrgencyNote": "Pin colour shows urgency — how serious it gets if nobody acts. Red signals are never grouped into a cluster, so they stay visible at every zoom.",
+  "mapLegendVetClinic": "Vet clinic"
 }

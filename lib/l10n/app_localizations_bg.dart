@@ -1860,4 +1860,14 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get moderationRestore => 'Възстановяване';
+
+  @override
+  String get mapLegend => 'Какво означават маркерите';
+
+  @override
+  String get mapLegendUrgencyNote =>
+      'Цветът на маркера показва спешността — колко сериозно става, ако никой не реагира. Червените сигнали никога не се групират, така че остават видими при всяко приближение.';
+
+  @override
+  String get mapLegendVetClinic => 'Ветеринарна клиника';
 }

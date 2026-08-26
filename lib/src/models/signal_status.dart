@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
 
-/// Single source of truth for a signal's status (label, color, map pin, code).
+/// Single source of truth for a signal's status (label, glyph, code).
 ///
 /// [code] is the value persisted in Firestore (`Signal.status`). It is a
 /// **stable, opaque identifier — not an ordering**. Never change or reuse a
@@ -20,24 +20,33 @@ import '../../l10n/app_localizations.dart';
 /// resolved(code: 2, ...), // keeps code 2 in the DB
 /// ```
 enum SignalStatus {
-  needsHelp(code: 0, color: Colors.red),
-  inProgress(code: 1, color: Colors.orange),
-  resolved(code: 2, color: Colors.green);
+  needsHelp(code: 0, icon: Icons.error_outline),
+  inProgress(code: 1, icon: Icons.autorenew),
+  resolved(code: 2, icon: Icons.check_circle_outline);
 
   const SignalStatus({
     required this.code,
-    required this.color,
+    required this.icon,
   });
 
   /// Stable identifier persisted in Firestore. Never change or reuse.
   final int code;
 
-  /// Color for status badges, chips and list accents.
+  /// Glyph for status badges, chips and list accents.
   ///
-  /// **Not a map pin.** Pin color encodes [SignalUrgency] and nothing else —
-  /// status deliberately has no pin asset, so nothing can quietly go back to
-  /// painting the map by status. Use a dot or a chip instead.
-  final Color color;
+  /// **Status has no colour, by design.** It used to be red/amber/green — the
+  /// same three colours as [SignalUrgency], carrying the opposite meaning. A
+  /// row showed two unlabelled traffic-light chips stacked on each other, and
+  /// green+red, red+green, green+green and red+red were all reachable on one
+  /// list. Whichever one you read first taught you the wrong thing about the
+  /// other.
+  ///
+  /// So the app has exactly one colour axis now: colour means urgency, always
+  /// — on the map, in a chip, in the history. Status is a neutral glyph
+  /// instead, which also survives being read by someone who cannot separate
+  /// red from green, and by anyone reading Bulgarian, where the two labels are
+  /// near-homographs ("нужна е помощ скоро" vs "нужна е помощ").
+  final IconData icon;
 
   /// Resolve a persisted [code] to a status, defaulting to [needsHelp] for any
   /// unknown/legacy value (the safe "still needs attention" default).

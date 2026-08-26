@@ -22,6 +22,7 @@ import '../utils/map_marker_builder.dart';
 import '../viewmodels/map_view_model.dart';
 import 'home_route_drawer.dart';
 import 'map/filter_bottom_sheet.dart';
+import 'map/map_legend_sheet.dart';
 import 'map/new_signal_location_bar.dart';
 import 'notification_onboarding_button.dart';
 import 'helper_tags_gate.dart';
@@ -890,20 +891,28 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               ),
             ),
             Semantics(
+              label: l10n.mapLegend,
+              button: true,
+              enabled: true,
+              child: IconButton(
+                icon: const Icon(Icons.help_outline),
+                onPressed: () => showMapLegendSheet(context),
+              ),
+            ),
+            Semantics(
               label: l10n.toggleVetClinics,
               button: true,
               enabled: true,
               child: IconButton(
-                icon: Icon(
-                  Icons.local_hospital,
-                  color: mapState.vetClinicState.showVetClinics
-                      ? Colors.white
-                      : Colors.white70,
+                // On/off is carried by the filled backing, not by a white
+                // vs white70 icon — a 30% opacity difference is not a state.
+                icon: const Icon(Icons.local_hospital),
+                isSelected: mapState.vetClinicState.showVetClinics,
+                style: IconButton.styleFrom(
+                  backgroundColor: mapState.vetClinicState.showVetClinics
+                      ? Theme.of(context).colorScheme.onPrimary.withAlpha(51)
+                      : null,
                 ),
-                style: mapState.vetClinicState.showVetClinics
-                    ? IconButton.styleFrom(
-                        backgroundColor: Colors.orange[800])
-                    : null,
                 onPressed: () {
                   final viewModel = ref.read(mapViewModelProvider.notifier);
                   viewModel.toggleVetClinics();

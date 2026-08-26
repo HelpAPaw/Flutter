@@ -75,9 +75,26 @@ class MapMarkerBuilder {
           snippet: signal.signal.description,
         ),
         icon: getSignalPin(signal.urgency),
-        clusterManagerId: clusterManagerId,
+        clusterManagerId: clusterOf(signal.urgency, clusterManagerId),
         onTap: () => onMarkerTap(signal),
       );
     }).toSet();
   }
+
+  /// Which cluster a signal's marker joins — or `null`, meaning "stay a pin".
+  ///
+  /// Clustering hides urgency. A cluster bubble is drawn natively by the Maps
+  /// SDK in its own colour, and `ClusterManager` exposes no way to restyle it
+  /// (the Dart type carries an id and a tap callback, nothing else), so at the
+  /// zoom the app opens at — where nearly every signal is inside a bubble —
+  /// the map cannot say that anything on it is critical.
+  ///
+  /// [SignalUrgency.red] therefore opts out. A signal where an animal may die
+  /// if nobody moves now is always its own red pin, at every zoom, and the
+  /// count on the neighbouring bubble is one lower. That is the whole point of
+  /// the colour: a screen of red pins has to mean "these animals may die".
+  ///
+  /// Green and amber still cluster, which is what keeps a busy city readable.
+  static ClusterManagerId? clusterOf(int urgency, ClusterManagerId? id) =>
+      SignalUrgency.fromCode(urgency) == SignalUrgency.red ? null : id;
 }

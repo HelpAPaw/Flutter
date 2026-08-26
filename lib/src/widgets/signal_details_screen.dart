@@ -972,16 +972,15 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                       value: status.code,
                                       child: Row(
                                         children: [
-                                          // A coloured dot, not a map pin: the
-                                          // pin is the urgency vocabulary now,
-                                          // and reusing it here would re-imply
-                                          // that pin colour tracks status.
+                                          // A neutral glyph, not a map pin and
+                                          // not a coloured dot: colour is the
+                                          // urgency vocabulary, and status
+                                          // borrowing it put two traffic
+                                          // lights with opposite meanings on
+                                          // the same screen.
                                           Padding(
                                             padding: const EdgeInsets.all(12.0),
-                                            child: CircleAvatar(
-                                              radius: 6,
-                                              backgroundColor: status.color,
-                                            ),
+                                            child: Icon(status.icon, size: 20),
                                           ),
                                           SizedBox.fromSize(size: const Size(8, 8)),
                                           Text(status.label(l10n)),

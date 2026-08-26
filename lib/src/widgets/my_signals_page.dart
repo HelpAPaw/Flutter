@@ -17,7 +17,6 @@ import '../services/signal_removal_service.dart';
 import '../utils/nav_extensions.dart';
 import 'app_bar_title.dart';
 
-Color _statusColor(int status) => SignalStatus.fromCode(status).color;
 
 Color _urgencyColor(int urgency) => SignalUrgency.fromCode(urgency).color;
 
@@ -206,8 +205,8 @@ class _ActiveSignalsTab extends StatelessWidget {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         UrgencyChip(urgency: signal.urgency),
-                        LevelChip(
-                          color: _statusColor(signal.status),
+                        LevelChip.status(
+                          icon: SignalStatus.fromCode(signal.status).icon,
                           label: SignalStatus.fromCode(signal.status).label(l10n),
                         ),
                         Text(dateStr,

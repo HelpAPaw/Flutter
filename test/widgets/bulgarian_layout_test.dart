@@ -54,8 +54,8 @@ void main() {
                 spacing: 8,
                 children: [
                   const UrgencyChip(urgency: 1),
-                  LevelChip(
-                    color: SignalStatus.needsHelp.color,
+                  LevelChip.status(
+                    icon: SignalStatus.needsHelp.icon,
                     label: SignalStatus.needsHelp
                         .label(AppLocalizations.of(context)),
                   ),
@@ -89,7 +89,7 @@ void main() {
                     for (final u in SignalUrgency.values)
                       UrgencyChip(urgency: u.code),
                     for (final s in SignalStatus.values)
-                      LevelChip(color: s.color, label: s.label(l10n)),
+                      LevelChip.status(icon: s.icon, label: s.label(l10n)),
                   ],
                 ),
               ),
