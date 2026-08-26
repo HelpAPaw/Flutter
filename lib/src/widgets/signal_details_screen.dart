@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:adaptive_components/adaptive_components.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -455,8 +454,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
           }
         },
         child: Scaffold(
-          body: AdaptiveContainer(
-            child: Scaffold(
+          body: Scaffold(
               appBar: _appBar(l10n, actions: [
                 if (isAuthor)
                   Semantics(
@@ -1105,8 +1103,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                 ),
               ),
             ),
-          )
-        ),
+          ),
         ),
       );
     });

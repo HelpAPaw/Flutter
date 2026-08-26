@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
-import 'package:adaptive_components/adaptive_components.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show PlatformException;
@@ -679,8 +678,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       },
       child: Scaffold(
         resizeToAvoidBottomInset: false,
-        body: AdaptiveContainer(
-          child: Stack(
+        body: Stack(
             children: [
               GoogleMap(
                 initialCameraPosition: CameraPosition(
@@ -851,7 +849,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 ),
             ],
           ),
-        ),
         appBar: AppBar(
           title: GestureDetector(
             behavior: HitTestBehavior.opaque,

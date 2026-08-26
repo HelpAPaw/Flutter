@@ -1878,4 +1878,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get undo => 'Undo';
+
+  @override
+  String get discardChanges => 'Discard changes?';
+
+  @override
+  String get discardChangesHint => 'Your edits to this profile will be lost.';
+
+  @override
+  String get discard => 'Discard';
+
+  @override
+  String get keepEditing => 'Keep editing';
 }

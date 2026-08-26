@@ -7,7 +7,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../config/routes.dart';
 import '../services/navigation_service.dart';
 import 'escape_leading.dart';
-import 'package:adaptive_components/adaptive_components.dart';
 
 import '../models/vet_clinic.dart';
 import '../services/vet_clinic_service.dart';
@@ -107,8 +106,7 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
         }
       },
       child: Scaffold(
-        body: AdaptiveContainer(
-          child: Scaffold(
+        body: Scaffold(
             appBar: _appBar(l10n),
             body: SingleChildScrollView(
               padding: const EdgeInsets.all(16.0),
@@ -257,7 +255,6 @@ class _ClinicDetailsState extends State<ClinicDetailsScreen> {
               ),
             ),
           ),
-        ),
       ),
     );
   }

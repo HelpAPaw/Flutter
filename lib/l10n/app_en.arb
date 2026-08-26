@@ -940,5 +940,9 @@
   "couldNotLoadPrivacyPolicy": "Couldn't load the privacy policy",
   "couldNotLoadPrivacyPolicyHint": "Check your connection and try again, or read it at helpapaw.org/privacypolicy.",
   "notificationDeleted": "Notification deleted",
-  "undo": "Undo"
+  "undo": "Undo",
+  "discardChanges": "Discard changes?",
+  "discardChangesHint": "Your edits to this profile will be lost.",
+  "discard": "Discard",
+  "keepEditing": "Keep editing"
 }

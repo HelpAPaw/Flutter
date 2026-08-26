@@ -1909,4 +1909,16 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get undo => 'Отмени';
+
+  @override
+  String get discardChanges => 'Отхвърляне на промените?';
+
+  @override
+  String get discardChangesHint => 'Промените в профила ви ще бъдат загубени.';
+
+  @override
+  String get discard => 'Отхвърли';
+
+  @override
+  String get keepEditing => 'Продължи редакцията';
 }

@@ -10,7 +10,6 @@ dependencies:
     sdk: flutter
   flutter_web_plugins:
     sdk: flutter
-  adaptive_components: ^0.0.9
   cloud_firestore: ^6.0.0
   cupertino_icons: ^1.0.6
   firebase_analytics: ^12.0.0

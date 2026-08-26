@@ -655,5 +655,9 @@
   "couldNotLoadPrivacyPolicy": "Политиката за поверителност не можа да се зареди",
   "couldNotLoadPrivacyPolicyHint": "Проверете връзката си и опитайте отново или я прочетете на helpapaw.org/privacypolicy.",
   "notificationDeleted": "Известието е изтрито",
-  "undo": "Отмени"
+  "undo": "Отмени",
+  "discardChanges": "Отхвърляне на промените?",
+  "discardChangesHint": "Промените в профила ви ще бъдат загубени.",
+  "discard": "Отхвърли",
+  "keepEditing": "Продължи редакцията"
 }

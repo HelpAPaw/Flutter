@@ -26,9 +26,6 @@ void showFilterBottomSheet(BuildContext context, WidgetRef ref) {
   showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(10.0)),
-    ),
     builder: (BuildContext context) {
       return _FilterBottomSheetContent(l10n: l10n);
     },

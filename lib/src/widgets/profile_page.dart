@@ -28,6 +28,12 @@ class _ProfilePageState extends State<ProfilePage> {
   final _displayNameController = TextEditingController();
   final _phoneController = TextEditingController();
   bool _isEditing = false;
+
+  /// What the fields held when the screen last loaded or saved — the baseline
+  /// the X button compares against before offering to discard.
+  String _savedName = '';
+  String _savedPhone = '';
+
   bool _isLoading = false;
   int _signalsCount = 0;
   int _commentsCount = 0;
@@ -98,6 +104,7 @@ class _ProfilePageState extends State<ProfilePage> {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       _displayNameController.text = user.displayName ?? '';
+      _savedName = _displayNameController.text;
 
       final doc = await FirebaseFirestore.instance
           .collection('users')
@@ -107,6 +114,7 @@ class _ProfilePageState extends State<ProfilePage> {
       if (doc.exists) {
         setState(() {
           _phoneController.text = doc.data()?['phone'] ?? '';
+          _savedPhone = _phoneController.text;
         });
       }
     }
@@ -219,6 +227,8 @@ class _ProfilePageState extends State<ProfilePage> {
 
       // Mirror the new name to the world-readable public profile.
       await PublicProfileService.setName(user.uid, displayName);
+      _savedName = displayName;
+      _savedPhone = _phoneController.text.trim();
 
       await user.reload();
 
@@ -297,6 +307,46 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  /// Leave edit mode, asking first if there is anything to lose.
+  ///
+  /// This was a bare `setState(_isEditing = false)`: the X sat one tap away
+  /// from Save, discarded everything typed, and said nothing. The dialog only
+  /// appears when the fields actually differ from what is stored, so tapping X
+  /// on an untouched form still just closes.
+  Future<void> _cancelEditing() async {
+    final l10n = AppLocalizations.of(context);
+    final dirty = _displayNameController.text.trim() != _savedName ||
+        _phoneController.text.trim() != _savedPhone;
+
+    if (dirty) {
+      final discard = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(l10n.discardChanges),
+          content: Text(l10n.discardChangesHint),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(l10n.keepEditing),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(l10n.discard),
+            ),
+          ],
+        ),
+      );
+      if (discard != true) return;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _displayNameController.text = _savedName;
+      _phoneController.text = _savedPhone;
+      _isEditing = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
@@ -319,7 +369,7 @@ class _ProfilePageState extends State<ProfilePage> {
           else
             IconButton(
               icon: const Icon(Icons.close),
-              onPressed: () => setState(() => _isEditing = false),
+              onPressed: _cancelEditing,
             ),
         ],
       ),

@@ -3433,6 +3433,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Undo'**
   String get undo;
+
+  /// No description provided for @discardChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard changes?'**
+  String get discardChanges;
+
+  /// No description provided for @discardChangesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Your edits to this profile will be lost.'**
+  String get discardChangesHint;
+
+  /// No description provided for @discard.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get discard;
+
+  /// No description provided for @keepEditing.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep editing'**
+  String get keepEditing;
 }
 
 class _AppLocalizationsDelegate
