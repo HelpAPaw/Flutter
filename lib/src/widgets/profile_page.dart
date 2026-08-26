@@ -363,11 +363,13 @@ class _ProfilePageState extends State<ProfilePage> {
         actions: [
           if (!_isEditing)
             IconButton(
+              tooltip: l10n.editProfile,
               icon: const Icon(Icons.edit),
               onPressed: () => setState(() => _isEditing = true),
             )
           else
             IconButton(
+              tooltip: l10n.cancel,
               icon: const Icon(Icons.close),
               onPressed: _cancelEditing,
             ),
@@ -412,6 +414,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           child: CircleAvatar(
                             backgroundColor: Theme.of(context).colorScheme.primary,
                             child: IconButton(
+                              tooltip: l10n.changeProfilePhoto,
                               icon: const Icon(Icons.camera_alt, color: Colors.white),  // theme-independent: over the avatar photo
                               onPressed: _isLoading ? null : _pickAndUploadPhoto,
                             ),

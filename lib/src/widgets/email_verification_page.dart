@@ -208,6 +208,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage>
         appBar: AppBar(
           title: AppBarTitle(l10n.verifyEmail),
           leading: IconButton(
+            tooltip: l10n.back,
             icon: const Icon(Icons.arrow_back),
             onPressed: () => _exitVerification(),
           ),

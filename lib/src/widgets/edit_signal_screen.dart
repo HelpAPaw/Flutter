@@ -240,6 +240,7 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
         title: AppBarTitle(l10n.editSignal),
         actions: [
           IconButton(
+            tooltip: l10n.save,
             icon: _isSaving
                 ? const SizedBox(
                     width: 20,

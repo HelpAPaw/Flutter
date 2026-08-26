@@ -75,6 +75,7 @@ class _NewSignalWizardPageState extends ConsumerState<NewSignalWizardPage> {
             // that is already being written is confusing whichever way the race
             // lands.
             child: IconButton(
+              tooltip: l10n.cancel,
               icon: const Icon(Icons.close),
               onPressed: formState.isSubmitting ? null : _leave,
             ),

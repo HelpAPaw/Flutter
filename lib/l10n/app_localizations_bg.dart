@@ -1921,4 +1921,13 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get keepEditing => 'Продължи редакцията';
+
+  @override
+  String get close => 'Затвори';
+
+  @override
+  String get editProfile => 'Редактиране на профила';
+
+  @override
+  String get changeProfilePhoto => 'Смяна на профилната снимка';
 }

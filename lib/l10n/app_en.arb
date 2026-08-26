@@ -944,5 +944,8 @@
   "discardChanges": "Discard changes?",
   "discardChangesHint": "Your edits to this profile will be lost.",
   "discard": "Discard",
-  "keepEditing": "Keep editing"
+  "keepEditing": "Keep editing",
+  "close": "Close",
+  "editProfile": "Edit profile",
+  "changeProfilePhoto": "Change profile photo"
 }

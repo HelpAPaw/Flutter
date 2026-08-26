@@ -231,6 +231,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
           Align(
             alignment: Alignment.topRight,
             child: IconButton(
+              tooltip: AppLocalizations.of(context).close,
               icon: const Icon(Icons.close),
               onPressed: widget.onDismiss,
               padding: EdgeInsets.zero,

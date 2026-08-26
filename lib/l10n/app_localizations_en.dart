@@ -1890,4 +1890,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get keepEditing => 'Keep editing';
+
+  @override
+  String get close => 'Close';
+
+  @override
+  String get editProfile => 'Edit profile';
+
+  @override
+  String get changeProfilePhoto => 'Change profile photo';
 }

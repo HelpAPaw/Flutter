@@ -659,5 +659,8 @@
   "discardChanges": "Отхвърляне на промените?",
   "discardChangesHint": "Промените в профила ви ще бъдат загубени.",
   "discard": "Отхвърли",
-  "keepEditing": "Продължи редакцията"
+  "keepEditing": "Продължи редакцията",
+  "close": "Затвори",
+  "editProfile": "Редактиране на профила",
+  "changeProfilePhoto": "Смяна на профилната снимка"
 }
