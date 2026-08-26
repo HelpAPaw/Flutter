@@ -177,6 +177,16 @@ class MapViewModel extends Notifier<MapScreenState> {
     );
   }
 
+  /// Put a whole filter state back.
+  ///
+  /// The filter sheet applies every toggle live, so the map updates under it
+  /// as you tick — which is the good part, and the reason it cannot simply
+  /// discard its edits on Cancel. It snapshots the state it opened with and
+  /// hands it back here instead.
+  void restoreFilterState(MapFilterState filterState) {
+    state = state.copyWith(filterState: filterState);
+  }
+
   // ============================================================
   // New Signal Form Management
   // ============================================================

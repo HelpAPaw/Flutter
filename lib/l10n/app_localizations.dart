@@ -3367,6 +3367,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Vet clinic'**
   String get mapLegendVetClinic;
+
+  /// No description provided for @done.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get done;
+
+  /// No description provided for @signOutFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not sign out. Please try again.'**
+  String get signOutFailed;
+
+  /// No description provided for @couldNotOpenEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'No email app is set up on this device. Write to {address} from anywhere.'**
+  String couldNotOpenEmail(String address);
+
+  /// No description provided for @feedbackEmailSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'Help a Paw — feedback'**
+  String get feedbackEmailSubject;
 }
 
 class _AppLocalizationsDelegate

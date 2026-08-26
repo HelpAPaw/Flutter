@@ -562,531 +562,537 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
             body: Center(
               child: Padding(
                 padding: const EdgeInsets.all(8.0),
-                child: Stack(
-                  fit: StackFit.expand,
+                child: Column(
                   children: [
-                    SingleChildScrollView(
-                      controller: _scrollController,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.start,
-                        children: <Widget>[
-                          // A moderator's warning label (§18.3). Above the
-                          // photos on purpose: the whole point of "possible
-                          // duplicate" or "disputed" is to be read *before* the
-                          // content it qualifies, not after scrolling past it.
-                          _moderationLabelBanner(signal, l10n),
-                          if (signal.photoUrls.isNotEmpty || isAuthor)
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                SizedBox(
-                                  height: 250,
-                                  child: PageView.builder(
-                                    controller: _photoPageController,
-                                    onPageChanged: (index) {
-                                      setState(() {
-                                        _currentPhotoPage = index;
-                                      });
-                                    },
-                                    itemCount: signal.photoUrls.length +
-                                        (isAuthor && signal.photoUrls.length < 5 ? 1 : 0),
-                                    itemBuilder: (context, index) {
-                                      // Show "Add Photo" page if this is the last index and user is author
-                                      if (index >= signal.photoUrls.length) {
+                    // A Column, not a Stack. The composer used to be
+                    // Positioned(bottom: 0) over the same scroll view, with no
+                    // bottom padding underneath it, so it permanently hid the
+                    // last ~90px of the page — and more at larger text sizes,
+                    // where it swallowed the whole "Red — immediate critical
+                    // help" option. Making it a sibling means the overlap
+                    // cannot come back, and no padding constant has to track
+                    // the composer's height.
+                    Expanded(
+                      child: SingleChildScrollView(
+                        controller: _scrollController,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.start,
+                          children: <Widget>[
+                            // A moderator's warning label (§18.3). Above the
+                            // photos on purpose: the whole point of "possible
+                            // duplicate" or "disputed" is to be read *before* the
+                            // content it qualifies, not after scrolling past it.
+                            _moderationLabelBanner(signal, l10n),
+                            if (signal.photoUrls.isNotEmpty || isAuthor)
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SizedBox(
+                                    height: 250,
+                                    child: PageView.builder(
+                                      controller: _photoPageController,
+                                      onPageChanged: (index) {
+                                        setState(() {
+                                          _currentPhotoPage = index;
+                                        });
+                                      },
+                                      itemCount: signal.photoUrls.length +
+                                          (isAuthor && signal.photoUrls.length < 5 ? 1 : 0),
+                                      itemBuilder: (context, index) {
+                                        // Show "Add Photo" page if this is the last index and user is author
+                                        if (index >= signal.photoUrls.length) {
+                                          return Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                            child: GestureDetector(
+                                              onTap: _isUploadingPhoto ? null : _showImageSourceDialog,
+                                              child: Container(
+                                                decoration: BoxDecoration(
+                                                  color: Colors.grey[200],
+                                                  borderRadius: BorderRadius.circular(12),
+                                                  border: Border.all(
+                                                    color: Colors.orange,
+                                                    width: 2,
+                                                    style: BorderStyle.solid,
+                                                  ),
+                                                ),
+                                                child: Center(
+                                                  child: _isUploadingPhoto
+                                                      ? Column(
+                                                          mainAxisAlignment: MainAxisAlignment.center,
+                                                          children: [
+                                                            const CircularProgressIndicator(
+                                                              valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+                                                            ),
+                                                            const SizedBox(height: 16),
+                                                            Text(
+                                                              l10n.uploadingPhoto,
+                                                              style: TextStyle(
+                                                                color: Colors.grey[600],
+                                                                fontSize: 14,
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        )
+                                                      : Column(
+                                                          mainAxisAlignment: MainAxisAlignment.center,
+                                                          children: [
+                                                            const Icon(
+                                                              Icons.add_photo_alternate,
+                                                              size: 48,
+                                                              color: Colors.orange,
+                                                            ),
+                                                            const SizedBox(height: 8),
+                                                            Text(
+                                                              signal.photoUrls.isEmpty ? l10n.addPhoto : l10n.addAnotherPhoto,
+                                                              style: TextStyle(
+                                                                color: Colors.grey[600],
+                                                                fontSize: 16,
+                                                                fontWeight: FontWeight.bold,
+                                                              ),
+                                                            ),
+                                                            const SizedBox(height: 4),
+                                                            Text(
+                                                              l10n.photosCount(signal.photoUrls.length, 5),
+                                                              style: TextStyle(
+                                                                color: Colors.grey[500],
+                                                                fontSize: 12,
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                ),
+                                              ),
+                                            ),
+                                          );
+                                        }
+
+                                        // Show photo
                                         return Padding(
                                           padding: const EdgeInsets.symmetric(horizontal: 8.0),
                                           child: GestureDetector(
-                                            onTap: _isUploadingPhoto ? null : _showImageSourceDialog,
-                                            child: Container(
-                                              decoration: BoxDecoration(
-                                                color: Colors.grey[200],
-                                                borderRadius: BorderRadius.circular(12),
-                                                border: Border.all(
-                                                  color: Colors.orange,
-                                                  width: 2,
-                                                  style: BorderStyle.solid,
+                                            onTap: () {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (context) => _FullScreenPhotoGallery(
+                                                    photoUrls: signal.photoUrls,
+                                                    initialIndex: index,
+                                                  ),
                                                 ),
-                                              ),
-                                              child: Center(
-                                                child: _isUploadingPhoto
-                                                    ? Column(
-                                                        mainAxisAlignment: MainAxisAlignment.center,
-                                                        children: [
-                                                          const CircularProgressIndicator(
-                                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
-                                                          ),
-                                                          const SizedBox(height: 16),
-                                                          Text(
-                                                            l10n.uploadingPhoto,
-                                                            style: TextStyle(
-                                                              color: Colors.grey[600],
-                                                              fontSize: 14,
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      )
-                                                    : Column(
-                                                        mainAxisAlignment: MainAxisAlignment.center,
-                                                        children: [
-                                                          const Icon(
-                                                            Icons.add_photo_alternate,
-                                                            size: 48,
-                                                            color: Colors.orange,
-                                                          ),
-                                                          const SizedBox(height: 8),
-                                                          Text(
-                                                            signal.photoUrls.isEmpty ? l10n.addPhoto : l10n.addAnotherPhoto,
-                                                            style: TextStyle(
-                                                              color: Colors.grey[600],
-                                                              fontSize: 16,
-                                                              fontWeight: FontWeight.bold,
-                                                            ),
-                                                          ),
-                                                          const SizedBox(height: 4),
-                                                          Text(
-                                                            l10n.photosCount(signal.photoUrls.length, 5),
-                                                            style: TextStyle(
-                                                              color: Colors.grey[500],
-                                                              fontSize: 12,
-                                                            ),
-                                                          ),
-                                                        ],
+                                              );
+                                            },
+                                            child: Stack(
+                                              children: [
+                                                ClipRRect(
+                                                  borderRadius: BorderRadius.circular(12.0),
+                                                  child: CachedNetworkImage(
+                                                    imageUrl: signal.photoUrls[index],
+                                                    width: double.infinity,
+                                                    fit: BoxFit.cover,
+                                                    placeholder: (context, url) => Container(
+                                                      color: Colors.grey[200],
+                                                      child: const Center(
+                                                        child: CircularProgressIndicator(),
                                                       ),
-                                              ),
+                                                    ),
+                                                    errorWidget: (context, url, error) => Container(
+                                                      color: Colors.grey[200],
+                                                      child: Center(
+                                                        child: Column(
+                                                          mainAxisAlignment: MainAxisAlignment.center,
+                                                          children: [
+                                                            const Icon(Icons.broken_image, size: 48, color: Colors.grey),
+                                                            const SizedBox(height: 8),
+                                                            Text(l10n.failedToLoadImage, style: const TextStyle(color: Colors.grey)),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                if (isAuthor)
+                                                  Positioned(
+                                                    top: 8,
+                                                    right: 8,
+                                                    child: Semantics(
+                                                      label: l10n.deletePhoto,
+                                                      button: true,
+                                                      enabled: true,
+                                                      child: IconButton(
+                                                        icon: const Icon(Icons.delete, color: Colors.white),
+                                                        style: IconButton.styleFrom(
+                                                          backgroundColor: Colors.red,
+                                                        ),
+                                                        onPressed: () => _deletePhoto(signal.photoUrls[index]),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                Positioned(
+                                                  bottom: 8,
+                                                  right: 8,
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.black54,
+                                                      borderRadius: BorderRadius.circular(20),
+                                                    ),
+                                                    child: Text(
+                                                      '${index + 1}/${signal.photoUrls.length}',
+                                                      style: const TextStyle(
+                                                        color: Colors.white,
+                                                        fontSize: 12,
+                                                        fontWeight: FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ),
                                         );
-                                      }
-
-                                      // Show photo
-                                      return Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                                        child: GestureDetector(
-                                          onTap: () {
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (context) => _FullScreenPhotoGallery(
-                                                  photoUrls: signal.photoUrls,
-                                                  initialIndex: index,
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                          child: Stack(
-                                            children: [
-                                              ClipRRect(
-                                                borderRadius: BorderRadius.circular(12.0),
-                                                child: CachedNetworkImage(
-                                                  imageUrl: signal.photoUrls[index],
-                                                  width: double.infinity,
-                                                  fit: BoxFit.cover,
-                                                  placeholder: (context, url) => Container(
-                                                    color: Colors.grey[200],
-                                                    child: const Center(
-                                                      child: CircularProgressIndicator(),
-                                                    ),
-                                                  ),
-                                                  errorWidget: (context, url, error) => Container(
-                                                    color: Colors.grey[200],
-                                                    child: Center(
-                                                      child: Column(
-                                                        mainAxisAlignment: MainAxisAlignment.center,
-                                                        children: [
-                                                          const Icon(Icons.broken_image, size: 48, color: Colors.grey),
-                                                          const SizedBox(height: 8),
-                                                          Text(l10n.failedToLoadImage, style: const TextStyle(color: Colors.grey)),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                              if (isAuthor)
-                                                Positioned(
-                                                  top: 8,
-                                                  right: 8,
-                                                  child: Semantics(
-                                                    label: l10n.deletePhoto,
-                                                    button: true,
-                                                    enabled: true,
-                                                    child: IconButton(
-                                                      icon: const Icon(Icons.delete, color: Colors.white),
-                                                      style: IconButton.styleFrom(
-                                                        backgroundColor: Colors.red,
-                                                      ),
-                                                      onPressed: () => _deletePhoto(signal.photoUrls[index]),
-                                                    ),
-                                                  ),
-                                                ),
-                                              Positioned(
-                                                bottom: 8,
-                                                right: 8,
-                                                child: Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.black54,
-                                                    borderRadius: BorderRadius.circular(20),
-                                                  ),
-                                                  child: Text(
-                                                    '${index + 1}/${signal.photoUrls.length}',
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 12,
-                                                      fontWeight: FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      );
-                                    },
+                                      },
+                                    ),
                                   ),
-                                ),
-                                // Page indicator dots
-                                if ((signal.photoUrls.length +
-                                        (isAuthor && signal.photoUrls.length < 5 ? 1 : 0)) >
-                                    1)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 8.0),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: List.generate(
-                                        signal.photoUrls.length +
-                                            (isAuthor && signal.photoUrls.length < 5 ? 1 : 0),
-                                        (index) => Container(
-                                          margin: const EdgeInsets.symmetric(horizontal: 4.0),
-                                          width: 8.0,
-                                          height: 8.0,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color: _currentPhotoPage == index
-                                                ? Colors.orange
-                                                : Colors.grey[400],
+                                  // Page indicator dots
+                                  if ((signal.photoUrls.length +
+                                          (isAuthor && signal.photoUrls.length < 5 ? 1 : 0)) >
+                                      1)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 8.0),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: List.generate(
+                                          signal.photoUrls.length +
+                                              (isAuthor && signal.photoUrls.length < 5 ? 1 : 0),
+                                          (index) => Container(
+                                            margin: const EdgeInsets.symmetric(horizontal: 4.0),
+                                            width: 8.0,
+                                            height: 8.0,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              color: _currentPhotoPage == index
+                                                  ? Colors.orange
+                                                  : Colors.grey[400],
+                                            ),
                                           ),
                                         ),
                                       ),
                                     ),
+                                  const SizedBox(height: 8),
+                                ],
+                              ),
+                            Text(signal.title, style: const TextStyle(fontSize: 30), textAlign: TextAlign.center,),
+                            Text(signal.description, style: const TextStyle(fontSize: 20), textAlign: TextAlign.center,),
+                            // No type line: what the signal needs is shown as the
+                            // help-tag chips below, which carry the same
+                            // information with more precision.
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    dateFormat.format((signal.createdAt as Timestamp).toDate()),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                const SizedBox(height: 8),
+                                ),
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  // Same helper the history rows use, so the
+                                  // "don't flash the fallback before the lookup
+                                  // lands" rule (R4-OBS-01) has one home rather
+                                  // than a copy here and a copy per row type.
+                                  child: _actorText(
+                                    signal.reporter.id,
+                                    (name) => name,
+                                    fallback: l10n.unknown,
+                                    textAlign: TextAlign.end,
+                                    maxLines: 1,
+                                  ),
+                                ),
                               ],
                             ),
-                          Text(signal.title, style: const TextStyle(fontSize: 30), textAlign: TextAlign.center,),
-                          Text(signal.description, style: const TextStyle(fontSize: 20), textAlign: TextAlign.center,),
-                          // No type line: what the signal needs is shown as the
-                          // help-tag chips below, which carry the same
-                          // information with more precision.
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  dateFormat.format((signal.createdAt as Timestamp).toDate()),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Flexible(
-                                // Same helper the history rows use, so the
-                                // "don't flash the fallback before the lookup
-                                // lands" rule (R4-OBS-01) has one home rather
-                                // than a copy here and a copy per row type.
-                                child: _actorText(
-                                  signal.reporter.id,
-                                  (name) => name,
-                                  fallback: l10n.unknown,
-                                  textAlign: TextAlign.end,
-                                  maxLines: 1,
-                                ),
-                              ),
-                            ],
-                          ),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              TextButton.icon(
-                                onPressed: () async {
-                                  GeoPoint location = signal.location['geopoint'];
-                                  final coords = Coords(location.latitude, location.longitude);
-                                  await NavigationService.navigateTo(
-                                    context: context,
-                                    coords: coords,
-                                    destinationTitle: signal.title,
-                                  );
-                                },
-                                icon: const Icon(Icons.directions),
-                                label: Text(l10n.navigateMe),
-                                style: ButtonStyle(
-                                  foregroundColor: WidgetStateProperty.all<Color>(Colors.white),
-                                  backgroundColor: WidgetStateProperty.all<Color>(Colors.orange),
-                                )
-                              ),
-                              if (signal.contactPhone.isNotEmpty)
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
                                 TextButton.icon(
                                   onPressed: () async {
-                                    Uri phoneUri = Uri(scheme: 'tel', path: signal.contactPhone);
-                                    if (await canLaunchUrl(phoneUri)) {
-                                      launchUrl(phoneUri);
-                                    } else {
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text(l10n.cannotCall(signal.contactPhone)),
-                                          ),
-                                        );
-                                      }
-                                    }
+                                    GeoPoint location = signal.location['geopoint'];
+                                    final coords = Coords(location.latitude, location.longitude);
+                                    await NavigationService.navigateTo(
+                                      context: context,
+                                      coords: coords,
+                                      destinationTitle: signal.title,
+                                    );
                                   },
-                                  icon: const Icon(Icons.phone),
-                                  label: Text(signal.contactPhone),
+                                  icon: const Icon(Icons.directions),
+                                  label: Text(l10n.navigateMe),
                                   style: ButtonStyle(
                                     foregroundColor: WidgetStateProperty.all<Color>(Colors.white),
                                     backgroundColor: WidgetStateProperty.all<Color>(Colors.orange),
                                   )
                                 ),
-                            ],
-                          ),
-                          Text(' ${l10n.urgency}'),
-                          // Master spec §5.2 restricts marking a case Red to
-                          // "the original poster/case holder, a moderator or an
-                          // admin". Until case ownership existed the reporter
-                          // was the whole of that set by default; now the case
-                          // holder is in it too, which is the spec being
-                          // implemented rather than the rule being relaxed.
-                          //
-                          // A moderator does NOT reach it here: they use the
-                          // shield in the app bar, which routes through the
-                          // `moderateAction` callable so the correction is
-                          // audited and carries a note (§5.3).
-                          //
-                          // `isCaseHolderUpdate` enforces the same line, so
-                          // hiding this picker is UI courtesy, not the security
-                          // boundary. Everyone else sees the level read-only.
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            child: canCoordinate
-                                ? UrgencyPicker(
-                                    value: signal.urgency,
-                                    enabled: !_isApplyingLevelChange,
-                                    onChanged: (value) => _updateSignalUrgency(
-                                      signal.urgency,
-                                      value,
-                                    ),
-                                  )
-                                : Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: UrgencyChip(urgency: signal.urgency),
-                                  ),
-                          ),
-                          // What the signal needs. Master spec §4.2: "as needs
-                          // are resolved, the case holder removes/completes tags
-                          // and the next priority becomes active" — so the
-                          // holder edits these here, rather than through the
-                          // edit screen, which carries the reporter's own
-                          // account of what they saw and stays theirs.
-                          //
-                          // Signals from before tags existed have none, so the
-                          // block is omitted rather than showing an empty
-                          // heading — but a coordinator still needs a way to add
-                          // the first one, which is why the edit affordance is
-                          // not inside the `if`.
-                          if (signal.helpNeededTags.isNotEmpty ||
-                              signal.animalType != null ||
-                              canCoordinate) ...[
-                            const SizedBox(height: 8),
-                            // Only when there is actually a need to head. A
-                            // signal with a species and no tags (legacy, or
-                            // edited by an older build) would otherwise read
-                            // "Help needed" above a lone Cat chip.
-                            if (signal.helpNeededTags.isNotEmpty ||
-                                canCoordinate)
-                              Row(
-                                children: [
-                                  Text(' ${l10n.helpNeeded}'),
-                                  const Spacer(),
-                                  if (canCoordinate)
-                                    TextButton.icon(
-                                      icon: const Icon(Icons.edit, size: 16),
-                                      label: Text(l10n.change),
-                                      onPressed: _isApplyingLevelChange
-                                          ? null
-                                          : () => _editHelpTags(signal),
-                                    ),
-                                ],
-                              ),
-                            Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 8),
-                              child: Wrap(
-                                spacing: 6,
-                                runSpacing: 4,
-                                children: [
-                                  if (AnimalType.fromCode(signal.animalType)
-                                      case final species?)
-                                    Chip(
-                                      avatar: Icon(species.icon, size: 16),
-                                      label: Text(species.label(l10n)),
-                                      visualDensity: VisualDensity.compact,
-                                    ),
-                                  // Unknown codes are dropped: one means the
-                                  // signal came from a newer build, and there is
-                                  // no label for it here.
-                                  for (final tag in HelpTag.fromCodes(
-                                      signal.helpNeededTags))
-                                    Chip(
-                                      avatar: Icon(tag.icon, size: 16),
-                                      label: Text(tag.label(l10n)),
-                                      visualDensity: VisualDensity.compact,
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ],
-                          // Who is responsible, immediately above the control
-                          // that responsibility gates. The holder is *who*, the
-                          // status is *how far along*, and putting them next to
-                          // each other is what makes "take responsibility, then
-                          // move it" read as one idea rather than two.
-                          CaseHolderBlock(
-                            signal: signal,
-                            signalId: widget.signalId,
-                            uid: uid,
-                            busy: _isApplyingLevelChange,
-                            runGuarded: _runGuarded,
-                            nameOf: _nameWidget,
-                            onClaim: _claimCase,
-                            onSignInRequired: _showSignInDialog,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(' ${l10n.status}'),
-                          DropdownButton<int>(
-                            itemHeight: 64,
-                            isExpanded: true,
-                            value: signal.status,
-                              items: SignalStatus.values
-                                  .map(
-                                    (status) => DropdownMenuItem(
-                                      value: status.code,
-                                      child: Row(
-                                        children: [
-                                          // A neutral glyph, not a map pin and
-                                          // not a coloured dot: colour is the
-                                          // urgency vocabulary, and status
-                                          // borrowing it put two traffic
-                                          // lights with opposite meanings on
-                                          // the same screen.
-                                          Padding(
-                                            padding: const EdgeInsets.all(12.0),
-                                            child: Icon(status.icon, size: 20),
-                                          ),
-                                          SizedBox.fromSize(size: const Size(8, 8)),
-                                          Text(status.label(l10n)),
-                                        ],
-                                      ),
-                                    ),
-                                  )
-                                  .toList(),
-                              // Disabled mid-write for the same reason as the
-                              // urgency picker: a second selection before the
-                              // first lands posts a duplicate timeline entry.
-                              onChanged: _isApplyingLevelChange
-                                  ? null
-                                  : (value) {
-                                      if (value != null) {
-                                        _updateSignalStatus(
-                                            signal, signal.status, value);
+                                if (signal.contactPhone.isNotEmpty)
+                                  TextButton.icon(
+                                    onPressed: () async {
+                                      Uri phoneUri = Uri(scheme: 'tel', path: signal.contactPhone);
+                                      if (await canLaunchUrl(phoneUri)) {
+                                        launchUrl(phoneUri);
+                                      } else {
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text(l10n.cannotCall(signal.contactPhone)),
+                                            ),
+                                          );
+                                        }
                                       }
                                     },
-                          ),
-                          _buildSignalHistory(signal, dateFormat),
-                        ],
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 0,
-                      left: 0,
-                      right: 0,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: Colors.grey,
-                            width: 1,
-                          ),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Colors.grey,
-                              blurRadius: 5.0,
-                            ),
-                          ],
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          // A moderator has locked comments (§18.3). The
-                          // composer is replaced rather than merely disabled:
-                          // a greyed-out field invites people to keep tapping
-                          // it, while a sentence explains what happened. The
-                          // rules deny the write regardless — this is the
-                          // courtesy, not the enforcement.
-                          child: signal.commentsLocked
-                              ? Row(
-                                  children: [
-                                    const Icon(Icons.lock_outline,
-                                        size: 20, color: Colors.grey),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        l10n.moderationCommentsLocked,
-                                        style: const TextStyle(
-                                          color: Colors.grey,
-                                          fontStyle: FontStyle.italic,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              : Row(
-                            children: [
-                              Expanded(
-                                child: TextField(
-                                  controller: _newCommentController,
-                                  textCapitalization: TextCapitalization.sentences,
-                                  // Matches the rules' 2000-char cap, so over-long
-                                  // input is stopped at the keyboard rather than
-                                  // failing the write. No counter — this is a
-                                  // chat-style field, not a form.
-                                  inputFormatters: [
-                                    LengthLimitingTextInputFormatter(2000),
-                                  ],
-                                  decoration: InputDecoration(
-                                    hintText: l10n.enterYourComment,
+                                    icon: const Icon(Icons.phone),
+                                    label: Text(signal.contactPhone),
+                                    style: ButtonStyle(
+                                      foregroundColor: WidgetStateProperty.all<Color>(Colors.white),
+                                      backgroundColor: WidgetStateProperty.all<Color>(Colors.orange),
+                                    )
                                   ),
+                              ],
+                            ),
+                            Text(' ${l10n.urgency}'),
+                            // Master spec §5.2 restricts marking a case Red to
+                            // "the original poster/case holder, a moderator or an
+                            // admin". Until case ownership existed the reporter
+                            // was the whole of that set by default; now the case
+                            // holder is in it too, which is the spec being
+                            // implemented rather than the rule being relaxed.
+                            //
+                            // A moderator does NOT reach it here: they use the
+                            // shield in the app bar, which routes through the
+                            // `moderateAction` callable so the correction is
+                            // audited and carries a note (§5.3).
+                            //
+                            // `isCaseHolderUpdate` enforces the same line, so
+                            // hiding this picker is UI courtesy, not the security
+                            // boundary. Everyone else sees the level read-only.
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              child: canCoordinate
+                                  ? UrgencyPicker(
+                                      value: signal.urgency,
+                                      enabled: !_isApplyingLevelChange,
+                                      onChanged: (value) => _updateSignalUrgency(
+                                        signal.urgency,
+                                        value,
+                                      ),
+                                    )
+                                  : Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: UrgencyChip(urgency: signal.urgency),
+                                    ),
+                            ),
+                            // What the signal needs. Master spec §4.2: "as needs
+                            // are resolved, the case holder removes/completes tags
+                            // and the next priority becomes active" — so the
+                            // holder edits these here, rather than through the
+                            // edit screen, which carries the reporter's own
+                            // account of what they saw and stays theirs.
+                            //
+                            // Signals from before tags existed have none, so the
+                            // block is omitted rather than showing an empty
+                            // heading — but a coordinator still needs a way to add
+                            // the first one, which is why the edit affordance is
+                            // not inside the `if`.
+                            if (signal.helpNeededTags.isNotEmpty ||
+                                signal.animalType != null ||
+                                canCoordinate) ...[
+                              const SizedBox(height: 8),
+                              // Only when there is actually a need to head. A
+                              // signal with a species and no tags (legacy, or
+                              // edited by an older build) would otherwise read
+                              // "Help needed" above a lone Cat chip.
+                              if (signal.helpNeededTags.isNotEmpty ||
+                                  canCoordinate)
+                                Row(
+                                  children: [
+                                    Text(' ${l10n.helpNeeded}'),
+                                    const Spacer(),
+                                    if (canCoordinate)
+                                      TextButton.icon(
+                                        icon: const Icon(Icons.edit, size: 16),
+                                        label: Text(l10n.change),
+                                        onPressed: _isApplyingLevelChange
+                                            ? null
+                                            : () => _editHelpTags(signal),
+                                      ),
+                                  ],
                                 ),
-                              ),
-                              Semantics(
-                                label: l10n.sendComment,
-                                button: true,
-                                enabled: true,
-                                child: IconButton(
-                                  icon: const Icon(Icons.send),
-                                  onPressed: () {
-                                    if (!RepositoryProvider.instance.userRepository.canModifyData) {
-                                      _showSignInDialog();
-                                    } else {
-                                      _addComment();
-                                    }
-                                  }
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 8),
+                                child: Wrap(
+                                  spacing: 6,
+                                  runSpacing: 4,
+                                  children: [
+                                    if (AnimalType.fromCode(signal.animalType)
+                                        case final species?)
+                                      Chip(
+                                        avatar: Icon(species.icon, size: 16),
+                                        label: Text(species.label(l10n)),
+                                        visualDensity: VisualDensity.compact,
+                                      ),
+                                    // Unknown codes are dropped: one means the
+                                    // signal came from a newer build, and there is
+                                    // no label for it here.
+                                    for (final tag in HelpTag.fromCodes(
+                                        signal.helpNeededTags))
+                                      Chip(
+                                        avatar: Icon(tag.icon, size: 16),
+                                        label: Text(tag.label(l10n)),
+                                        visualDensity: VisualDensity.compact,
+                                      ),
+                                  ],
                                 ),
                               ),
                             ],
-                                ),
+                            // Who is responsible, immediately above the control
+                            // that responsibility gates. The holder is *who*, the
+                            // status is *how far along*, and putting them next to
+                            // each other is what makes "take responsibility, then
+                            // move it" read as one idea rather than two.
+                            CaseHolderBlock(
+                              signal: signal,
+                              signalId: widget.signalId,
+                              uid: uid,
+                              busy: _isApplyingLevelChange,
+                              runGuarded: _runGuarded,
+                              nameOf: _nameWidget,
+                              onClaim: _claimCase,
+                              onSignInRequired: _showSignInDialog,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(' ${l10n.status}'),
+                            DropdownButton<int>(
+                              itemHeight: 64,
+                              isExpanded: true,
+                              value: signal.status,
+                                items: SignalStatus.values
+                                    .map(
+                                      (status) => DropdownMenuItem(
+                                        value: status.code,
+                                        child: Row(
+                                          children: [
+                                            // A neutral glyph, not a map pin and
+                                            // not a coloured dot: colour is the
+                                            // urgency vocabulary, and status
+                                            // borrowing it put two traffic
+                                            // lights with opposite meanings on
+                                            // the same screen.
+                                            Padding(
+                                              padding: const EdgeInsets.all(12.0),
+                                              child: Icon(status.icon, size: 20),
+                                            ),
+                                            SizedBox.fromSize(size: const Size(8, 8)),
+                                            Text(status.label(l10n)),
+                                          ],
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
+                                // Disabled mid-write for the same reason as the
+                                // urgency picker: a second selection before the
+                                // first lands posts a duplicate timeline entry.
+                                onChanged: _isApplyingLevelChange
+                                    ? null
+                                    : (value) {
+                                        if (value != null) {
+                                          _updateSignalStatus(
+                                              signal, signal.status, value);
+                                        }
+                                      },
+                            ),
+                            _buildSignalHistory(signal, dateFormat),
+                          ],
                         ),
                       ),
                     ),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outline,
+                          width: 1,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Theme.of(context).colorScheme.shadow
+                                .withAlpha(40),
+                            blurRadius: 5.0,
+                          ),
+                        ],
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        // A moderator has locked comments (§18.3). The
+                        // composer is replaced rather than merely disabled:
+                        // a greyed-out field invites people to keep tapping
+                        // it, while a sentence explains what happened. The
+                        // rules deny the write regardless — this is the
+                        // courtesy, not the enforcement.
+                        child: signal.commentsLocked
+                            ? Row(
+                                children: [
+                                  const Icon(Icons.lock_outline,
+                                      size: 20, color: Colors.grey),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      l10n.moderationCommentsLocked,
+                                      style: const TextStyle(
+                                        color: Colors.grey,
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _newCommentController,
+                                textCapitalization: TextCapitalization.sentences,
+                                // Matches the rules' 2000-char cap, so over-long
+                                // input is stopped at the keyboard rather than
+                                // failing the write. No counter — this is a
+                                // chat-style field, not a form.
+                                inputFormatters: [
+                                  LengthLimitingTextInputFormatter(2000),
+                                ],
+                                decoration: InputDecoration(
+                                  hintText: l10n.enterYourComment,
+                                ),
+                              ),
+                            ),
+                            Semantics(
+                              label: l10n.sendComment,
+                              button: true,
+                              enabled: true,
+                              child: IconButton(
+                                icon: const Icon(Icons.send),
+                                onPressed: () {
+                                  if (!RepositoryProvider.instance.userRepository.canModifyData) {
+                                    _showSignInDialog();
+                                  } else {
+                                    _addComment();
+                                  }
+                                }
+                              ),
+                            ),
+                          ],
+                              ),
+                      ),
+                    ),
+
                   ],
                 ),
               ),

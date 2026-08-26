@@ -637,5 +637,16 @@
   "moderationRestore": "Възстановяване",
   "mapLegend": "Какво означават маркерите",
   "mapLegendUrgencyNote": "Цветът на маркера показва спешността — колко сериозно става, ако никой не реагира. Червените сигнали никога не се групират, така че остават видими при всяко приближение.",
-  "mapLegendVetClinic": "Ветеринарна клиника"
+  "mapLegendVetClinic": "Ветеринарна клиника",
+  "done": "Готово",
+  "signOutFailed": "Неуспешно излизане. Моля, опитайте отново.",
+  "couldNotOpenEmail": "На това устройство няма настроено приложение за имейл. Пишете ни на {address}.",
+  "@couldNotOpenEmail": {
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "feedbackEmailSubject": "Help a Paw — обратна връзка"
 }

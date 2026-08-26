@@ -8,6 +8,10 @@ import 'dart:io' show Platform;
 
 import '../utils/nav_extensions.dart';
 import 'app_bar_title.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+/// Where feedback that does not go through the form ends up.
+const _contactEmail = 'contact@helpapaw.org';
 
 class FeedbackPage extends StatefulWidget {
   const FeedbackPage({super.key});
@@ -111,6 +115,36 @@ class _FeedbackPageState extends State<FeedbackPage> {
       if (mounted) {
         setState(() => _isSubmitting = false);
       }
+    }
+  }
+
+  /// Open the device's mail app with our address filled in.
+  ///
+  /// This button used to be an enabled control wired to a comment that said
+  /// "// Would launch email client". Tapping it did nothing at all, and said
+  /// nothing about doing nothing — the app just sat there. A control that
+  /// looks live has to either work or explain why it can't.
+  Future<void> _emailUs() async {
+    final l10n = AppLocalizations.of(context);
+    final uri = Uri(
+      scheme: 'mailto',
+      path: _contactEmail,
+      queryParameters: {'subject': l10n.feedbackEmailSubject},
+    );
+
+    // A device with no mail app configured throws rather than returning
+    // false, so both paths lead to the same message — which names the
+    // address, so the user can still write to us from somewhere else.
+    var opened = false;
+    try {
+      opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      opened = false;
+    }
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.couldNotOpenEmail(_contactEmail))),
+      );
     }
   }
 
@@ -283,11 +317,9 @@ class _FeedbackPageState extends State<FeedbackPage> {
                     ),
                     const SizedBox(height: 8),
                     TextButton.icon(
-                      onPressed: () {
-                        // Would launch email client
-                      },
+                      onPressed: _emailUs,
                       icon: const Icon(Icons.email),
-                      label: const Text('contact@helpapaw.org'),
+                      label: const Text(_contactEmail),
                     ),
                   ],
                 ),

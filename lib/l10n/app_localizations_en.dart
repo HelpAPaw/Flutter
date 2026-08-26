@@ -1842,4 +1842,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get mapLegendVetClinic => 'Vet clinic';
+
+  @override
+  String get done => 'Done';
+
+  @override
+  String get signOutFailed => 'Could not sign out. Please try again.';
+
+  @override
+  String couldNotOpenEmail(String address) {
+    return 'No email app is set up on this device. Write to $address from anywhere.';
+  }
+
+  @override
+  String get feedbackEmailSubject => 'Help a Paw — feedback';
 }

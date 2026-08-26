@@ -23,8 +23,6 @@ class HomeRouteDrawer extends StatefulWidget {
 }
 
 class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
-  Future<void>? _browserLaunched;
-  int _homeRouteTile = 0;
 
   /// Cached so the drawer's frequent rebuilds — a tile selection is a setState,
   /// and the auth StreamBuilder rebuilds the whole list — don't open a fresh
@@ -70,8 +68,14 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
         Navigator.of(context).pop();
       }
     } catch (e) {
-      // Handle sign out error
       debugPrint('Sign out error: $e');
+      // Not just a debugPrint: a failed sign-out leaves the drawer open on an
+      // account the user believes they have left. Say so.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context).signOutFailed)),
+        );
+      }
     }
   }
 
@@ -88,20 +92,12 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
     }
   }
 
-  Future<void> homeRouteTile(int index) async {
-    setState(() {
-      _homeRouteTile = index;
-    });
-  }
-
   // Home Route Navigation Drawer Widgets
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final Uri launchUrl = Uri(
         scheme: 'https', host: 'www.helpapaw.org');
-    FutureBuilder<void>(
-        future: _browserLaunched, builder: (context, snapshot) => _browserLaunchStatus(context, snapshot, l10n));
     return StreamBuilder<User?>(
       // userChanges() rather than authStateChanges(): the latter only fires on
       // sign-in/sign-out, so editing the name or avatar on the profile screen
@@ -128,9 +124,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
                   leading: const Icon(Icons.login),
                   onTap: () => {
                     context.push(Routes.signIn),
-                    homeRouteTile(0),
                   },
-                  selected: _homeRouteTile == 0,
                   title: Text(
                     l10n.signIn,
                     softWrap: true,
@@ -150,9 +144,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
                       ),
                       onTap: () => {
                         context.push(Routes.profile),
-                        homeRouteTile(1),
                       },
-                      selected: _homeRouteTile == 1,
                       title: Text(
                         user?.displayName ?? user?.email ?? l10n.profile,
                         softWrap: true,
@@ -169,9 +161,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
                       leading: const Icon(Icons.logout),
                       onTap: () => {
                         _signOut(),
-                        homeRouteTile(11),
                       },
-                      selected: _homeRouteTile == 11,
                       title: Text(
                         l10n.signOut,
                         softWrap: true,
@@ -184,9 +174,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             leading: const Icon(Icons.pin_drop),
             onTap: () => {
               context.push(Routes.mySignals),
-              homeRouteTile(2),
             },
-            selected: _homeRouteTile == 2,
             title: Text(
               l10n.mySignals,
               softWrap: true,
@@ -206,15 +194,13 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
                 return Badge.count(
                   count: unread,
                   isLabelVisible: unread > 0,
-                  child: const Icon(Icons.notifications_active),
+                  child: const Icon(Icons.inbox),
                 );
               },
             ),
             onTap: () => {
               context.push(Routes.myNotifications),
-              homeRouteTile(10),
             },
-            selected: _homeRouteTile == 10,
             title: Text(
               l10n.myNotifications,
               softWrap: true,
@@ -243,9 +229,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
                 leading: const Icon(Icons.shield_outlined),
                 onTap: () => {
                   context.push(Routes.moderation),
-                  homeRouteTile(12),
                 },
-                selected: _homeRouteTile == 12,
                 title: Text(
                   l10n.moderationQueue,
                   softWrap: true,
@@ -258,9 +242,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             leading: const Icon(Icons.notifications),
             onTap: () => {
               context.push(Routes.notificationSettings),
-              homeRouteTile(3),
             },
-            selected: _homeRouteTile == 3,
             title: Text(
               l10n.notificationSettings,
               softWrap: true,
@@ -271,9 +253,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             leading: const Icon(Icons.question_mark),
             onTap: () => {
               context.push(Routes.faqs),
-              homeRouteTile(4),
             },
-            selected: _homeRouteTile == 4,
             title: Text(
               l10n.faqs,
               softWrap: true,
@@ -284,9 +264,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             leading: const Icon(Icons.feedback),
             onTap: () => {
               context.push(Routes.feedback),
-              homeRouteTile(5),
             },
-            selected: _homeRouteTile == 5,
             title: Text(
               l10n.feedback,
               softWrap: true,
@@ -297,9 +275,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             leading: const Icon(Icons.privacy_tip),
             onTap: () => {
               context.push(Routes.privacyPolicy),
-              homeRouteTile(6),
             },
-            selected: _homeRouteTile == 6,
             title: Text(
               l10n.privacyPolicy,
               softWrap: true,
@@ -308,13 +284,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
           ListTile(
             enableFeedback: true,
             leading: const Icon(Icons.link),
-            onTap: () => {
-              homeRouteTile(7),
-              setState(() {
-                _browserLaunched = _launchBrowser(launchUrl);
-              }),
-            },
-            selected: _homeRouteTile == 7,
+            onTap: () => _launchBrowser(launchUrl),
             title: Text(
               l10n.ourSite,
               softWrap: true,
@@ -325,9 +295,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
             leading: const Icon(Icons.info),
             onTap: () => {
               context.push(Routes.about),
-              homeRouteTile(8),
             },
-            selected: _homeRouteTile == 8,
             title: Text(
               l10n.about,
               softWrap: true,
@@ -343,9 +311,7 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
                     ? box.localToGlobal(Offset.zero) & box.size
                     : null;
                 ShareService.shareApp(sharePositionOrigin: origin);
-                homeRouteTile(9);
               },
-              selected: _homeRouteTile == 9,
               title: Text(
                 l10n.share,
                 softWrap: true,
@@ -359,12 +325,4 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
     );
   }
 
-  Widget _browserLaunchStatus(
-      BuildContext context, AsyncSnapshot<void> snapshot, AppLocalizations l10n) {
-    if (snapshot.hasError) {
-      return Text(l10n.snapshotError(snapshot.error.toString()));
-    } else {
-      return Text(l10n.launchingBrowser);
-    }
-  }
 }

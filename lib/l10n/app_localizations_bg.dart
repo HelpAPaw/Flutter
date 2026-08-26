@@ -1870,4 +1870,18 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get mapLegendVetClinic => 'Ветеринарна клиника';
+
+  @override
+  String get done => 'Готово';
+
+  @override
+  String get signOutFailed => 'Неуспешно излизане. Моля, опитайте отново.';
+
+  @override
+  String couldNotOpenEmail(String address) {
+    return 'На това устройство няма настроено приложение за имейл. Пишете ни на $address.';
+  }
+
+  @override
+  String get feedbackEmailSubject => 'Help a Paw — обратна връзка';
 }

@@ -922,5 +922,16 @@
   "moderationRestore": "Restore",
   "mapLegend": "What the pins mean",
   "mapLegendUrgencyNote": "Pin colour shows urgency — how serious it gets if nobody acts. Red signals are never grouped into a cluster, so they stay visible at every zoom.",
-  "mapLegendVetClinic": "Vet clinic"
+  "mapLegendVetClinic": "Vet clinic",
+  "done": "Done",
+  "signOutFailed": "Could not sign out. Please try again.",
+  "couldNotOpenEmail": "No email app is set up on this device. Write to {address} from anywhere.",
+  "@couldNotOpenEmail": {
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "feedbackEmailSubject": "Help a Paw — feedback"
 }

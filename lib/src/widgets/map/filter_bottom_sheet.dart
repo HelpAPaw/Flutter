@@ -13,7 +13,17 @@ import 'package:help_a_paw/l10n/app_localizations.dart';
 /// Shows the filter bottom sheet for help tags, species, urgency and status
 void showFilterBottomSheet(BuildContext context, WidgetRef ref) {
   final l10n = AppLocalizations.of(context);
-  showModalBottomSheet(
+
+  // Every toggle applies to the map immediately, which is the good part — you
+  // watch pins appear and disappear as you tick. It also meant there was no
+  // way back: "Apply Filters" only called Navigator.pop, and dismissing with
+  // the back gesture left the edits applied just the same. Unticking Red and
+  // changing your mind was unrecoverable except by re-ticking from memory.
+  //
+  // So the sheet remembers what it opened with and Cancel puts it back.
+  final opened = ref.read(mapViewModelProvider).filterState;
+
+  showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     shape: const RoundedRectangleBorder(
@@ -22,7 +32,13 @@ void showFilterBottomSheet(BuildContext context, WidgetRef ref) {
     builder: (BuildContext context) {
       return _FilterBottomSheetContent(l10n: l10n);
     },
-  );
+  ).then((keep) {
+    // null = dismissed by the back gesture or by tapping the scrim, which is
+    // a cancel like any other.
+    if (keep != true) {
+      ref.read(mapViewModelProvider.notifier).restoreFilterState(opened);
+    }
+  });
 }
 
 class _FilterBottomSheetContent extends ConsumerWidget {
@@ -172,23 +188,30 @@ class _FilterBottomSheetContent extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10.0),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            onPressed: () => Navigator.pop(context, false),
+                            child: Text(l10n.cancel),
                           ),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
-                        onPressed: () {
-                          Navigator.pop(context);
-                        },
-                        child: Text(
-                          l10n.applyFilters,
-                          style: const TextStyle(fontSize: 16),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            onPressed: () => Navigator.pop(context, true),
+                            child: Text(l10n.done),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ],
                 ),
