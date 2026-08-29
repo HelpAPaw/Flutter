@@ -11,6 +11,7 @@ import 'app_bar_title.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'section_header.dart';
 import 'escape_leading.dart';
+import '../utils/error_text.dart';
 
 /// Where feedback that does not go through the form ends up.
 const _contactEmail = 'contact@helpapaw.org';
@@ -106,11 +107,15 @@ class _FeedbackPageState extends State<FeedbackPage> {
         );
         context.pop();
       }
-    } catch (e) {
+    } catch (e, stack) {
       if (mounted) {
         final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.errorSubmittingFeedback(e.toString()))),
+          SnackBar(
+            content: Text(reportAndDescribe(l10n, e, stack: stack,
+                where: 'feedback.submit',
+                fallback: l10n.errorSubmittingFeedback)),
+          ),
         );
       }
     } finally {

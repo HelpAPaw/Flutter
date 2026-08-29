@@ -14,6 +14,7 @@ import '../../viewmodels/map_view_model.dart';
 import '../help_tag_selector.dart';
 import '../section_header.dart';
 import '../urgency_picker.dart';
+import '../../utils/error_text.dart';
 
 /// Shared layout for a wizard page: the question, an optional supporting line,
 /// then the control.
@@ -206,13 +207,16 @@ class _NewSignalPhotoStepState extends ConsumerState<NewSignalPhotoStep> {
       if (image != null) {
         ref.read(mapViewModelProvider.notifier).setFormImage(image);
       }
-    } catch (e) {
+    } catch (e, stack) {
+      final message = reportAndDescribe(l10n, e, stack: stack,
+          where: 'newSignal.pickImage',
+          fallback: source == ImageSource.camera
+              ? l10n.errorAccessingCamera
+              : l10n.errorAccessingGallery);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(source == ImageSource.camera
-              ? l10n.errorAccessingCamera(e.toString())
-              : l10n.errorAccessingGallery(e.toString())),
+          content: Text(message),
           backgroundColor: Colors.red,
         ),
       );

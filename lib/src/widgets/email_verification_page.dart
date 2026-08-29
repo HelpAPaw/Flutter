@@ -9,6 +9,7 @@ import '../config/routes.dart';
 import '../services/auth_service.dart';
 import '../utils/nav_extensions.dart';
 import 'app_bar_title.dart';
+import '../utils/error_text.dart';
 
 class EmailVerificationPage extends StatefulWidget {
   const EmailVerificationPage({super.key});
@@ -151,7 +152,11 @@ class _EmailVerificationPageState extends State<EmailVerificationPage>
         } else if (e.code == 'network-request-failed') {
           errorMessage = l10n.networkError;
         } else {
-          errorMessage = l10n.errorWithCode(e.message ?? e.code);
+          // The SDK's own `e.message` is an English sentence about our auth
+          // configuration; it is logged, not shown.
+          errorMessage = reportAndDescribe(l10n, e,
+              where: 'emailVerification.send',
+              fallback: l10n.unexpectedError);
         }
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -162,12 +167,15 @@ class _EmailVerificationPageState extends State<EmailVerificationPage>
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stack) {
       if (mounted) {
         final l10n = AppLocalizations.of(context);
+        final message = reportAndDescribe(l10n, e, stack: stack,
+            where: 'emailVerification.send',
+            fallback: l10n.unexpectedError);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(l10n.unexpectedErrorWithMessage(e.toString())),
+            content: Text(message),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 5),
           ),

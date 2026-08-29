@@ -485,6 +485,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get networkError => 'Network error. Please check your connection.';
 
   @override
+  String get notAllowedError =>
+      'You are not allowed to do that. Signing in again may help.';
+
+  @override
+  String get serverBusyError =>
+      'The server is busy right now. Please try again in a moment.';
+
+  @override
+  String get cameraPermissionDenied =>
+      'Help a Paw needs camera access. You can allow it in Settings.';
+
+  @override
+  String get photosPermissionDenied =>
+      'Help a Paw needs access to your photos. You can allow it in Settings.';
+
+  @override
   String get failedToCreateSignal =>
       'Failed to create signal. Please try again.';
 
@@ -516,14 +532,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get removePhoto => 'Remove Photo';
 
   @override
-  String errorAccessingCamera(String error) {
-    return 'Error accessing camera: $error';
-  }
+  String get errorAccessingCamera =>
+      'Could not open the camera. Please try again.';
 
   @override
-  String errorAccessingGallery(String error) {
-    return 'Error accessing gallery: $error';
-  }
+  String get errorAccessingGallery =>
+      'Could not open your photos. Please try again.';
 
   @override
   String get signInSubtitle => 'Sign in to report and help animals in need';
@@ -827,14 +841,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photoDeletedSuccessfully => 'Photo deleted successfully';
 
   @override
-  String failedToUploadPhoto(String error) {
-    return 'Failed to upload photo: $error';
-  }
+  String get failedToUploadPhoto =>
+      'Could not upload the photo. Please try again.';
 
   @override
-  String failedToDeletePhoto(String error) {
-    return 'Failed to delete photo: $error';
-  }
+  String get failedToDeletePhoto =>
+      'Could not delete the photo. Please try again.';
 
   @override
   String photoOf(int current, int total) {
@@ -878,22 +890,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileUpdatedSuccessfully => 'Profile updated successfully';
 
   @override
-  String errorUpdatingProfile(String error) {
-    return 'Error updating profile: $error';
-  }
+  String get errorUpdatingProfile =>
+      'Could not save your profile. Please try again.';
 
   @override
   String get photoUpdatedSuccessfully => 'Photo updated successfully';
 
   @override
-  String errorUploadingPhoto(String error) {
-    return 'Error uploading photo: $error';
-  }
+  String get errorUploadingPhoto =>
+      'Could not upload your photo. Please try again.';
 
   @override
-  String errorLoadingStatistics(String error) {
-    return 'Error loading statistics: $error';
-  }
+  String get errorLoadingStatistics => 'Could not load your statistics.';
 
   @override
   String get saveChanges => 'Save Changes';
@@ -965,9 +973,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get thankYouFeedback => 'Thank you for your feedback!';
 
   @override
-  String errorSubmittingFeedback(String error) {
-    return 'Error submitting feedback: $error';
-  }
+  String get errorSubmittingFeedback =>
+      'Could not send your feedback. Please try again.';
 
   @override
   String get otherWaysToReach => 'Other ways to reach us';
@@ -1062,11 +1069,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get unknownDate => 'Unknown date';
 
   @override
-  String errorWithMessage(String error) {
-    return 'Error: $error';
-  }
-
-  @override
   String get navigationDrawer => 'Navigation Drawer';
 
   @override
@@ -1089,11 +1091,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get launchingBrowser => 'Launching Browser';
-
-  @override
-  String snapshotError(String error) {
-    return 'Snapshot Error: $error';
-  }
 
   @override
   String get faqsTitle => 'FAQs';
@@ -1324,11 +1321,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'This account has been disabled. Please contact support.';
 
   @override
-  String unexpectedErrorWithMessage(String error) {
-    return 'Unexpected error: $error';
-  }
-
-  @override
   String errorWithCode(String message) {
     return 'Error: $message';
   }
@@ -1465,9 +1457,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get skipForNowProfile => 'Skip for now';
 
   @override
-  String errorSavingProfile(String error) {
-    return 'Error saving profile: $error';
-  }
+  String get errorSavingProfile =>
+      'Could not save your profile. Please try again.';
 
   @override
   String get clinicDetails => 'Clinic Details';

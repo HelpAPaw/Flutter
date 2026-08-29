@@ -51,6 +51,7 @@ import '../services/public_profile_service.dart';
 import 'app_bar_title.dart';
 import 'status_view.dart';
 import 'sign_in_required_dialog.dart';
+import '../utils/error_text.dart';
 
 class SignalDetailsScreen extends StatefulWidget {
   const SignalDetailsScreen({super.key, required this.signalId});
@@ -2138,11 +2139,14 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
             ),
           );
         }
-      } catch (e) {
+      } catch (e, stack) {
+        final message = reportAndDescribe(l10n, e, stack: stack,
+            where: 'signalDetails.uploadPhoto',
+            fallback: l10n.failedToUploadPhoto);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(l10n.failedToUploadPhoto(e.toString())),
+              content: Text(message),
               backgroundColor: Colors.red,
             ),
           );
@@ -2152,11 +2156,13 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
           setState(() => _isUploadingPhoto = false);
         }
       }
-    } catch (e) {
+    } catch (e, stack) {
+      final errorMessage = reportAndDescribe(l10n, e, stack: stack,
+          where: 'signalDetails.pickImage',
+          fallback: source == ImageSource.camera
+              ? l10n.errorAccessingCamera
+              : l10n.errorAccessingGallery);
       if (mounted) {
-        final errorMessage = source == ImageSource.camera
-            ? l10n.errorAccessingCamera(e.toString())
-            : l10n.errorAccessingGallery(e.toString());
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(errorMessage),
@@ -2212,11 +2218,14 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stack) {
+      final message = reportAndDescribe(l10n, e, stack: stack,
+          where: 'signalDetails.deletePhoto',
+          fallback: l10n.failedToDeletePhoto);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(l10n.failedToDeletePhoto(e.toString())),
+            content: Text(message),
             backgroundColor: Colors.red,
           ),
         );

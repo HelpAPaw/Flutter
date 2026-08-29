@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../config/routes.dart';
 import '../services/auth_service.dart';
 import '../services/public_profile_service.dart';
+import '../utils/error_text.dart';
 
 class ProfileCompletionPage extends StatefulWidget {
   const ProfileCompletionPage({super.key});
@@ -130,12 +131,15 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
         // Pop back through auth screens to return to original screen
         _popAuthStack(context);
       }
-    } catch (e) {
+    } catch (e, stack) {
       if (mounted) {
         final l10n = AppLocalizations.of(context);
+        final message = reportAndDescribe(l10n, e, stack: stack,
+            where: 'profileCompletion.save',
+            fallback: l10n.errorSavingProfile);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(l10n.errorSavingProfile(e.toString())),
+            content: Text(message),
             backgroundColor: Colors.red,
           ),
         );

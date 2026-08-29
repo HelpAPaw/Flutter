@@ -16,6 +16,7 @@ import '../config/routes.dart';
 import '../utils/nav_extensions.dart';
 import 'app_bar_title.dart';
 import 'escape_leading.dart';
+import '../utils/error_text.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -144,11 +145,14 @@ class _ProfilePageState extends State<ProfilePage> {
         _signalsCount = results[0];
         _commentsCount = results[1];
       });
-    } catch (e) {
+    } catch (e, stack) {
       if (mounted) {
         final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.errorLoadingStatistics(e.toString()))),
+          SnackBar(
+            content: Text(reportAndDescribe(l10n, e, stack: stack,
+                where: 'profile.loadStatistics', fallback: l10n.errorLoadingStatistics)),
+          ),
         );
       }
     }
@@ -239,11 +243,14 @@ class _ProfilePageState extends State<ProfilePage> {
           SnackBar(content: Text(l10n.profileUpdatedSuccessfully)),
         );
       }
-    } catch (e) {
+    } catch (e, stack) {
       if (mounted) {
         final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.errorUpdatingProfile(e.toString()))),
+          SnackBar(
+            content: Text(reportAndDescribe(l10n, e, stack: stack,
+                where: 'profile.save', fallback: l10n.errorUpdatingProfile)),
+          ),
         );
       }
     } finally {
@@ -293,11 +300,14 @@ class _ProfilePageState extends State<ProfilePage> {
           SnackBar(content: Text(l10n.photoUpdatedSuccessfully)),
         );
       }
-    } catch (e) {
+    } catch (e, stack) {
       if (mounted) {
         final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.errorUploadingPhoto(e.toString()))),
+          SnackBar(
+            content: Text(reportAndDescribe(l10n, e, stack: stack,
+                where: 'profile.uploadAvatar', fallback: l10n.errorUploadingPhoto)),
+          ),
         );
       }
     } finally {

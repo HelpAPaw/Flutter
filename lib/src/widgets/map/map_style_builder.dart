@@ -71,8 +71,10 @@ class _MapStyleBuilderState extends State<MapStyleBuilder> {
     }).catchError((Object error) {
       // A missing or malformed asset must not take the map with it — an
       // unstyled map is a cosmetic problem, no map is not.
+      // No `return` here: the future is a `Future<void>`, so returning a
+      // String makes the handler itself throw on the one path it exists to
+      // protect.
       debugPrint('Could not load $_darkAsset: $error');
-      return '';
     });
   }
 

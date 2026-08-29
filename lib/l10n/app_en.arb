@@ -180,6 +180,10 @@
   "authenticationError": "Authentication error. Please sign in again.",
   "serviceUnavailable": "Service unavailable. Please try again later.",
   "networkError": "Network error. Please check your connection.",
+  "notAllowedError": "You are not allowed to do that. Signing in again may help.",
+  "serverBusyError": "The server is busy right now. Please try again in a moment.",
+  "cameraPermissionDenied": "Help a Paw needs camera access. You can allow it in Settings.",
+  "photosPermissionDenied": "Help a Paw needs access to your photos. You can allow it in Settings.",
   "failedToCreateSignal": "Failed to create signal. Please try again.",
   "requestTimedOut": "Request timed out. Please check your connection and try again.",
   "unexpectedError": "An unexpected error occurred. Please try again.",
@@ -189,22 +193,8 @@
   "takePhoto": "Take Photo",
   "chooseFromGallery": "Choose from Gallery",
   "removePhoto": "Remove Photo",
-  "errorAccessingCamera": "Error accessing camera: {error}",
-  "@errorAccessingCamera": {
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
-  },
-  "errorAccessingGallery": "Error accessing gallery: {error}",
-  "@errorAccessingGallery": {
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
-  },
+  "errorAccessingCamera": "Could not open the camera. Please try again.",
+  "errorAccessingGallery": "Could not open your photos. Please try again.",
   "signInSubtitle": "Sign in to report and help animals in need",
   "signInSideMessage": "Join our community of animal lovers",
   "signInWithGoogle": "Sign in with Google",
@@ -408,22 +398,8 @@
   "confirmDeletePhoto": "Are you sure you want to delete this photo?",
   "photoAddedSuccessfully": "Photo added successfully!",
   "photoDeletedSuccessfully": "Photo deleted successfully",
-  "failedToUploadPhoto": "Failed to upload photo: {error}",
-  "@failedToUploadPhoto": {
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
-  },
-  "failedToDeletePhoto": "Failed to delete photo: {error}",
-  "@failedToDeletePhoto": {
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
-  },
+  "failedToUploadPhoto": "Could not upload the photo. Please try again.",
+  "failedToDeletePhoto": "Could not delete the photo. Please try again.",
   "photoOf": "{current} of {total}",
   "@photoOf": {
     "placeholders": {
@@ -447,31 +423,10 @@
   "verificationEmailSent": "Verification email sent",
   "memberSince": "Member Since",
   "profileUpdatedSuccessfully": "Profile updated successfully",
-  "errorUpdatingProfile": "Error updating profile: {error}",
-  "@errorUpdatingProfile": {
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
-  },
+  "errorUpdatingProfile": "Could not save your profile. Please try again.",
   "photoUpdatedSuccessfully": "Photo updated successfully",
-  "errorUploadingPhoto": "Error uploading photo: {error}",
-  "@errorUploadingPhoto": {
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
-  },
-  "errorLoadingStatistics": "Error loading statistics: {error}",
-  "@errorLoadingStatistics": {
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
-  },
+  "errorUploadingPhoto": "Could not upload your photo. Please try again.",
+  "errorLoadingStatistics": "Could not load your statistics.",
   "saveChanges": "Save Changes",
   "sendFeedback": "Send Feedback",
   "weLoveToHear": "We'd love to hear from you!",
@@ -494,14 +449,7 @@
   "submitFeedback": "Submit Feedback",
   "pleaseEnterFeedback": "Please enter your feedback",
   "thankYouFeedback": "Thank you for your feedback!",
-  "errorSubmittingFeedback": "Error submitting feedback: {error}",
-  "@errorSubmittingFeedback": {
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
-  },
+  "errorSubmittingFeedback": "Could not send your feedback. Please try again.",
   "otherWaysToReach": "Other ways to reach us",
   "notificationSettings": "Notification Settings",
   "createAnAccount": "Create an account",
@@ -543,14 +491,6 @@
   "noSignalsYet": "No signals yet",
   "submittedSignalsAppearHere": "Your submitted signals will appear here",
   "unknownDate": "Unknown date",
-  "errorWithMessage": "Error: {error}",
-  "@errorWithMessage": {
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
-  },
   "navigationDrawer": "Navigation Drawer",
   "ourSite": "Our Site",
   "about": "About",
@@ -559,14 +499,6 @@
   "feedback": "Feedback",
   "privacyPolicy": "Privacy Policy",
   "launchingBrowser": "Launching Browser",
-  "snapshotError": "Snapshot Error: {error}",
-  "@snapshotError": {
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
-  },
   "faqsTitle": "FAQs",
   "faqSectionGeneral": "General",
   "faqSectionCreatingSignals": "Creating Signals",
@@ -650,14 +582,6 @@
   "verificationEmailSentCheck": "Verification email sent! Check your inbox (or SPAM).",
   "tooManyRequests": "Too many requests. Please try again later or contact support.",
   "accountDisabled": "This account has been disabled. Please contact support.",
-  "unexpectedErrorWithMessage": "Unexpected error: {error}",
-  "@unexpectedErrorWithMessage": {
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
-  },
   "errorWithCode": "Error: {message}",
   "@errorWithCode": {
     "placeholders": {
@@ -781,14 +705,7 @@
   "validPhoneNumber": "Please enter a valid phone number",
   "completeProfile": "Complete Profile",
   "skipForNowProfile": "Skip for now",
-  "errorSavingProfile": "Error saving profile: {error}",
-  "@errorSavingProfile": {
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
-  },
+  "errorSavingProfile": "Could not save your profile. Please try again.",
   "clinicDetails": "Clinic Details",
   "clinicNotFound": "Clinic not found",
   "returnToMap": "Return to Map",

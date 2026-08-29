@@ -485,6 +485,22 @@ class AppLocalizationsBg extends AppLocalizations {
   String get networkError => 'Мрежова грешка. Моля, проверете връзката си.';
 
   @override
+  String get notAllowedError =>
+      'Нямате право да направите това. Опитайте да влезете отново.';
+
+  @override
+  String get serverBusyError =>
+      'Сървърът е зает в момента. Моля, опитайте отново след малко.';
+
+  @override
+  String get cameraPermissionDenied =>
+      '„Помогни на лапа“ се нуждае от достъп до камерата. Може да го разрешите в Настройки.';
+
+  @override
+  String get photosPermissionDenied =>
+      '„Помогни на лапа“ се нуждае от достъп до снимките ви. Може да го разрешите в Настройки.';
+
+  @override
   String get failedToCreateSignal =>
       'Неуспешно създаване на сигнал. Моля, опитайте отново.';
 
@@ -518,14 +534,12 @@ class AppLocalizationsBg extends AppLocalizations {
   String get removePhoto => 'Премахни снимка';
 
   @override
-  String errorAccessingCamera(String error) {
-    return 'Грешка при достъп до камерата: $error';
-  }
+  String get errorAccessingCamera =>
+      'Камерата не можа да се отвори. Моля, опитайте отново.';
 
   @override
-  String errorAccessingGallery(String error) {
-    return 'Грешка при достъп до галерията: $error';
-  }
+  String get errorAccessingGallery =>
+      'Галерията не можа да се отвори. Моля, опитайте отново.';
 
   @override
   String get signInSubtitle =>
@@ -840,14 +854,12 @@ class AppLocalizationsBg extends AppLocalizations {
   String get photoDeletedSuccessfully => 'Снимката е изтрита успешно';
 
   @override
-  String failedToUploadPhoto(String error) {
-    return 'Неуспешно качване на снимка: $error';
-  }
+  String get failedToUploadPhoto =>
+      'Снимката не можа да се качи. Моля, опитайте отново.';
 
   @override
-  String failedToDeletePhoto(String error) {
-    return 'Неуспешно изтриване на снимка: $error';
-  }
+  String get failedToDeletePhoto =>
+      'Снимката не можа да се изтрие. Моля, опитайте отново.';
 
   @override
   String photoOf(int current, int total) {
@@ -892,22 +904,18 @@ class AppLocalizationsBg extends AppLocalizations {
   String get profileUpdatedSuccessfully => 'Профилът е обновен успешно';
 
   @override
-  String errorUpdatingProfile(String error) {
-    return 'Грешка при обновяване на профила: $error';
-  }
+  String get errorUpdatingProfile =>
+      'Профилът не можа да се запази. Моля, опитайте отново.';
 
   @override
   String get photoUpdatedSuccessfully => 'Снимката е обновена успешно';
 
   @override
-  String errorUploadingPhoto(String error) {
-    return 'Грешка при качване на снимка: $error';
-  }
+  String get errorUploadingPhoto =>
+      'Снимката не можа да се качи. Моля, опитайте отново.';
 
   @override
-  String errorLoadingStatistics(String error) {
-    return 'Грешка при зареждане на статистика: $error';
-  }
+  String get errorLoadingStatistics => 'Статистиката не можа да се зареди.';
 
   @override
   String get saveChanges => 'Запази промените';
@@ -980,9 +988,8 @@ class AppLocalizationsBg extends AppLocalizations {
   String get thankYouFeedback => 'Благодарим ви за отзива!';
 
   @override
-  String errorSubmittingFeedback(String error) {
-    return 'Грешка при изпращане на отзив: $error';
-  }
+  String get errorSubmittingFeedback =>
+      'Отзивът не можа да се изпрати. Моля, опитайте отново.';
 
   @override
   String get otherWaysToReach => 'Други начини да се свържете с нас';
@@ -1078,11 +1085,6 @@ class AppLocalizationsBg extends AppLocalizations {
   String get unknownDate => 'Неизвестна дата';
 
   @override
-  String errorWithMessage(String error) {
-    return 'Грешка: $error';
-  }
-
-  @override
   String get navigationDrawer => 'Навигационно меню';
 
   @override
@@ -1105,11 +1107,6 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get launchingBrowser => 'Отваряне на браузър';
-
-  @override
-  String snapshotError(String error) {
-    return 'Грешка в снимката: $error';
-  }
 
   @override
   String get faqsTitle => 'Често задавани въпроси';
@@ -1342,11 +1339,6 @@ class AppLocalizationsBg extends AppLocalizations {
       'Този акаунт е деактивиран. Моля, свържете се с поддръжката.';
 
   @override
-  String unexpectedErrorWithMessage(String error) {
-    return 'Неочаквана грешка: $error';
-  }
-
-  @override
   String errorWithCode(String message) {
     return 'Грешка: $message';
   }
@@ -1485,9 +1477,8 @@ class AppLocalizationsBg extends AppLocalizations {
   String get skipForNowProfile => 'Пропусни за сега';
 
   @override
-  String errorSavingProfile(String error) {
-    return 'Грешка при запазване на профила: $error';
-  }
+  String get errorSavingProfile =>
+      'Профилът не можа да се запази. Моля, опитайте отново.';
 
   @override
   String get clinicDetails => 'Детайли за клиниката';
