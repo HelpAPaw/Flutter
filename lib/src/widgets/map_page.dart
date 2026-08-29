@@ -28,6 +28,7 @@ import 'helper_tags_gate.dart';
 import 'notification_onboarding_sheet.dart';
 import 'sign_in_required_dialog.dart';
 import 'map/map_style_builder.dart';
+import 'app_bar_title.dart';
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -891,7 +892,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           title: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: _handleTitleTap,
-            child: Text(
+            // The one app bar title that was still a bare Text. With three
+            // actions beside it, "Help a Paw (TEST)" ellipsises at 411dp and a
+            // larger text size — and this title is also the seven-tap target
+            // for test mode, so shrinking beats clipping the tap area.
+            child: AppBarTitle(
               ref.watch(testModeProvider) ? 'Help a Paw (TEST)' : 'Help a Paw',
             ),
           ),
