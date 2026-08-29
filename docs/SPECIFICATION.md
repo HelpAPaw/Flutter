@@ -918,6 +918,26 @@ holderActiveAt with the server time"*.
 
 **Order:**
 
+**What is actually out there (measured on help-a-paw-dev, 2026-08-29):**
+
+| Collection | Docs | Carrying a pre-rename name |
+|---|---|---|
+| `signals` (production) | 6 | **0** — no `caseHolder`, no `holderActiveAt`, no `ownership_transfer` event |
+| `signals_test` | 20 | 10 `caseHolder`, 4 `holderActiveAt` |
+| `reports` | — | 1 `reason: "duplicateCase"` |
+
+All six production signals are pre-tag documents (`signalType`, no `urgency`), the
+newest created 2026-08-27 — a week *after* ownership deployed. **No real user has
+ever produced an ownership field.** Every legacy value except one report reason
+lives in test-mode data on the QA devices.
+
+That narrows the gate. `6.0.2+129` is the only released build, and it contains no
+ownership feature at all — not the fields, not the callable, not the timeline. It
+can neither read nor write any renamed name, so **no released build depends on a
+shim.** They exist for `7.0.0+131`, which is the QA devices only. The phase B gate
+is therefore "those devices are updated", which is same-day and under your
+control — not "the installed base turns over", which never completes.
+
 **Step 1 was done 2026-08-29** — `signalOwnership` created, `caseOwnership` retained as
 an alias on the same build, live rules re-read and verified byte-identical. Steps 2–4 are
 tracked in HelpAPaw/Flutter#77.
@@ -956,6 +976,8 @@ leaves `ownerActiveAt` frozen at the last server transfer while `holderActiveAt`
 keeps moving. `ownerActiveAtOf` and `Signal.latestStampFrom` therefore take the
 **later of the two**, not a preferred name — preferring the new one would read an
 active owner as silent and let anyone displace them after `STALE_OWNER_DAYS`.
+No production document can reach this today (none carries either stamp), so it is
+insurance against the mixed-build window the app release opens, not a live fault.
 
 
 ## 5. Security model (`firestore.rules`, `storage.rules`)
