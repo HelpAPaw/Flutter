@@ -1,18 +1,18 @@
 /**
- * Case ownership (master spec §4.5) — the decisions that are wrong to get wrong.
+ * Signal ownership (master spec §4.5) — the decisions that are wrong to get wrong.
  *
  * The callable itself needs Firestore, so what is tested here is the set of pure
  * predicates it delegates its judgement to. Each one has a failure mode that no
  * type checker and no rules test can catch:
  *
- *  - {@link caseHolderOf} collapsing "absent" into "released" would hand every
- *    legacy signal to nobody, or hand every released case straight back to the
+ *  - {@link signalOwnerOf} collapsing "absent" into "released" would hand every
+ *    legacy signal to nobody, or hand every released signal straight back to the
  *    person who stepped away from it;
- *  - {@link isHolderStale} defaulting the wrong way would let anyone take any
- *    case whose timestamps are unusual;
+ *  - {@link isOwnerStale} defaulting the wrong way would let anyone take any
+ *    signal whose timestamps are unusual;
  *  - {@link requireRealAccount} is the only thing standing between an
  *    unreachable anonymous account and responsibility for a live animal;
- *  - {@link requireCurrentHolder} is what keeps answering an offer the holder's
+ *  - {@link requireCurrentOwner} is what keeps answering an offer the owner's
  *    decision once the app shows that offer to the reporter as well;
  *  - the ownership encoder writing a wrong key is accepted by the Admin SDK,
  *    stored, and then silently dropped by the Dart decoder.
@@ -22,51 +22,51 @@ import { Timestamp } from "firebase-admin/firestore";
 
 import {
   ActionContext,
-  holderActiveAtOf,
-  isHolderStale,
+  ownerActiveAtOf,
+  isOwnerStale,
   optionalStatus,
-  requireCurrentHolder,
+  requireCurrentOwner,
   requireRealAccount,
-  STALE_HOLDER_DAYS,
-} from "../caseOwnership";
+  STALE_OWNER_DAYS,
+} from "../signalOwnership";
 import { buildOwnershipEventData, SIGNAL_EVENT_KEYS } from "../events";
-import { caseHolderOf } from "../signalRefs";
+import { signalOwnerOf } from "../signalRefs";
 
 const reporter = { id: "reporter-uid" } as never;
-const holder = { id: "holder-uid" } as never;
+const owner = { id: "owner-uid" } as never;
 
 const daysAgo = (days: number) =>
   Timestamp.fromMillis(Date.now() - days * 24 * 60 * 60 * 1000);
 
-describe("caseHolderOf", () => {
-  // The derivation that must never be dropped: builds released before case
-  // ownership keep creating signals with no `caseHolder`, and nothing is
+describe("signalOwnerOf", () => {
+  // The derivation that must never be dropped: builds released before signal
+  // ownership keep creating signals with no `signalOwner`, and nothing is
   // backfilled, so there is no version of this app that may assume the field.
-  it("derives an absent caseHolder to the reporter", () => {
-    expect(caseHolderOf({ reporter })).toBe(reporter);
+  it("derives an absent signalOwner to the reporter", () => {
+    expect(signalOwnerOf({ reporter })).toBe(reporter);
   });
 
   // And the distinction that must survive alongside it. A release stores an
-  // explicit null; reading that as "absent" would give the case back to the
+  // explicit null; reading that as "absent" would give the signal back to the
   // reporter, who is precisely the person who may have just released it.
   it("treats an explicit null as released, NOT as the reporter", () => {
-    expect(caseHolderOf({ reporter, caseHolder: null })).toBeNull();
+    expect(signalOwnerOf({ reporter, signalOwner: null })).toBeNull();
   });
 
-  it("returns the holder when one is set", () => {
-    expect(caseHolderOf({ reporter, caseHolder: holder })).toBe(holder);
+  it("returns the owner when one is set", () => {
+    expect(signalOwnerOf({ reporter, signalOwner: owner })).toBe(owner);
   });
 
   it("survives a signal document with no reporter at all", () => {
-    expect(caseHolderOf({})).toBeNull();
-    expect(caseHolderOf(undefined)).toBeNull();
+    expect(signalOwnerOf({})).toBeNull();
+    expect(signalOwnerOf(undefined)).toBeNull();
   });
 });
 
-describe("holderActiveAtOf", () => {
-  it("prefers holderActiveAt", () => {
+describe("ownerActiveAtOf", () => {
+  it("prefers ownerActiveAt", () => {
     const active = daysAgo(1);
-    expect(holderActiveAtOf({ holderActiveAt: active, createdAt: daysAgo(90) })).toBe(
+    expect(ownerActiveAtOf({ ownerActiveAt: active, createdAt: daysAgo(90) })).toBe(
       active
     );
   });
@@ -74,40 +74,40 @@ describe("holderActiveAtOf", () => {
   // Every signal that predates the field, which is all of them on the day this
   // ships. Falling back to `createdAt` is what makes an old, never-touched
   // signal claimable rather than permanently frozen behind its reporter.
-  it("falls back to createdAt when the holder has never acted", () => {
+  it("falls back to createdAt when the owner has never acted", () => {
     const created = daysAgo(30);
-    expect(holderActiveAtOf({ createdAt: created })).toBe(created);
+    expect(ownerActiveAtOf({ createdAt: created })).toBe(created);
   });
 
   it("returns null when neither field is a timestamp", () => {
-    expect(holderActiveAtOf({ createdAt: "not a timestamp" })).toBeNull();
-    expect(holderActiveAtOf(undefined)).toBeNull();
+    expect(ownerActiveAtOf({ createdAt: "not a timestamp" })).toBeNull();
+    expect(ownerActiveAtOf(undefined)).toBeNull();
   });
 });
 
-describe("isHolderStale", () => {
-  it("is false for a holder who acted recently", () => {
-    expect(isHolderStale({ holderActiveAt: daysAgo(1) })).toBe(false);
+describe("isOwnerStale", () => {
+  it("is false for an owner who acted recently", () => {
+    expect(isOwnerStale({ ownerActiveAt: daysAgo(1) })).toBe(false);
   });
 
-  it(`is true past ${STALE_HOLDER_DAYS} days of silence`, () => {
-    expect(isHolderStale({ holderActiveAt: daysAgo(STALE_HOLDER_DAYS + 1) })).toBe(
+  it(`is true past ${STALE_OWNER_DAYS} days of silence`, () => {
+    expect(isOwnerStale({ ownerActiveAt: daysAgo(STALE_OWNER_DAYS + 1) })).toBe(
       true
     );
   });
 
   it("does not fire exactly on the boundary", () => {
-    expect(isHolderStale({ holderActiveAt: daysAgo(STALE_HOLDER_DAYS - 1) })).toBe(
+    expect(isOwnerStale({ ownerActiveAt: daysAgo(STALE_OWNER_DAYS - 1) })).toBe(
       false
     );
   });
 
   // The safe direction. A missing or unreadable timestamp must mean "ask the
-  // holder", never "anyone may take this" — the latter turns a data defect into
-  // a way to seize an actively-worked case.
+  // owner", never "anyone may take this" — the latter turns a data defect into
+  // a way to seize an actively-worked signal.
   it("defaults to NOT stale when there is no usable timestamp", () => {
-    expect(isHolderStale({})).toBe(false);
-    expect(isHolderStale(undefined)).toBe(false);
+    expect(isOwnerStale({})).toBe(false);
+    expect(isOwnerStale(undefined)).toBe(false);
   });
 });
 
@@ -124,7 +124,7 @@ describe("requireRealAccount", () => {
 
   // Unlike signal creation, which still tolerates anonymous callers for the sake
   // of already-released builds (M-1, HelpAPaw/Flutter#67), nothing has ever
-  // claimed a case — so this surface is strict from its first day.
+  // claimed a signal — so this surface is strict from its first day.
   it("rejects an anonymous caller", () => {
     expect(() =>
       requireRealAccount({ uid: "u1", token: { firebase: { sign_in_provider: "anonymous" } } })
@@ -147,22 +147,27 @@ describe("optionalStatus", () => {
 });
 
 describe("buildOwnershipEventData", () => {
-  const actor = { id: "holder-uid" } as never;
+  const actor = { id: "owner-uid" } as never;
   const createdAt = new Date("2026-08-19T12:00:00Z");
 
   it("writes the keys the Dart decoder reads", () => {
     const event = buildOwnershipEventData({
-      oldHolder: reporter,
-      newHolder: holder,
+      oldOwner: reporter,
+      newOwner: owner,
       note: "I can get there this afternoon.",
       actor,
       createdAt,
     });
 
+    // `oldHolder`/`newHolder` are the same two references under the payload's
+    // pre-rename key names, written for builds released before the case→signal
+    // rename. Asserted here so dropping them is a deliberate change.
     expect(event).toEqual({
       type: "ownership_transfer",
+      oldOwner: reporter,
+      newOwner: owner,
       oldHolder: reporter,
-      newHolder: holder,
+      newHolder: owner,
       note: "I can get there this afternoon.",
       actor,
       createdAt,
@@ -172,81 +177,81 @@ describe("buildOwnershipEventData", () => {
   // Both nulls are real answers, not missing values: a decoder cannot tell
   // "released" from "malformed" if the key is simply absent, so neither may be
   // dropped from the document.
-  it("keeps an explicit null newHolder on a release", () => {
+  it("keeps an explicit null newOwner on a release", () => {
     const event = buildOwnershipEventData({
-      oldHolder: holder,
-      newHolder: null,
+      oldOwner: owner,
+      newOwner: null,
       note: "I cannot go anymore.",
       actor,
       createdAt,
     });
 
-    expect(event).toHaveProperty("newHolder", null);
-    expect(Object.keys(event)).toContain("newHolder");
+    expect(event).toHaveProperty("newOwner", null);
+    expect(Object.keys(event)).toContain("newOwner");
   });
 
-  it("keeps an explicit null oldHolder when a released case is claimed", () => {
+  it("keeps an explicit null oldOwner when a released signal is claimed", () => {
     const event = buildOwnershipEventData({
-      oldHolder: null,
-      newHolder: holder,
+      oldOwner: null,
+      newOwner: owner,
       note: "Taking this on.",
       actor,
       createdAt,
     });
 
-    expect(event).toHaveProperty("oldHolder", null);
+    expect(event).toHaveProperty("oldOwner", null);
   });
 
   it("takes its key names from the shared table, not from literals", () => {
     const { oldKey, newKey } = SIGNAL_EVENT_KEYS.ownership_transfer;
-    expect(oldKey).toBe("oldHolder");
-    expect(newKey).toBe("newHolder");
+    expect(oldKey).toBe("oldOwner");
+    expect(newKey).toBe("newOwner");
   });
 });
 
-describe("requireCurrentHolder", () => {
+describe("requireCurrentOwner", () => {
   // Only the two fields the check reads. Building a whole ActionContext would
   // need a transaction and a live document, which is the thing this file exists
   // to stay clear of.
-  const ctx = (uid: string, currentHolder: { id: string } | null) =>
-    ({ uid, currentHolder } as unknown as ActionContext);
+  const ctx = (uid: string, currentOwner: { id: string } | null) =>
+    ({ uid, currentOwner } as unknown as ActionContext);
 
-  const message = "Only the current case holder can decline a request.";
+  const message = "Only the current signal owner can decline a request.";
 
-  it("lets the current holder through", () => {
-    expect(() => requireCurrentHolder(ctx("holder-uid", holder), message))
+  it("lets the current owner through", () => {
+    expect(() => requireCurrentOwner(ctx("owner-uid", owner), message))
       .not.toThrow();
   });
 
-  // The derived holder, so a signal written before case ownership passes for
-  // its reporter — `caseHolderOf` has already resolved the absent field by the
+  // The derived owner, so a signal written before signal ownership passes for
+  // its reporter — `signalOwnerOf` has already resolved the absent field by the
   // time the context is built, which is why this check reads one value and not
   // two.
-  it("lets a legacy signal's reporter through, since they are the derived holder", () => {
-    expect(() => requireCurrentHolder(ctx("reporter-uid", reporter), message))
+  it("lets a legacy signal's reporter through, since they are the derived owner", () => {
+    expect(() => requireCurrentOwner(ctx("reporter-uid", reporter), message))
       .not.toThrow();
   });
 
   // The one this is really for. The app now shows the pending offers to the
-  // reporter as well as the holder, read-only — so the next person to touch
+  // reporter as well as the owner, read-only — so the next person to touch
   // that block will be tempted to wire up Hand over / Decline for them too.
   // Answering an offer moves responsibility for an animal, and the person
-  // currently carrying it is the one who decides; a holder who has gone quiet
+  // currently carrying it is the one who decides; an owner who has gone quiet
   // is what staleness is for.
-  it("refuses the reporter once they have handed the case on", () => {
-    expect(() => requireCurrentHolder(ctx("reporter-uid", holder), message))
+  it("refuses the reporter once they have handed the signal on", () => {
+    expect(() => requireCurrentOwner(ctx("reporter-uid", owner), message))
       .toThrow(message);
   });
 
   it("refuses a stranger", () => {
-    expect(() => requireCurrentHolder(ctx("someone-else", holder), message))
+    expect(() => requireCurrentOwner(ctx("someone-else", owner), message))
       .toThrow(message);
   });
 
-  // A released case is held by nobody, so nobody may answer an offer on it —
+  // A released signal is held by nobody, so nobody may answer an offer on it —
   // the way to take it is `claim`, which is open to anyone.
-  it("refuses everyone on a released case", () => {
-    expect(() => requireCurrentHolder(ctx("reporter-uid", null), message))
+  it("refuses everyone on a released signal", () => {
+    expect(() => requireCurrentOwner(ctx("reporter-uid", null), message))
       .toThrow(message);
   });
 });

@@ -14,7 +14,7 @@
 > | **Help tags + species** | One 13-code vocabulary shared by signals (`helpNeededTags`, 1–3) and users (`helperTags`), plus `animalType` as its own axis. Matching is a set intersection. | **§3.1c, §6.4b NEW** |
 > | **`signalType` retired** | The 7-value category is **gone** from creation, editing, filtering and notifications. `helpNeededTags[0]` is the category now. Builds still in the field keep writing the old field, so legacy rendering is a live path. | **§3.8 NEW**, §4.5 |
 > | **Signal creation wizard** | The single-screen form is replaced by a **7-step, one-question-per-screen wizard** with per-step validation, auto-advance and a review screen. | §3.1 (rewritten) |
-> | **Case timeline** | Status and urgency changes now require a **mandatory update note** and are written to a new `signals/{id}/events` subcollection. The details screen merges `events` + `comments` + a synthetic "reported" row into one history. | **§3.4 NEW** (replaces Comments) |
+> | **Signal timeline** | Status and urgency changes now require a **mandatory update note** and are written to a new `signals/{id}/events` subcollection. The details screen merges `events` + `comments` + a synthetic "reported" row into one history. | **§3.4 NEW** (replaces Comments) |
 > | **Helper-tag onboarding gate** | A non-skippable full-screen picker on the map route for any account without `helperTags` — **including existing accounts**. | **§6.8 NEW** |
 > | **Fan-out rework** | Prioritise-then-backfill: tag matches in radius always notified, then C→B→D nearest-first to a floor of 10, with one widened 250 km re-scan. Candidates with no usable position are dropped. | §6.7 (rewritten) |
 > | **Notification settings** | Per-type checkboxes and Select all/Deselect all are gone; species + helper tags with a ≥1-of-each requirement while enabled, and a load-failure state that refuses to render an editor. | §6.4 |
@@ -28,9 +28,9 @@
 >
 > | Area | What changed | Where |
 > |---|---|---|
-> | **Signal removal replaces deletion** | Delete is gone. **Remove** moves the signal server-side to `removedSignals`, keeps its comments/events/photos, and is restorable for **30 days** from a new **Removed** tab in My Signals. An *open* case is asked "Is this case resolved?" first. Removal is **refused while an open report names the signal**. | **§3.7 (rewritten), §3.5b NEW** |
+> | **Signal removal replaces deletion** | Delete is gone. **Remove** moves the signal server-side to `removedSignals`, keeps its comments/events/photos, and is restorable for **30 days** from a new **Removed** tab in My Signals. An *open* signal is asked "Is this signal resolved?" first. Removal is **refused while an open report names the signal**. | **§3.7 (rewritten), §3.5b NEW** |
 > | **Contribution stats** | The profile's signal count is now a server-written `publicProfiles.signalsPosted` that **never decrements**, with a live-`count()` fallback for accounts that predate it. Test-mode signals do not count. | §1.6 |
-> | **Case ownership** | New `caseHolder` axis. Status/urgency/tags become **reporter-or-holder**; a non-holder gets **claim-to-act**. Three escapes from a silent holder: offer, released case, stale case (14 days). Transfers go through the `caseOwnership` callable, which **rejects anonymous callers**. | **§3.9 NEW** |
+> | **Signal ownership** | New `signalOwner` axis. Status/urgency/tags become **reporter-or-owner**; a non-owner gets **claim-to-act**. Three escapes from a silent owner: offer, released signal, stale signal (14 days). Transfers go through the `signalOwnership` callable, which **rejects anonymous callers**. | **§3.9 NEW** |
 > | **Moderation & reporting** | Report any signal or comment (12 reasons, one report per user per target). A `moderators/{uid}` **document** grants a drawer entry, a Reports queue, a **Hidden** tab, and eight actions behind one `moderateAction` callable — reachable both from the queue and **in-context** from the signal app bar / comment long-press. A moderator **cannot act on their own content**. | **§16 NEW** |
 > | **Test mode on the account (#72)** | `users/{uid}.testMode` gets a single writer (`AuthService.syncTestMode`) that runs at launch, on a new anonymous session, on sign-in and on the toggle — **independently of notification preferences**. An unrecorded mode used to cost the account its inbox entry as well as its push. | §12.1 |
 
@@ -73,8 +73,16 @@
 > - [x] ✅ **Moderation** — `moderateAction` and `listQuarantined` deployed; the rules
 >       carry `isModerator`, `isCommentsLocked`, `isNotTouchingModeration`, `reports` and
 >       `moderationActions`. Device-verified on SM X205 + SM J610FN.
-> - [x] ✅ **Case ownership** — `caseOwnership` + `onTakeoverRequested` deployed **and the
+> - [x] ✅ **Signal ownership** — `signalOwnership` + `onTakeoverRequested` deployed **and the
 >       rules narrowing went out with them**. Device-verified 2026-08-21.
+> - [ ] 🔴 **The case→signal rename needs BOTH a functions and a rules deploy, before
+>       the app release** (SPECIFICATION §4.8a). Not cosmetic: the callable was renamed,
+>       so a new build's claim/release/approve/decline hits `not-found` against the
+>       deployed function set; and `isSignalOwnerUpdate()`'s `hasOnly` list gained
+>       `ownerActiveAt`, so against the deployed ruleset **a non-owner-reporter cannot
+>       change status, urgency or tags at all**. The reporter branch still passes, so
+>       this presents as intermittent. Deploy the two together, then release, then run
+>       `functions/scripts/backfill_case_to_signal.js` — never before the deploy.
 > - [x] ✅ **Signal removal (#68) steps 1 and 3** — `signalRemoval` and
 >       `purgeRemovedSignals` created (nothing deleted — checked by diffing the deployed
 >       export list against the built one), the additive `removedSignals` rules block and
@@ -92,7 +100,7 @@
 >       already-released build still runs the old client cascade and denying it makes that
 >       batch fail atomically. Third item queued behind a release, with #67 and #71.
 > - [ ] **Before any further rules deploy:** the live ruleset is now `dev`'s **plus**
->       moderation, case ownership and `removedSignals`. Merge first, deploy from the
+>       moderation, signal ownership and `removedSignals`. Merge first, deploy from the
 >       merged branch, re-read the live rules afterwards (§11.5, §11.11).
 
 > ## ⚠️ Pre-Release Blockers & Open Items (resolve before shipping)
@@ -104,7 +112,7 @@
 > - [ ] **iOS background relaunch is UNVERIFIED.** The whole premise of §7.2 — iOS waking a *terminated* app on a significant location change — has never been observed on a device. It cannot be tested on a debug build. See §7.2 and `BACKGROUND_LOCATION_PENDING_TESTS.md` §1.
 > - [ ] **M-1 is only half done.** Firestore rules still allow **anonymous** users to create signals/comments; the server-side `email_verified` gate is held back until the token-refresh fix (`633da3b`) ships in a released build. Client-side guards are the only thing enforcing it today. Tracking: `HelpAPaw/Flutter#67`. See §11.5.
 > - [ ] **Signal history is tamper-*evident*, not tamper-proof — the fix is built but its rules step is held back.** `signalRemoval` moved removal server-side, so nothing in the *new* client deletes a subcollection document; the reporter can still delete individual `events` until step 5 of the deploy gates flips those three rules, which waits for the release. Tracked as `HelpAPaw/Flutter#68`.
-> - [ ] 🔴 **#71 — the case-ownership regression window is OPEN.** The rules that narrow `status`/`urgency`/tag writes to *reporter or holder* are **already deployed**, and no released build knows about claim-to-act. So a released client that is neither reporter nor holder gets a bare `permission-denied` on the status dropdown until the app release lands. Deliberate (the rollout inverts the usual order), but it is live user-facing breakage for the duration — confirm the window is understood before scheduling the release, and re-test §3.3 on **129** as well as on the new build.
+> - [ ] 🔴 **#71 — the signal-ownership regression window is OPEN.** The rules that narrow `status`/`urgency`/tag writes to *reporter or owner* are **already deployed**, and no released build knows about claim-to-act. So a released client that is neither reporter nor owner gets a bare `permission-denied` on the status dropdown until the app release lands. Deliberate (the rollout inverts the usual order), but it is live user-facing breakage for the duration — confirm the window is understood before scheduling the release, and re-test §3.3 on **129** as well as on the new build.
 > - [ ] 🔴 **The 30-day retention window is not disclosed anywhere users can read it.** "Restorable for 30 days" is the whole basis for removal being a bin rather than indefinite retention, and `privacy_policy_page.dart` is a **WebView onto `https://www.helpapaw.org/privacypolicy`** — so this is an edit on the site, by somebody outside this repo, not a code change. Verify the live page states the window before shipping (§3.7).
 > - [ ] **The moderator role has no verified grant path on this machine.** `functions/scripts/grant_moderator.js` needs the same Application Default Credentials the backfill does, and has never been run. §16 cannot be tested at all until at least one test account holds a `moderators/{uid}` document — arrange that first (§17.0-C).
 > - [ ] **Contribution stats under-report, permanently, for accounts that already deleted signals.** The backfill counts the live collection, so anything erased under the old hard-delete path is not there to count. Not fixable; do not file it again (§1.6).
@@ -213,7 +221,7 @@
 - [ ] `users/{uid}/notifications` subcollection removed; profile photo deleted from Storage
 - [ ] `userCounters/{uid}` (the unread/badge counter) is removed
 - [ ] **`removedSignals` for that uid are PURGED outright, not anonymized** (NEW) — a removal holds a whole copy of the signal under `data`, contact phone included, so anonymizing it would leave a fourth place a phone number survives. Remove a signal, then delete the account, then check the collection: nothing for that uid.
-- [ ] Any `takeoverRequests` the account filed are cleaned up, and a case it held is left in a state someone else can take on
+- [ ] Any `takeoverRequests` the account filed are cleaned up, and a signal it held is left in a state someone else can take on
 - [ ] `publicProfiles/{uid}` is tombstoned so the name resolves to "Deleted user" everywhere, and the tombstone **cannot be cleared by a client** (rules restrict client writes to `name`)
 - [ ] Stored live location removed: `userLocations/{uid}` document is deleted (location PII no longer lives on the user doc)
 - [ ] Background location monitoring stops on that device (no further `userLocations` writes after deletion)
@@ -379,12 +387,12 @@
 - [ ] User auto-subscribed to signal on status change
 - [ ] Subscribers receive a `status_change` push; the actor does not
 - [ ] Cannot change to same status (no-op)
-- [ ] **A non-holder is offered claim-to-act, not an error.** The dropdown stays live for anyone signed in; choosing a status offers to take the case on first (§3.9). On a **129** install the same action gets a bare `permission-denied` — that is the #71 window, not a new bug.
-- [ ] The reporter and the current holder both change status **without** being asked to claim anything
+- [ ] **A non-owner is offered claim-to-act, not an error.** The dropdown stays live for anyone signed in; choosing a status offers to take the signal on first (§3.9). On a **129** install the same action gets a bare `permission-denied` — that is the #71 window, not a new bug.
+- [ ] The reporter and the current owner both change status **without** being asked to claim anything
 
-### 3.3b Urgency Change — reporter **or case holder** (NEW; CHANGED by §3.9)
-- [ ] **The reporter AND the current case holder** see the urgency picker; everyone else sees a read-only chip (CHANGED — case ownership, §3.9)
-- [ ] A user who is **neither reporter nor holder** cannot change urgency by any route — the enforcement moved from the field allow-list into `isCaseHolder()`, so `urgency` is now *in* that list and is still safe (§11.5). Verify by direct write, not just by the UI.
+### 3.3b Urgency Change — reporter **or signal owner** (NEW; CHANGED by §3.9)
+- [ ] **The reporter AND the current signal owner** see the urgency picker; everyone else sees a read-only chip (CHANGED — signal ownership, §3.9)
+- [ ] A user who is **neither reporter nor owner** cannot change urgency by any route — the enforcement moved from the field allow-list into `isSignalOwner()`, so `urgency` is now *in* that list and is still safe (§11.5). Verify by direct write, not just by the UI.
 - [ ] Changing urgency asks for an update note, exactly as status does
 - [ ] **Escalating to Red: the Red-Alert confirm comes FIRST, then the note dialog** — confirm the intent, then explain it
 - [ ] The picker is **disabled while the write is in flight** — a double-tap must not post two timeline entries or two pushes
@@ -395,7 +403,7 @@
 - [ ] **Reopening a legacy (pre-urgency) signal must not push a phantom escalation** — take a *Solved* signal created before this release, set status back to Help Needed, and confirm subscribers get the **status** notification and no "urgency raised"
 - [ ] **The Edit screen writes the same event with a note** (§3.6) — escalating from there must not notify everyone while the history shows nothing happened
 
-### 3.4 Signal History / Case Timeline (NEW — replaces Comments)
+### 3.4 Signal History / Signal Timeline (NEW — replaces Comments)
 > One chronological list merged from **two** collections — `events` (status/urgency
 > changes, server-written types later) and `comments` — opened by a synthetic
 > "reported this signal" row derived from the signal document itself. Nothing was
@@ -485,17 +493,17 @@
 > **inverted**: after a removal those subcollections must still be **present**.
 >
 > ⚠️ Two devices are needed for most of this, and a moderator account for the
-> under-review case. Removal is a server round trip — nothing is applied locally first.
+> under-review signal. Removal is a server round trip — nothing is applied locally first.
 
 **The resolve-first dialog — the reason this was built**
-> Reporters were reaching for Delete to mean "this case is finished". That threw away the
+> Reporters were reaching for Delete to mean "this signal is finished". That threw away the
 > outcome others could have learned from, and (while stats were a live count) the credit
 > for reporting it at all.
 - [ ] **Remove signal** replaces Delete in the details screen for the reporter, and is still hidden for everyone else
-- [ ] On an **open** case, the first dialog is *"Is this case resolved?"* with **Mark as resolved** as the primary action and **Remove anyway** as the secondary
+- [ ] On an **open** signal, the first dialog is *"Is this signal resolved?"* with **Mark as resolved** as the primary action and **Remove anyway** as the secondary
 - [ ] **Mark as resolved** asks for the **same mandatory update note** the status dropdown does, and writes the **same `status_change` event** — resolving from the Remove button must not produce a different kind of history from resolving the normal way (compare the two rows in §3.4)
-- [ ] Choosing Mark as resolved as a **non-holder** offers claim-to-act exactly as the dropdown does (§3.9)
-- [ ] On an **already-resolved** case the first dialog is **skipped** — the user is not nagged
+- [ ] Choosing Mark as resolved as a **non-owner** offers claim-to-act exactly as the dropdown does (§3.9)
+- [ ] On an **already-resolved** signal the first dialog is **skipped** — the user is not nagged
 - [ ] Backing out of either dialog writes nothing at all
 
 **The removal**
@@ -544,8 +552,8 @@
 - [ ] Editing a legacy signal (which requires choosing tags) **does not** rewrite or drop its stored `signalType` — check the document afterwards
 - [ ] The map's **category filter** files it under **Rescue** — deliberate, so the map and the fan-out agree about what an untagged signal asks for
 
-### 3.9 Case Ownership — who is responsible right now (NEW)
-> Master spec §4.5. A new axis on every signal: `caseHolder`. **Its three states are the
+### 3.9 Signal Ownership — who is responsible right now (NEW)
+> Master spec §4.5. A new axis on every signal: `signalOwner`. **Its three states are the
 > whole design** — *absent* means the signal predates ownership and its **reporter** holds
 > it by derivation; a **reference** means held; an explicit **`null`** means *released*,
 > held by nobody and claimable by anyone. Nothing is backfilled, ever, so an absent field
@@ -553,67 +561,67 @@
 >
 > ⚠️ **The rules for this are already deployed and no released build knows about them**
 > (#71 — see the blockers). Test §3.3 on a **129** install too: a signed-in user who is
-> neither reporter nor holder gets a bare `permission-denied` there.
+> neither reporter nor owner gets a bare `permission-denied` there.
 >
 > Needs **three** accounts: A (reporter), B (a volunteer), C (a second volunteer).
 
 **The three states, and what each viewer is offered**
-- [ ] A **legacy** signal (write one by hand with **no** `caseHolder` field): its **reporter** can still change status, urgency and tags. If the reporter is locked out, the absent→null collapse has happened and every pre-ownership signal is affected.
-- [ ] A **newly created** signal stores `caseHolder == reporter` — check the document
+- [ ] A **legacy** signal (write one by hand with **no** `signalOwner` field): its **reporter** can still change status, urgency and tags. If the reporter is locked out, the absent→null collapse has happened and every pre-ownership signal is affected.
+- [ ] A **newly created** signal stores `signalOwner == reporter` — check the document
 - [ ] Exactly **one** affordance is shown at a time. Walk all four audiences on the same signal:
-  - [ ] **the holder** sees "You are responsible for this case", **I can no longer do this** (release), and any pending offers
-  - [ ] **the reporter, not holding** sees who holds it **and the pending offers, read-only** — the rows show each volunteer's name and note, with **no** Hand over / Decline buttons. Answering stays the holder's; seeing is the reporter's, because otherwise a reporter watching their case go quiet has no way to know somebody is trying to pick it up.
+  - [ ] **the owner** sees "You are responsible for this signal", **I can no longer do this** (release), and any pending offers
+  - [ ] **the reporter, not holding** sees who holds it **and the pending offers, read-only** — the rows show each volunteer's name and note, with **no** Hand over / Decline buttons. Answering stays the owner's; seeing is the reporter's, because otherwise a reporter watching their signal go quiet has no way to know somebody is trying to pick it up.
   - [ ] Confirm the reporter's read-only list **updates live** as offers arrive and are answered, and disappears when the last one is resolved
-  - [ ] A reporter who **still holds** the case sees the ordinary answerable list — the read-only variant only exists once they have handed it on or released it
-  - [ ] **anyone else, case held** sees **Offer to take over** — or "You have offered to take this over" once they have
-  - [ ] **anyone else, case released** sees **Take responsibility**
-- [ ] A **released** case shows "Nobody has taken this case on yet" and is claimable by anyone — including, deliberately, by the reporter again
+  - [ ] A reporter who **still holds** the signal sees the ordinary answerable list — the read-only variant only exists once they have handed it on or released it
+  - [ ] **anyone else, signal held** sees **Offer to take over** — or "You have offered to take this over" once they have
+  - [ ] **anyone else, signal released** sees **Take responsibility**
+- [ ] A **released** signal shows "Nobody has taken this signal on yet" and is claimable by anyone — including, deliberately, by the reporter again
 
 **Who may change what (the rules are the enforcement — §11.5)**
-- [ ] **Status, urgency and help tags**: reporter ✔, holder ✔, anyone else must claim first
-- [ ] **Title, description, photos, contact phone**: reporter only — the holder cannot edit them (the reporter's account of what they saw stays theirs). Confirm the Edit pencil is absent for a non-reporter holder.
-- [ ] **Removing the signal**: reporter only (§3.7); a holder who is not the reporter has no Remove
-- [ ] **`caseHolder` itself is writable by nobody** — attempt a direct client write of the field as reporter, as holder and as a stranger; all three must be `PERMISSION_DENIED`. The callable is the only writer.
+- [ ] **Status, urgency and help tags**: reporter ✔, owner ✔, anyone else must claim first
+- [ ] **Title, description, photos, contact phone**: reporter only — the owner cannot edit them (the reporter's account of what they saw stays theirs). Confirm the Edit pencil is absent for a non-reporter owner.
+- [ ] **Removing the signal**: reporter only (§3.7); an owner who is not the reporter has no Remove
+- [ ] **`signalOwner` itself is writable by nobody** — attempt a direct client write of the field as reporter, as owner and as a stranger; all three must be `PERMISSION_DENIED`. The callable is the only writer.
 
 **Claim-to-act — one tap, one note, one notification**
-- [ ] As B (neither reporter nor holder), open the status dropdown: it stays **live**, and choosing a status offers to take the case on ("Take responsibility for this case?" → **Take it on**)
+- [ ] As B (neither reporter nor owner), open the status dropdown: it stays **live**, and choosing a status offers to take the signal on ("Take responsibility for this signal?" → **Take it on**)
 - [ ] Exactly **one** confirmation and **one** note — not two round trips
-- [ ] The transfer **and** the status change land together: the signal shows B as holder *and* the new status, or neither
+- [ ] The transfer **and** the status change land together: the signal shows B as owner *and* the new status, or neither
 - [ ] **One tap produces ONE push**, not two. Check the second device: a single notification that says both things ("{name} is now responsible", carrying the status). Two pushes for one tap is what trains people to mute a signal that matters.
 - [ ] The timeline shows an **`ownership_transfer`** row with B's note, alongside the `status_change` (§3.4)
-- [ ] **Two devices claiming the same released case in the same second**: exactly one wins. The loser gets an error, **not** a success message for a case they do not hold, and the timeline carries **one** transfer, not two. (Every action runs in a transaction for this reason — a batch takes no read lock.)
+- [ ] **Two devices claiming the same released signal in the same second**: exactly one wins. The loser gets an error, **not** a success message for a signal they do not hold, and the timeline carries **one** transfer, not two. (Every action runs in a transaction for this reason — a batch takes no read lock.)
 - [ ] Declining the confirmation writes nothing and leaves the dropdown showing the stored status
 
 **Offering, answering, and the cooldown**
-- [ ] As B on a **held** case: **Offer to take over** → "Your offer was sent to the person responsible."
-- [ ] The holder gets a push ("{name} asked to take responsibility") and sees the offer under **Offers to take over**
+- [ ] As B on a **held** signal: **Offer to take over** → "Your offer was sent to the person responsible."
+- [ ] The owner gets a push ("{name} asked to take responsibility") and sees the offer under **Offers to take over**
 - [ ] Offering **twice** is refused: "You have already offered to take this over." (the request is keyed by uid — the document id *is* the rate limit)
-- [ ] Holder taps **Hand over** → B becomes holder, both are told, and an `ownership_transfer` row appears
-- [ ] Holder taps **Decline** → B is told, and B is shown **"You can offer again after {when}"**
+- [ ] Owner taps **Hand over** → B becomes owner, both are told, and an `ownership_transfer` row appears
+- [ ] Owner taps **Decline** → B is told, and B is shown **"You can offer again after {when}"**
 - [ ] **The cooldown is one day and it must actually bite.** Immediately after a decline, B cannot re-offer. Fast-forward the stored `resolvedAt` by hand to confirm the offer becomes available again after a day.
-- [ ] **Withdraw does not reset the cooldown.** Withdraw an offer, then try to re-file: it must cost the same wait. (Withdrawing is an *update*; freeing the slot with a delete would make withdraw → re-file → withdraw an unlimited loop that pushes to the holder every time.)
+- [ ] **Withdraw does not reset the cooldown.** Withdraw an offer, then try to re-file: it must cost the same wait. (Withdrawing is an *update*; freeing the slot with a delete would make withdraw → re-file → withdraw an unlimited loop that pushes to the owner every time.)
 - [ ] B has **no delete** on their own request — attempt one directly and confirm `PERMISSION_DENIED`
 - [ ] A **re-filed** request cannot arrive in a shape a fresh one could not: attempt to re-file directly as already-`approved` and confirm the write is denied
 - [ ] `resolvedAt` cannot be chosen by the requester — a withdrawal with a client-supplied timestamp is denied (it is pinned to `request.time`, or the cooldown is skippable)
-- [ ] A **re-file notifies the holder** even though no document was created (the trigger is on *write*, not create — a create trigger would leave the holder with an offer nobody told them about)
+- [ ] A **re-file notifies the owner** even though no document was created (the trigger is on *write*, not create — a create trigger would leave the owner with an offer nobody told them about)
 - [ ] An approve, a decline and a withdrawal do **not** each fire a fresh "someone offered" push
 
-**Release, and the three escapes from a silent holder**
-- [ ] Holder taps **I can no longer do this** → the case is **released** (explicit `null`, not absent — check the document), everyone following is told ("This case needs someone" / "Nobody is responsible for this case now"), and anyone may now take it
-- [ ] A released case does **not** hand itself back to the reporter automatically
-- [ ] **Stale takeover**: on a case whose `holderActiveAt` is older than **14 days**, the button reads **Take responsibility**, not *Offer to take over* — and the claim succeeds. Without this the only affordance is an offer sent to somebody who by definition is not reading it, and the escape hatch is unreachable.
-- [ ] The displaced holder is told when a stale case is taken from them
-- [ ] The banner "Nobody has updated this case in a while." appears on a stale case
-- [ ] **A signal with no usable holder timestamp reads as NOT stale** — the safe direction is "you have to ask", never "anyone may take this". Write one by hand with no `holderActiveAt` and confirm only *Offer to take over* is shown.
-- [ ] `holderActiveAt` cannot be set by a client — attempt a direct write and confirm it is denied
+**Release, and the three escapes from a silent owner**
+- [ ] Owner taps **I can no longer do this** → the signal is **released** (explicit `null`, not absent — check the document), everyone following is told ("This signal needs someone" / "Nobody is responsible for this signal now"), and anyone may now take it
+- [ ] A released signal does **not** hand itself back to the reporter automatically
+- [ ] **Stale takeover**: on a signal whose `ownerActiveAt` is older than **14 days**, the button reads **Take responsibility**, not *Offer to take over* — and the claim succeeds. Without this the only affordance is an offer sent to somebody who by definition is not reading it, and the escape hatch is unreachable.
+- [ ] The displaced owner is told when a stale signal is taken from them
+- [ ] The banner "Nobody has updated this signal in a while." appears on a stale signal
+- [ ] **A signal with no usable owner timestamp reads as NOT stale** — the safe direction is "you have to ask", never "anyone may take this". Write one by hand with no `ownerActiveAt` and confirm only *Offer to take over* is shown.
+- [ ] `ownerActiveAt` cannot be set by a client — attempt a direct write and confirm it is denied
 
 **Anonymous users**
-- [ ] **`caseOwnership` rejects anonymous callers outright** — the only write path in the app that does. Signed out (anonymous), every ownership affordance either is hidden or fails cleanly with a sign-in prompt; nothing produces an unexplained error.
+- [ ] **`signalOwnership` rejects anonymous callers outright** — the only write path in the app that does. Signed out (anonymous), every ownership affordance either is hidden or fails cleanly with a sign-in prompt; nothing produces an unexplained error.
 
 **Failure and copy**
-- [ ] Any failed ownership action shows "Could not change who is responsible." and leaves the stored holder unchanged
+- [ ] Any failed ownership action shows "Could not change who is responsible." and leaves the stored owner unchanged
 - [ ] All of the above renders in **Bulgarian** (§9) — the ownership strings are new this release
-- [ ] The timeline sentences read correctly with real names: "{name} took responsibility for this case", "{name} handed this case to {other}", "{name} stepped down from this case"
+- [ ] The timeline sentences read correctly with real names: "{name} took responsibility for this signal", "{name} handed this signal to {other}", "{name} stepped down from this signal"
 - [ ] A transfer involving a **deleted** account resolves to "Deleted user" rather than a blank
 
 ---
@@ -645,7 +653,7 @@
 > The type section is gone. The sheet now filters on the same vocabulary the
 > notifications use, which is what closed the old browse-vs-notify asymmetry.
 - [ ] **Help tags**: all 13 codes listed, toggled independently, all enabled by default
-- [ ] A signal matches if **any** of its 1–3 tags is selected (someone filtering for `foster` still sees a case needing rescue *and* fostering)
+- [ ] A signal matches if **any** of its 1–3 tags is selected (someone filtering for `foster` still sees a signal needing rescue *and* fostering)
 - [ ] **Species**: cat / dog / other, all enabled by default
 - [ ] A signal with **no** `animalType` (legacy) stays visible whatever the species selection — hiding it would be a silent disappearance
 - [ ] A signal with **no** tags (legacy) is filed under **Rescue** — deselect Rescue and it disappears; that is deliberate (§3.8)
@@ -711,13 +719,13 @@
 - [ ] ⚠️ **The update note is NOT in the push or the inbox body** — a status-change push still reads `{signalTitle}: {status}`. Expected, recorded as a known gap; don't file it.
 
 **Ownership notifications (NEW — §3.9)**
-- [ ] **Someone took responsibility** — subscribers are told when a case changes hands ("{name} is now responsible")
-- [ ] **This case needs someone** — sent when a holder **releases** a case ("Nobody is responsible for this case now")
-- [ ] **Someone offered to take over** — sent to the **holder** only ("{name} asked to take responsibility")
-- [ ] **A re-filed offer notifies the holder too**, even though no new document was created
-- [ ] **You are now responsible for a case** / **Your offer was declined** — sent to the requester on approve / decline
+- [ ] **Someone took responsibility** — subscribers are told when a signal changes hands ("{name} is now responsible")
+- [ ] **This signal needs someone** — sent when an owner **releases** a signal ("Nobody is responsible for this signal now")
+- [ ] **Someone offered to take over** — sent to the **owner** only ("{name} asked to take responsibility")
+- [ ] **A re-filed offer notifies the owner too**, even though no new document was created
+- [ ] **You are now responsible for a signal** / **Your offer was declined** — sent to the requester on approve / decline
 - [ ] **A claim-with-status sends ONE push, not two** — the ownership message carries the status change with it (§3.9). Two pushes for one tap is the regression to watch for here.
-- [ ] The displaced holder is told when a **stale** case is taken from them
+- [ ] The displaced owner is told when a **stale** signal is taken from them
 - [ ] Each of these also lands in the **in-app inbox** (§6.6) — including for a recipient with notifications off, which is exactly what #72 broke (§12.1)
 
 ### 6.3 Notification Handling by App State
@@ -1049,8 +1057,8 @@
 - [ ] **Onboarding gate** (§6.8): title, explanation, save button, error state
 - [ ] `signInWithGoogle`, `googleSignInFailed` (§1.3)
 - [ ] `pleaseEnterValidEmail` (§8.3)
-- [ ] **Case ownership** (§3.9) — the responsible-for block's four states, Take responsibility / Offer to take over / Hand over / Decline / I can no longer do this, all five confirmation dialogs, the "You can offer again after {when}" line, the stale banner, and the three timeline sentences (`tookResponsibility`, `handedCaseTo`, `releasedCase`)
-- [ ] **Removal** (§3.7, §3.5b) — the "Is this case resolved?" dialog, the confirmation naming the 30-day window, `signalUnderReview`, the Active/Removed tab labels, the empty state, and **"Deleted permanently on {date}"** with a Bulgarian-formatted date
+- [ ] **Signal ownership** (§3.9) — the responsible-for block's four states, Take responsibility / Offer to take over / Hand over / Decline / I can no longer do this, all five confirmation dialogs, the "You can offer again after {when}" line, the stale banner, and the three timeline sentences (`tookResponsibility`, `handedSignalTo`, `releasedSignal`)
+- [ ] **Removal** (§3.7, §3.5b) — the "Is this signal resolved?" dialog, the confirmation naming the 30-day window, `signalUnderReview`, the Active/Removed tab labels, the empty state, and **"Deleted permanently on {date}"** with a Bulgarian-formatted date
 - [ ] **Reporting** (§16.2) — all 12 reasons plus the dialog copy
 - [ ] **Moderation** (§16) — the eight action labels, the three warning labels, "Why are you doing this? (required)", "You cannot moderate your own content.", "You no longer have moderator access.", the Reports/Hidden tab labels and both empty states
 - [ ] `locationAlwaysPermissionRequired` (§6.4) — long string, check it doesn't overflow the snackbar
@@ -1076,7 +1084,7 @@
 - [ ] Signal **removal** on Device A removes the marker and closes the details view on Device B (§3.7) — and **restoring** it from Device A brings the marker back on B, live
 - [ ] A moderator **hiding** a signal on Device A removes it from Device B's map the same way (§16.6)
 - [ ] Signal **removal** on Device A while its **info window/overlay is open on the map** on Device B: the marker disappears and the open info window + invisible tap target are dismissed cleanly — no crash (`PlatformException: Invalid markerId`) and tapping where the window was does **not** navigate to the removed signal
-- [ ] **Case ownership changes propagate live**: a claim on Device A updates the responsible-for block on Device B without a reload
+- [ ] **Signal ownership changes propagate live**: a claim on Device A updates the responsible-for block on Device B without a reload
 - [ ] Status changes propagate across all devices viewing the same signal
 - [ ] Comments appear in real time on all devices viewing the signal
 - [ ] Profile edits (name, phone, photo) sync via Firestore across devices
@@ -1143,7 +1151,7 @@
 - [ ] The parent signal's **reporter** can still delete events — **deliberately, and only until the release ships**. Removal moved server-side (§3.7), so the *new* client never deletes a subcollection document, but every already-released build still runs the old cascade and denying it would break their Delete button. Flipping these three to `if false` is **step 5 of the deploy gates**.
 - [ ] ⚠️ Recorded, not a finding: until that flip, the history stays tamper-**evident**, not tamper-proof (`HelpAPaw/Flutter#68`)
 - [ ] ⚠️ The worse half is `comments`: there is **no author-delete rule at all**, so a comment's author cannot delete their own comment while the signal's reporter can delete anyone's, unaudited. That power is what `moderateAction.deleteComment` exists to route properly (§16)
-- [ ] **`ownership_transfer` must be ABSENT from the accepted event vocabulary.** Attempt to write one from a client: it must be **denied**. It is server-only precisely so nobody can forge a timeline entry claiming they took responsibility for a case — and `test/signal_event_vocabulary_guard_test.dart` asserts the absence so the "types match" test cannot be made green by adding it here (§17.1)
+- [ ] **`ownership_transfer` must be ABSENT from the accepted event vocabulary.** Attempt to write one from a client: it must be **denied**. It is server-only precisely so nobody can forge a timeline entry claiming they took responsibility for a signal — and `test/signal_event_vocabulary_guard_test.dart` asserts the absence so the "types match" test cannot be made green by adding it here (§17.1)
 - [ ] The same holds for **`signals_test`**
 - [ ] **Deploy-order check:** on rules *without* the events block, a status change fails **entirely** (atomic batch) — confirm you see `errorUpdatingStatus` and no partial write. That is the symptom to recognise if the revert happens again.
 
@@ -1153,14 +1161,14 @@
 - [ ] **New field bounds**: `helpNeededTags` 1–3 strings, `animalType` a known code, `urgency` an int 0–2 — out-of-range values are denied
 - [ ] ⚠️ The new fields are **bounded but not required** — a create without them is still accepted, deliberately, so a shipped build's writes keep working (§3.8)
 - [ ] A retired `signalType` on create is **neither required nor rejected** — a retired field must not be able to refuse an old client's write
-- [ ] **`urgency` is reporter-or-holder** (CHANGED — case ownership, §3.9). It used to be reporter-only *by being omitted from the status-only allow-list*; that omission was the entire enforcement of "only the case holder may mark a signal Red". The load-bearing clause has moved into `isCaseHolder()`, so `urgency` is now **in** the list and is still safe. Confirm: reporter ✔, holder ✔, a stranger denied (§3.3b, §11.12)
+- [ ] **`urgency` is reporter-or-owner** (CHANGED — signal ownership, §3.9). It used to be reporter-only *by being omitted from the status-only allow-list*; that omission was the entire enforcement of "only the signal owner may mark a signal Red". The load-bearing clause has moved into `isSignalOwner()`, so `urgency` is now **in** the list and is still safe. Confirm: reporter ✔, owner ✔, a stranger denied (§3.3b, §11.12)
 - [ ] **Reporter-only edits**: only the signal's author can change title/description/tags/species/phone/photos (§3.6)
-- [ ] **The status-only volunteer path is GONE — this is the #71 breaking change.** `isStatusOnlyUpdate` became `isCaseHolderUpdate`: an arbitrary signed-in user can **no longer** change a stranger's status. Only the **reporter** or the **case holder** can, and everyone else must claim the case first (§3.9). A stranger's direct status write must be **denied**.
+- [ ] **The status-only volunteer path is GONE — this is the #71 breaking change.** `isStatusOnlyUpdate` became `isSignalOwnerUpdate`: an arbitrary signed-in user can **no longer** change a stranger's status. Only the **reporter** or the **signal owner** can, and everyone else must claim the signal first (§3.9). A stranger's direct status write must be **denied**.
 - [ ] The allowed fields for that path are `status`, `urgency` and the help tags, and the caller must still self-stamp `lastUpdatedBy` — any other field in the same write is denied
 - [ ] ⚠️ **These rules are already deployed and the released build predates them.** On a **129** install, a signed-in non-reporter changing status gets a bare `permission-denied`. Expected for the duration of the #71 window; record it, do not file it.
 - [ ] `lastUpdatedBy` cannot be spoofed to a different user
-- [ ] **Delete** is reporter-only (§3.7); a non-author's delete is denied. The holder, if not the reporter, cannot delete.
-- [ ] **`caseHolder` is writable by no client at all** — reporter, holder and stranger are each denied. The `caseOwnership` callable (Admin SDK) is the only writer (§3.9)
+- [ ] **Delete** is reporter-only (§3.7); a non-author's delete is denied. The owner, if not the reporter, cannot delete.
+- [ ] **`signalOwner` is writable by no client at all** — reporter, owner and stranger are each denied. The `signalOwnership` callable (Admin SDK) is the only writer (§3.9)
 - [ ] **Comment create binding**: `author` must equal the caller; text (when present) 1–2000 chars
 - [ ] A `status_change` comment (no `text` field) is accepted
 - [ ] A signal's reporter can delete comments on their own signal (enables the delete cascade); a third party cannot
@@ -1225,20 +1233,20 @@
 - [ ] A client cannot resolve its own report (update denied); only `moderateAction` closes one
 - [ ] The `reporter` on a report is pinned to the caller — a forged reporter is denied
 - [ ] **`moderators/{uid}` is not client-writable** — a user cannot grant themselves the role
-- [ ] **The reporter cannot undo moderation.** Attempt a client write touching the signal's `moderation` map, on **both** the reporter branch and the holder/status branch: both must be denied. This is load-bearing, not defensive — the reporter branch otherwise accepts *any* field, and a patched client would clear its own comment lock.
+- [ ] **The reporter cannot undo moderation.** Attempt a client write touching the signal's `moderation` map, on **both** the reporter branch and the owner/status branch: both must be denied. This is load-bearing, not defensive — the reporter branch otherwise accepts *any* field, and a patched client would clear its own comment lock.
 - [ ] **A comment lock is enforced in the rules, not just the UI.** With `moderation.commentsLocked` set, a direct comment create is denied.
 - [ ] All of the above hold identically for **`signals_test`**
 
-### 11.12 Firestore Rules — Case ownership & takeover requests (NEW)
-- [ ] **`isCaseHolder()` resolves an ABSENT `caseHolder` to the reporter.** Write a signal by hand with no `caseHolder` and confirm its reporter can still change status — if they cannot, absent has been collapsed into null and **every** pre-ownership signal is locked from its own reporter.
-- [ ] **An explicit `null` resolves to nobody**, and anyone may claim — confirm a released case does *not* silently hand itself back to the reporter. The two errors are silent and opposite; this is invariant §12.5d.
+### 11.12 Firestore Rules — Signal ownership & takeover requests (NEW)
+- [ ] **`isSignalOwner()` resolves an ABSENT `signalOwner` to the reporter.** Write a signal by hand with no `signalOwner` and confirm its reporter can still change status — if they cannot, absent has been collapsed into null and **every** pre-ownership signal is locked from its own reporter.
+- [ ] **An explicit `null` resolves to nobody**, and anyone may claim — confirm a released signal does *not* silently hand itself back to the reporter. The two errors are silent and opposite; this is invariant §12.5d.
 - [ ] `takeoverRequests/{uid}`: the document id **is** the rate limit — a request keyed to another uid is denied
-- [ ] **The requester has no delete**, unconditionally — freeing the uid-keyed slot would make `create` unconstrained again and turn withdraw → re-file into an unlimited loop that pushes to the holder every time
+- [ ] **The requester has no delete**, unconditionally — freeing the uid-keyed slot would make `create` unconstrained again and turn withdraw → re-file into an unlimited loop that pushes to the owner every time
 - [ ] A **withdrawal** is an update, and `resolvedAt` is pinned to `request.time` — a client-chosen timestamp is denied (a timestamp the requester picks is a cooldown they skip)
 - [ ] **Re-filing before the one-day cooldown is denied**; after it, allowed
 - [ ] A re-file must also satisfy the **create** validator — re-filing directly as `approved` is denied
-- [ ] Only the **holder** may approve or decline; the reporter (when not holding) cannot — verify by calling `caseOwnership` directly as the reporter, not just by the absent buttons. The app now shows them the offer list, so this is the only thing separating seeing from answering.
-- [ ] `holderActiveAt` cannot be written by a client — staleness needs a server clock
+- [ ] Only the **owner** may approve or decline; the reporter (when not holding) cannot — verify by calling `signalOwnership` directly as the reporter, not just by the absent buttons. The app now shows them the offer list, so this is the only thing separating seeing from answering.
+- [ ] `ownerActiveAt` cannot be written by a client — staleness needs a server clock
 - [ ] The reporter's delete on the subcollection stays unconditional **until deploy-gates step 5**, because the old client's delete cascade has to be able to empty it
 
 ---
@@ -1268,7 +1276,7 @@
 > push, for a user whose only mistake was leaving notifications off. **Absent reads as
 > production**, which is right for every real user and silent for a test one.
 - [ ] **The bug this closes:** put a test-mode device into the state that used to break it — sign in to an account with notifications **off**, on a device already in test mode. `users/{uid}.testMode` must be `true` **without** ever enabling notifications and without an FCM token existing.
-- [ ] That account then **receives its inbox entry** for a test-mode signal/comment/ownership event (§6.6) — this is the case where a `takeover_approved` notification and its inbox row both vanished with nothing logged
+- [ ] That account then **receives its inbox entry** for a test-mode signal/comment/ownership event (§6.6) — this is the signal where a `takeover_approved` notification and its inbox row both vanished with nothing logged
 - [ ] **Launch backfills.** Take an account with **no** `testMode` field at all (delete it by hand), relaunch on a test-mode device, and confirm the field is written.
 - [ ] **A new anonymous session is stamped without a relaunch.** Sign out mid-session (which mints a new anonymous uid) and confirm the *new* uid gets `testMode` — the device preference outlives the session it was set in, so this does not come for free.
 - [ ] **The reverse direction is covered too.** Take an account stamped `testMode: true`, turn test mode **off** on the device, relaunch, and confirm the field flips to `false` — an account left stamped `true` is invisible to the **production** fan-out, which is the silent failure in the other direction.
@@ -1430,7 +1438,7 @@
 - [ ] The role is a **`moderators/{uid}` document, not an auth claim** — grant it and the drawer entry appears without a restart; revoke it and the entry disappears (§8.1). A claim would leave a revoked moderator with every power until their token expired, up to an hour.
 - [ ] A **Moderator** badge is shown where the app draws one
 - [ ] A revoked moderator's next action fails with "You no longer have moderator access." rather than silently doing nothing
-- [ ] The role is **purely additive** — a moderator's own signals, comments, status changes and case ownership behave exactly as any other user's
+- [ ] The role is **purely additive** — a moderator's own signals, comments, status changes and signal ownership behave exactly as any other user's
 
 ### 16.2 Reporting (any user)
 - [ ] A **flag** appears in the signal details app bar for **non-authors**; the author does not see it on their own signal
@@ -1495,12 +1503,12 @@
 - [ ] Success shows "Done."; failure shows "That did not work. Please try again."
 
 ### 16.7 Self-moderation is refused
-> Without this, a moderator could clear a `disputed` label off their own case, lock the
+> Without this, a moderator could clear a `disputed` label off their own signal, lock the
 > thread criticising it, or downgrade a Red Alert about them — each perfectly audited, and
 > each exactly the unchecked power master spec §3.6.1 says the role must not carry.
 - [ ] Every action on **the moderator's own signal** is refused with **"You cannot moderate your own content."** (`failed-precondition` — a *different* message from the revoked-role one, deliberately: telling a moderator who still has the role that they have lost it sends them to the wrong person for help)
 - [ ] Every action on **the moderator's own comment** is refused the same way
-- [ ] **Deleting a comment clears TWO owners**: the comment's author **and** the reporter of the signal it sits under. A moderator must not be able to delete the comment criticising their own case.
+- [ ] **Deleting a comment clears TWO owners**: the comment's author **and** the reporter of the signal it sits under. A moderator must not be able to delete the comment criticising their own signal.
 - [ ] **`addNote` is exempt** — a moderator may add an internal note on their own content
 - [ ] The signal is left **byte-identical** after a refused action
 - [ ] The **UI mirrors the server**: the shield is not drawn for the signal's own reporter, and the comment chooser is not offered on a signal they reported — so nobody meets this error in ordinary use
@@ -1555,7 +1563,7 @@
 - [ ] ⚠️ **Do not let the upgrade happen unobserved** — that is what spoiled the 125→126 run on both Android devices. Pause Play auto-updates on the observation device, establish the 129 state in §17.4 Phase 1 **first**, and only then update.
 - [ ] Keep **one account with no helper tags** in reserve for §6.8 — completing the gate is not undoable from inside the app.
 - [ ] **Grant the moderator role to one test account** — write a `moderators/{uid}` document. Nothing in §16 is testable without it, and `grant_moderator.js` needs credentials this machine does not have.
-- [ ] **A third and fourth account are now needed for §3.9** — case ownership walks reporter / holder / second volunteer, and the transfer, decline and stale paths each need a distinct actor.
+- [ ] **A third and fourth account are now needed for §3.9** — signal ownership walks reporter / owner / second volunteer, and the transfer, decline and stale paths each need a distinct actor.
 - [ ] Keep **one account whose content the moderator did NOT create** — every moderator action is refused on their own content (§16.7), so a single-account run tests nothing.
 - [ ] Keep **one signal with an open report** in reserve for the §3.7 under-review refusal, and be ready to resolve it to confirm the removal then succeeds.
 
@@ -1576,12 +1584,12 @@
   - `test/firestore_settings_guard_test.dart` — assigning custom Firestore `Settings` in Dart silently breaks the Android headless isolate's geo query, and reports as "no signals nearby"
   - `test/report_status_vocabulary_guard_test.dart` — the report status is a **query filter** (`where('status', isEqualTo: 'open')`), so a drift means handled reports never leave the queue or filed reports never enter it, with no error on either side (§16.3)
   - `test/moderation_label_vocabulary_guard_test.dart` — a label only the server knows is stored, renders nothing, and the moderator believes the signal is annotated (§16.6)
-  - `test/takeover_cooldown_guard_test.dart` — the re-ask cooldown **and** `STALE_HOLDER_DAYS`. The staleness half is the one that matters: the button it draws is the only way a case escapes a holder who stopped answering (§3.9)
+  - `test/takeover_cooldown_guard_test.dart` — the re-ask cooldown **and** `STALE_OWNER_DAYS`. The staleness half is the one that matters: the button it draws is the only way a signal escapes an owner who stopped answering (§3.9)
   - `test/removal_retention_guard_test.dart` — the 30-day window in two languages. Dart *longer* than the server is the worse direction: the app promises time the user does not have, and a bin that empties early is a delete with extra steps (§3.5b)
   - `test/signal_event_vocabulary_guard_test.dart` also asserts that **`ownership_transfer` is ABSENT from the rules** — do not "fix" a failure there by adding it, which would make a timeline entry claiming responsibility forgeable (§11.5)
-- [ ] **New unit suites pass**: `test/models/case_holder_test.dart` (the absent / ref / null derivation — §11.12), `test/models/moderation_target_test.dart` (never defaults `collection` to `signals`; narrows on an unknown `targetType` — §16.3), `test/signal_doc_state_test.dart` (the details-screen state machine; R5-004/R6-001/R6-002 each broke in a shipped build), `test/test_mode_sync_cache_test.dart` (the write-avoidance cache **fails towards writing** — §12.1)
+- [ ] **New unit suites pass**: `test/models/signal_owner_test.dart` (the absent / ref / null derivation — §11.12), `test/models/moderation_target_test.dart` (never defaults `collection` to `signals`; narrows on an unknown `targetType` — §16.3), `test/signal_doc_state_test.dart` (the details-screen state machine; R5-004/R6-001/R6-002 each broke in a shipped build), `test/test_mode_sync_cache_test.dart` (the write-avoidance cache **fails towards writing** — §12.1)
 - [ ] `cd firestore-tests && npm ci && npm test` — Firestore **and** Storage rules suites pass, **including the new `events` cases**. Required before **every** rules deploy; device testing cannot validate undeployed rules because `help-a-paw-dev` is production.
-- [ ] `cd functions && npm ci && npm test` — covers `recipientSelection` tier ranking and the floor, the legacy headline shims (`displayTagsOf` / `signalHeadline`), the `events` encoder parity, and now `moderation`, `caseOwnership` and `removeSignal`. Every failure mode here is silent in production.
+- [ ] `cd functions && npm ci && npm test` — covers `recipientSelection` tier ranking and the floor, the legacy headline shims (`displayTagsOf` / `signalHeadline`), the `events` encoder parity, and now `moderation`, `signalOwnership` and `removeSignal`. Every failure mode here is silent in production.
 - [ ] **The self-moderation guard coverage test passes.** It *reads the source* of `functions/src/moderation.ts` — a new moderator action that skipped `requireNotOwnContent` would compile perfectly and fail silently, so this is the only thing that catches it (§16.7).
 - [ ] Expected suite sizes on this branch: **258 rules tests, 260 Dart tests, 112 functions tests**. A sharp drop means a suite stopped being discovered, not that it got faster.
 - [ ] Kotlin: `android/app/src/test/.../GeohashTest.kt` passes (guards the Dart↔Kotlin geohash parity the fan-out depends on)
@@ -1602,11 +1610,11 @@
 - [ ] `onCommentCreated` does **not** throw on a **status-change** comment (which carries no `.text`) — this was R3-002; re-verify on the deployed build
 
 **New functions this release**
-- [ ] The deployed export list contains **`signalRemoval`, `purgeRemovedSignals`, `caseOwnership`, `onTakeoverRequested`, `moderateAction`, `listQuarantined`** — and **nothing was deleted**. Diff the deployed list against the built one: a blanket deploy from a branch missing one of these *removes* it, which is the near-miss `listQuarantined` had during the ownership deploy.
+- [ ] The deployed export list contains **`signalRemoval`, `purgeRemovedSignals`, `signalOwnership`, `onTakeoverRequested`, `moderateAction`, `listQuarantined`** — and **nothing was deleted**. Diff the deployed list against the built one: a blanket deploy from a branch missing one of these *removes* it, which is the near-miss `listQuarantined` had during the ownership deploy.
 - [ ] `recordSignalPosted` increments `publicProfiles/{uid}.signalsPosted` on a real (non-test-mode) signal create, and does **not** on a test-mode one (§1.6)
 - [ ] `signalRemoval` logs a refusal when an open report names the signal, rather than failing opaquely (§3.7)
 - [ ] Restoring — by the reporter **or** by a moderator — logs **`Skipping fan-out for restored signal`**. That line is the only evidence the re-notification guard fired (§3.5b, §16.4).
-- [ ] `caseOwnership` rejects an **anonymous** caller with a clean error, and each action runs in a transaction (two simultaneous claims → one winner, §3.9)
+- [ ] `signalOwnership` rejects an **anonymous** caller with a clean error, and each action runs in a transaction (two simultaneous claims → one winner, §3.9)
 - [ ] **The mode guards log every drop, and distinguish absent from false** (#72). Without that line, a user silently dropped from the fan-out is indistinguishable from "no notification was due" — this is the logging that made #72 findable at all, and it is **not yet deployed** (§12.1).
 - [ ] `moderateAction` writes a `moderationActions` entry for every action, including ones taken with **no `reportId`** (§16.5)
 - [ ] The `removedSignals` indexes and the `reports` index are **READY**, and the `notifications` TTL policy survived the deploy (a deploy can report an unmanaged field override; without `--force` it leaves it alone)
@@ -1652,7 +1660,7 @@
 - [ ] **Change one signal's status and post a comment**, so there is history stored the *old* way (status changes as comments)
 - [ ] Receive at least one push, and **leave it unread**
 - [ ] **Record all of it** — uid, exact radius, which types are deselected, token value, badge number, signal ids **and their types**. Without this baseline, "survived the upgrade" is unfalsifiable.
-- [ ] **Leave the 129 signals with NO `caseHolder` field.** 129 does not write one, and nothing is ever backfilled — these are the permanent legacy-ownership corpus and cannot be manufactured afterwards. Check one document to confirm the field is genuinely absent, not null.
+- [ ] **Leave the 129 signals with NO `signalOwner` field.** 129 does not write one, and nothing is ever backfilled — these are the permanent legacy-ownership corpus and cannot be manufactured afterwards. Check one document to confirm the field is genuinely absent, not null.
 - [ ] **Record the profile's signal count on 129** (it is a live `count()` there). It is the number the new build must not silently reduce, and the number the backfill exists to restore.
 - [ ] **Delete one signal on 129, through the old client cascade**, and note that it is gone. That account's count is now permanently under-reported — the backfill counts the live collection and cannot recover it. Confirming that is expected, not a finding, is worth more than filing it twice.
 
@@ -1699,9 +1707,9 @@
 - [ ] **Mixed-version check (the one only two devices can do):** with one device on 129 and one on the new build, create a signal on each. Each must render sensibly on the other, and the push each generates must announce the right category on both.
 
 **New this release — the paths a clean install never touches**
-- [ ] **A legacy signal's own reporter can still change its status and urgency.** The `caseHolder` field is absent on every 129 signal, and the rules must derive the reporter from that absence. If the reporter is locked out of their own signal, absent has been collapsed into null and **every** pre-ownership signal is affected (§3.9, §11.12).
-- [ ] A legacy signal shows a sensible ownership block — not a blank, and not "Nobody has taken this case on yet"
-- [ ] **Claim-to-act works on a legacy signal**: as a different account, choosing a status offers to take the case on, and the transfer lands
+- [ ] **A legacy signal's own reporter can still change its status and urgency.** The `signalOwner` field is absent on every 129 signal, and the rules must derive the reporter from that absence. If the reporter is locked out of their own signal, absent has been collapsed into null and **every** pre-ownership signal is affected (§3.9, §11.12).
+- [ ] A legacy signal shows a sensible ownership block — not a blank, and not "Nobody has taken this signal on yet"
+- [ ] **Claim-to-act works on a legacy signal**: as a different account, choosing a status offers to take the signal on, and the transfer lands
 - [ ] **The profile's signal count survives the upgrade** and matches the Phase 1 number (allowing for the deliberately-deleted one). Before the backfill has run it comes from the live-count fallback; after, from the stored value — check **both** if the backfill runs between passes.
 - [ ] **`users/{uid}.testMode` is written on the first launch of the new build** even though this account never toggled anything on it (#72 backfills at launch — §12.1)
 - [ ] **Remove a legacy signal** (created on 129, with its status history stored as *comments*): it moves to the Removed tab, restores losslessly, and its old comment-shaped history still renders afterwards (§3.4)

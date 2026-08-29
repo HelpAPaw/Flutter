@@ -67,7 +67,7 @@ function commentDoc(db, uid, overrides = {}) {
 }
 
 /**
- * A case-timeline event as `_applyLevelChange` writes it (spec 4.6).
+ * A signal-timeline event as `_applyLevelChange` writes it (spec 4.6).
  *
  * Note the differences from a comment: the actor field is `actor`, not
  * `author`, and the `note` is mandatory rather than optional.
@@ -530,9 +530,9 @@ for (const coll of ['signals', 'signals_test']) {
     });
   });
 
-  // Master spec 4.5 — a volunteer asks the current holder to hand the case over.
+  // Master spec 4.5 — a volunteer asks the current owner to hand the signal over.
   // Client-written (a request carries no privilege); APPROVING it is the
-  // caseOwnership callable's job, which is why `update` is denied outright here.
+  // signalOwnership callable's job, which is why `update` is denied outright here.
   describe(`${coll} — takeoverRequests`, () => {
     const SIGNAL = 'signal-1';
     const requestsPath = `${coll}/${SIGNAL}/takeoverRequests`;
@@ -554,7 +554,7 @@ for (const coll of ['signals', 'signals_test']) {
       });
     });
 
-    it('lets a signed-in non-holder file one request', async () => {
+    it('lets a signed-in non-owner file one request', async () => {
       const db = testEnv.authenticatedContext(OTHER).firestore();
       await assertSucceeds(setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER)));
     });
@@ -581,7 +581,7 @@ for (const coll of ['signals', 'signals_test']) {
       await assertFails(setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER)));
     });
 
-    it('denies the current case holder requesting their own case', async () => {
+    it('denies the current signal owner requesting their own signal', async () => {
       const db = testEnv.authenticatedContext(REPORTER).firestore();
       await assertFails(setDoc(doc(db, requestsPath, REPORTER), requestDoc(db, REPORTER)));
     });
@@ -617,8 +617,8 @@ for (const coll of ['signals', 'signals_test']) {
       }
     });
 
-    // A decline is not permanent — a case looks different two weeks later. But
-    // re-asking notifies the holder, so it has to cost something.
+    // A decline is not permanent — a signal looks different two weeks later. But
+    // re-asking notifies the owner, so it has to cost something.
     it('lets a declined request be re-filed after the cooldown', async () => {
       await testEnv.withSecurityRulesDisabled(async (ctx) => {
         const db = ctx.firestore();
@@ -693,7 +693,7 @@ for (const coll of ['signals', 'signals_test']) {
 
     // THE BYPASS THIS CLOSES: if withdrawing removed the document, `create`
     // would be unconstrained again and withdraw → re-file → withdraw → re-file
-    // is an unlimited loop, pushing to the holder every time. Occupying the slot
+    // is an unlimited loop, pushing to the owner every time. Occupying the slot
     // is what makes the cooldown mean anything.
     it('denies the requester deleting their own request at all', async () => {
       await testEnv.withSecurityRulesDisabled(async (ctx) => {
@@ -710,7 +710,7 @@ for (const coll of ['signals', 'signals_test']) {
     });
 
     // A withdrawal that could choose its own resolvedAt is a cooldown that can
-    // be skipped — the same reasoning as holderActiveAt on the signal.
+    // be skipped — the same reasoning as ownerActiveAt on the signal.
     it('pins the withdrawal timestamp to the server clock', async () => {
       await testEnv.withSecurityRulesDisabled(async (ctx) => {
         const db = ctx.firestore();
@@ -808,30 +808,49 @@ for (const coll of ['signals', 'signals_test']) {
       await assertFails(updateDoc(doc(other, coll, SIGNAL), { title: 'Vandalised' }));
     });
 
-    // CHANGED with case ownership (master spec 4.5). This used to succeed:
+    // CHANGED with signal ownership (master spec 4.5). This used to succeed:
     // isStatusOnlyUpdate let ANY signed-in user move ANY signal's status. It is
-    // now isCaseHolderUpdate, gated on isCaseHolder(), so a bystander has to take
-    // responsibility for the case first — through the caseOwnership callable,
+    // now isSignalOwnerUpdate, gated on isSignalOwner(), so a bystander has to take
+    // responsibility for the signal first — through the signalOwnership callable,
     // which no rule can grant.
-    it('rejects a non-holder advancing status, even self-stamping lastUpdatedBy', async () => {
+    it('rejects a non-owner advancing status, even self-stamping lastUpdatedBy', async () => {
       const db = testEnv.authenticatedContext(OTHER).firestore();
       await assertFails(
         updateDoc(doc(db, coll, SIGNAL), { status: 1, lastUpdatedBy: doc(db, 'users', OTHER) }),
       );
     });
 
-    // The fixture has no `caseHolder` field at all — the shape of every signal
-    // written before case ownership existed. This is the derivation that must
+    // The fixture has no `signalOwner` field at all — the shape of every signal
+    // written before signal ownership existed. This is the derivation that must
     // never be dropped: absent means the reporter holds it, so the reporter goes
-    // through isCaseHolderUpdate() as well as their own branch.
-    it('lets the case holder advance status on a legacy signal with no caseHolder', async () => {
+    // through isSignalOwnerUpdate() as well as their own branch.
+    it('lets the signal owner advance status on a legacy signal with no signalOwner', async () => {
       const db = testEnv.authenticatedContext(REPORTER).firestore();
       await assertSucceeds(
         updateDoc(doc(db, coll, SIGNAL), { status: 1, lastUpdatedBy: doc(db, 'users', REPORTER) }),
       );
     });
 
-    it('lets an explicit case holder who is not the reporter advance status', async () => {
+    it('lets an explicit signal owner who is not the reporter advance status', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, coll, SIGNAL),
+          signalDoc(db, REPORTER, { signalOwner: doc(db, 'users', OTHER) }));
+      });
+
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, coll, SIGNAL), { status: 1, lastUpdatedBy: doc(db, 'users', OTHER) }),
+      );
+    });
+
+    // `caseHolder` is the field's pre-rename name. Documents written before the
+    // case→signal rename are not rewritten, so isSignalOwner() has to read it —
+    // and, because the app dual-writes both names during the migration window,
+    // isNotTouchingOwnership() has to block it. A miss on the first locks the
+    // real owner out of their own signal; a miss on the second leaves the
+    // seizure that check exists to prevent wide open through the old name.
+    it('lets a signal owner named only by the legacy caseHolder advance status', async () => {
       await testEnv.withSecurityRulesDisabled(async (ctx) => {
         const db = ctx.firestore();
         await setDoc(doc(db, coll, SIGNAL),
@@ -844,13 +863,82 @@ for (const coll of ['signals', 'signals_test']) {
       );
     });
 
-    // A RELEASED case stores an explicit null. That must not fall back to the
-    // reporter — the reporter is precisely the person who may have stepped away.
-    // They keep their own reporter branch; nobody passes the holder branch.
-    it('gives a released signal no case holder at all', async () => {
+    it('gives a signal released under the legacy caseHolder no owner at all', async () => {
       await testEnv.withSecurityRulesDisabled(async (ctx) => {
         const db = ctx.firestore();
         await setDoc(doc(db, coll, SIGNAL), signalDoc(db, REPORTER, { caseHolder: null }));
+      });
+
+      const other = testEnv.authenticatedContext(OTHER).firestore();
+      await assertFails(
+        updateDoc(doc(other, coll, SIGNAL), { status: 1, lastUpdatedBy: doc(other, 'users', OTHER) }),
+      );
+    });
+
+    // An explicit null under the CURRENT name is a release, and a stale
+    // `caseHolder` beside it must not resurrect the owner.
+    it('prefers an explicit null signalOwner over a stale caseHolder', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, coll, SIGNAL), signalDoc(db, REPORTER, {
+          signalOwner: null,
+          caseHolder: doc(db, 'users', OTHER),
+        }));
+      });
+
+      const other = testEnv.authenticatedContext(OTHER).firestore();
+      await assertFails(
+        updateDoc(doc(other, coll, SIGNAL), { status: 1, lastUpdatedBy: doc(other, 'users', OTHER) }),
+      );
+    });
+
+    it('rejects the reporter writing the legacy caseHolder directly', async () => {
+      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      await assertFails(
+        updateDoc(doc(db, coll, SIGNAL), { caseHolder: doc(db, 'users', REPORTER) }),
+      );
+    });
+
+    // THE MIXED-VERSION CHECK. Builds released before the case→signal rename
+    // stamp `holderActiveAt` on every coordination write, and `hasOnly` is an
+    // exact allow-list — so leaving the old name out of it does not degrade
+    // those builds, it denies them outright. Nothing else in the suite would
+    // catch that, because every other test writes the new name.
+    it('accepts a pre-rename client stamping holderActiveAt with the server time', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, coll, SIGNAL),
+          signalDoc(db, REPORTER, { caseHolder: doc(db, 'users', OTHER) }));
+      });
+
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+      await assertSucceeds(
+        updateDoc(doc(db, coll, SIGNAL), {
+          status: 1,
+          lastUpdatedBy: doc(db, 'users', OTHER),
+          holderActiveAt: serverTimestamp(),
+        }),
+      );
+    });
+
+    it('rejects a caller self-stamping the legacy holderActiveAt', async () => {
+      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      await assertFails(
+        updateDoc(doc(db, coll, SIGNAL), {
+          status: 1,
+          lastUpdatedBy: doc(db, 'users', REPORTER),
+          holderActiveAt: new Date('2030-01-01'),
+        }),
+      );
+    });
+
+    // A RELEASED signal stores an explicit null. That must not fall back to the
+    // reporter — the reporter is precisely the person who may have stepped away.
+    // They keep their own reporter branch; nobody passes the owner branch.
+    it('gives a released signal no signal owner at all', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, coll, SIGNAL), signalDoc(db, REPORTER, { signalOwner: null }));
       });
 
       const other = testEnv.authenticatedContext(OTHER).firestore();
@@ -862,44 +950,44 @@ for (const coll of ['signals', 'signals_test']) {
       await assertSucceeds(updateDoc(doc(reporter, coll, SIGNAL), { title: 'Updated' }));
     });
 
-    // caseHolder is written only by the caseOwnership callable (Admin SDK). The
+    // signalOwner is written only by the signalOwnership callable (Admin SDK). The
     // reporter branch accepts any field, so without isNotTouchingOwnership() the
     // reporter could never be handed off from, and a patched client could seize
     // any case with a single field write and no timeline entry.
-    it('denies every client writing caseHolder — the reporter and the holder alike', async () => {
+    it('denies every client writing signalOwner — the reporter and the owner alike', async () => {
       const reporter = testEnv.authenticatedContext(REPORTER).firestore();
       await assertFails(
-        updateDoc(doc(reporter, coll, SIGNAL), { caseHolder: doc(reporter, 'users', REPORTER) }),
+        updateDoc(doc(reporter, coll, SIGNAL), { signalOwner: doc(reporter, 'users', REPORTER) }),
       );
-      await assertFails(updateDoc(doc(reporter, coll, SIGNAL), { caseHolder: null }));
+      await assertFails(updateDoc(doc(reporter, coll, SIGNAL), { signalOwner: null }));
 
       const other = testEnv.authenticatedContext(OTHER).firestore();
       await assertFails(
         updateDoc(doc(other, coll, SIGNAL), {
-          caseHolder: doc(other, 'users', OTHER),
+          signalOwner: doc(other, 'users', OTHER),
           lastUpdatedBy: doc(other, 'users', OTHER),
         }),
       );
     });
 
-    // holderActiveAt is what the staleness rule reads, so a holder free to pick
-    // its value could hold an abandoned case forever.
-    it('pins holderActiveAt to the server clock on both branches', async () => {
+    // ownerActiveAt is what the staleness rule reads, so an owner free to pick
+    // its value could hold an abandoned signal forever.
+    it('pins ownerActiveAt to the server clock on both branches', async () => {
       const reporter = testEnv.authenticatedContext(REPORTER).firestore();
       await assertFails(
-        updateDoc(doc(reporter, coll, SIGNAL), { holderActiveAt: new Date(2099, 0, 1) }),
+        updateDoc(doc(reporter, coll, SIGNAL), { ownerActiveAt: new Date(2099, 0, 1) }),
       );
       await assertSucceeds(
         updateDoc(doc(reporter, coll, SIGNAL), {
           status: 1,
           lastUpdatedBy: doc(reporter, 'users', REPORTER),
-          holderActiveAt: serverTimestamp(),
+          ownerActiveAt: serverTimestamp(),
         }),
       );
     });
 
-    // Master spec 4.2: the holder completes tags as needs are resolved.
-    it('lets the case holder change urgency and help tags', async () => {
+    // Master spec 4.2: the owner completes tags as needs are resolved.
+    it('lets the signal owner change urgency and help tags', async () => {
       const db = testEnv.authenticatedContext(REPORTER).firestore();
       await assertSucceeds(
         updateDoc(doc(db, coll, SIGNAL), {
@@ -935,7 +1023,7 @@ for (const coll of ['signals', 'signals_test']) {
       );
     });
 
-    // Spec 5.2: only the signal holder (plus moderators/admins, which do not
+    // Spec 5.2: only the signal owner (plus moderators/admins, which do not
     // exist yet) may set urgency. `isStatusOnlyUpdate` enforces that by leaving
     // `urgency` out of its affectedKeys allowlist — these are the guards that
     // fail if someone "helpfully" adds it.
@@ -981,31 +1069,31 @@ for (const coll of ['signals', 'signals_test']) {
       }
     });
 
-    // holderActiveAt is what the staleness escape hatch reads. isValidHolderStamp
+    // ownerActiveAt is what the staleness escape hatch reads. isValidOwnerStamp
     // only guards the UPDATE rules, so without an explicit clause on create a
     // patched client could stamp a far-future value, make the age permanently
-    // negative, and freeze the case behind its holder forever.
-    it('rejects holderActiveAt at creation, at any value', async () => {
+    // negative, and freeze the signal behind its owner forever.
+    it('rejects ownerActiveAt at creation, at any value', async () => {
       const db = testEnv.authenticatedContext(REPORTER).firestore();
       for (const at of [new Date(2099, 0, 1), new Date(), serverTimestamp()]) {
         await assertFails(
-          addDoc(collection(db, coll), { ...signalDoc(db, REPORTER), holderActiveAt: at }),
+          addDoc(collection(db, coll), { ...signalDoc(db, REPORTER), ownerActiveAt: at }),
         );
       }
     });
 
-    it('accepts a create that names the reporter as the case holder, and no other', async () => {
+    it('accepts a create that names the reporter as the signal owner, and no other', async () => {
       const db = testEnv.authenticatedContext(REPORTER).firestore();
       await assertSucceeds(
         addDoc(collection(db, coll), {
           ...signalDoc(db, REPORTER),
-          caseHolder: doc(db, 'users', REPORTER),
+          signalOwner: doc(db, 'users', REPORTER),
         }),
       );
       await assertFails(
         addDoc(collection(db, coll), {
           ...signalDoc(db, REPORTER),
-          caseHolder: doc(db, 'users', OTHER),
+          signalOwner: doc(db, 'users', OTHER),
         }),
       );
     });
@@ -1785,13 +1873,13 @@ describe('a moderator is still an ordinary user', () => {
     await assertSucceeds(
       addDoc(collection(db, `signals/${SIGNAL}/comments`), commentDoc(db, MOD)),
     );
-    // Advance status on a case they hold, self-stamping like any volunteer.
-    // Since case ownership (master spec 4.5) that means holding it first — a
-    // moderator gets no shortcut past isCaseHolder(), which is the point of
+    // Advance status on a signal they hold, self-stamping like any volunteer.
+    // Since signal ownership (master spec 4.5) that means holding it first — a
+    // moderator gets no shortcut past isSignalOwner(), which is the point of
     // this describe: the role adds moderateAction, not content powers.
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await updateDoc(doc(ctx.firestore(), 'signals', SIGNAL), {
-        caseHolder: doc(ctx.firestore(), 'users', MOD),
+        signalOwner: doc(ctx.firestore(), 'users', MOD),
       });
     });
     await assertSucceeds(

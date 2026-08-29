@@ -14,7 +14,7 @@ import 'callable_client.dart';
 /// *errored* on the missing parent so nothing could go back for them), it
 /// forced `comments`, `events` and `takeoverRequests` to grant the reporter a
 /// delete they had no other reason to have, and it was irreversible — which is
-/// why people used Delete to mean "this case is finished" instead of marking it
+/// why people used Delete to mean "this signal is finished" instead of marking it
 /// Resolved. The server does all three parts now; see
 /// `functions/src/removeSignal.ts`.
 ///

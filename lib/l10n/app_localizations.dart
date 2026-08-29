@@ -575,7 +575,7 @@ abstract class AppLocalizations {
   /// No description provided for @helperTagsOnboardingIntro.
   ///
   /// In en, this message translates to:
-  /// **'Pick what you can realistically do, and which animals you can help. We use this to send you the cases you can actually act on — you can change it any time in settings.'**
+  /// **'Pick what you can realistically do, and which animals you can help. We use this to send you the signals you can actually act on — you can change it any time in settings.'**
   String get helperTagsOnboardingIntro;
 
   /// No description provided for @helperTagsOnboardingHelpSection.
@@ -1202,28 +1202,28 @@ abstract class AppLocalizations {
   /// **'Changing to: {level}'**
   String updateNoteChangingTo(String level);
 
-  /// No description provided for @updateNoteTakingCase.
+  /// No description provided for @updateNoteTakingSignal.
   ///
   /// In en, this message translates to:
-  /// **'Taking responsibility for this case'**
-  String get updateNoteTakingCase;
+  /// **'Taking responsibility for this signal'**
+  String get updateNoteTakingSignal;
 
-  /// No description provided for @updateNoteTakingCaseAndChangingTo.
+  /// No description provided for @updateNoteTakingSignalAndChangingTo.
   ///
   /// In en, this message translates to:
   /// **'Taking responsibility, and changing to: {level}'**
-  String updateNoteTakingCaseAndChangingTo(String level);
+  String updateNoteTakingSignalAndChangingTo(String level);
 
   /// No description provided for @updateNoteSteppingDown.
   ///
   /// In en, this message translates to:
-  /// **'Stepping down from this case'**
+  /// **'Stepping down from this signal'**
   String get updateNoteSteppingDown;
 
   /// No description provided for @updateNoteHandingOver.
   ///
   /// In en, this message translates to:
-  /// **'Handing this case over'**
+  /// **'Handing this signal over'**
   String get updateNoteHandingOver;
 
   /// No description provided for @updateNoteDecliningOffer.
@@ -1235,7 +1235,7 @@ abstract class AppLocalizations {
   /// No description provided for @updateNoteOfferingTakeover.
   ///
   /// In en, this message translates to:
-  /// **'Offering to take this case on'**
+  /// **'Offering to take this signal on'**
   String get updateNoteOfferingTakeover;
 
   /// No description provided for @updateNoteHint.
@@ -1262,88 +1262,88 @@ abstract class AppLocalizations {
   /// **'Someone'**
   String get someone;
 
-  /// No description provided for @caseHolder.
+  /// No description provided for @signalOwner.
   ///
   /// In en, this message translates to:
   /// **'Responsible'**
-  String get caseHolder;
+  String get signalOwner;
 
-  /// No description provided for @caseHolderNobody.
+  /// No description provided for @signalOwnerNobody.
   ///
   /// In en, this message translates to:
-  /// **'Nobody has taken this case on yet'**
-  String get caseHolderNobody;
+  /// **'Nobody has taken this signal on yet'**
+  String get signalOwnerNobody;
 
-  /// No description provided for @caseHolderIsYou.
+  /// No description provided for @signalOwnerIsYou.
   ///
   /// In en, this message translates to:
-  /// **'You are responsible for this case'**
-  String get caseHolderIsYou;
+  /// **'You are responsible for this signal'**
+  String get signalOwnerIsYou;
 
-  /// No description provided for @caseHolderTakeResponsibility.
+  /// No description provided for @signalOwnerTakeResponsibility.
   ///
   /// In en, this message translates to:
   /// **'Take responsibility'**
-  String get caseHolderTakeResponsibility;
+  String get signalOwnerTakeResponsibility;
 
-  /// No description provided for @caseHolderRequestTakeover.
+  /// No description provided for @signalOwnerRequestTakeover.
   ///
   /// In en, this message translates to:
   /// **'Offer to take over'**
-  String get caseHolderRequestTakeover;
+  String get signalOwnerRequestTakeover;
 
-  /// No description provided for @caseHolderRequestPending.
+  /// No description provided for @signalOwnerRequestPending.
   ///
   /// In en, this message translates to:
   /// **'You have offered to take this over'**
-  String get caseHolderRequestPending;
+  String get signalOwnerRequestPending;
 
-  /// No description provided for @caseHolderWithdrawRequest.
+  /// No description provided for @signalOwnerWithdrawRequest.
   ///
   /// In en, this message translates to:
   /// **'Withdraw offer'**
-  String get caseHolderWithdrawRequest;
+  String get signalOwnerWithdrawRequest;
 
-  /// No description provided for @caseHolderRelease.
+  /// No description provided for @signalOwnerRelease.
   ///
   /// In en, this message translates to:
   /// **'I can no longer do this'**
-  String get caseHolderRelease;
+  String get signalOwnerRelease;
 
-  /// No description provided for @caseHolderHandOver.
+  /// No description provided for @signalOwnerHandOver.
   ///
   /// In en, this message translates to:
   /// **'Hand over'**
-  String get caseHolderHandOver;
+  String get signalOwnerHandOver;
 
-  /// No description provided for @caseHolderDecline.
+  /// No description provided for @signalOwnerDecline.
   ///
   /// In en, this message translates to:
   /// **'Decline'**
-  String get caseHolderDecline;
+  String get signalOwnerDecline;
 
-  /// No description provided for @caseHolderOffers.
+  /// No description provided for @signalOwnerOffers.
   ///
   /// In en, this message translates to:
   /// **'Offers to take over'**
-  String get caseHolderOffers;
+  String get signalOwnerOffers;
 
-  /// No description provided for @caseHolderStale.
+  /// No description provided for @signalOwnerStale.
   ///
   /// In en, this message translates to:
-  /// **'Nobody has updated this case in a while.'**
-  String get caseHolderStale;
+  /// **'Nobody has updated this signal in a while.'**
+  String get signalOwnerStale;
 
   /// No description provided for @takeoverConfirmTitle.
   ///
   /// In en, this message translates to:
-  /// **'Take responsibility for this case?'**
+  /// **'Take responsibility for this signal?'**
   String get takeoverConfirmTitle;
 
   /// No description provided for @takeoverConfirmBody.
   ///
   /// In en, this message translates to:
-  /// **'You become the person coordinating this case. You can change its status and urgency, and hand it on or step down at any time.'**
+  /// **'You become the person coordinating this signal. You can change its status and urgency, and hand it on or step down at any time.'**
   String get takeoverConfirmBody;
 
   /// No description provided for @takeoverConfirmAction.
@@ -1355,31 +1355,31 @@ abstract class AppLocalizations {
   /// No description provided for @handOverConfirmTitle.
   ///
   /// In en, this message translates to:
-  /// **'Hand this case over?'**
+  /// **'Hand this signal over?'**
   String get handOverConfirmTitle;
 
   /// No description provided for @handOverConfirmBody.
   ///
   /// In en, this message translates to:
-  /// **'They become the person coordinating this case. You stay on the signal and can offer to take it back later.'**
+  /// **'They become the person coordinating this signal. You stay subscribed to it and can offer to take it back later.'**
   String get handOverConfirmBody;
 
   /// No description provided for @declineConfirmBody.
   ///
   /// In en, this message translates to:
-  /// **'They are told you are keeping the case. They can offer again after a day.'**
+  /// **'They are told you are keeping the signal. They can offer again after a day.'**
   String get declineConfirmBody;
 
   /// No description provided for @releaseConfirmTitle.
   ///
   /// In en, this message translates to:
-  /// **'Step down from this case?'**
+  /// **'Step down from this signal?'**
   String get releaseConfirmTitle;
 
   /// No description provided for @releaseConfirmBody.
   ///
   /// In en, this message translates to:
-  /// **'The case stays open and anyone can take it on. Everyone following it is told.'**
+  /// **'The signal stays open and anyone can take it on. Everyone following it is told.'**
   String get releaseConfirmBody;
 
   /// No description provided for @takeoverNoteHint.
@@ -1388,11 +1388,11 @@ abstract class AppLocalizations {
   /// **'Say what you plan to do'**
   String get takeoverNoteHint;
 
-  /// No description provided for @takeoverAlreadyHeld.
+  /// No description provided for @takeoverAlreadyOwned.
   ///
   /// In en, this message translates to:
-  /// **'Someone else is responsible for this case. You can offer to take it over.'**
-  String get takeoverAlreadyHeld;
+  /// **'Someone else is responsible for this signal. You can offer to take it over.'**
+  String get takeoverAlreadyOwned;
 
   /// No description provided for @takeoverRequestSent.
   ///
@@ -1412,23 +1412,23 @@ abstract class AppLocalizations {
   /// **'You can offer again after {when}.'**
   String takeoverAskAgainAfter(String when);
 
-  /// No description provided for @errorChangingCaseHolder.
+  /// No description provided for @errorChangingSignalOwner.
   ///
   /// In en, this message translates to:
   /// **'Could not change who is responsible.'**
-  String get errorChangingCaseHolder;
+  String get errorChangingSignalOwner;
 
   /// No description provided for @tookResponsibility.
   ///
   /// In en, this message translates to:
-  /// **'{name} took responsibility for this case'**
+  /// **'{name} took responsibility for this signal'**
   String tookResponsibility(String name);
 
-  /// No description provided for @handedCaseTo.
+  /// No description provided for @handedSignalTo.
   ///
   /// In en, this message translates to:
-  /// **'{name} handed this case to {other}'**
-  String handedCaseTo(String name, String other);
+  /// **'{name} handed this signal to {other}'**
+  String handedSignalTo(String name, String other);
 
   /// No description provided for @reportedThisSignalShort.
   ///
@@ -1448,29 +1448,29 @@ abstract class AppLocalizations {
   /// **'Urgency set to {urgency}'**
   String urgencySetTo(String urgency);
 
-  /// No description provided for @releasedCaseShort.
+  /// No description provided for @releasedSignalShort.
   ///
   /// In en, this message translates to:
-  /// **'Stepped down from this case'**
-  String get releasedCaseShort;
+  /// **'Stepped down from this signal'**
+  String get releasedSignalShort;
 
   /// No description provided for @tookResponsibilityShort.
   ///
   /// In en, this message translates to:
-  /// **'Took responsibility for this case'**
+  /// **'Took responsibility for this signal'**
   String get tookResponsibilityShort;
 
-  /// No description provided for @handedCaseToShort.
+  /// No description provided for @handedSignalToShort.
   ///
   /// In en, this message translates to:
-  /// **'Handed this case to {other}'**
-  String handedCaseToShort(String other);
+  /// **'Handed this signal to {other}'**
+  String handedSignalToShort(String other);
 
-  /// No description provided for @releasedCase.
+  /// No description provided for @releasedSignal.
   ///
   /// In en, this message translates to:
-  /// **'{name} stepped down from this case'**
-  String releasedCase(String name);
+  /// **'{name} stepped down from this signal'**
+  String releasedSignal(String name);
 
   /// No description provided for @notificationOwnershipChangeTitle.
   ///
@@ -1481,7 +1481,7 @@ abstract class AppLocalizations {
   /// No description provided for @notificationOwnershipReleasedTitle.
   ///
   /// In en, this message translates to:
-  /// **'This case needs someone'**
+  /// **'This signal needs someone'**
   String get notificationOwnershipReleasedTitle;
 
   /// No description provided for @notificationOwnershipChangeBody.
@@ -1493,7 +1493,7 @@ abstract class AppLocalizations {
   /// No description provided for @notificationOwnershipReleasedBody.
   ///
   /// In en, this message translates to:
-  /// **'Nobody is responsible for this case now'**
+  /// **'Nobody is responsible for this signal now'**
   String get notificationOwnershipReleasedBody;
 
   /// No description provided for @notificationTakeoverRequestTitle.
@@ -1511,13 +1511,13 @@ abstract class AppLocalizations {
   /// No description provided for @notificationTakeoverApprovedTitle.
   ///
   /// In en, this message translates to:
-  /// **'You are now responsible for a case'**
+  /// **'You are now responsible for a signal'**
   String get notificationTakeoverApprovedTitle;
 
   /// No description provided for @notificationTakeoverApprovedBody.
   ///
   /// In en, this message translates to:
-  /// **'The case is yours'**
+  /// **'The signal is yours'**
   String get notificationTakeoverApprovedBody;
 
   /// No description provided for @notificationTakeoverDeclinedTitle.
@@ -1529,7 +1529,7 @@ abstract class AppLocalizations {
   /// No description provided for @notificationTakeoverDeclinedBody.
   ///
   /// In en, this message translates to:
-  /// **'The current holder is keeping this case'**
+  /// **'The current owner is keeping this signal'**
   String get notificationTakeoverDeclinedBody;
 
   /// No description provided for @deletePhoto.
@@ -2858,17 +2858,17 @@ abstract class AppLocalizations {
   /// **'Remove signal'**
   String get removeSignal;
 
-  /// No description provided for @removeSignalCaseOpenTitle.
+  /// No description provided for @removeSignalOpenTitle.
   ///
   /// In en, this message translates to:
-  /// **'Is this case resolved?'**
-  String get removeSignalCaseOpenTitle;
+  /// **'Is this signal resolved?'**
+  String get removeSignalOpenTitle;
 
-  /// No description provided for @removeSignalCaseOpenBody.
+  /// No description provided for @removeSignalOpenBody.
   ///
   /// In en, this message translates to:
-  /// **'If the animal has been helped, mark the case Resolved instead. Your report and its history stay on the map for others to learn from, and it still counts towards your profile.'**
-  String get removeSignalCaseOpenBody;
+  /// **'If the animal has been helped, mark the signal Resolved instead. Your report and its history stay on the map for others to learn from, and it still counts towards your profile.'**
+  String get removeSignalOpenBody;
 
   /// No description provided for @markAsResolved.
   ///
@@ -3158,11 +3158,11 @@ abstract class AppLocalizations {
   /// **'Public accusation about a person'**
   String get reportReasonDefamationRisk;
 
-  /// No description provided for @reportReasonDuplicateCase.
+  /// No description provided for @reportReasonDuplicateSignal.
   ///
   /// In en, this message translates to:
   /// **'Duplicate of another signal'**
-  String get reportReasonDuplicateCase;
+  String get reportReasonDuplicateSignal;
 
   /// No description provided for @reportReasonOther.
   ///

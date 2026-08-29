@@ -34,7 +34,7 @@ export const SIGNAL_URGENCIES: Record<number, string> = {
  * Urgency for a document written by an app build that predates the urgency
  * system, derived from its status.
  *
- * A resolved case is under control; anything else needs help but is not
+ * A resolved signal is under control; anything else needs help but is not
  * assumed critical. **Nothing is ever inferred as Red** — that is a human
  * judgement (master spec 5.2), and a migration that manufactured Red Alerts
  * would devalue every real one.

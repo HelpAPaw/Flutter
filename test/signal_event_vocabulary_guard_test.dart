@@ -5,7 +5,7 @@ import 'package:help_a_paw/src/models/signal_event.dart';
 import 'package:help_a_paw/src/models/signal_status.dart';
 import 'package:help_a_paw/src/models/signal_urgency.dart';
 
-/// Guards the copy of the case-event vocabulary that lives in `firestore.rules`.
+/// Guards the copy of the signal-event vocabulary that lives in `firestore.rules`.
 ///
 /// [SignalEventType] is the source of truth, but the rules validate a closed list
 /// of their own — that is the whole point of putting events in their own
@@ -54,7 +54,7 @@ void main() {
   // A server-only type is written through the Admin SDK, which bypasses rules
   // entirely, so the rules never need to accept it — and NOT accepting it is
   // what makes an ownership transfer unforgeable by the person claiming the
-  // case. This test exists to stop the previous one being "fixed" by adding the
+  // signal. This test exists to stop the previous one being "fixed" by adding the
   // missing code to the rules, which would look like a green build and quietly
   // remove that property.
   test('server-only types are deliberately absent from the rules', () {

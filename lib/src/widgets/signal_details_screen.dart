@@ -30,9 +30,9 @@ import '../models/signal_doc_state.dart';
 import '../models/signal_status.dart';
 import '../models/help_tag.dart';
 import '../models/signal_urgency.dart';
-import 'case_holder_block.dart';
-import 'manage_case_sheet.dart';
-import 'signal_case_card.dart';
+import 'signal_owner_block.dart';
+import 'manage_signal_sheet.dart';
+import 'signal_state_card.dart';
 import 'help_tag_picker_sheet.dart';
 import 'report_dialog.dart';
 import 'update_note_dialog.dart';
@@ -42,7 +42,7 @@ import '../models/removed_signal.dart';
 import '../models/report_reason.dart';
 import '../services/app_preferences_service.dart';
 import '../services/callable_client.dart';
-import '../services/case_ownership_service.dart';
+import '../services/signal_ownership_service.dart';
 import '../services/moderation_service.dart';
 import '../services/signal_removal_service.dart';
 import 'moderation_action_sheet.dart';
@@ -447,11 +447,11 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       _signalWasLoaded = true;
       final signal = Signal.fromJson(snapshot.data!.data() as Map<String, dynamic>);
       final isAuthor = _isUserAuthor(signal);
-      // Master spec §4.5: the case holder coordinates the case. The reporter
+      // Master spec §4.5: the signal owner coordinates the signal. The reporter
       // keeps their own powers whether or not they still hold it — they own the
       // photos, the description and the phone number, and §5.2 names "the
       // original poster/case holder" as one set. `firestore.rules` draws the
-      // same line with `isSignalReporter() || isCaseHolderUpdate()`; this is
+      // same line with `isSignalReporter() || isSignalOwnerUpdate()`; this is
       // which controls to draw, not the security boundary.
       final uid = FirebaseAuth.instance.currentUser?.uid;
       final canCoordinate = signal.canCoordinate(uid);
@@ -566,7 +566,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
             // This was `Center(Padding(Column(...)))`, and `Column`'s default
             // `crossAxisAlignment` is centre — so "Urgency", "Status" and
             // "Signal history" centred while every child that filled its width
-            // (the tag `Wrap`, the help-needed `Row`, the case-holder block)
+            // (the tag `Wrap`, the help-needed `Row`, the signal-owner block)
             // sat left. The page stopped centring halfway down, which is most
             // of why it read as disorganised, and no amount of fixing an
             // individual heading could have shown up while the wrapper stayed.
@@ -874,25 +874,25 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                               ],
                             ),
                             const SizedBox(height: 16),
-                            // Urgency, status, who holds the case and what the
+                            // Urgency, status, who holds the signal and what the
                             // animal needs, in one bounded surface — see
-                            // [SignalCaseCard]. They were four sibling blocks
+                            // [SignalStateCard]. They were four sibling blocks
                             // with four headings at three different type sizes,
                             // and the editing controls for three of them were
                             // inline, so a reader who could change nothing
                             // still scrolled past a six-line radio group and a
                             // full-width dropdown to reach the timeline.
-                            SignalCaseCard(
+                            SignalStateCard(
                               signal: signal,
                               canCoordinate: canCoordinate,
                               busy: _isApplyingLevelChange,
-                              onManage: () => showManageCaseSheet(
+                              onManage: () => showManageSignalSheet(
                                 context,
                                 signal: signal,
                                 busy: _isApplyingLevelChange,
-                                // Master spec §5.2 restricts marking a case Red
+                                // Master spec §5.2 restricts marking a signal Red
                                 // to "the original poster/case holder, a
-                                // moderator or an admin"; `isCaseHolderUpdate`
+                                // moderator or an admin"; `isSignalOwnerUpdate`
                                 // in the rules enforces it, so gating the sheet
                                 // on `canCoordinate` is UI courtesy rather than
                                 // the security boundary. A moderator does NOT
@@ -910,7 +910,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                               ),
                               // Who is responsible, immediately above the
                               // control that responsibility gates.
-                              holder: CaseHolderBlock(
+                              owner: SignalOwnerBlock(
                                 signal: signal,
                                 signalId: widget.signalId,
                                 uid: uid,
@@ -1162,7 +1162,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
             isLast: index == entries.length - 1,
             // Computed once for the whole list rather than per row. A moderator
             // may not act on comments under their OWN signal — deleting the
-            // comment criticising your case is the conflict of interest the
+            // comment criticising your signal is the conflict of interest the
             // server's `requireNotOwnContent` refuses — so on your own signal
             // the rows behave exactly as they do for everybody else.
             canModerateComments: _isModerator && !_isUserAuthor(signal),
@@ -1290,14 +1290,14 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// "Ownership history is visible in the case timeline" (master spec §4.5).
   ///
   /// Three sentences from one event, told apart by who the actor and the new
-  /// holder are — which is the whole reason the event stores both rather than
+  /// owner are — which is the whole reason the event stores both rather than
   /// just the new one:
   ///
-  ///  * no new holder → the holder stepped down;
-  ///  * the actor IS the new holder → they took the case on themselves;
-  ///  * otherwise → the previous holder handed it to someone.
+  ///  * no new owner → the owner stepped down;
+  ///  * the actor IS the new owner → they took the signal on themselves;
+  ///  * otherwise → the previous owner handed it to someone.
   ///
-  /// The previous holder stays visible because the row above it in the thread is
+  /// The previous owner stays visible because the row above it in the thread is
   /// theirs — the spec's "previous case holders remain visible" is satisfied by
   /// the timeline being a thread, with no per-row restatement.
   ///
@@ -1306,23 +1306,23 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   Widget _buildOwnershipRow(
       SignalHistoryEntry entry, DateFormat dateFormat, bool isLast) {
     final l10n = AppLocalizations.of(context);
-    final holderId = entry.holderId;
+    final ownerId = entry.ownerId;
 
     final Widget sentence;
-    if (holderId == null) {
-      sentence = Text(l10n.releasedCaseShort);
-    } else if (holderId == entry.actorId) {
+    if (ownerId == null) {
+      sentence = Text(l10n.releasedSignalShort);
+    } else if (ownerId == entry.actorId) {
       sentence = Text(l10n.tookResponsibilityShort);
     } else {
       sentence = _actorText(
-        holderId,
-        (name) => l10n.handedCaseToShort(name),
+        ownerId,
+        (name) => l10n.handedSignalToShort(name),
         fallback: l10n.someone,
       );
     }
 
     return _timelineRow(
-      icon: holderId == null
+      icon: ownerId == null
           ? Icons.person_off_outlined
           : Icons.volunteer_activism,
       iconBackground: Theme.of(context).colorScheme.surfaceContainerHigh,
@@ -1706,12 +1706,12 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// Move the signal's status, taking responsibility for it first if needed.
   ///
   /// **Claim-to-act** (master spec §4.5, "the current case holder can update
-  /// status"). Before case ownership, any signed-in user could move any
+  /// status"). Before signal ownership, any signed-in user could move any
   /// stranger's signal to Resolved with nothing recording that they had taken
-  /// it on. Now a bystander who wants to move a case is asked to take it on —
+  /// it on. Now a bystander who wants to move a signal is asked to take it on —
   /// one confirmation, one note, one write. The status dropdown stays visible
   /// and enabled for everyone, because hiding it would leave a volunteer with no
-  /// way to discover that taking the case on is what unlocks it.
+  /// way to discover that taking the signal on is what unlocks it.
   Future<void> _updateSignalStatus(
       Signal signal, int oldStatus, int newStatus) async {
     final status = SignalStatus.fromCode(newStatus);
@@ -1732,11 +1732,11 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   }
 
   // -------------------------------------------------------------------------
-  // Case ownership (master spec §4.5). Every one of these goes through the
-  // `caseOwnership` callable — the client cannot write `caseHolder`, by rule.
+  // Signal ownership (master spec §4.5). Every one of these goes through the
+  // `signalOwnership` callable — the client cannot write `signalOwner`, by rule.
   // -------------------------------------------------------------------------
 
-  /// Take responsibility for a case, optionally moving its status in the same
+  /// Take responsibility for a signal, optionally moving its status in the same
   /// The flag's whole job is to stop a second change landing on top of one
   /// already in flight, and it is deliberately **one flag for every path** — a
   /// claim can carry a status change, so separate guards would let one tap
@@ -1754,10 +1754,10 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     }
   }
 
-  /// Change what the case needs (master spec §4.2).
+  /// Change what the signal needs (master spec §4.2).
   ///
-  /// An ordinary field write on the holder branch, not an ownership change — it
-  /// travels through `isCaseHolderUpdate()` like a status change does, and needs
+  /// An ordinary field write on the owner branch, not an ownership change — it
+  /// travels through `isSignalOwnerUpdate()` like a status change does, and needs
   /// no callable.
   Future<void> _editHelpTags(Signal signal) async {
     final selected = await showHelpTagPicker(
@@ -1770,9 +1770,9 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       try {
         await _signalRef.update({
           'helpNeededTags': selected.map((t) => t.code).toList(),
-          // The shared stamp, so this write cannot forget the holder's proof of
+          // The shared stamp, so this write cannot forget the owner's proof of
           // life the way the edit screen once did.
-          ...CaseOwnershipService.coordinationStamp(_userRef),
+          ...SignalOwnershipService.coordinationStamp(_userRef),
         });
       } catch (_) {
         if (!mounted) return;
@@ -1785,16 +1785,16 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     });
   }
 
-  /// Take responsibility for a case, optionally moving its status with it.
+  /// Take responsibility for a signal, optionally moving its status with it.
   ///
-  /// Lives here rather than in [CaseHolderBlock] because the **status dropdown**
+  /// Lives here rather than in [SignalOwnerBlock] because the **status dropdown**
   /// shares it: choosing a status you are not entitled to set offers to claim
   /// first, and that has to be the same flow as pressing the button in the
-  /// block, or the two ways of taking a case on write different history.
+  /// block, or the two ways of taking a signal on write different history.
   ///
   /// [newStatus] arrives from the dropdown on that path. The server applies both
   /// in one batch, which is what lets one note explain both and stops a failed
-  /// second write leaving someone owning a case they only meant to update.
+  /// second write leaving someone owning a signal they only meant to update.
   Future<void> _claimCase({int? newStatus}) async {
     final l10n = AppLocalizations.of(context);
     final note = await askOwnershipNote(
@@ -1806,8 +1806,8 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       // explains both, so the headline has to name both — naming only the
       // ownership change left the status the user picked unmentioned anywhere.
       noteHeadline: newStatus == null
-          ? l10n.updateNoteTakingCase
-          : l10n.updateNoteTakingCaseAndChangingTo(
+          ? l10n.updateNoteTakingSignal
+          : l10n.updateNoteTakingSignalAndChangingTo(
               SignalStatus.fromCode(newStatus).label(l10n),
             ),
       busy: _isApplyingLevelChange,
@@ -1819,7 +1819,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     await runOwnershipChange(
       context,
       _runGuarded,
-      () => CaseOwnershipService.instance.claim(
+      () => SignalOwnershipService.instance.claim(
         signalId: widget.signalId,
         note: note,
         newStatus: newStatus,
@@ -1827,7 +1827,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     );
   }
 
-  /// [CaseHolderBlock]'s name renderer, adapting [_actorText] so the block
+  /// [SignalOwnerBlock]'s name renderer, adapting [_actorText] so the block
   /// shares this screen's memoized `publicProfiles` cache rather than starting
   /// a second one.
   Widget _nameWidget(
@@ -1928,10 +1928,10 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     final batch = FirebaseFirestore.instance.batch();
     batch.update(signalRef, {
       eventType.signalField: newValue,
-      // `lastUpdatedBy` plus the holder's proof of life, from the one helper
+      // `lastUpdatedBy` plus the owner's proof of life, from the one helper
       // that defines what a coordination write carries — see its doc comment for
       // what each is load-bearing for.
-      ...CaseOwnershipService.coordinationStamp(userRef),
+      ...SignalOwnershipService.coordinationStamp(userRef),
     });
     batch.set(
       signalRef.collection('events').doc(),
@@ -1962,10 +1962,10 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   ///
   /// Two dialogs, and the first one exists because of what people were actually
   /// using Delete for. A reporter whose animal has been helped reaches for
-  /// Delete rather than Resolved: the case is finished, so the post feels like
+  /// Delete rather than Resolved: the signal is finished, so the post feels like
   /// clutter. That silently threw away the outcome other people could have
   /// learned from, and — until statistics moved off the live collection — the
-  /// credit for having reported it. So an OPEN case is asked the question
+  /// credit for having reported it. So an OPEN signal is asked the question
   /// first, with Resolved as the primary action; an already-resolved one goes
   /// straight to the removal confirmation and is not nagged.
   ///
@@ -1981,8 +1981,8 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       final choice = await showDialog<_RemoveChoice>(
         context: context,
         builder: (context) => AlertDialog(
-          title: Text(l10n.removeSignalCaseOpenTitle),
-          content: Text(l10n.removeSignalCaseOpenBody),
+          title: Text(l10n.removeSignalOpenTitle),
+          content: Text(l10n.removeSignalOpenBody),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, _RemoveChoice.remove),

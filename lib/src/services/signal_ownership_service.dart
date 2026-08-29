@@ -6,22 +6,22 @@ import '../models/signal_event.dart';
 import 'app_preferences_service.dart';
 import 'callable_client.dart';
 
-/// Case ownership (master spec §4.5) — who is responsible for a signal now.
+/// Signal ownership (master spec §4.5) — who is responsible for a signal now.
 ///
 /// Two halves with different trust levels, deliberately in one place so the
 /// split is visible, exactly as `ModerationService` does it:
 ///
 /// * **Filing a takeover request** is a plain Firestore write. It carries no
 ///   privilege — it is one person saying they would like to help — so the rules
-///   validate it and a Cloud Function trigger tells the holder.
-/// * **Every ownership change** goes through the `caseOwnership` callable,
-///   because moving the case, writing the timeline entry that says so, and
+///   validate it and a Cloud Function trigger tells the owner.
+/// * **Every ownership change** goes through the `signalOwnership` callable,
+///   because moving the signal, writing the timeline entry that says so, and
 ///   answering the request that asked for it have to happen together, and
 ///   because the timeline entry must not be forgeable by the person claiming
-///   the case (`SignalEventType.serverOnly`).
-class CaseOwnershipService {
-  CaseOwnershipService._();
-  static final CaseOwnershipService instance = CaseOwnershipService._();
+///   the signal (`SignalEventType.serverOnly`).
+class SignalOwnershipService {
+  SignalOwnershipService._();
+  static final SignalOwnershipService instance = SignalOwnershipService._();
 
   static const String _requestsSubcollection = 'takeoverRequests';
 
@@ -35,10 +35,10 @@ class CaseOwnershipService {
 
   /// How long after being answered a takeover request may be filed again.
   ///
-  /// A decline is not permanent — a case looks very different two weeks later,
+  /// A decline is not permanent — a signal looks very different two weeks later,
   /// and a volunteer told "no, I have this" in the first hour may be the right
-  /// person once the holder has moved on. But re-asking has to cost something,
-  /// because every request notifies the holder.
+  /// person once the owner has moved on. But re-asking has to cost something,
+  /// because every request notifies the owner.
   ///
   /// **Mirrored by `isAfterReaskCooldown()` in `firestore.rules`, which is the
   /// enforcement.** This copy exists so the UI can say *when* rather than just
@@ -47,14 +47,14 @@ class CaseOwnershipService {
   /// would show a button whose write is refused, or hide one that would work.
   static const Duration reaskCooldown = Duration(days: 1);
 
-  /// How long a case holder may be silent before anyone may take the case.
+  /// How long a signal owner may be silent before anyone may take the signal.
   ///
-  /// **Mirrored by `STALE_HOLDER_DAYS` in `functions/src/caseOwnership.ts`,
+  /// **Mirrored by `STALE_OWNER_DAYS` in `functions/src/signalOwnership.ts`,
   /// which is the enforcement** — the server decides, and answers a claim it
   /// disagrees with by throwing `failed-precondition`.
   ///
   /// This copy exists because without it the staleness escape hatch is
-  /// *unreachable from the UI*: a case held by someone who stopped answering
+  /// *unreachable from the UI*: a signal held by someone who stopped answering
   /// looks identical to one held by someone active, so the only affordance
   /// offered is "Offer to take over" — an offer sent to a person who by
   /// definition is not reading it. The whole design is shaped around not
@@ -62,41 +62,41 @@ class CaseOwnershipService {
   ///
   /// Guarded by `test/takeover_cooldown_guard_test.dart`, which parses the
   /// TypeScript. Drift only mis-draws a button; it cannot grant anything.
-  static const Duration staleHolderAfter = Duration(days: 14);
+  static const Duration staleOwnerAfter = Duration(days: 14);
 
-  /// Whether this case's holder has been silent long enough to be displaced.
+  /// Whether this signal's owner has been silent long enough to be displaced.
   ///
   /// A signal with no usable timestamp reads as **not** stale, matching
-  /// `isHolderStale` on the server: the failure of a missing field must be "you
-  /// have to ask the holder", never "anyone may take this".
-  static bool isHolderStale(Signal signal) {
-    final active = signal.holderLastActiveAt;
+  /// `isOwnerStale` on the server: the failure of a missing field must be "you
+  /// have to ask the owner", never "anyone may take this".
+  static bool isOwnerStale(Signal signal) {
+    final active = signal.ownerLastActiveAt;
     if (active == null) return false;
-    return DateTime.now().difference(active) > staleHolderAfter;
+    return DateTime.now().difference(active) > staleOwnerAfter;
   }
 
   /// The two fields every **coordination write** must carry.
   ///
-  /// A coordination write is anything travelling the `isCaseHolderUpdate()`
+  /// A coordination write is anything travelling the `isSignalOwnerUpdate()`
   /// branch — a status change, an urgency change, a tag edit. Both fields are
   /// easy to leave out and neither omission is visible:
   ///
   /// * `lastUpdatedBy` is how `handleSignalUpdated` decides whom *not* to
   ///   notify, so a stale one mutes the wrong subscriber.
-  /// * `holderActiveAt` is the holder's proof of life. Omit it and a case
+  /// * `ownerActiveAt` is the owner's proof of life. Omit it and a signal
   ///   somebody is actively working becomes claimable by a stranger 14 days
   ///   later, with no error anywhere — which is exactly what the edit screen did
   ///   before this helper existed.
   ///
-  /// A server sentinel rather than a local clock: `isValidHolderStamp()` pins the
+  /// A server sentinel rather than a local clock: `isValidOwnerStamp()` pins the
   /// value to `request.time`, so a literal is a denied write.
   ///
   /// The server-side counterpart is `writeTransfer()` in
-  /// `functions/src/caseOwnership.ts`, which carries the same pair for the same
+  /// `functions/src/signalOwnership.ts`, which carries the same pair for the same
   /// reason.
   static Map<String, dynamic> coordinationStamp(DocumentReference actor) => {
         'lastUpdatedBy': actor,
-        'holderActiveAt': FieldValue.serverTimestamp(),
+        'ownerActiveAt': FieldValue.serverTimestamp(),
       };
 
   FirebaseFirestore get _db => FirebaseFirestore.instance;
@@ -123,9 +123,9 @@ class CaseOwnershipService {
               ? TakeoverRequest.fromDocument(doc.id, doc.data()!)
               : null);
 
-  /// Live view of the requests still awaiting the holder's answer.
+  /// Live view of the requests still awaiting the owner's answer.
   ///
-  /// Filtered server-side for the same reason: without it the holder re-reads
+  /// Filtered server-side for the same reason: without it the owner re-reads
   /// every historical answered request to render a list that shows none of them.
   /// An equality filter needs no composite index (single-field indexes are
   /// automatic), so the ordering stays client-side — a signal has a handful of
@@ -153,7 +153,7 @@ class CaseOwnershipService {
         return requests;
       });
 
-  /// Ask the current holder to hand the case over.
+  /// Ask the current owner to hand the signal over.
   ///
   /// The document id is the caller's uid, which is what makes this
   /// self-limiting: one live request per person per signal, with no counter to
@@ -197,7 +197,7 @@ class CaseOwnershipService {
   /// An **update, not a delete**. Deleting would free the uid-keyed slot, and
   /// `create` is unconstrained when no document exists — so
   /// withdraw → re-file → withdraw → re-file would be an unlimited loop, pushing
-  /// to the holder every time. Marking it `withdrawn` leaves the slot occupied,
+  /// to the owner every time. Marking it `withdrawn` leaves the slot occupied,
   /// so asking again costs the same [reaskCooldown] as being declined does.
   ///
   /// `resolvedAt` is a server sentinel because `isTakeoverWithdraw()` pins it to
@@ -214,18 +214,18 @@ class CaseOwnershipService {
 
   // -------------------------------------------------------------------------
   // Ownership changes. All of these go through the callable; see
-  // functions/src/caseOwnership.ts.
+  // functions/src/signalOwnership.ts.
   // -------------------------------------------------------------------------
 
-  /// Take responsibility for a case.
+  /// Take responsibility for a signal.
   ///
   /// [newStatus] is what makes claim-to-act a single action: a volunteer moving
-  /// a case they do not yet hold confirms once, writes one note, and the server
+  /// a signal they do not yet hold confirms once, writes one note, and the server
   /// applies the transfer and the status change in one batch. Omitted when
-  /// somebody is only taking the case on.
+  /// somebody is only taking the signal on.
   ///
-  /// Throws [CallableException] with code `failed-precondition` when the case is
-  /// already held by an active holder — not an error so much as an answer, and
+  /// Throws [CallableException] with code `failed-precondition` when the signal is
+  /// already held by an active owner — not an error so much as an answer, and
   /// the UI turns it into an offer to request a takeover instead.
   Future<void> claim({
     required String signalId,
@@ -242,7 +242,7 @@ class CaseOwnershipService {
   Future<void> release({required String signalId, required String note}) =>
       _act('release', {'signalId': signalId, 'note': note});
 
-  /// Hand the case to someone who asked for it.
+  /// Hand the signal to someone who asked for it.
   Future<void> approveRequest({
     required String signalId,
     required String requesterId,
@@ -255,7 +255,7 @@ class CaseOwnershipService {
       });
 
   /// Turn a request down. Writes no timeline entry — nothing happened to the
-  /// case — but the requester is told.
+  /// signal — but the requester is told.
   Future<void> declineRequest({
     required String signalId,
     required String requesterId,
@@ -270,7 +270,7 @@ class CaseOwnershipService {
   /// The collection is stamped here rather than at each call site, so a caller
   /// can never point an ownership change at the wrong mode's data.
   Future<void> _act(String action, Map<String, dynamic> params) async {
-    await CallableClient.call('caseOwnership', {
+    await CallableClient.call('signalOwnership', {
       'action': action,
       'collection': _collection,
       ...params,
@@ -278,7 +278,7 @@ class CaseOwnershipService {
   }
 }
 
-/// One person's outstanding offer to take a case on.
+/// One person's outstanding offer to take a signal on.
 class TakeoverRequest {
   const TakeoverRequest({
     required this.requesterId,
@@ -299,13 +299,13 @@ class TakeoverRequest {
   final String note;
   final DateTime? createdAt;
 
-  /// When the holder answered this, or null while it is still pending.
+  /// When the owner answered this, or null while it is still pending.
   final DateTime? resolvedAt;
 
-  /// Why the holder declined, in their words.
+  /// Why the owner declined, in their words.
   ///
-  /// A decline writes no timeline event — nothing happened to the case — so this
-  /// is the only place the reason the holder was made to type actually goes.
+  /// A decline writes no timeline event — nothing happened to the signal — so this
+  /// is the only place the reason the owner was made to type actually goes.
   /// Null on every other status.
   final String? resolvedNote;
 
@@ -319,12 +319,12 @@ class TakeoverRequest {
   /// says.
   DateTime? get reaskableAt {
     if (isPending || resolvedAt == null) return null;
-    final at = resolvedAt!.add(CaseOwnershipService.reaskCooldown);
+    final at = resolvedAt!.add(SignalOwnershipService.reaskCooldown);
     return at.isAfter(DateTime.now()) ? at : null;
   }
 
   /// Returns null for a document this build cannot make sense of, so one
-  /// malformed row cannot take out the holder's whole list.
+  /// malformed row cannot take out the owner's whole list.
   static TakeoverRequest? fromDocument(String id, Map<String, dynamic> data) {
     final status = data['status'];
     if (status is! String) return null;
@@ -340,7 +340,7 @@ class TakeoverRequest {
   }
 }
 
-/// What happened when someone asked to take a case over.
+/// What happened when someone asked to take a signal over.
 enum TakeoverRequestOutcome {
   submitted,
 

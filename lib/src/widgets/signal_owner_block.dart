@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 import '../../l10n/app_localizations.dart';
 import '../models/signal.dart';
 import '../services/callable_client.dart';
-import '../services/case_ownership_service.dart';
+import '../services/signal_ownership_service.dart';
 import 'update_note_dialog.dart';
 
 /// Renders a name for a uid. Supplied by the host screen so the memoized
@@ -24,12 +24,12 @@ typedef NameBuilder = Widget Function(
 /// a second flag would let one tap through each of them.
 typedef GuardedRunner = Future<void> Function(Future<void> Function() body);
 
-/// Who is responsible for this case, and what this viewer can do about it
+/// Who is responsible for this signal, and what this viewer can do about it
 /// (master spec §4.5).
 ///
 /// Its own widget because this is a self-contained feature with its own async
 /// flows, and `signal_details_screen.dart` is the file every subsequent feature
-/// that attaches to `caseHolder` would otherwise land in too — the spec already
+/// that attaches to `signalOwner` would otherwise land in too — the spec already
 /// names pinned comments (§9.1), helper commitments and fundraising.
 ///
 /// It deliberately owns **no** state that the screen also needs: the in-flight
@@ -40,12 +40,12 @@ typedef GuardedRunner = Future<void> Function(Future<void> Function() body);
 ///
 /// | viewer | sees |
 /// |---|---|
-/// | the holder | who they are, plus Release and any offers to answer |
+/// | the owner | who they are, plus Release and any offers to answer |
 /// | the reporter, not holding | who holds it, and any offers — read-only |
-/// | anyone else, case held | Offer to take over (or their pending offer) |
+/// | anyone else, signal held | Offer to take over (or their pending offer) |
 /// | anyone else, released or stale | Take responsibility |
-class CaseHolderBlock extends StatelessWidget {
-  const CaseHolderBlock({
+class SignalOwnerBlock extends StatelessWidget {
+  const SignalOwnerBlock({
     super.key,
     required this.signal,
     required this.signalId,
@@ -71,7 +71,7 @@ class CaseHolderBlock extends StatelessWidget {
   final GuardedRunner runGuarded;
   final NameBuilder nameOf;
 
-  /// Take responsibility for the case. Owned by the screen because the status
+  /// Take responsibility for the signal. Owned by the screen because the status
   /// dropdown shares it — choosing a status you are not entitled to set offers
   /// to claim first, and that must be the same flow as pressing the button here
   /// or the two produce different history.
@@ -80,38 +80,38 @@ class CaseHolderBlock extends StatelessWidget {
   /// Shown when an anonymous session tries to act.
   final VoidCallback onSignInRequired;
 
-  bool get _isHolder => signal.isHeldBy(uid);
+  bool get _isOwner => signal.isHeldBy(uid);
 
-  /// The person who filed the report, whether or not they still hold the case.
+  /// The person who filed the report, whether or not they still hold the signal.
   ///
-  /// Only ever differs from [_isHolder] once the case has moved: the derivation
-  /// makes the reporter the holder of every signal that has never been handed
+  /// Only ever differs from [_isOwner] once the signal has moved: the derivation
+  /// makes the reporter the owner of every signal that has never been handed
   /// on, so this distinction exists exactly for the reporter who released it or
   /// gave it away.
   bool get _isReporter => uid != null && signal.reporter.id == uid;
 
-  /// Offers to take this case over, split by audience.
+  /// Offers to take this signal over, split by audience.
   ///
   /// Two listeners rather than one view of the subcollection, because the two
   /// readers want different things and the collection only ever grows —
   /// answered requests are never deleted, since the cooldown reads them. A
-  /// volunteer wants **their own** row, addressable by id; the holder wants the
+  /// volunteer wants **their own** row, addressable by id; the owner wants the
   /// **pending** ones, which is a server-side filter. One unfiltered listener
   /// made both pay a read per person who had ever asked.
   Stream<TakeoverRequest?> get _myRequest =>
-      CaseOwnershipService.instance.watchMyRequest(signalId, uid!);
+      SignalOwnershipService.instance.watchMyRequest(signalId, uid!);
 
   Stream<List<TakeoverRequest>> get _pendingRequests =>
-      CaseOwnershipService.instance.watchPendingRequests(signalId);
+      SignalOwnershipService.instance.watchPendingRequests(signalId);
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final holder = signal.caseHolder;
+    final owner = signal.signalOwner;
 
     // No heading of its own any more. This block is one row inside
-    // [SignalCaseCard], which is what now says "these facts belong together" —
-    // the old `Text(' ${l10n.caseHolder}')`, indented with a literal leading
+    // [SignalStateCard], which is what now says "these facts belong together" —
+    // the old `Text(' ${l10n.signalOwner}')`, indented with a literal leading
     // space and set two type steps below the headings beside it, was the
     // clearest single symptom of the screen having four unequal peers.
     return Column(
@@ -122,45 +122,45 @@ class CaseHolderBlock extends StatelessWidget {
           child: Row(
             children: [
               Icon(
-                holder == null ? Icons.person_off_outlined : Icons.person,
+                owner == null ? Icons.person_off_outlined : Icons.person,
                 size: 18,
-                // A case nobody holds is the one thing in this block worth
+                // A signal nobody holds is the one thing in this block worth
                 // drawing the eye to: it is an ask, not a status.
-                color: holder == null ? Theme.of(context).colorScheme.primary : null,
+                color: owner == null ? Theme.of(context).colorScheme.primary : null,
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: _isHolder
-                    ? Text(l10n.caseHolderIsYou)
-                    : holder == null
-                        ? Text(l10n.caseHolderNobody)
+                child: _isOwner
+                    ? Text(l10n.signalOwnerIsYou)
+                    : owner == null
+                        ? Text(l10n.signalOwnerNobody)
                         // `someone`, not `unknown`: this is the fallback the
                         // rest of the timeline uses for a person, and an
                         // account with no publicProfiles document is common
                         // enough (legacy and Google sign-ups both) that
                         // "Unknown" reads like an error rather than a missing
                         // name. See the publicProfiles gap in SPECIFICATION 14.
-                        : nameOf(holder.id,
+                        : nameOf(owner.id,
                             fallback: l10n.someone, maxLines: 1),
               ),
             ],
           ),
         ),
         _buildActions(context),
-        // The holder and the reporter both see the offers; only the holder can
+        // The owner and the reporter both see the offers; only the owner can
         // answer them.
         //
-        // Answering stays `requireCurrentHolder`'s, so the reporter gets no
+        // Answering stays `requireCurrentOwner`'s, so the reporter gets no
         // Hand over / Decline — those would be buttons that always fail with a
-        // generic error, and a holder who has gone quiet is what staleness is
+        // generic error, and an owner who has gone quiet is what staleness is
         // for, not what the reporter is for. But *seeing* them is the
         // reporter's business: it is their report, the offers name people
-        // volunteering to take their animal's case on, and a reporter watching
-        // a case go quiet has no other way to know that somebody is trying to
+        // volunteering to take their animal's signal on, and a reporter watching
+        // a signal go quiet has no other way to know that somebody is trying to
         // pick it up. The read costs nothing new — the rules already allow any
         // signed-in user to read this subcollection.
-        if (_isHolder || _isReporter)
-          _buildPendingOffers(context, answerable: _isHolder),
+        if (_isOwner || _isReporter)
+          _buildPendingOffers(context, answerable: _isOwner),
       ],
     );
   }
@@ -178,13 +178,13 @@ class CaseHolderBlock extends StatelessWidget {
   Widget _buildActions(BuildContext context) {
     final l10n = AppLocalizations.of(context);
 
-    if (_isHolder) {
+    if (_isOwner) {
       return Align(
         alignment: Alignment.centerLeft,
         child: TextButton.icon(
           style: _flushLeft,
           icon: const Icon(Icons.logout, size: 16),
-          label: Text(l10n.caseHolderRelease),
+          label: Text(l10n.signalOwnerRelease),
           onPressed: busy ? null : () => _release(context),
         ),
       );
@@ -195,13 +195,13 @@ class CaseHolderBlock extends StatelessWidget {
     //
     // The staleness half matters: without it the escape hatch the whole design
     // is shaped around is reachable only as a side effect of using the status
-    // dropdown, and somebody who just wants to take the case on has no button.
-    if (signal.isReleased || CaseOwnershipService.isHolderStale(signal)) {
+    // dropdown, and somebody who just wants to take the signal on has no button.
+    if (signal.isReleased || SignalOwnershipService.isOwnerStale(signal)) {
       return Align(
         alignment: Alignment.centerLeft,
         child: FilledButton.tonalIcon(
           icon: const Icon(Icons.volunteer_activism, size: 16),
-          label: Text(l10n.caseHolderTakeResponsibility),
+          label: Text(l10n.signalOwnerTakeResponsibility),
           onPressed: busy ? null : onClaim,
         ),
       );
@@ -218,7 +218,7 @@ class CaseHolderBlock extends StatelessWidget {
     return StreamBuilder<TakeoverRequest?>(
       stream: _myRequest,
       builder: (context, snapshot) {
-        // Nothing until the first snapshot: offering to take over a case you
+        // Nothing until the first snapshot: offering to take over a signal you
         // have already offered for reads as a dead button when the write is
         // then refused by the uid-keyed document id.
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -238,7 +238,7 @@ class CaseHolderBlock extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // The holder's reason, when they gave one. They were required to
+                // The owner's reason, when they gave one. They were required to
                 // type it; showing it is what makes that requirement honest.
                 if (mine?.resolvedNote case final why? when why.isNotEmpty)
                   Text(why),
@@ -260,13 +260,13 @@ class CaseHolderBlock extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    l10n.caseHolderRequestPending,
+                    l10n.signalOwnerRequestPending,
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),
                 TextButton(
                   onPressed: busy ? null : () => _withdraw(),
-                  child: Text(l10n.caseHolderWithdrawRequest),
+                  child: Text(l10n.signalOwnerWithdrawRequest),
                 ),
               ],
             ),
@@ -278,7 +278,7 @@ class CaseHolderBlock extends StatelessWidget {
           child: TextButton.icon(
             style: _flushLeft,
             icon: const Icon(Icons.pan_tool_alt_outlined, size: 16),
-            label: Text(l10n.caseHolderRequestTakeover),
+            label: Text(l10n.signalOwnerRequestTakeover),
             onPressed: busy ? null : () => _request(context),
           ),
         );
@@ -286,8 +286,8 @@ class CaseHolderBlock extends StatelessWidget {
     );
   }
 
-  /// Pending offers — answerable in place for the holder, read-only for the
-  /// reporter who no longer holds the case.
+  /// Pending offers — answerable in place for the owner, read-only for the
+  /// reporter who no longer holds the signal.
   Widget _buildPendingOffers(
     BuildContext context, {
     required bool answerable,
@@ -298,8 +298,8 @@ class CaseHolderBlock extends StatelessWidget {
       stream: _pendingRequests,
       builder: (context, snapshot) {
         final pending = snapshot.data ?? const <TakeoverRequest>[];
-        // A read that failed, and a case nobody has offered for, both render
-        // nothing — there is no useful difference to a holder here, and an error
+        // A read that failed, and a signal nobody has offered for, both render
+        // nothing — there is no useful difference to an owner here, and an error
         // row about a list that is empty far more often than not would be noise.
         if (pending.isEmpty) return const SizedBox.shrink();
 
@@ -309,7 +309,7 @@ class CaseHolderBlock extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                l10n.caseHolderOffers,
+                l10n.signalOwnerOffers,
                 style: Theme.of(context).textTheme.labelLarge,
               ),
               for (final request in pending)
@@ -321,7 +321,7 @@ class CaseHolderBlock extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // The most important of the three: this row asks the
-                        // holder to hand responsibility for an animal to this
+                        // owner to hand responsibility for an animal to this
                         // person, and "Unknown" reads like something is broken.
                         // Matches the push, which says "A volunteer".
                         nameOf(
@@ -340,14 +340,14 @@ class CaseHolderBlock extends StatelessWidget {
                                     ? null
                                     : () => _answer(context, request,
                                         approve: false),
-                                child: Text(l10n.caseHolderDecline),
+                                child: Text(l10n.signalOwnerDecline),
                               ),
                               FilledButton(
                                 onPressed: busy
                                     ? null
                                     : () => _answer(context, request,
                                         approve: true),
-                                child: Text(l10n.caseHolderHandOver),
+                                child: Text(l10n.signalOwnerHandOver),
                               ),
                             ],
                           ),
@@ -369,7 +369,7 @@ class CaseHolderBlock extends StatelessWidget {
       context,
       title: l10n.releaseConfirmTitle,
       body: l10n.releaseConfirmBody,
-      confirmLabel: l10n.caseHolderRelease,
+      confirmLabel: l10n.signalOwnerRelease,
       noteHeadline: l10n.updateNoteSteppingDown,
       busy: busy,
       onSignInRequired: onSignInRequired,
@@ -379,12 +379,12 @@ class CaseHolderBlock extends StatelessWidget {
     await runOwnershipChange(
       context,
       runGuarded,
-      () => CaseOwnershipService.instance
+      () => SignalOwnershipService.instance
           .release(signalId: signalId, note: note),
     );
   }
 
-  /// Answer someone's offer to take the case on.
+  /// Answer someone's offer to take the signal on.
   Future<void> _answer(
     BuildContext context,
     TakeoverRequest request, {
@@ -393,12 +393,12 @@ class CaseHolderBlock extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final note = await askOwnershipNote(
       context,
-      title: approve ? l10n.handOverConfirmTitle : l10n.caseHolderDecline,
+      title: approve ? l10n.handOverConfirmTitle : l10n.signalOwnerDecline,
       // Its own string. `takeoverConfirmBody` is written in the second person
-      // — "You become the person coordinating this case" — which is exactly
-      // wrong here: the holder is handing the case to somebody else.
+      // — "You become the person coordinating this signal" — which is exactly
+      // wrong here: the owner is handing the signal to somebody else.
       body: approve ? l10n.handOverConfirmBody : l10n.declineConfirmBody,
-      confirmLabel: approve ? l10n.caseHolderHandOver : l10n.caseHolderDecline,
+      confirmLabel: approve ? l10n.signalOwnerHandOver : l10n.signalOwnerDecline,
       noteHeadline: approve
           ? l10n.updateNoteHandingOver
           : l10n.updateNoteDecliningOffer,
@@ -407,7 +407,7 @@ class CaseHolderBlock extends StatelessWidget {
     );
     if (note == null || !context.mounted) return;
 
-    final service = CaseOwnershipService.instance;
+    final service = SignalOwnershipService.instance;
     await runOwnershipChange(
       context,
       runGuarded,
@@ -425,10 +425,10 @@ class CaseHolderBlock extends StatelessWidget {
     );
   }
 
-  /// Offer to take a case its holder has not released.
+  /// Offer to take a signal its owner has not released.
   ///
   /// A plain Firestore write, not a callable — a request carries no privilege.
-  /// The holder hears about it through the `onTakeoverRequested` trigger.
+  /// The owner hears about it through the `onTakeoverRequested` trigger.
   Future<void> _request(BuildContext context) async {
     final l10n = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
@@ -441,7 +441,7 @@ class CaseHolderBlock extends StatelessWidget {
     if (note == null) return;
 
     await runGuarded(() async {
-      final outcome = await CaseOwnershipService.instance.requestTakeover(
+      final outcome = await SignalOwnershipService.instance.requestTakeover(
         signalId: signalId,
         note: note,
       );
@@ -452,14 +452,14 @@ class CaseHolderBlock extends StatelessWidget {
         TakeoverRequestOutcome.submitted => l10n.takeoverRequestSent,
         TakeoverRequestOutcome.alreadyAsked => l10n.takeoverAlreadyAsked,
         TakeoverRequestOutcome.notSignedIn => l10n.signInRequired,
-        TakeoverRequestOutcome.failed => l10n.errorChangingCaseHolder,
+        TakeoverRequestOutcome.failed => l10n.errorChangingSignalOwner,
       };
       messenger.showSnackBar(SnackBar(content: Text(message)));
     });
   }
 
   Future<void> _withdraw() => runGuarded(
-      () => CaseOwnershipService.instance.withdrawRequest(signalId));
+      () => SignalOwnershipService.instance.withdrawRequest(signalId));
 }
 
 /// Confirm the intent, then ask for the note that explains it.
@@ -471,7 +471,7 @@ class CaseHolderBlock extends StatelessWidget {
 ///
 /// A top-level function rather than a method because the **claim-to-act** path
 /// on the status dropdown needs the identical prompt, and that lives on the
-/// details screen. Two copies would let the two ways of taking a case on ask for
+/// details screen. Two copies would let the two ways of taking a signal on ask for
 /// different things and write different history.
 Future<String?> askOwnershipNote(
   BuildContext context, {
@@ -542,8 +542,8 @@ Future<void> runOwnershipChange(
       messenger.showSnackBar(
         SnackBar(
           content: Text(alreadyHeld
-              ? l10n.takeoverAlreadyHeld
-              : l10n.errorChangingCaseHolder),
+              ? l10n.takeoverAlreadyOwned
+              : l10n.errorChangingSignalOwner),
         ),
       );
     }

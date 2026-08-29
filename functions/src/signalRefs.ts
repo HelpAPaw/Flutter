@@ -2,7 +2,7 @@
  * Addressing a signal document safely, shared by every callable that takes a
  * signal id from a client.
  *
- * Extracted when `caseOwnership` arrived as the second such callable. These
+ * Extracted when `signalOwnership` arrived as the second such callable. These
  * helpers are not "utilities" in the pejorative sense — each one encodes a
  * decision that is wrong to make twice:
  *
@@ -154,24 +154,30 @@ export async function loadSignal(data: Record<string, unknown>): Promise<{
 }
 
 /**
- * Who currently holds this case (master spec §4.5), or null if nobody does.
+ * Who currently holds this signal (master spec §4.5), or null if nobody does.
  *
  * **This is the server's copy of the absent-means-the-reporter derivation**,
- * matching `Signal.caseHolderFrom` (Dart) and `isCaseHolder()` in
+ * matching `Signal.signalOwnerFrom` (Dart) and `isSignalOwner()` in
  * `firestore.rules`. All three must agree, and the distinction that must
- * survive in each is between an **absent** field — a signal written before case
+ * survive in each is between an **absent** field — a signal written before signal
  * ownership, whose reporter holds it — and an **explicit null**, which means the
- * case was released and is held by nobody.
+ * signal was released and is held by nobody.
  *
- * Collapsing them would hand a released case straight back to the one person
+ * Collapsing them would hand a released signal straight back to the one person
  * who explicitly stepped away from it.
  */
-export function caseHolderOf(
+export function signalOwnerOf(
   data: Record<string, unknown> | undefined
 ): FirebaseFirestore.DocumentReference | null {
   if (data == null) return null;
-  if (!("caseHolder" in data)) {
-    return (data.reporter as FirebaseFirestore.DocumentReference) ?? null;
+  if ("signalOwner" in data) {
+    return (data.signalOwner as FirebaseFirestore.DocumentReference) ?? null;
   }
-  return (data.caseHolder as FirebaseFirestore.DocumentReference) ?? null;
+  // `caseHolder` is the field's pre-rename name, consulted only when the new
+  // one is ABSENT — an explicit null under the new name is a release, and
+  // falling through to the old name would undo it.
+  if ("caseHolder" in data) {
+    return (data.caseHolder as FirebaseFirestore.DocumentReference) ?? null;
+  }
+  return (data.reporter as FirebaseFirestore.DocumentReference) ?? null;
 }

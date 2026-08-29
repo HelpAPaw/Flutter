@@ -24,7 +24,7 @@
   "urgencyAmberDescription": "Нужна е бърза помощ, но не е въпрос на живот и смърт в рамките на часове.",
   "urgencyRed": "Критична",
   "urgencyRedDescription": "Възможни са тежки наранявания, смърт или изчезване, ако помощта не дойде сега.",
-  "pleaseSelectUrgency": "Моля, изберете колко спешен е случаят",
+  "pleaseSelectUrgency": "Моля, изберете колко спешен е сигналът",
   "errorUpdatingUrgency": "Неуспешна промяна на спешността. Моля, опитайте отново.",
   "changedUrgencyTo": "{name} промени спешността на {urgency}",
   "@changedUrgencyTo": {
@@ -96,7 +96,7 @@
     }
   },
   "helperTagsOnboardingTitle": "Как можете да помогнете?",
-  "helperTagsOnboardingIntro": "Изберете какво реално можете да направите и на кои животни можете да помогнете. Използваме това, за да ви изпращаме случаите, по които наистина можете да действате — можете да го промените по всяко време в настройките.",
+  "helperTagsOnboardingIntro": "Изберете какво реално можете да направите и на кои животни можете да помогнете. Използваме това, за да ви изпращаме сигналите, по които наистина можете да действате — можете да го промените по всяко време в настройките.",
   "helperTagsOnboardingHelpSection": "С какво можете да помогнете?",
   "helperTagsOnboardingAnimalSection": "На кои животни можете да помогнете?",
   "helperTagsOnboardingContinue": "Продължи",
@@ -218,40 +218,40 @@
   "updateNoteTitle": "Какво се промени?",
   "nothingWasSaved": "Нищо не беше запазено.",
   "updateNoteChangingTo": "Промяна на: {level}",
-  "updateNoteTakingCase": "Поемате отговорност за този случай",
-  "updateNoteTakingCaseAndChangingTo": "Поемате отговорност и променяте на: {level}",
-  "updateNoteSteppingDown": "Отказвате се от този случай",
-  "updateNoteHandingOver": "Предавате случая",
+  "updateNoteTakingSignal": "Поемате отговорност за този сигнал",
+  "updateNoteTakingSignalAndChangingTo": "Поемате отговорност и променяте на: {level}",
+  "updateNoteSteppingDown": "Отказвате се от този сигнал",
+  "updateNoteHandingOver": "Предавате сигнала",
   "updateNoteDecliningOffer": "Отказвате предложението",
-  "updateNoteOfferingTakeover": "Предлагате да поемете този случай",
+  "updateNoteOfferingTakeover": "Предлагате да поемете този сигнал",
   "updateNoteHint": "Добавете кратка бележка към историята на сигнала",
   "updateNoteRequired": "Моля, опишете какво се промени — всички, които следят сигнала, ще го видят.",
   "changedStatusTo": "{name} промени статуса на {status}",
   "someone": "Някой",
-  "caseHolder": "Отговорник",
-  "caseHolderNobody": "Още никой не е поел този случай",
-  "caseHolderIsYou": "Вие отговаряте за този случай",
-  "caseHolderTakeResponsibility": "Поеми отговорност",
-  "caseHolderRequestTakeover": "Предложи да поемеш случая",
-  "caseHolderRequestPending": "Предложили сте да поемете случая",
-  "caseHolderWithdrawRequest": "Оттегли предложението",
-  "caseHolderRelease": "Вече не мога да поема това",
-  "caseHolderHandOver": "Предай случая",
-  "caseHolderDecline": "Откажи",
-  "caseHolderOffers": "Предложения за поемане",
-  "caseHolderStale": "От известно време никой не е обновявал този случай.",
-  "takeoverConfirmTitle": "Да поемете ли отговорност за този случай?",
-  "takeoverConfirmBody": "Вие ставате човекът, който координира случая. Можете да променяте статуса и спешността му, както и да го предадете или да се откажете по всяко време.",
+  "signalOwner": "Отговорник",
+  "signalOwnerNobody": "Още никой не е поел този сигнал",
+  "signalOwnerIsYou": "Вие отговаряте за този сигнал",
+  "signalOwnerTakeResponsibility": "Поеми отговорност",
+  "signalOwnerRequestTakeover": "Предложи да поемеш сигнала",
+  "signalOwnerRequestPending": "Предложили сте да поемете сигнала",
+  "signalOwnerWithdrawRequest": "Оттегли предложението",
+  "signalOwnerRelease": "Вече не мога да поема това",
+  "signalOwnerHandOver": "Предай сигнала",
+  "signalOwnerDecline": "Откажи",
+  "signalOwnerOffers": "Предложения за поемане",
+  "signalOwnerStale": "От известно време никой не е обновявал този сигнал.",
+  "takeoverConfirmTitle": "Да поемете ли отговорност за този сигнал?",
+  "takeoverConfirmBody": "Вие ставате човекът, който координира сигнала. Можете да променяте статуса и спешността му, както и да го предадете или да се откажете по всяко време.",
   "takeoverConfirmAction": "Поемам го",
-  "handOverConfirmTitle": "Да предадете ли случая?",
-  "handOverConfirmBody": "Този човек става координатор на случая. Вие оставате абонирани за сигнала и можете да предложите да го поемете обратно по-късно.",
-  "declineConfirmBody": "Ще бъде уведомен, че запазвате случая. Може да предложи отново след ден.",
-  "releaseConfirmTitle": "Да се откажете ли от този случай?",
+  "handOverConfirmTitle": "Да предадете ли сигнала?",
+  "handOverConfirmBody": "Този човек става координатор на сигнала. Вие оставате абонирани за него и можете да предложите да го поемете обратно по-късно.",
+  "declineConfirmBody": "Ще бъде уведомен, че запазвате сигнала. Може да предложи отново след ден.",
+  "releaseConfirmTitle": "Да се откажете ли от този сигнал?",
   "releaseConfirmBody": "Случаят остава отворен и всеки може да го поеме. Всички, които го следят, ще бъдат уведомени.",
   "takeoverNoteHint": "Опишете какво възнамерявате да направите",
-  "takeoverAlreadyHeld": "Друг човек отговаря за този случай. Можете да предложите да го поемете.",
+  "takeoverAlreadyOwned": "Друг човек отговаря за този сигнал. Можете да предложите да го поемете.",
   "takeoverRequestSent": "Предложението ви беше изпратено на отговорника.",
-  "takeoverAlreadyAsked": "Вече сте предложили да поемете този случай.",
+  "takeoverAlreadyAsked": "Вече сте предложили да поемете този сигнал.",
   "takeoverAskAgainAfter": "Можете да предложите отново след {when}.",
   "@takeoverAskAgainAfter": {
     "placeholders": {
@@ -260,8 +260,8 @@
       }
     }
   },
-  "errorChangingCaseHolder": "Отговорникът не можа да бъде променен.",
-  "tookResponsibility": "{name} пое отговорност за този случай",
+  "errorChangingSignalOwner": "Отговорникът не можа да бъде променен.",
+  "tookResponsibility": "{name} пое отговорност за този сигнал",
   "@tookResponsibility": {
     "placeholders": {
       "name": {
@@ -269,8 +269,8 @@
       }
     }
   },
-  "handedCaseTo": "{name} предаде този случай на {other}",
-  "@handedCaseTo": {
+  "handedSignalTo": "{name} предаде този сигнал на {other}",
+  "@handedSignalTo": {
     "placeholders": {
       "name": {
         "type": "String"
@@ -298,20 +298,20 @@
       }
     }
   },
-  "releasedCaseShort": "Отказа се от този случай",
-  "@releasedCaseShort": {},
-  "tookResponsibilityShort": "Пое отговорност за този случай",
+  "releasedSignalShort": "Отказа се от този сигнал",
+  "@releasedSignalShort": {},
+  "tookResponsibilityShort": "Пое отговорност за този сигнал",
   "@tookResponsibilityShort": {},
-  "handedCaseToShort": "Предаде този случай на {other}",
-  "@handedCaseToShort": {
+  "handedSignalToShort": "Предаде този сигнал на {other}",
+  "@handedSignalToShort": {
     "placeholders": {
       "other": {
         "type": "String"
       }
     }
   },
-  "releasedCase": "{name} се отказа от този случай",
-  "@releasedCase": {
+  "releasedSignal": "{name} се отказа от този сигнал",
+  "@releasedSignal": {
     "placeholders": {
       "name": {
         "type": "String"
@@ -319,7 +319,7 @@
     }
   },
   "notificationOwnershipChangeTitle": "Някой пое отговорност",
-  "notificationOwnershipReleasedTitle": "Този случай търси отговорник",
+  "notificationOwnershipReleasedTitle": "Този сигнал търси отговорник",
   "notificationOwnershipChangeBody": "{name} вече отговаря за него",
   "@notificationOwnershipChangeBody": {
     "placeholders": {
@@ -328,8 +328,8 @@
       }
     }
   },
-  "notificationOwnershipReleasedBody": "В момента никой не отговаря за този случай",
-  "notificationTakeoverRequestTitle": "Някой предложи да поеме случая",
+  "notificationOwnershipReleasedBody": "В момента никой не отговаря за този сигнал",
+  "notificationTakeoverRequestTitle": "Някой предложи да поеме сигнала",
   "notificationTakeoverRequestBody": "{name} поиска да поеме отговорност",
   "@notificationTakeoverRequestBody": {
     "placeholders": {
@@ -338,10 +338,10 @@
       }
     }
   },
-  "notificationTakeoverApprovedTitle": "Вече отговаряте за случай",
+  "notificationTakeoverApprovedTitle": "Вече отговаряте за сигнал",
   "notificationTakeoverApprovedBody": "Случаят е ваш",
   "notificationTakeoverDeclinedTitle": "Предложението ви беше отказано",
-  "notificationTakeoverDeclinedBody": "Настоящият отговорник запазва случая",
+  "notificationTakeoverDeclinedBody": "Настоящият отговорник запазва сигнала",
   "deletePhoto": "Изтрий снимка",
   "confirmDeletePhoto": "Сигурни ли сте, че искате да изтриете тази снимка?",
   "photoAddedSuccessfully": "Снимката е добавена успешно!",
@@ -563,8 +563,8 @@
   "backToMap": "Обратно към картата",
   "failedToUpdateSignal": "Неуспешно обновяване на сигнала. Моля, опитайте отново.",
   "removeSignal": "Премахни сигнала",
-  "removeSignalCaseOpenTitle": "Случаят решен ли е?",
-  "removeSignalCaseOpenBody": "Ако животното е получило помощ, отбележете случая като Приключен. Сигналът и неговата история остават на картата, за да послужат на другите, и продължават да се броят в профила ви.",
+  "removeSignalOpenTitle": "Сигналът приключен ли е?",
+  "removeSignalOpenBody": "Ако животното е получило помощ, отбележете сигнала като Приключен. Сигналът и неговата история остават на картата, за да послужат на другите, и продължават да се броят в профила ви.",
   "markAsResolved": "Отбележи като решен",
   "removeAnyway": "Все пак премахни",
   "confirmRemoveSignal": "Сигналът ще бъде премахнат от картата. Можете да го възстановите от „Моите сигнали“ през следващите {days} дни, след което се изтрива окончателно.",
@@ -627,7 +627,7 @@
   "reportReasonSpam": "Спам",
   "reportReasonDoxxing": "Разкрива лични данни",
   "reportReasonDefamationRisk": "Публично обвинение срещу човек",
-  "reportReasonDuplicateCase": "Дублира друг сигнал",
+  "reportReasonDuplicateSignal": "Дублира друг сигнал",
   "reportReasonOther": "Друго",
   "moderation": "Модерация",
   "moderationQueue": "Доклади",

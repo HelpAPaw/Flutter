@@ -7,7 +7,7 @@ import 'package:help_a_paw/src/models/signal_event.dart';
 import 'package:help_a_paw/src/models/signal.dart';
 import 'package:help_a_paw/src/models/signal_urgency.dart';
 import 'package:help_a_paw/src/services/app_preferences_service.dart';
-import 'package:help_a_paw/src/services/case_ownership_service.dart';
+import 'package:help_a_paw/src/services/signal_ownership_service.dart';
 import 'package:help_a_paw/src/models/help_tag.dart';
 import 'package:help_a_paw/src/widgets/help_tag_selector.dart';
 import 'package:help_a_paw/src/widgets/level_badge.dart';
@@ -169,11 +169,11 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
       // Changing urgency here fires the same update notification as the
       // details screen, so the actor has to be recorded — otherwise a stale
       // lastUpdatedBy from an earlier status change decides who gets skipped.
-      // The same helper the details screen uses, which also carries the holder's
+      // The same helper the details screen uses, which also carries the owner's
       // proof of life: this screen is a coordination write like any other, and
-      // omitting the stamp let a reporter actively re-triaging their own case
-      // fall into the stale-holder path anyway.
-      ...CaseOwnershipService.coordinationStamp(userRef),
+      // omitting the stamp let a reporter actively re-triaging their own signal
+      // fall into the stale-owner path anyway.
+      ...SignalOwnershipService.coordinationStamp(userRef),
     });
 
     // Same timeline entry the details screen writes. Without it, escalating

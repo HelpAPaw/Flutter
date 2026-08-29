@@ -59,61 +59,78 @@ service cloud.firestore {
                 .affectedKeys().hasAny(['moderation']);
     }
 
-    // The caller currently holds this case (master spec 4.5).
+    // The caller currently holds this signal (master spec 4.5).
     //
     // The DEFAULT ARGUMENT is the "absent means the reporter" derivation, and it
-    // is permanent rather than a migration step: builds released before case
-    // ownership keep creating signals with no `caseHolder`, so no ruleset can
+    // is permanent rather than a migration step: builds released before signal
+    // ownership keep creating signals with no `signalOwner`, so no ruleset can
     // assume the field is there, and nothing is backfilled.
     //
-    // A RELEASED case stores an explicit null, which equals no userDoc() — so a
-    // released case correctly has no holder rather than falling back to the
+    // A RELEASED signal stores an explicit null, which equals no userDoc() — so a
+    // released signal correctly has no owner rather than falling back to the
     // reporter, who is the one person who may have just stepped away from it.
     // That distinction is the whole point of storing null rather than deleting
     // the field, and collapsing the two is the mistake this comment exists to
     // prevent.
-    function isCaseHolder() {
-      return resource.data.get('caseHolder', resource.data.reporter) == userDoc();
+    // `caseHolder` is the field's pre-rename name, and is consulted only when
+    // `signalOwner` is ABSENT — an explicit null under the new name is a
+    // release, and falling through to the old name would undo it. Mirrors
+    // `signalOwnerOf` (functions) and `Signal.signalOwnerFrom` (Dart); all
+    // three must agree. Retire the middle term with the other legacy reads.
+    function isSignalOwner() {
+      return resource.data.get('signalOwner',
+               resource.data.get('caseHolder', resource.data.reporter))
+             == userDoc();
     }
 
-    // `caseHolder` is written ONLY by the caseOwnership Cloud Function (Admin
+    // `signalOwner` is written ONLY by the signalOwnership Cloud Function (Admin
     // SDK, bypasses rules), plus once at creation via isSignalCreate().
     //
     // Load-bearing for exactly the reason isNotTouchingModeration() is, and
     // applied to BOTH update branches for the same reason: the reporter's branch
     // accepts any field at any value, so without this a reporter could never be
     // handed off from — they would simply write themselves back in — and any
-    // signed-in user on a patched client could seize a stranger's case by
+    // signed-in user on a patched client could seize a stranger's signal by
     // writing one field. The timeline would show no transfer, because no event
     // was written.
+    // BOTH names are blocked. Leaving the old one writable would leave the
+    // seizure this exists to prevent open through the legacy field, which
+    // `isSignalOwner` still reads on documents that have no new field.
     function isNotTouchingOwnership() {
       return !request.resource.data.diff(resource.data)
-                .affectedKeys().hasAny(['caseHolder']);
+                .affectedKeys().hasAny(['signalOwner', 'caseHolder']);
     }
 
-    // `holderActiveAt` is a CLOCK, so it is pinned to the server's.
+    // `ownerActiveAt` is a CLOCK, so it is pinned to the server's.
     //
-    // The staleness rule that stops a case deadlocking behind a silent holder
-    // reads this field, which means a holder free to choose its value could keep
-    // a case they have abandoned forever. Allowed on either branch — the holder
+    // The staleness rule that stops a signal deadlocking behind a silent owner
+    // reads this field, which means an owner free to choose its value could keep
+    // a signal they have abandoned forever. Allowed on either branch — the owner
     // stamps it as part of an ordinary status change — but never at a value the
     // caller picked.
-    function isValidHolderStamp() {
-      return !request.resource.data.diff(resource.data)
-                .affectedKeys().hasAny(['holderActiveAt'])
-             || request.resource.data.holderActiveAt == request.time;
+    // Both the current and the pre-rename name, for the reason
+    // isNotTouchingOwnership() blocks both: an unpinned `holderActiveAt` is an
+    // unpinned clock, and `ownerActiveAtOf` still falls back to it.
+    function isValidOwnerStamp() {
+      return (!request.resource.data.diff(resource.data)
+                 .affectedKeys().hasAny(['ownerActiveAt'])
+              || request.resource.data.ownerActiveAt == request.time)
+             && (!request.resource.data.diff(resource.data)
+                    .affectedKeys().hasAny(['holderActiveAt'])
+                 || request.resource.data.holderActiveAt == request.time);
     }
 
-    // The caller holds the case on the parent signal at {coll}/{signalId}.
+    // The caller holds the signal on the parent signal at {coll}/{signalId}.
     // Same shape and same reasoning as isParentSignalReporter, including the
     // absent-means-reporter default; backs the takeoverRequests rules, where a
-    // holder must not be able to file a request against themselves.
-    function isParentCaseHolder(coll, signalId) {
+    // owner must not be able to file a request against themselves.
+    function isParentSignalOwner(coll, signalId) {
       // `let` so the document is fetched ONCE. Spelling the get() out twice —
       // for the value and for the default — is two billed document reads on
       // every takeover-request write, for one answer.
       let parent = get(/databases/$(database)/documents/$(coll)/$(signalId)).data;
-      return parent.get('caseHolder', parent.reporter) == userDoc();
+      return parent.get('signalOwner',
+               parent.get('caseHolder', parent.reporter)) == userDoc();
     }
 
     // The caller is the reporter of the parent signal at {coll}/{signalId}.
@@ -146,29 +163,35 @@ service cloud.firestore {
              && isValidUrgency()
              && isValidHelpNeededTags()
              && isValidAnimalType()
-             && isValidInitialCaseHolder();
+             && isValidInitialSignalOwner();
     }
 
-    // The reporter is the initial case holder (master spec 4.5).
+    // The reporter is the initial signal owner (master spec 4.5).
     //
     // Optional-if-absent for the same reason as isValidUrgency: builds released
-    // before case ownership create signals with no `caseHolder`, and readers
+    // before signal ownership create signals with no `signalOwner`, and readers
     // derive one. Present-and-wrong is what this rejects — a signal cannot be
     // created already assigned to somebody else, which would be a way to write
     // the field without going through the callable or leaving a timeline entry.
     //
-    // `holderActiveAt` is REJECTED outright on create, and that is a security
-    // check rather than tidiness: isValidHolderStamp() is wired into the two
+    // `ownerActiveAt` is REJECTED outright on create, and that is a security
+    // check rather than tidiness: isValidOwnerStamp() is wired into the two
     // update rules only, so without this clause a patched client could create a
-    // signal stamped with a far-future `holderActiveAt`. `isHolderStale` then
+    // signal stamped with a far-future `ownerActiveAt`. `isOwnerStale` then
     // computes a negative age forever, and the staleness escape hatch — the
-    // thing that stops a case deadlocking behind a holder who stops answering —
+    // thing that stops a signal deadlocking behind an owner who stops answering —
     // is permanently disabled for that signal, silently.
     //
-    // The server falls back to `createdAt` until the holder first acts, so
+    // The server falls back to `createdAt` until the owner first acts, so
     // omitting it costs nothing.
-    function isValidInitialCaseHolder() {
-      return !('holderActiveAt' in request.resource.data)
+    // Both names are validated, because the app writes both during the
+    // case→signal migration window and an unchecked `caseHolder` would be a way
+    // to create a signal already assigned to somebody else.
+    function isValidInitialSignalOwner() {
+      return !('ownerActiveAt' in request.resource.data)
+             && !('holderActiveAt' in request.resource.data)
+             && (!('signalOwner' in request.resource.data)
+                 || request.resource.data.signalOwner == userDoc())
              && (!('caseHolder' in request.resource.data)
                  || request.resource.data.caseHolder == userDoc());
     }
@@ -261,7 +284,7 @@ service cloud.firestore {
     // never appears in anyone's history.
     //
     // A `status_change` event does not by itself authorise the status change:
-    // the signal write travels through isCaseHolderUpdate() separately.
+    // the signal write travels through isSignalOwnerUpdate() separately.
     function isSignalEventCreate() {
       return request.auth != null
              && request.resource.data.actor == userDoc()
@@ -276,10 +299,10 @@ service cloud.firestore {
     }
 
     // NOTE the type NOT in that list: `ownership_transfer`. It is SERVER-ONLY
-    // (SignalEventType.serverOnly) — the caseOwnership callable writes it through
+    // (SignalEventType.serverOnly) — the signalOwnership callable writes it through
     // the Admin SDK, which bypasses rules entirely, so omitting it here costs
     // nothing and buys a real property: nobody can forge a timeline entry saying
-    // they took responsibility for a case. The drift guard therefore compares
+    // they took responsibility for a signal. The drift guard therefore compares
     // this list against SignalEventType.clientCodes, not allCodes. Do NOT add it
     // here to make a failing guard pass.
 
@@ -320,26 +343,26 @@ service cloud.firestore {
                   .matches('[^\\x00-\\x1f]*[^\\x00-\\x20][^\\x00-\\x1f]*');
     }
 
-    // The CASE HOLDER's coordination powers (master spec 4.5, 4.2, 5.2): the
+    // The SIGNAL OWNER's coordination powers (master spec 4.5, 4.2, 5.2): the
     // status, the urgency and the help-needed tags, plus the two stamps that
     // travel with them. Everything else about the signal stays the reporter's.
     //
     // This REPLACED isStatusOnlyUpdate(), which let ANY signed-in user change
     // ANY signal's status. That is why `urgency` used to be excluded from this
     // allow-list, and why that exclusion was described — here, and in
-    // SPECIFICATION 4.6 and 5.1 — as the entire enforcement of "only the case
-    // holder may mark a signal Red": with no ownership concept, the reporter was
-    // the only stand-in for a case holder the app had.
+    // SPECIFICATION 4.6 and 5.1 — as the entire enforcement of "only the signal
+    // owner may mark a signal Red": with no ownership concept, the reporter was
+    // the only stand-in for a signal owner the app had.
     //
-    // Now there is one. The gate moved from the FIELD LIST to isCaseHolder(), so
+    // Now there is one. The gate moved from the FIELD LIST to isSignalOwner(), so
     // `urgency` and `helpNeededTags` being here is the spec being implemented
     // rather than the old rule being weakened — master spec 5.2 names the case
     // holder explicitly, and 4.2 gives them the tags. **The load-bearing clause
-    // is now isCaseHolder(); do not drop it to "simplify" this function.**
+    // is now isSignalOwner(); do not drop it to "simplify" this function.**
     //
     // lastUpdatedBy is still self-stamped so it can't be pointed at someone else
     // (handleSignalUpdated uses it to decide whom NOT to notify), and
-    // holderActiveAt is pinned to the server clock by isValidHolderStamp on the
+    // ownerActiveAt is pinned to the server clock by isValidOwnerStamp on the
     // rule itself.
     // **THIS BREAKS ALREADY-RELEASED BUILDS, DELIBERATELY.** Every shipped
     // client writes `{status, lastUpdatedBy}` for any signed-in user, which the
@@ -351,11 +374,20 @@ service cloud.firestore {
     // the mitigation is a DEPLOY ORDER and not a code change: functions first,
     // then the app release that offers claim-to-act, then this ruleset — never
     // this ruleset first. Tracking: HelpAPaw/Flutter#71, and SPECIFICATION 4.8.
-    function isCaseHolderUpdate() {
-      return isCaseHolder()
+    // `holderActiveAt` is `ownerActiveAt`'s pre-rename name and MUST stay in this
+    // list while pre-rename builds are live. `hasOnly` is an exact allow-list, so
+    // dropping the old name does not merely fail to help an old client — it
+    // DENIES every coordination write those builds make, because their
+    // `coordinationStamp` sends `holderActiveAt` on every status, urgency and
+    // tag change. There is no deploy order that works around it: the new name
+    // has to be here for new builds and the old one for old ones. Letting it
+    // through costs nothing, because `isValidOwnerStamp()` pins BOTH names to
+    // `request.time` — an old client can name the field but not choose its value.
+    function isSignalOwnerUpdate() {
+      return isSignalOwner()
              && request.resource.data.diff(resource.data).affectedKeys()
                   .hasOnly(['status', 'urgency', 'helpNeededTags',
-                            'lastUpdatedBy', 'holderActiveAt'])
+                            'lastUpdatedBy', 'ownerActiveAt', 'holderActiveAt'])
              && request.resource.data.lastUpdatedBy == userDoc()
              && request.resource.data.status is int
              && request.resource.data.status >= 0
@@ -377,16 +409,16 @@ service cloud.firestore {
     // is what HelpAPaw/Flutter#67 is blocked on.
     // Whether an ANSWERED takeover request may be filed again.
     //
-    // A decline should not be permanent — a case looks very different two weeks
+    // A decline should not be permanent — a signal looks very different two weeks
     // later, and a volunteer told "no, I have this" in the first hour may be the
-    // right person once the holder has moved on. But re-asking has to cost
-    // something, because every request notifies the holder, and a decline is
+    // right person once the owner has moved on. But re-asking has to cost
+    // something, because every request notifies the owner, and a decline is
     // exactly the moment somebody might start nagging.
     //
     // One day. Long enough that it cannot be used to pester, short enough that
     // it never blocks a genuine change of circumstances.
     //
-    // The value is mirrored by `CaseOwnershipService.reaskCooldown`, which the
+    // The value is mirrored by `SignalOwnershipService.reaskCooldown`, which the
     // UI needs to say *when* the offer can be made again, and guarded by
     // `test/takeover_cooldown_guard_test.dart` — see the field-length invariant
     // in docs/SPECIFICATION.md 12 for why that pairing is always guarded.
@@ -401,11 +433,11 @@ service cloud.firestore {
     // It has to be, or the cooldown above is decoration: if withdrawing removed
     // the document, `create` would be unconstrained again and
     // withdraw → re-file → withdraw → re-file is an unlimited loop, notifying
-    // the holder every time. Marking it `withdrawn` leaves the slot occupied, so
+    // the owner every time. Marking it `withdrawn` leaves the slot occupied, so
     // asking again costs the same cooldown as being declined does.
     //
     // `resolvedAt` is pinned to `request.time` for the same reason it is on the
-    // holder's stamp — a value the requester could choose is a cooldown they
+    // owner's stamp — a value the requester could choose is a cooldown they
     // could skip. `handleTakeoverResolved` ignores this status, so nobody is
     // notified that somebody changed their mind.
     function isTakeoverWithdraw(requesterId) {
@@ -428,7 +460,7 @@ service cloud.firestore {
              && request.resource.data.createdAt is timestamp
              && request.resource.data.keys()
                   .hasOnly(['requester', 'status', 'note', 'createdAt'])
-             && !isParentCaseHolder(coll, signalId);
+             && !isParentSignalOwner(coll, signalId);
     }
 
     // Users collection - private profile (tokens, location, prefs, phone).
@@ -608,10 +640,10 @@ service cloud.firestore {
       // any released build, so that clause stays out until it ships.
       // Tracking: HelpAPaw/Flutter#67.
       allow create: if isSignalCreate();
-      // Reporter may edit any field; the CASE HOLDER may change the coordination
+      // Reporter may edit any field; the SIGNAL OWNER may change the coordination
       // fields (status, urgency, tags). Nobody else may write the signal at all
-      // — a volunteer who wants to move a case claims it first, through the
-      // caseOwnership callable (master spec 4.5, "the current case holder can
+      // — a volunteer who wants to move a signal claims it first, through the
+      // signalOwnership callable (master spec 4.5, "the current case holder can
       // update status").
       //
       // `isValidUrgency()` applies to BOTH branches. The reporter branch
@@ -635,8 +667,8 @@ service cloud.firestore {
                     && isValidAnimalType()
                     && isNotTouchingModeration()
                     && isNotTouchingOwnership()
-                    && isValidHolderStamp()
-                    && (isSignalReporter() || isCaseHolderUpdate());
+                    && isValidOwnerStamp()
+                    && (isSignalReporter() || isSignalOwnerUpdate());
       // Only the signal's reporter may delete it
       allow delete: if request.auth != null && isSignalReporter();
 
@@ -650,7 +682,7 @@ service cloud.firestore {
         // no author-delete rule anywhere on this collection, so the standing
         // effect is that a comment's own author cannot delete their comment but
         // the signal's reporter can delete ANYONE's — quietly, one at a time,
-        // with no audit row. Removing every critical comment on your own case
+        // with no audit row. Removing every critical comment on your own signal
         // is the power master spec §18.3 deliberately routes through
         // `moderateAction.deleteComment`, which demands a note, writes an audit
         // entry and refuses your own content.
@@ -700,7 +732,7 @@ service cloud.firestore {
       // Client-written, unlike the transfer itself, because a request is an
       // ordinary user-authored document with no privilege attached — routing it
       // through a function would buy nothing, exactly as with `reports`. The
-      // holder is told about it by the onTakeoverRequested trigger, and
+      // owner is told about it by the onTakeoverRequested trigger, and
       // APPROVING it is the privileged half, which is the callable's job.
       match /takeoverRequests/{requesterId} {
         // Signed-in rather than public: unlike a comment, this names someone who
@@ -712,7 +744,7 @@ service cloud.firestore {
         // cooldown, and it has to satisfy the create validator too — so a
         // re-filed request cannot have a different shape from a fresh one, and
         // in particular cannot arrive already `approved`. Approving and
-        // declining stay the caseOwnership callable's job: a client that could
+        // declining stay the signalOwnership callable's job: a client that could
         // flip `status` here would claim to have been accepted.
         // Ordered cheapest-first, the same convention isModerator() documents:
         // withdrawing needs no get() at all, and the cooldown check is free,
@@ -747,8 +779,8 @@ service cloud.firestore {
                     && isValidAnimalType()
                     && isNotTouchingModeration()
                     && isNotTouchingOwnership()
-                    && isValidHolderStamp()
-                    && (isSignalReporter() || isCaseHolderUpdate());
+                    && isValidOwnerStamp()
+                    && (isSignalReporter() || isSignalOwnerUpdate());
       allow delete: if request.auth != null && isSignalReporter();
 
       match /comments/{commentId} {

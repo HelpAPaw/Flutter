@@ -266,7 +266,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get helperTagsOnboardingIntro =>
-      'Pick what you can realistically do, and which animals you can help. We use this to send you the cases you can actually act on — you can change it any time in settings.';
+      'Pick what you can realistically do, and which animals you can help. We use this to send you the signals you can actually act on — you can change it any time in settings.';
 
   @override
   String get helperTagsOnboardingHelpSection => 'What can you help with?';
@@ -616,24 +616,24 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get updateNoteTakingCase => 'Taking responsibility for this case';
+  String get updateNoteTakingSignal => 'Taking responsibility for this signal';
 
   @override
-  String updateNoteTakingCaseAndChangingTo(String level) {
+  String updateNoteTakingSignalAndChangingTo(String level) {
     return 'Taking responsibility, and changing to: $level';
   }
 
   @override
-  String get updateNoteSteppingDown => 'Stepping down from this case';
+  String get updateNoteSteppingDown => 'Stepping down from this signal';
 
   @override
-  String get updateNoteHandingOver => 'Handing this case over';
+  String get updateNoteHandingOver => 'Handing this signal over';
 
   @override
   String get updateNoteDecliningOffer => 'Declining this offer';
 
   @override
-  String get updateNoteOfferingTakeover => 'Offering to take this case on';
+  String get updateNoteOfferingTakeover => 'Offering to take this signal on';
 
   @override
   String get updateNoteHint => 'Add a short note for the signal history';
@@ -651,75 +651,75 @@ class AppLocalizationsEn extends AppLocalizations {
   String get someone => 'Someone';
 
   @override
-  String get caseHolder => 'Responsible';
+  String get signalOwner => 'Responsible';
 
   @override
-  String get caseHolderNobody => 'Nobody has taken this case on yet';
+  String get signalOwnerNobody => 'Nobody has taken this signal on yet';
 
   @override
-  String get caseHolderIsYou => 'You are responsible for this case';
+  String get signalOwnerIsYou => 'You are responsible for this signal';
 
   @override
-  String get caseHolderTakeResponsibility => 'Take responsibility';
+  String get signalOwnerTakeResponsibility => 'Take responsibility';
 
   @override
-  String get caseHolderRequestTakeover => 'Offer to take over';
+  String get signalOwnerRequestTakeover => 'Offer to take over';
 
   @override
-  String get caseHolderRequestPending => 'You have offered to take this over';
+  String get signalOwnerRequestPending => 'You have offered to take this over';
 
   @override
-  String get caseHolderWithdrawRequest => 'Withdraw offer';
+  String get signalOwnerWithdrawRequest => 'Withdraw offer';
 
   @override
-  String get caseHolderRelease => 'I can no longer do this';
+  String get signalOwnerRelease => 'I can no longer do this';
 
   @override
-  String get caseHolderHandOver => 'Hand over';
+  String get signalOwnerHandOver => 'Hand over';
 
   @override
-  String get caseHolderDecline => 'Decline';
+  String get signalOwnerDecline => 'Decline';
 
   @override
-  String get caseHolderOffers => 'Offers to take over';
+  String get signalOwnerOffers => 'Offers to take over';
 
   @override
-  String get caseHolderStale => 'Nobody has updated this case in a while.';
+  String get signalOwnerStale => 'Nobody has updated this signal in a while.';
 
   @override
-  String get takeoverConfirmTitle => 'Take responsibility for this case?';
+  String get takeoverConfirmTitle => 'Take responsibility for this signal?';
 
   @override
   String get takeoverConfirmBody =>
-      'You become the person coordinating this case. You can change its status and urgency, and hand it on or step down at any time.';
+      'You become the person coordinating this signal. You can change its status and urgency, and hand it on or step down at any time.';
 
   @override
   String get takeoverConfirmAction => 'Take it on';
 
   @override
-  String get handOverConfirmTitle => 'Hand this case over?';
+  String get handOverConfirmTitle => 'Hand this signal over?';
 
   @override
   String get handOverConfirmBody =>
-      'They become the person coordinating this case. You stay on the signal and can offer to take it back later.';
+      'They become the person coordinating this signal. You stay subscribed to it and can offer to take it back later.';
 
   @override
   String get declineConfirmBody =>
-      'They are told you are keeping the case. They can offer again after a day.';
+      'They are told you are keeping the signal. They can offer again after a day.';
 
   @override
-  String get releaseConfirmTitle => 'Step down from this case?';
+  String get releaseConfirmTitle => 'Step down from this signal?';
 
   @override
   String get releaseConfirmBody =>
-      'The case stays open and anyone can take it on. Everyone following it is told.';
+      'The signal stays open and anyone can take it on. Everyone following it is told.';
 
   @override
   String get takeoverNoteHint => 'Say what you plan to do';
 
   @override
-  String get takeoverAlreadyHeld =>
-      'Someone else is responsible for this case. You can offer to take it over.';
+  String get takeoverAlreadyOwned =>
+      'Someone else is responsible for this signal. You can offer to take it over.';
 
   @override
   String get takeoverRequestSent =>
@@ -735,16 +735,16 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get errorChangingCaseHolder => 'Could not change who is responsible.';
+  String get errorChangingSignalOwner => 'Could not change who is responsible.';
 
   @override
   String tookResponsibility(String name) {
-    return '$name took responsibility for this case';
+    return '$name took responsibility for this signal';
   }
 
   @override
-  String handedCaseTo(String name, String other) {
-    return '$name handed this case to $other';
+  String handedSignalTo(String name, String other) {
+    return '$name handed this signal to $other';
   }
 
   @override
@@ -761,26 +761,26 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get releasedCaseShort => 'Stepped down from this case';
+  String get releasedSignalShort => 'Stepped down from this signal';
 
   @override
-  String get tookResponsibilityShort => 'Took responsibility for this case';
+  String get tookResponsibilityShort => 'Took responsibility for this signal';
 
   @override
-  String handedCaseToShort(String other) {
-    return 'Handed this case to $other';
+  String handedSignalToShort(String other) {
+    return 'Handed this signal to $other';
   }
 
   @override
-  String releasedCase(String name) {
-    return '$name stepped down from this case';
+  String releasedSignal(String name) {
+    return '$name stepped down from this signal';
   }
 
   @override
   String get notificationOwnershipChangeTitle => 'Someone took responsibility';
 
   @override
-  String get notificationOwnershipReleasedTitle => 'This case needs someone';
+  String get notificationOwnershipReleasedTitle => 'This signal needs someone';
 
   @override
   String notificationOwnershipChangeBody(String name) {
@@ -789,7 +789,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get notificationOwnershipReleasedBody =>
-      'Nobody is responsible for this case now';
+      'Nobody is responsible for this signal now';
 
   @override
   String get notificationTakeoverRequestTitle => 'Someone offered to take over';
@@ -801,17 +801,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get notificationTakeoverApprovedTitle =>
-      'You are now responsible for a case';
+      'You are now responsible for a signal';
 
   @override
-  String get notificationTakeoverApprovedBody => 'The case is yours';
+  String get notificationTakeoverApprovedBody => 'The signal is yours';
 
   @override
   String get notificationTakeoverDeclinedTitle => 'Your offer was declined';
 
   @override
   String get notificationTakeoverDeclinedBody =>
-      'The current holder is keeping this case';
+      'The current owner is keeping this signal';
 
   @override
   String get deletePhoto => 'Delete photo';
@@ -1573,11 +1573,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get removeSignal => 'Remove signal';
 
   @override
-  String get removeSignalCaseOpenTitle => 'Is this case resolved?';
+  String get removeSignalOpenTitle => 'Is this signal resolved?';
 
   @override
-  String get removeSignalCaseOpenBody =>
-      'If the animal has been helped, mark the case Resolved instead. Your report and its history stay on the map for others to learn from, and it still counts towards your profile.';
+  String get removeSignalOpenBody =>
+      'If the animal has been helped, mark the signal Resolved instead. Your report and its history stay on the map for others to learn from, and it still counts towards your profile.';
 
   @override
   String get markAsResolved => 'Mark as resolved';
@@ -1737,7 +1737,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get reportReasonDefamationRisk => 'Public accusation about a person';
 
   @override
-  String get reportReasonDuplicateCase => 'Duplicate of another signal';
+  String get reportReasonDuplicateSignal => 'Duplicate of another signal';
 
   @override
   String get reportReasonOther => 'Something else';

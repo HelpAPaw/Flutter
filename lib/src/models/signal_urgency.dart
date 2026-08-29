@@ -6,8 +6,8 @@ import '../../l10n/app_localizations.dart';
 ///
 /// Urgency is **separate from [SignalStatus]**: status says how far along the
 /// response is ("nobody has picked this up" / "someone is on it" / "done"),
-/// urgency says how bad it is if nobody acts. A resolved case and a case nobody
-/// has touched can both be Green; a case someone is already working on can
+/// urgency says how bad it is if nobody acts. A resolved signal and a signal nobody
+/// has touched can both be Green; a signal someone is already working on can
 /// still be Red.
 ///
 /// The map pin color encodes **urgency only** — status is shown as a text chip
@@ -54,7 +54,7 @@ enum SignalUrgency {
   /// Resolve a persisted [code] to an urgency.
   ///
   /// Unknown/legacy values fall back to [amber] — deliberately not [green],
-  /// which would hide a case that might be real, and not [red], which would
+  /// which would hide a signal that might be real, and not [red], which would
   /// cry wolf and erode the whole signal.
   static SignalUrgency fromCode(int code) =>
       values.firstWhere((u) => u.code == code, orElse: () => amber);
@@ -62,7 +62,7 @@ enum SignalUrgency {
   /// Urgency for a signal document that predates this field.
   ///
   /// Mirrors the backfill script's mapping so a document the script missed
-  /// still renders the same way it will once it is written: a resolved case is
+  /// still renders the same way it will once it is written: a resolved signal is
   /// under control, anything else needs help but is not assumed critical.
   /// Nothing is ever derived as [red] — that is a human judgement.
   static SignalUrgency fromLegacyStatus(int statusCode) =>
@@ -70,7 +70,7 @@ enum SignalUrgency {
 
   /// Whether marking a signal at this level requires explicit confirmation.
   ///
-  /// Red Alert is only meaningful while it stays rare, so promoting a case to
+  /// Red Alert is only meaningful while it stays rare, so promoting a signal to
   /// it is gated behind [RedAlertConfirmationDialog].
   bool get requiresConfirmation => this == SignalUrgency.red;
 

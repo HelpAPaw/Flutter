@@ -15,7 +15,7 @@ import '../../l10n/app_localizations.dart';
 /// the description primes every classification below it, because [animal],
 /// [urgency] and [helpTags] are all judgements *about the situation the
 /// reporter just narrated*. In particular [helpTags] must follow [urgency] and
-/// not precede it: "what does this case need" is not answerable before "how bad
+/// not precede it: "what does this signal need" is not answerable before "how bad
 /// is this" is settled, since a Red hit-by-car and a healthy stray produce
 /// different tag sets.
 ///

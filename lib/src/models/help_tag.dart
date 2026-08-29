@@ -87,7 +87,7 @@ enum HelpTag {
   /// Icon shown on the selector chips and on signal details.
   final IconData icon;
 
-  /// Whether this tag names something a case *asks for*.
+  /// Whether this tag names something a signal *asks for*.
   ///
   /// True for eleven of the thirteen. [lostFound] and [dangerWarning] describe a
   /// situation instead — a lost dog is not "lost / found needed" — so
@@ -135,7 +135,7 @@ enum HelpTag {
     values.where((t) => !t.isNeed).map((t) => t.code),
   );
 
-  /// The headline tag for [codes] — the case's category.
+  /// The headline tag for [codes] — the signal's category.
   ///
   /// Element 0 is the category (master spec §4.2), so this takes it verbatim
   /// rather than scanning for the first code it recognises. **Matching the

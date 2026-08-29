@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
-import 'package:help_a_paw/src/widgets/case_holder_block.dart';
+import 'package:help_a_paw/src/widgets/signal_owner_block.dart';
 
 /// [askOwnershipNote] shows two dialogs in a row, and the second one used to be
 /// handed the first one's button label — so the note dialog read *"Changing to:
@@ -10,7 +10,7 @@ import 'package:help_a_paw/src/widgets/case_holder_block.dart';
 /// stops the two being wired back together.
 void main() {
   const confirmLabel = 'Take it on';
-  const noteHeadline = 'Taking responsibility for this case';
+  const noteHeadline = 'Taking responsibility for this signal';
 
   Future<void> openAndConfirm(WidgetTester tester) async {
     await tester.pumpWidget(
@@ -21,8 +21,8 @@ void main() {
           builder: (context) => ElevatedButton(
             onPressed: () => askOwnershipNote(
               context,
-              title: 'Take responsibility for this case?',
-              body: 'You become the person coordinating this case.',
+              title: 'Take responsibility for this signal?',
+              body: 'You become the person coordinating this signal.',
               confirmLabel: confirmLabel,
               noteHeadline: noteHeadline,
               busy: false,

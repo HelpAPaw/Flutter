@@ -108,7 +108,7 @@ class MapFilterState {
   ///
   /// A signal matches the tag filter if **any** of its needs is selected — it
   /// declares up to three, and someone filtering for `foster` still wants to see
-  /// a case that needs rescue *and* fostering.
+  /// a signal that needs rescue *and* fostering.
   bool signalPassesFilter(
     List<String> helpNeededTags,
     String? animalType,
@@ -226,12 +226,12 @@ class NewSignalFormState {
   /// Chosen urgency, or null if the reporter has not picked one yet.
   ///
   /// Nullable on purpose: the spec makes urgency a required field on every
-  /// case, so defaulting it would let people publish a level they never
+  /// signal, so defaulting it would let people publish a level they never
   /// actually chose — which is exactly how an urgency system stops meaning
   /// anything. [isValid] keeps submit disabled until it is set.
   final int? urgency;
 
-  /// What the case needs — [HelpTag.code] values, in the order chosen.
+  /// What the signal needs — [HelpTag.code] values, in the order chosen.
   ///
   /// Order is the priority the reporter assigned and is preserved on write.
   /// A list rather than a set for exactly that reason.

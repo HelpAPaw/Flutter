@@ -6,7 +6,7 @@ import '../models/signal_status.dart';
 import 'section_header.dart';
 import 'urgency_picker.dart';
 
-/// Every control that *changes* a case, in one sheet.
+/// Every control that *changes* a signal, in one sheet.
 ///
 /// The details screen used to lay these out inline, one under the next, each
 /// with its own heading — an urgency radio group six lines tall, a full-width
@@ -23,7 +23,7 @@ import 'urgency_picker.dart';
 /// It closes on the way out because the [Signal] it was handed is a snapshot —
 /// leaving it open would show pre-write values over a screen that had already
 /// moved on.
-Future<void> showManageCaseSheet(
+Future<void> showManageSignalSheet(
   BuildContext context, {
   required Signal signal,
   required bool busy,
@@ -34,7 +34,7 @@ Future<void> showManageCaseSheet(
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    builder: (sheetContext) => _ManageCaseSheet(
+    builder: (sheetContext) => _ManageSignalSheet(
       signal: signal,
       busy: busy,
       onUrgencyChanged: onUrgencyChanged,
@@ -44,8 +44,8 @@ Future<void> showManageCaseSheet(
   );
 }
 
-class _ManageCaseSheet extends StatelessWidget {
-  const _ManageCaseSheet({
+class _ManageSignalSheet extends StatelessWidget {
+  const _ManageSignalSheet({
     required this.signal,
     required this.busy,
     required this.onUrgencyChanged,

@@ -84,7 +84,7 @@ class AppLocalizationsBg extends AppLocalizations {
       'Възможни са тежки наранявания, смърт или изчезване, ако помощта не дойде сега.';
 
   @override
-  String get pleaseSelectUrgency => 'Моля, изберете колко спешен е случаят';
+  String get pleaseSelectUrgency => 'Моля, изберете колко спешен е сигналът';
 
   @override
   String get errorUpdatingUrgency =>
@@ -265,7 +265,7 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get helperTagsOnboardingIntro =>
-      'Изберете какво реално можете да направите и на кои животни можете да помогнете. Използваме това, за да ви изпращаме случаите, по които наистина можете да действате — можете да го промените по всяко време в настройките.';
+      'Изберете какво реално можете да направите и на кои животни можете да помогнете. Използваме това, за да ви изпращаме сигналите, по които наистина можете да действате — можете да го промените по всяко време в настройките.';
 
   @override
   String get helperTagsOnboardingHelpSection => 'С какво можете да помогнете?';
@@ -623,24 +623,24 @@ class AppLocalizationsBg extends AppLocalizations {
   }
 
   @override
-  String get updateNoteTakingCase => 'Поемате отговорност за този случай';
+  String get updateNoteTakingSignal => 'Поемате отговорност за този сигнал';
 
   @override
-  String updateNoteTakingCaseAndChangingTo(String level) {
+  String updateNoteTakingSignalAndChangingTo(String level) {
     return 'Поемате отговорност и променяте на: $level';
   }
 
   @override
-  String get updateNoteSteppingDown => 'Отказвате се от този случай';
+  String get updateNoteSteppingDown => 'Отказвате се от този сигнал';
 
   @override
-  String get updateNoteHandingOver => 'Предавате случая';
+  String get updateNoteHandingOver => 'Предавате сигнала';
 
   @override
   String get updateNoteDecliningOffer => 'Отказвате предложението';
 
   @override
-  String get updateNoteOfferingTakeover => 'Предлагате да поемете този случай';
+  String get updateNoteOfferingTakeover => 'Предлагате да поемете този сигнал';
 
   @override
   String get updateNoteHint =>
@@ -659,66 +659,66 @@ class AppLocalizationsBg extends AppLocalizations {
   String get someone => 'Някой';
 
   @override
-  String get caseHolder => 'Отговорник';
+  String get signalOwner => 'Отговорник';
 
   @override
-  String get caseHolderNobody => 'Още никой не е поел този случай';
+  String get signalOwnerNobody => 'Още никой не е поел този сигнал';
 
   @override
-  String get caseHolderIsYou => 'Вие отговаряте за този случай';
+  String get signalOwnerIsYou => 'Вие отговаряте за този сигнал';
 
   @override
-  String get caseHolderTakeResponsibility => 'Поеми отговорност';
+  String get signalOwnerTakeResponsibility => 'Поеми отговорност';
 
   @override
-  String get caseHolderRequestTakeover => 'Предложи да поемеш случая';
+  String get signalOwnerRequestTakeover => 'Предложи да поемеш сигнала';
 
   @override
-  String get caseHolderRequestPending => 'Предложили сте да поемете случая';
+  String get signalOwnerRequestPending => 'Предложили сте да поемете сигнала';
 
   @override
-  String get caseHolderWithdrawRequest => 'Оттегли предложението';
+  String get signalOwnerWithdrawRequest => 'Оттегли предложението';
 
   @override
-  String get caseHolderRelease => 'Вече не мога да поема това';
+  String get signalOwnerRelease => 'Вече не мога да поема това';
 
   @override
-  String get caseHolderHandOver => 'Предай случая';
+  String get signalOwnerHandOver => 'Предай сигнала';
 
   @override
-  String get caseHolderDecline => 'Откажи';
+  String get signalOwnerDecline => 'Откажи';
 
   @override
-  String get caseHolderOffers => 'Предложения за поемане';
+  String get signalOwnerOffers => 'Предложения за поемане';
 
   @override
-  String get caseHolderStale =>
-      'От известно време никой не е обновявал този случай.';
+  String get signalOwnerStale =>
+      'От известно време никой не е обновявал този сигнал.';
 
   @override
   String get takeoverConfirmTitle =>
-      'Да поемете ли отговорност за този случай?';
+      'Да поемете ли отговорност за този сигнал?';
 
   @override
   String get takeoverConfirmBody =>
-      'Вие ставате човекът, който координира случая. Можете да променяте статуса и спешността му, както и да го предадете или да се откажете по всяко време.';
+      'Вие ставате човекът, който координира сигнала. Можете да променяте статуса и спешността му, както и да го предадете или да се откажете по всяко време.';
 
   @override
   String get takeoverConfirmAction => 'Поемам го';
 
   @override
-  String get handOverConfirmTitle => 'Да предадете ли случая?';
+  String get handOverConfirmTitle => 'Да предадете ли сигнала?';
 
   @override
   String get handOverConfirmBody =>
-      'Този човек става координатор на случая. Вие оставате абонирани за сигнала и можете да предложите да го поемете обратно по-късно.';
+      'Този човек става координатор на сигнала. Вие оставате абонирани за него и можете да предложите да го поемете обратно по-късно.';
 
   @override
   String get declineConfirmBody =>
-      'Ще бъде уведомен, че запазвате случая. Може да предложи отново след ден.';
+      'Ще бъде уведомен, че запазвате сигнала. Може да предложи отново след ден.';
 
   @override
-  String get releaseConfirmTitle => 'Да се откажете ли от този случай?';
+  String get releaseConfirmTitle => 'Да се откажете ли от този сигнал?';
 
   @override
   String get releaseConfirmBody =>
@@ -728,8 +728,8 @@ class AppLocalizationsBg extends AppLocalizations {
   String get takeoverNoteHint => 'Опишете какво възнамерявате да направите';
 
   @override
-  String get takeoverAlreadyHeld =>
-      'Друг човек отговаря за този случай. Можете да предложите да го поемете.';
+  String get takeoverAlreadyOwned =>
+      'Друг човек отговаря за този сигнал. Можете да предложите да го поемете.';
 
   @override
   String get takeoverRequestSent =>
@@ -737,7 +737,7 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get takeoverAlreadyAsked =>
-      'Вече сте предложили да поемете този случай.';
+      'Вече сте предложили да поемете този сигнал.';
 
   @override
   String takeoverAskAgainAfter(String when) {
@@ -745,17 +745,17 @@ class AppLocalizationsBg extends AppLocalizations {
   }
 
   @override
-  String get errorChangingCaseHolder =>
+  String get errorChangingSignalOwner =>
       'Отговорникът не можа да бъде променен.';
 
   @override
   String tookResponsibility(String name) {
-    return '$name пое отговорност за този случай';
+    return '$name пое отговорност за този сигнал';
   }
 
   @override
-  String handedCaseTo(String name, String other) {
-    return '$name предаде този случай на $other';
+  String handedSignalTo(String name, String other) {
+    return '$name предаде този сигнал на $other';
   }
 
   @override
@@ -772,19 +772,19 @@ class AppLocalizationsBg extends AppLocalizations {
   }
 
   @override
-  String get releasedCaseShort => 'Отказа се от този случай';
+  String get releasedSignalShort => 'Отказа се от този сигнал';
 
   @override
-  String get tookResponsibilityShort => 'Пое отговорност за този случай';
+  String get tookResponsibilityShort => 'Пое отговорност за този сигнал';
 
   @override
-  String handedCaseToShort(String other) {
-    return 'Предаде този случай на $other';
+  String handedSignalToShort(String other) {
+    return 'Предаде този сигнал на $other';
   }
 
   @override
-  String releasedCase(String name) {
-    return '$name се отказа от този случай';
+  String releasedSignal(String name) {
+    return '$name се отказа от този сигнал';
   }
 
   @override
@@ -792,7 +792,7 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get notificationOwnershipReleasedTitle =>
-      'Този случай търси отговорник';
+      'Този сигнал търси отговорник';
 
   @override
   String notificationOwnershipChangeBody(String name) {
@@ -801,11 +801,11 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get notificationOwnershipReleasedBody =>
-      'В момента никой не отговаря за този случай';
+      'В момента никой не отговаря за този сигнал';
 
   @override
   String get notificationTakeoverRequestTitle =>
-      'Някой предложи да поеме случая';
+      'Някой предложи да поеме сигнала';
 
   @override
   String notificationTakeoverRequestBody(String name) {
@@ -813,7 +813,7 @@ class AppLocalizationsBg extends AppLocalizations {
   }
 
   @override
-  String get notificationTakeoverApprovedTitle => 'Вече отговаряте за случай';
+  String get notificationTakeoverApprovedTitle => 'Вече отговаряте за сигнал';
 
   @override
   String get notificationTakeoverApprovedBody => 'Случаят е ваш';
@@ -824,7 +824,7 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get notificationTakeoverDeclinedBody =>
-      'Настоящият отговорник запазва случая';
+      'Настоящият отговорник запазва сигнала';
 
   @override
   String get deletePhoto => 'Изтрий снимка';
@@ -1595,11 +1595,11 @@ class AppLocalizationsBg extends AppLocalizations {
   String get removeSignal => 'Премахни сигнала';
 
   @override
-  String get removeSignalCaseOpenTitle => 'Случаят решен ли е?';
+  String get removeSignalOpenTitle => 'Сигналът приключен ли е?';
 
   @override
-  String get removeSignalCaseOpenBody =>
-      'Ако животното е получило помощ, отбележете случая като Приключен. Сигналът и неговата история остават на картата, за да послужат на другите, и продължават да се броят в профила ви.';
+  String get removeSignalOpenBody =>
+      'Ако животното е получило помощ, отбележете сигнала като Приключен. Сигналът и неговата история остават на картата, за да послужат на другите, и продължават да се броят в профила ви.';
 
   @override
   String get markAsResolved => 'Отбележи като решен';
@@ -1763,7 +1763,7 @@ class AppLocalizationsBg extends AppLocalizations {
   String get reportReasonDefamationRisk => 'Публично обвинение срещу човек';
 
   @override
-  String get reportReasonDuplicateCase => 'Дублира друг сигнал';
+  String get reportReasonDuplicateSignal => 'Дублира друг сигнал';
 
   @override
   String get reportReasonOther => 'Друго';

@@ -42,10 +42,10 @@ export const SIGNAL_EVENT_TYPES = [
  * `isSignalEventCreate()` in `firestore.rules` accepts. Mirrors Dart's
  * `SignalEventType.clientCodes`.
  *
- * `ownership_transfer` is deliberately not in it. The `caseOwnership` callable
+ * `ownership_transfer` is deliberately not in it. The `signalOwnership` callable
  * writes it through the Admin SDK, which bypasses rules entirely, so leaving it
  * out of the client vocabulary costs nothing and buys a real property: nobody
- * can forge a timeline entry claiming they took responsibility for a case. The
+ * can forge a timeline entry claiming they took responsibility for a signal. The
  * drift guard therefore compares this list against the rules and
  * {@link SIGNAL_EVENT_TYPES} against Dart — see
  * `test/signal_event_vocabulary_guard_test.dart`.
@@ -64,7 +64,7 @@ export type SignalEventType = (typeof SIGNAL_EVENT_TYPES)[number];
 export const SIGNAL_EVENT_FIELDS: Record<SignalEventType, string> = {
   status_change: "status",
   urgency_change: "urgency",
-  ownership_transfer: "caseHolder",
+  ownership_transfer: "signalOwner",
 };
 
 /**
@@ -77,7 +77,7 @@ export const SIGNAL_EVENT_KEYS: Record<
 > = {
   status_change: { oldKey: "oldStatus", newKey: "newStatus" },
   urgency_change: { oldKey: "oldUrgency", newKey: "newUrgency" },
-  ownership_transfer: { oldKey: "oldHolder", newKey: "newHolder" },
+  ownership_transfer: { oldKey: "oldOwner", newKey: "newOwner" },
 };
 
 /**
@@ -153,17 +153,17 @@ export function buildEventData(
  * *shape*, not a different field name: two nullable user references rather than
  * two ints on a 0..2 scale. Dart splits the same way, on
  * `SignalEventType.payload` — a single encoder taking `unknown` would type-check
- * an int into `newHolder` and the row would then be silently dropped by the
+ * an int into `newOwner` and the row would then be silently dropped by the
  * decoder, which is the failure mode this whole vocabulary is guarded against.
  *
- * **Both holders are nullable, and both nulls are real:** `oldHolder` is null
- * when a released case is claimed, `newHolder` is null when a case is released.
+ * **Both owners are nullable, and both nulls are real:** `oldOwner` is null
+ * when a released signal is claimed, `newOwner` is null when a signal is released.
  * Neither is a missing value, so neither may be omitted — a decoder cannot tell
  * "released" from "malformed" if the key is simply absent.
  */
 export function buildOwnershipEventData(params: {
-  oldHolder: FirebaseFirestore.DocumentReference | null;
-  newHolder: FirebaseFirestore.DocumentReference | null;
+  oldOwner: FirebaseFirestore.DocumentReference | null;
+  newOwner: FirebaseFirestore.DocumentReference | null;
   note: string;
   actor: FirebaseFirestore.DocumentReference;
   createdAt: FirebaseFirestore.Timestamp | Date;
@@ -171,8 +171,14 @@ export function buildOwnershipEventData(params: {
   const { oldKey, newKey } = SIGNAL_EVENT_KEYS.ownership_transfer;
   return {
     type: "ownership_transfer",
-    [oldKey]: params.oldHolder,
-    [newKey]: params.newHolder,
+    [oldKey]: params.oldOwner,
+    [newKey]: params.newOwner,
+    // The pre-rename key names, so a build released before the case→signal
+    // rename still renders the ownership row instead of dropping it. Its
+    // decoder reads `newHolder` and cannot tell an absent key from a release.
+    // Retire with the other legacy writes — see `writeTransfer`.
+    oldHolder: params.oldOwner,
+    newHolder: params.newOwner,
     note: params.note,
     actor: params.actor,
     createdAt: params.createdAt,

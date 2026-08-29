@@ -22,7 +22,7 @@ import {
   urgencyChangeOf,
 } from "./announcements";
 import { isRestoredSignal } from "./events";
-import { caseHolderOf } from "./signalRefs";
+import { signalOwnerOf } from "./signalRefs";
 import {
   displayTagsOf,
   effectiveHelperTags,
@@ -47,9 +47,9 @@ admin.initializeApp();
 // read. It must be imported AFTER initializeApp() — see the lazy `db()` there.
 export { moderateAction, listQuarantined } from "./moderation";
 
-// Case ownership (master spec 4.5), re-exported for the same reasons and with
+// Signal ownership (master spec 4.5), re-exported for the same reasons and with
 // the same initializeApp() ordering constraint.
-export { caseOwnership } from "./caseOwnership";
+export { signalOwnership, caseOwnership } from "./signalOwnership";
 
 // Removing a signal (HelpAPaw/Flutter#68) — the reporter's own delete, made
 // recoverable. Same module-per-privileged-surface reasoning and the same
@@ -343,13 +343,13 @@ interface InboxEntry {
   urgency?: number;
   commentExcerpt?: string;
   /**
-   * Who now holds the case, on the ownership types. Null on a *release*, which
+   * Who now holds the signal, on the ownership types. Null on a *release*, which
    * is a real answer ("nobody") rather than a missing value — the app renders
    * the two differently.
    */
-  newHolderId?: string | null;
+  newOwnerId?: string | null;
   /** Their display name, resolved once here rather than per reader. */
-  newHolderName?: string;
+  newOwnerName?: string;
 }
 
 /**
@@ -1079,13 +1079,13 @@ async function handleSignalUpdated(
 
   // Urgency notifies on ESCALATION only (Green->Amber, anything->Red). A
   // de-escalation is good news that can wait for the next time someone opens
-  // the case; waking every subscriber for it would train people to mute the
+  // the signal; waking every subscriber for it would train people to mute the
   // signal that matters.
   //
   // The "after" side must be an EXPLICITLY STORED urgency, never the derived
   // fallback. `urgencyOf` infers urgency from status for pre-urgency documents
   // (which the rules still allow clients to create), so on such a document
-  // reopening a resolved case — status 2 -> 0, urgency untouched — would move
+  // reopening a resolved signal — status 2 -> 0, urgency untouched — would move
   // the derived value green -> amber and look like an escalation. That would
   // push a phantom "urgency raised" AND swallow the real status notification,
   // because the escalation branch returns.
@@ -1098,15 +1098,15 @@ async function handleSignalUpdated(
   const urgencyStored = typeof afterData.urgency === "number";
   const urgencyEscalated = urgencyStored && newUrgency > oldUrgency;
 
-  // Case ownership moved (master spec §4.5). Compared through `caseHolderOf` on
+  // Signal ownership moved (master spec §4.5). Compared through `signalOwnerOf` on
   // BOTH sides so the absent-means-the-reporter derivation is applied
   // consistently: the first ever transfer on a legacy signal goes from an absent
   // field to a reference, and comparing the raw values would read that as
-  // "nobody -> someone" and announce that an unheld case had been taken when in
+  // "nobody -> someone" and announce that an unheld signal had been taken when in
   // fact it was taken *from the reporter*.
-  const oldHolder = caseHolderOf(beforeData);
-  const newHolder = caseHolderOf(afterData);
-  const ownershipChanged = (oldHolder?.id ?? null) !== (newHolder?.id ?? null);
+  const oldOwner = signalOwnerOf(beforeData);
+  const newOwner = signalOwnerOf(afterData);
+  const ownershipChanged = (oldOwner?.id ?? null) !== (newOwner?.id ?? null);
 
   if (!statusChanged && !urgencyEscalated && !ownershipChanged) {
     return;
@@ -1169,24 +1169,24 @@ async function handleSignalUpdated(
   // announced — being buzzed twice for one action is what trains people to mute
   // a signal that matters.
   //
-  // Resolved only on the ownership path, and only when there is a holder to
+  // Resolved only on the ownership path, and only when there is an owner to
   // name: one extra document read on a rare write, in exchange for a push that
-  // says who took the case instead of "someone".
-  const newHolderName =
-    ownershipChanged && newHolder ? await readPublicName(newHolder.id) : undefined;
+  // says who took the signal instead of "someone".
+  const newOwnerName =
+    ownershipChanged && newOwner ? await readPublicName(newOwner.id) : undefined;
 
   // Each change that could be announced, described independently. The winner is
   // the highest-ranked one present.
   //
   // This was a chained ternary while there were two candidates. At three it
   // stopped working: ownership routinely lands in the same write as a status
-  // change (`caseOwnership`'s `claim` sets both, so that taking a case and
+  // change (`signalOwnership`'s `claim` sets both, so that taking a signal and
   // moving it cannot come apart), so the ownership branch had to re-inline the
   // status branch's formatting, and the "one push per invocation" rule existed
   // only as the shape of the expression. Ranking them and then *merging* the
   // loser's fields into the winner says both things once.
   const candidates: (AnnouncedChange | null)[] = [
-    ownershipChanged ? ownershipChangeOf(signalId, signalTitle, newHolder, newHolderName) : null,
+    ownershipChanged ? ownershipChangeOf(signalId, signalTitle, newOwner, newOwnerName) : null,
     urgencyEscalated ? urgencyChangeOf(signalId, signalTitle, newUrgency) : null,
     statusChanged ? statusChangeOf(signalId, signalTitle, newStatus) : null,
   ];
@@ -1409,8 +1409,8 @@ export const onTestCommentCreated = onDocumentCreated(
  * Deliver one notification to exactly one person.
  *
  * The counterpart to the fan-out paths above, which all resolve a *set* of
- * recipients. Case ownership is the first feature here whose notifications are
- * addressed — "somebody offered to take your case", "your offer was accepted" —
+ * recipients. Signal ownership is the first feature here whose notifications are
+ * addressed — "somebody offered to take your signal", "your offer was accepted" —
  * so the recipient is known and the only work is the delivery.
  *
  * That delivery is four rules that have been got wrong before and must not be
@@ -1462,18 +1462,18 @@ async function notifyOneUser(
 }
 
 /**
- * Tell the current case holder that someone has asked to take the case over
+ * Tell the current signal owner that someone has asked to take the signal over
  * (master spec §4.5).
  *
  * A trigger rather than a write inside the callable, because filing a request is
  * an ordinary *client* write — it carries no privilege, so routing it through a
  * function would buy nothing, exactly as with `reports`. Approving one is the
- * privileged half, and that is `caseOwnership`.
+ * privileged half, and that is `signalOwnership`.
  *
  * `onDocumentWritten`, not `onDocumentCreated`, because a request can become
  * pending TWICE: once on create, and again when an answered one is re-filed
  * after the cooldown (§4.8) — which is an *update*, and a create trigger would
- * miss it silently, leaving the holder with an offer nobody told them about.
+ * miss it silently, leaving the owner with an offer nobody told them about.
  */
 async function handleTakeoverRequested(
   signalId: string,
@@ -1493,17 +1493,17 @@ async function handleTakeoverRequested(
   const signalData = signalSnapshot.data();
   if (!signalData) return;
 
-  const holder = caseHolderOf(signalData);
-  // Nobody to ask. A released case is claimed outright rather than requested, so
+  const owner = signalOwnerOf(signalData);
+  // Nobody to ask. A released signal is claimed outright rather than requested, so
   // this is a request filed in the moment between the two — harmless, and there
   // is no one it could be delivered to.
-  if (!holder || holder.id === requesterId) return;
+  if (!owner || owner.id === requesterId) return;
 
   const signalTitle = (signalData.title as string) ?? "";
   const name = requesterName ?? "A volunteer";
 
   await notifyOneUser(
-    holder.id,
+    owner.id,
     isTestMode,
     {
       docId: `req_${signalId}_${requesterId}`,
@@ -1512,10 +1512,10 @@ async function handleTakeoverRequested(
       body: `${signalTitle}: ${name} asked to take responsibility`,
       signalId,
       signalTitle,
-      newHolderId: requesterId,
-      newHolderName: name,
+      newOwnerId: requesterId,
+      newOwnerName: name,
     },
-    { newHolderId: requesterId }
+    { newOwnerId: requesterId }
   );
 }
 
@@ -1524,7 +1524,7 @@ async function handleTakeoverRequested(
  *
  * Note the *approval* also moves ownership, which makes `handleSignalUpdated`
  * fire an `ownership_change` to the signal's subscribers. The two are not
- * duplicates: that one announces to everyone watching the case that it changed
+ * duplicates: that one announces to everyone watching the signal that it changed
  * hands, this one answers the question the requester asked.
  */
 async function handleTakeoverResolved(
@@ -1539,11 +1539,11 @@ async function handleTakeoverResolved(
 
   const approved = after.status === "approved";
   const title = approved
-    ? "You are now responsible for a case"
+    ? "You are now responsible for a signal"
     : "Your takeover request was declined";
   const body = approved
-    ? `${signalTitle}: the case is yours`
-    : `${signalTitle}: the current holder is keeping this case`;
+    ? `${signalTitle}: the signal is yours`
+    : `${signalTitle}: the current owner is keeping this signal`;
 
   await notifyOneUser(
     requesterId,
@@ -1555,7 +1555,7 @@ async function handleTakeoverResolved(
       body,
       signalId,
       signalTitle,
-      ...(approved ? { newHolderId: requesterId } : {}),
+      ...(approved ? { newOwnerId: requesterId } : {}),
     },
     {}
   );
@@ -1588,7 +1588,7 @@ async function handleTakeoverWritten(
     return handleTakeoverRequested(signalId, requesterId, isTestMode);
   }
 
-  // Was answered by the holder. Guarded on the *transition* so a later write
+  // Was answered by the owner. Guarded on the *transition* so a later write
   // touching an already-answered request cannot re-notify.
   if (
     before?.status === "pending" &&
