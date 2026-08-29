@@ -218,42 +218,6 @@ void main() {
         expect(entry.ownerId, isNull);
       });
 
-      // The payload keys were `oldHolder`/`newHolder` before the case→signal
-      // rename, and events already in `signals/{id}/events` keep them. A miss
-      // here is silent: the row does not fail, it renders with a null owner,
-      // which is how a *release* is spelled — so every transfer that happened
-      // before the rename would read as "nobody is responsible".
-      test('decodes a pre-rename transfer written under newHolder', () {
-        final entry = SignalHistoryEntry.fromDocument('o5', {
-          'type': 'ownership_transfer',
-          'oldHolder': actor,
-          'newHolder': _FakeRef('u4'),
-          'note': 'I can get there this afternoon.',
-          'actor': actor,
-          'createdAt': Timestamp.fromDate(DateTime(2026, 8, 19, 12)),
-        })!;
-
-        expect(entry.kind, SignalHistoryKind.ownershipTransfer);
-        expect(entry.ownerId, 'u4');
-      });
-
-      // An explicit null under the CURRENT key is a release and must not fall
-      // through to the legacy key beside it, which the server writes too.
-      test('a null newOwner wins over a legacy newHolder', () {
-        final entry = SignalHistoryEntry.fromDocument('o6', {
-          'type': 'ownership_transfer',
-          'oldOwner': actor,
-          'newOwner': null,
-          'oldHolder': actor,
-          'newHolder': _FakeRef('u5'),
-          'note': 'I cannot go anymore.',
-          'actor': actor,
-          'createdAt': Timestamp.fromDate(DateTime(2026, 8, 19, 12)),
-        })!;
-
-        expect(entry.ownerId, isNull);
-      });
-
       test('decodes a claim of a released signal, with no previous owner', () {
         final entry = SignalHistoryEntry.fromDocument(
           'o3',

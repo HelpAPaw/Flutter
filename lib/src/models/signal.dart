@@ -161,13 +161,6 @@ class Signal {
       // the rules pin it to `request.time`, which a create cannot satisfy, and
       // the server falls back to `createdAt` until the owner first acts.
       'signalOwner': reporter,
-      // `caseHolder` is the same value under the field's pre-rename name.
-      // Written for as long as builds that read only the old name are still in
-      // the wild — without it, an older client resolves a signal created here
-      // through its absent-means-the-reporter fallback, which happens to be
-      // right at creation and would silently be wrong after the first transfer.
-      // Drop this, and `signalOwnerFrom`'s legacy branch, together.
-      'caseHolder': reporter,
       'photoUrls': photoUrls,
     };
   }
@@ -189,7 +182,7 @@ class Signal {
       moderation: (json['moderation'] as Map<dynamic, dynamic>?)
           ?.cast<String, dynamic>(),
       signalOwner: signalOwnerFrom(json),
-      ownerActiveAt: latestStampFrom(json),
+      ownerActiveAt: json['ownerActiveAt'] as Timestamp?,
       photoUrls: (json['photoUrls'] as List<dynamic>?)
           ?.map((e) => e as String)
           .toList() ?? [],
@@ -252,40 +245,10 @@ class Signal {
   /// Pulled out of [fromJson] for the same reason as [urgencyFrom]: the factory's
   /// `reporter` fallback touches `FirebaseFirestore.instance`, so a test cannot
   /// reach this logic through it without a Firebase app.
-  ///
-  /// `caseHolder` is the field's pre-rename name and is still read, because
-  /// documents written by builds released before the rename are never
-  /// rewritten. It is consulted only when `signalOwner` is *absent*, so a
-  /// released signal that carries an explicit null under the new name is never
-  /// resurrected from the old one. Mirrored by `signalOwnerOf` in
-  /// `functions/src/signalRefs.ts` and `isSignalOwner()` in `firestore.rules`.
-  static DocumentReference? signalOwnerFrom(Map<String, dynamic> json) {
-    if (json.containsKey('signalOwner')) {
-      return json['signalOwner'] as DocumentReference?;
-    }
-    if (json.containsKey('caseHolder')) {
-      return json['caseHolder'] as DocumentReference?;
-    }
-    return json['reporter'] as DocumentReference?;
-  }
-
-  /// The later of `ownerActiveAt` and its pre-rename twin `holderActiveAt`.
-  ///
-  /// **The later, not a preference order.** This pair is the one part of
-  /// ownership a *client* may write, and each build writes only the name it
-  /// knows — so on a signal coordinated from a pre-rename build the new name
-  /// stays frozen at the last server transfer while the old one keeps moving.
-  /// Preferring the new name would draw "Nobody has updated this signal in a
-  /// while" over an owner who is actively working it, and offer Take
-  /// responsibility to everyone else. Mirrors `ownerActiveAtOf` in
-  /// `functions/src/signalOwnership.ts`, which is the enforcement.
-  static Timestamp? latestStampFrom(Map<String, dynamic> json) {
-    final owner = json['ownerActiveAt'] as Timestamp?;
-    final holder = json['holderActiveAt'] as Timestamp?;
-    if (owner == null) return holder;
-    if (holder == null) return owner;
-    return owner.compareTo(holder) >= 0 ? owner : holder;
-  }
+  static DocumentReference? signalOwnerFrom(Map<String, dynamic> json) =>
+      json.containsKey('signalOwner')
+          ? json['signalOwner'] as DocumentReference?
+          : json['reporter'] as DocumentReference?;
 
   /// Whether nobody currently holds this signal, so anyone may take it on.
   ///

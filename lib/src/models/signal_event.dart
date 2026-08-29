@@ -49,8 +49,6 @@ sealed class SignalEventType {
     required this.oldKey,
     required this.newKey,
     required this.historyKind,
-    this.legacyOldKey,
-    this.legacyNewKey,
     this.serverOnly = false,
   });
 
@@ -71,16 +69,6 @@ sealed class SignalEventType {
   /// only one of them was under a guard test.
   final String oldKey;
   final String newKey;
-
-  /// The keys this event's payload used **before** the case→signal rename.
-  ///
-  /// Read-side only, and null on every type that never had one. Events already
-  /// in `signals/{id}/events` were written with the old names and are not
-  /// rewritten by the backfill, so the decoder has to accept both forever —
-  /// dropping this would blank the ownership rows of every transfer that
-  /// happened before the rename.
-  final String? legacyOldKey;
-  final String? legacyNewKey;
 
   /// Which row this event becomes in the merged history.
   ///
@@ -134,8 +122,6 @@ sealed class SignalEventType {
     oldKey: 'oldOwner',
     newKey: 'newOwner',
     historyKind: SignalHistoryKind.ownershipTransfer,
-    legacyOldKey: 'oldHolder',
-    legacyNewKey: 'newHolder',
     serverOnly: true,
   );
 
@@ -189,8 +175,6 @@ final class LevelEventType extends SignalEventType {
     required super.oldKey,
     required super.newKey,
     required super.historyKind,
-    super.legacyOldKey,
-    super.legacyNewKey,
     super.serverOnly,
   });
 
@@ -238,8 +222,6 @@ final class OwnerEventType extends SignalEventType {
     required super.oldKey,
     required super.newKey,
     required super.historyKind,
-    super.legacyOldKey,
-    super.legacyNewKey,
     super.serverOnly,
   });
 }
@@ -375,11 +357,7 @@ class SignalHistoryEntry {
     // `SignalEventType` is sealed, so a new subtype is a compile error here
     // rather than a row that silently fails to render.
     final note = data['note'] as String?;
-    // `containsKey`, not `??`: on an ownership transfer a null value is a
-    // RELEASE and must not fall through to the legacy key.
-    final raw = data.containsKey(type.newKey)
-        ? data[type.newKey]
-        : data[type.legacyNewKey];
+    final raw = data[type.newKey];
 
     switch (type) {
       case LevelEventType():

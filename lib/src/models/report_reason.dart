@@ -32,17 +32,12 @@ enum ReportReason {
   spam(code: 'spam', icon: Icons.block),
   doxxing(code: 'doxxing', icon: Icons.privacy_tip),
   defamationRisk(code: 'defamationRisk', icon: Icons.gavel),
-  duplicateSignal(
-    code: 'duplicateSignal',
-    legacyCode: 'duplicateCase',
-    icon: Icons.copy_all,
-  ),
+  duplicateSignal(code: 'duplicateSignal', icon: Icons.copy_all),
   other(code: 'other', icon: Icons.more_horiz);
 
   const ReportReason({
     required this.code,
     required this.icon,
-    this.legacyCode,
   });
 
   /// Stable identifier persisted in Firestore. Never change or reuse.
@@ -50,14 +45,6 @@ enum ReportReason {
 
   /// Icon shown beside the reason in the report sheet.
   final IconData icon;
-
-  /// A code this reason used to be written under, still accepted on read.
-  ///
-  /// Only `duplicateSignal` has one, from the case→signal rename. Reports
-  /// already in Firestore keep the old value unless the backfill has run, and
-  /// the moderator queue must keep resolving them to a label rather than
-  /// falling through to the raw code.
-  final String? legacyCode;
 
   /// Resolve a persisted [code], returning null for anything unrecognised.
   ///
@@ -67,7 +54,7 @@ enum ReportReason {
   /// newer than the one reading it.
   static ReportReason? fromCode(String code) {
     for (final reason in values) {
-      if (reason.code == code || reason.legacyCode == code) return reason;
+      if (reason.code == code) return reason;
     }
     return null;
   }

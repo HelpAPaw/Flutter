@@ -110,27 +110,11 @@ export function requireRealAccount(auth: { uid: string; token: Record<string, un
   return auth.uid;
 }
 
-/**
- * When the owner last did anything, falling back to when the signal was made.
- *
- * **The LATER of the two names, not a preference order.** `ownerActiveAt` and
- * its pre-rename twin `holderActiveAt` are the one pair a *client* may write
- * (`isSignalOwnerUpdate` allows both), and each build writes only the name it
- * knows — so on a signal whose owner coordinates from a pre-rename build, the
- * new name sits frozen at whatever the last server transfer stamped while the
- * old one keeps moving. Preferring the new name would then read an active owner
- * as silent, and after {@link STALE_OWNER_DAYS} anyone could displace them.
- *
- * Taking the later value is correct under any mix of builds and needs no
- * assumption about which one is live. Mirrored by `Signal.ownerActiveAt`.
- */
+/** When the owner last did anything, falling back to when the signal was made. */
 export function ownerActiveAtOf(
   data: Record<string, unknown> | undefined
 ): FirebaseFirestore.Timestamp | null {
-  const stamps = [data?.ownerActiveAt, data?.holderActiveAt].filter(
-    (v): v is FirebaseFirestore.Timestamp => v instanceof admin.firestore.Timestamp
-  );
-  const active = stamps.sort((a, b) => b.toMillis() - a.toMillis())[0];
+  const active = data?.ownerActiveAt;
   if (active instanceof admin.firestore.Timestamp) return active;
   const created = data?.createdAt;
   if (created instanceof admin.firestore.Timestamp) return created;
@@ -296,15 +280,6 @@ function writeTransfer(
   ctx.tx.update(ctx.ref, {
     signalOwner: newOwner,
     ownerActiveAt: ctx.now,
-    // The same two values under their pre-rename names, so a build released
-    // before the case→signal rename still reads the right owner — including
-    // the explicit null that means "released", which an old client would
-    // otherwise derive back to the reporter. Remove these two lines, the
-    // legacy branches in `signalOwnerOf` / `ownerActiveAtOf` / `isSignalOwner`,
-    // and the `caseOwnership` alias below, in one change once those builds are
-    // gone.
-    caseHolder: newOwner,
-    holderActiveAt: ctx.now,
     lastUpdatedBy: ctx.actor,
     ...extraSignalFields,
   });
@@ -514,16 +489,3 @@ export function optionalStatus(raw: unknown): number | null {
   }
   return raw;
 }
-
-/**
- * The callable's pre-rename name, kept deployed so released builds keep working.
- *
- * Builds shipped before the case→signal rename call `caseOwnership`; an
- * undeployed name comes back to them as `not-found`, which the app surfaces as
- * a generic failure with no way for the user to tell that an upgrade fixes it.
- * Same handler, same behaviour — this is an alias, not a fork.
- *
- * Retire it together with the dual writes in `writeTransfer`, once those builds
- * are out of use.
- */
-export const caseOwnership = signalOwnership;

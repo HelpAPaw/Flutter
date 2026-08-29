@@ -861,10 +861,10 @@ of the master spec: "I can transport", "I am going to check") are a separate fea
 signal ownership is the *one responsible person* axis, helpers are the *many
 volunteers* axis. Pinned comments (§9.1) are now unblocked by this field.
 
-### 4.8a The case→signal rename, and what still answers to the old names
+### 4.8a The case→signal rename
 
 The ownership feature (§4.8) took the master spec's vocabulary into the wire
-format. The app's word is **signal**, and its word for the responsible person is
+format. The app's word is **signal** and its word for the responsible person is
 **owner**, so the stored names were renamed to match:
 
 | Was | Is | Where |
@@ -875,109 +875,23 @@ format. The app's word is **signal**, and its word for the responsible person is
 | `"duplicateCase"` | `"duplicateSignal"` | `reports/{id}.reason` |
 | `caseOwnership` | `signalOwnership` | callable |
 
-**Every reader still accepts the old name, and this is not optional.** Builds
-released before the rename are in the wild, and the failure mode is silent in
-both directions: an unread `caseHolder` locks the real owner out of their own
-signal, and an unread `newHolder` renders every pre-rename transfer as a
-*release*, because a null new owner is exactly how a release is spelled. The
-legacy branches live in `Signal.signalOwnerFrom` and `SignalEventType.legacyNewKey`
-(Dart), `signalOwnerOf` and `ownerActiveAtOf` (functions), `isSignalOwner()`,
-`isNotTouchingOwnership()`, `isValidOwnerStamp()` and `isValidInitialSignalOwner()`
-(rules), and `ReportReason.legacyCode`.
+**It carries no compatibility shim, and that is a measured decision rather than
+an oversight.** Ownership shipped 2026-08-20 and never reached a released build:
+`6.0.2+129`, the only release, contains no ownership feature at all — not the
+fields, not the callable, not the timeline — so it can neither read nor write any
+of these names. Counted on 2026-08-29, **production `signals` held six documents
+and not one carried a pre-rename name**; every legacy value lived in
+`signals_test` on the QA devices, plus a single report reason. That data was
+disposable, so the rename was taken straight rather than bridged, and there is no
+backfill.
 
-The new name **wins wherever both are present**. The old one is consulted only
-when the new one is *absent*, because an explicit null under the new name is a
-release and falling through to a stale old value would resurrect the owner who
-just stepped away — the same edge §4.8 is built around, one level up.
+The one consequence: a device still running `7.0.0+131` reads `caseHolder`, which
+nothing writes any more, so it would derive every signal's owner back to its
+reporter. Update those devices rather than pointing them at ownership.
 
-While old builds are still out there the server also **dual-writes**: `writeTransfer`
-sets both field pairs and `buildOwnershipEventData` emits both key pairs, so an
-old client reads the right owner rather than deriving one. `firestore.rules`
-therefore blocks and pins *both* names — an unguarded `caseHolder` would leave the
-seizure `isNotTouchingOwnership()` exists to prevent open through the old name.
-
-**This rename is a deploy, not just an app release.** Both halves are required,
-and each is load-bearing for a different reason:
-
-- **Functions.** The callable was renamed. A new build calls `signalOwnership`,
-  which the deployed function set does not export, so every claim / release /
-  approve / decline comes back `not-found`. `caseOwnership` stays exported as an
-  alias for the reverse direction — old builds calling the old name.
-- **Rules.** `isSignalOwnerUpdate()` allows an exact key set (`hasOnly`), and the
-  stamp in that set was renamed. A new build sends `ownerActiveAt`, which the
-  deployed ruleset does not list, so **a non-reporter owner cannot change status,
-  urgency or tags at all** — the reporter branch still passes, which makes this
-  present as intermittent rather than broken.
-
-The allow-list carries **both** names for that same reason in reverse: pre-rename
-builds send `holderActiveAt` on every coordination write, so dropping the old name
-would deny them outright. No deploy order avoids that — the list has to name both
-until those builds are gone, which costs nothing because `isValidOwnerStamp()`
-pins both to `request.time`. Pinned by *"accepts a pre-rename client stamping
-holderActiveAt with the server time"*.
-
-**Order:**
-
-**What is actually out there (measured on help-a-paw-dev, 2026-08-29):**
-
-| Collection | Docs | Carrying a pre-rename name |
-|---|---|---|
-| `signals` (production) | 6 | **0** — no `caseHolder`, no `holderActiveAt`, no `ownership_transfer` event |
-| `signals_test` | 20 | 10 `caseHolder`, 4 `holderActiveAt` |
-| `reports` | — | 1 `reason: "duplicateCase"` |
-
-All six production signals are pre-tag documents (`signalType`, no `urgency`), the
-newest created 2026-08-27 — a week *after* ownership deployed. **No real user has
-ever produced an ownership field.** Every legacy value except one report reason
-lives in test-mode data on the QA devices.
-
-That narrows the gate. `6.0.2+129` is the only released build, and it contains no
-ownership feature at all — not the fields, not the callable, not the timeline. It
-can neither read nor write any renamed name, so **no released build depends on a
-shim.** They exist for `7.0.0+131`, which is the QA devices only. The phase B gate
-is therefore "those devices are updated", which is same-day and under your
-control — not "the installed base turns over", which never completes.
-
-**Step 1 was done 2026-08-29** — `signalOwnership` created, `caseOwnership` retained as
-an alias on the same build, live rules re-read and verified byte-identical. Steps 2–4 are
-tracked in HelpAPaw/Flutter#77.
-
-1. Deploy functions **and** rules together. The rules must not lag the functions:
-   `ownerActiveAtOf` prefers `ownerActiveAt`, and until the new ruleset pins it a
-   reporter could self-stamp a far-future value and disable the staleness escape
-   hatch on their own signal, silently and permanently.
-2. Ship the app release. **This is a rollout, not a moment** — it takes weeks and
-   some users never update, so no step below may assume the old builds are gone.
-3. Run `functions/scripts/backfill_case_to_signal.js` — **phase A, its default**,
-   which writes the new names and *keeps* the old ones. Safe under any mix of
-   builds. Before step 1 it would push a spurious "someone took responsibility"
-   for every signal it touches, because `onSignalUpdated` would compare a derived
-   reporter against a real owner; after it, before and after compare equal and
-   the handler returns silently.
-4. **Only once the pre-rename builds are off the installed base** (the condition
-   #70 already tracks, not "after the release"): run the backfill again with
-   `--drop-legacy`, and in the same change delete the dual writes, the legacy
-   read branches, the legacy key in the `hasOnly` list, the `caseOwnership` alias
-   and this section.
-
-Deleting the old names early is silent and wrong in the worst direction. A
-pre-rename build reads a deleted `caseHolder` as **absent**, and absent means the
-reporter — so every *released* signal hands itself straight back to the person
-who stepped away from it, and every transferred signal shows its reporter as the
-owner. The rules read both names throughout, so nothing is denied and no
-permission is widened; the old app simply shows the wrong person.
-
-**The one pair that can genuinely disagree is the activity stamp.** Neither owner
-field is client-writable — `isNotTouchingOwnership()` blocks both names on every
-update branch, so only the callable writes them and it writes both together. But
-`isSignalOwnerUpdate()` *must* allow both stamps (§4.8a above), and each build
-writes only the name it knows, so an owner coordinating from a pre-rename build
-leaves `ownerActiveAt` frozen at the last server transfer while `holderActiveAt`
-keeps moving. `ownerActiveAtOf` and `Signal.latestStampFrom` therefore take the
-**later of the two**, not a preferred name — preferring the new one would read an
-active owner as silent and let anyone displace them after `STALE_OWNER_DAYS`.
-No production document can reach this today (none carries either stamp), so it is
-insurance against the mixed-build window the app release opens, not a live fault.
+Spec quotations elsewhere in this document are left in the spec's own words; the
+master spec's *case* is this app's **signal** and its *case holder* is the
+**signal owner**.
 
 
 ## 5. Security model (`firestore.rules`, `storage.rules`)
@@ -2780,7 +2694,7 @@ silently breaks Auth/Firestore/FCM in release builds only.
 
 | Date | Change |
 |---|---|
-| 2026-08-26 | **Renamed the master spec's "case" vocabulary to the app's own (§4.8a).** The ownership feature had carried the spec's words into the wire format; user-facing copy in both locales, every identifier, and the stored names now say **signal** and **signal owner**. Renamed on the wire: `caseHolder`→`signalOwner`, `holderActiveAt`→`ownerActiveAt`, the `ownership_transfer` payload's `oldHolder`/`newHolder`→`oldOwner`/`newOwner`, `reports.reason` `"duplicateCase"`→`"duplicateSignal"`, and the `caseOwnership` callable→`signalOwnership` (the old name stays deployed as an alias). **Every reader accepts both names and the new one wins**, because both failure modes are silent — an unread `caseHolder` locks the real owner out, and an unread `newHolder` renders every pre-rename transfer as a *release*. The server dual-writes both pairs while old builds are live. `functions/scripts/backfill_case_to_signal.js` rewrites the stored documents and **must run after** the functions/rules deploy, or `onSignalUpdated` compares a derived reporter against a real owner and pushes a spurious "someone took responsibility" per signal. Spec quotations are left in the spec's own words throughout. 276 Dart tests, 112 functions tests, 268 rules tests. |
+| 2026-08-29 | **Renamed the master spec's "case" vocabulary to the app's own (§4.8a).** The ownership feature had carried the spec's words into the wire format; user-facing copy in both locales, every identifier, and the stored names now say **signal** and **signal owner**. Renamed on the wire: `caseHolder`→`signalOwner`, `holderActiveAt`→`ownerActiveAt`, the `ownership_transfer` payload's `oldHolder`/`newHolder`→`oldOwner`/`newOwner`, `reports.reason` `"duplicateCase"`→`"duplicateSignal"`, and the `caseOwnership` callable→`signalOwnership`. **Taken straight, with no compatibility shim and no backfill** — a decision made by counting rather than assuming: ownership shipped 2026-08-20 and never reached a released build, `6.0.2+129` has no ownership feature at all, and production `signals` was measured to hold six documents carrying zero pre-rename names. The only legacy values were in `signals_test` on the QA devices plus one report reason, all disposable. A first pass did build the full bridge — dual writes, three read fallbacks, a two-phase backfill and a callable alias — and it was removed once the data said none of it had anything to protect. Deployed to help-a-paw-dev the same day, export list diffed both ways and live rules re-read byte-identical. Spec quotations stay in the spec's own words. 270 Dart tests, 112 functions tests, 258 rules tests. |
 | 2026-08-22 | **Showed the pending takeover offers to the reporter, read-only** (§4.8). The offer list was gated on `_isOwner` alone, which matched `requireCurrentOwner` on the callable but over-applied it: a reporter who had handed their case on — or released it — could not see that anyone was offering to pick it up, on their own report. The rows name people volunteering to take responsibility for that reporter's animal, and a case going quiet is exactly when that matters. **Answering stays the owner's**, so the reporter gets the list without Hand over / Decline; the split is one `answerable` flag on `SignalOwnerBlock._buildPendingOffers`. **No new access and no deploy** — `takeoverRequests` is already `read: if request.auth != null`, so this is a client-only change to what is drawn. `requireCurrentOwner` is now **exported and pinned by five tests** (owner passes, a legacy signal's derived-owner reporter passes, the handed-on reporter is refused, a stranger is refused, and a released case refuses everyone), because showing somebody a list they cannot act on is a standing invitation to wire up the buttons later. Also deleted a stale duplicate of the audience table that had been left above `_actorText` in `signal_details_screen.dart` when the block was extracted, and which had drifted to claim the reporter already saw the offers. 260 Dart tests, 112 functions tests. §4.8. |
 | 2026-08-21 | **Made an account's test mode a recorded fact rather than a side effect of push (#72).** `users/{uid}.testMode` decides whether the server fan-out considers an account **at all** — the mode guard sits above the `inboxRecipients`/`userTokens` split — and it had exactly two writers: the 7-tap toggle, for whichever account happened to be signed in at that moment, and the FCM token stamp. Neither fires for an account that arrives on a test-mode device with notifications off, so the field stayed absent, which reads as production and drops the account **including its inbox entry** — precisely the thing that split exists to preserve for users without push. Found during case-ownership device verification, where a `takeover_approved` notification and its inbox row both vanished with nothing logged. The toggle cannot cover it alone, because the device preference outlives the session it was set in: signing out mints a new anonymous uid, and upgrading that one in place carries no `testMode` forward because there never was one; the reverse — an account left stamped `true` and invisible to the *production* fan-out — is equally silent. **`AuthService.syncTestMode()` is now the single writer** (§3.2.1), called at launch (which also backfills accounts predating it), when a new anonymous session is minted, above `onUserLogin`'s notification-preference early return, and from the toggle. A `(uid, mode)` cache in `AppPreferencesService` keeps the ordinary launch at zero writes and **fails towards writing**; callers must not await it, since a Firestore write's future only completes on server ack. The three mode guards now log every drop and say whether the field was *absent* rather than false — this class of bug is otherwise indistinguishable from "no notification was due". §3.2, §3.2.1, §4.1, §7.1, §7.6, §9. **Android-verified 2026-08-21; the functions-side logging is not yet deployed.** |
 | 2026-08-21 | **Replaced deleting a signal with removing it (#68).** Deleting was a client-side cascade — best-effort Storage deletes, then one batch emptying `comments`, `events` and `takeoverRequests` **by name**. It could not be finished (an app killed mid-cascade orphaned the subcollections permanently, and `isParentSignalReporter` then *errors* on the missing parent, so nothing could go back for them), it forced three delete rules open, and it carried the standing hazard that adding a subcollection meant remembering to add it to `_deleteHistory`. **`signalRemoval` moves the document to `removedSignals`** and leaves the subcollections and photos where they are — the same move-not-a-flag shape as `hideSignal`, for the same reasons, and a separate collection because these expire, the *reporter* restores them, and `listQuarantined` is a 50-item moderator worklist ordinary removals would swamp. `purgeRemovedSignals` erases everything after `REMOVED_RETENTION_DAYS = 30`, deleting the removal record **last** so a failed run is resumable; `deleteAccount` purges a departing user's removals outright rather than anonymizing them, so there is no fourth place for a phone number to survive. **The motivating problem was not audit but statistics**: people reached for Delete to mean "this case is finished", and the profile counted signals with a live `count()` over `signals` — so it measured *signals still visible*, and every removal, hide or future §4.10 archive took the credit with it. Master spec §3.5.1 requires the opposite. Counting moved to a server-written `publicProfiles.signalsPosted`, which needs **no rules change** because that document already restricts clients to `name` (`userCounters` would have been forgeable). Hiding alone would not have fixed it, since a hidden signal has to leave `signals` too. An open case is now asked "is this resolved?" first, reusing the ordinary status path so the history is identical; removal is refused while an open report names the signal, which is the one abuse a recoverable removal invites. **The three cascade delete rules are deliberately left permissive here** — flipping them breaks every released build's cascade batch, so it is step 5 of §13.3, behind the app release, alongside #67 and #71. 258 rules tests, 260 Dart tests, 107 functions tests. §4.1, §5.1, §7.2, §7.5, §7.11, §9, §11, §13.3, §14. **Functions, rules and indexes deployed 2026-08-21 and verified on SM X205 + SM J610FN (2026-08-21) and the iPad (2026-08-22)** in test mode: the resolve-first dialog appears on an open case and is skipped on a resolved one; resolving from it writes the same `status_change` event with its note; a removal moves the document and leaves `comments` behind; **restore logged "Skipping fan-out for restored signal"**, so the reporter path inherits the guard that stops a re-notification; Delete permanently erased the document, the orphaned `comments` and a planted Storage object under the photos prefix; removal was refused with `signalUnderReview` while an open report named the signal and allowed once only a closed one did; and the Removed tab rendered for an anonymous account with no permission error. Profile stats took the legacy fallback, correctly — the counter skips test mode, so verification did not inflate a real account's number. **iOS was verified on a Profile build** driven through WebDriverAgent over plain HTTP — the debug build cannot run there (plugin-registration SIGSEGV) and iOS 17 will not launch a debug build without the debugger, so `flutter build ios --profile` plus `devicectl install/launch` is the working path. It launched clean, the tabs and both dialogs rendered, removal and restore round-tripped, and the restore logged the same fan-out skip. |

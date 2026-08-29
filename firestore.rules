@@ -72,15 +72,8 @@ service cloud.firestore {
     // That distinction is the whole point of storing null rather than deleting
     // the field, and collapsing the two is the mistake this comment exists to
     // prevent.
-    // `caseHolder` is the field's pre-rename name, and is consulted only when
-    // `signalOwner` is ABSENT — an explicit null under the new name is a
-    // release, and falling through to the old name would undo it. Mirrors
-    // `signalOwnerOf` (functions) and `Signal.signalOwnerFrom` (Dart); all
-    // three must agree. Retire the middle term with the other legacy reads.
     function isSignalOwner() {
-      return resource.data.get('signalOwner',
-               resource.data.get('caseHolder', resource.data.reporter))
-             == userDoc();
+      return resource.data.get('signalOwner', resource.data.reporter) == userDoc();
     }
 
     // `signalOwner` is written ONLY by the signalOwnership Cloud Function (Admin
@@ -93,12 +86,9 @@ service cloud.firestore {
     // signed-in user on a patched client could seize a stranger's signal by
     // writing one field. The timeline would show no transfer, because no event
     // was written.
-    // BOTH names are blocked. Leaving the old one writable would leave the
-    // seizure this exists to prevent open through the legacy field, which
-    // `isSignalOwner` still reads on documents that have no new field.
     function isNotTouchingOwnership() {
       return !request.resource.data.diff(resource.data)
-                .affectedKeys().hasAny(['signalOwner', 'caseHolder']);
+                .affectedKeys().hasAny(['signalOwner']);
     }
 
     // `ownerActiveAt` is a CLOCK, so it is pinned to the server's.
@@ -108,16 +98,10 @@ service cloud.firestore {
     // a signal they have abandoned forever. Allowed on either branch — the owner
     // stamps it as part of an ordinary status change — but never at a value the
     // caller picked.
-    // Both the current and the pre-rename name, for the reason
-    // isNotTouchingOwnership() blocks both: an unpinned `holderActiveAt` is an
-    // unpinned clock, and `ownerActiveAtOf` still falls back to it.
     function isValidOwnerStamp() {
-      return (!request.resource.data.diff(resource.data)
-                 .affectedKeys().hasAny(['ownerActiveAt'])
-              || request.resource.data.ownerActiveAt == request.time)
-             && (!request.resource.data.diff(resource.data)
-                    .affectedKeys().hasAny(['holderActiveAt'])
-                 || request.resource.data.holderActiveAt == request.time);
+      return !request.resource.data.diff(resource.data)
+                .affectedKeys().hasAny(['ownerActiveAt'])
+             || request.resource.data.ownerActiveAt == request.time;
     }
 
     // The caller holds the signal on the parent signal at {coll}/{signalId}.
@@ -129,8 +113,7 @@ service cloud.firestore {
       // for the value and for the default — is two billed document reads on
       // every takeover-request write, for one answer.
       let parent = get(/databases/$(database)/documents/$(coll)/$(signalId)).data;
-      return parent.get('signalOwner',
-               parent.get('caseHolder', parent.reporter)) == userDoc();
+      return parent.get('signalOwner', parent.reporter) == userDoc();
     }
 
     // The caller is the reporter of the parent signal at {coll}/{signalId}.
@@ -184,16 +167,10 @@ service cloud.firestore {
     //
     // The server falls back to `createdAt` until the owner first acts, so
     // omitting it costs nothing.
-    // Both names are validated, because the app writes both during the
-    // case→signal migration window and an unchecked `caseHolder` would be a way
-    // to create a signal already assigned to somebody else.
     function isValidInitialSignalOwner() {
       return !('ownerActiveAt' in request.resource.data)
-             && !('holderActiveAt' in request.resource.data)
              && (!('signalOwner' in request.resource.data)
-                 || request.resource.data.signalOwner == userDoc())
-             && (!('caseHolder' in request.resource.data)
-                 || request.resource.data.caseHolder == userDoc());
+                 || request.resource.data.signalOwner == userDoc());
     }
 
     // Bounds the help tags, but does NOT require the field — same reasoning as
@@ -374,20 +351,11 @@ service cloud.firestore {
     // the mitigation is a DEPLOY ORDER and not a code change: functions first,
     // then the app release that offers claim-to-act, then this ruleset — never
     // this ruleset first. Tracking: HelpAPaw/Flutter#71, and SPECIFICATION 4.8.
-    // `holderActiveAt` is `ownerActiveAt`'s pre-rename name and MUST stay in this
-    // list while pre-rename builds are live. `hasOnly` is an exact allow-list, so
-    // dropping the old name does not merely fail to help an old client — it
-    // DENIES every coordination write those builds make, because their
-    // `coordinationStamp` sends `holderActiveAt` on every status, urgency and
-    // tag change. There is no deploy order that works around it: the new name
-    // has to be here for new builds and the old one for old ones. Letting it
-    // through costs nothing, because `isValidOwnerStamp()` pins BOTH names to
-    // `request.time` — an old client can name the field but not choose its value.
     function isSignalOwnerUpdate() {
       return isSignalOwner()
              && request.resource.data.diff(resource.data).affectedKeys()
                   .hasOnly(['status', 'urgency', 'helpNeededTags',
-                            'lastUpdatedBy', 'ownerActiveAt', 'holderActiveAt'])
+                            'lastUpdatedBy', 'ownerActiveAt'])
              && request.resource.data.lastUpdatedBy == userDoc()
              && request.resource.data.status is int
              && request.resource.data.status >= 0

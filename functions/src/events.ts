@@ -173,12 +173,6 @@ export function buildOwnershipEventData(params: {
     type: "ownership_transfer",
     [oldKey]: params.oldOwner,
     [newKey]: params.newOwner,
-    // The pre-rename key names, so a build released before the case→signal
-    // rename still renders the ownership row instead of dropping it. Its
-    // decoder reads `newHolder` and cannot tell an absent key from a release.
-    // Retire with the other legacy writes — see `writeTransfer`.
-    oldHolder: params.oldOwner,
-    newHolder: params.newOwner,
     note: params.note,
     actor: params.actor,
     createdAt: params.createdAt,

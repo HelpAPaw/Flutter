@@ -49,7 +49,7 @@ export { moderateAction, listQuarantined } from "./moderation";
 
 // Signal ownership (master spec 4.5), re-exported for the same reasons and with
 // the same initializeApp() ordering constraint.
-export { signalOwnership, caseOwnership } from "./signalOwnership";
+export { signalOwnership } from "./signalOwnership";
 
 // Removing a signal (HelpAPaw/Flutter#68) — the reporter's own delete, made
 // recoverable. Same module-per-privileged-surface reasoning and the same

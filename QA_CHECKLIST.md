@@ -75,22 +75,12 @@
 >       `moderationActions`. Device-verified on SM X205 + SM J610FN.
 > - [x] ✅ **Signal ownership** — `signalOwnership` + `onTakeoverRequested` deployed **and the
 >       rules narrowing went out with them**. Device-verified 2026-08-21.
-> - [ ] 🔴 **The case→signal rename needs BOTH a functions and a rules deploy, before
->       the app release** (SPECIFICATION §4.8a). Not cosmetic: the callable was renamed,
->       so a new build's claim/release/approve/decline hits `not-found` against the
->       deployed function set; and `isSignalOwnerUpdate()`'s `hasOnly` list gained
->       `ownerActiveAt`, so against the deployed ruleset **a non-owner-reporter cannot
->       change status, urgency or tags at all**. The reporter branch still passes, so
->       this presents as intermittent. Deploy the two together, then release, then run
->       `functions/scripts/backfill_case_to_signal.js` — never before the deploy.
-> - [x] ✅ **Case→signal deploy done 2026-08-29.** `signalOwnership` created, `caseOwnership`
->       kept as an alias to the same handler (identical build hash), nothing deleted —
->       `listQuarantined` verified present after. Live rules re-read and byte-identical to
->       the branch. Behaviourally a no-op for **129**, which writes none of the renamed
->       fields: every changed predicate is either vacuous or strictly wider. **Backfill and
->       shim retirement tracked in #77**. The backfill's phase A (additive) waits only
->       for the app release; **phase A must not delete the pre-rename names**, and
->       `--drop-legacy` waits for the installed base to turn over, not for the release.
+> - [x] ✅ **Case→signal rename** — functions and rules deployed 2026-08-29
+>       (`signalOwnership` created, export list diffed both ways, live rules re-read
+>       byte-identical). **No compatibility shim and none needed**: 129 has no ownership
+>       feature at all, and production `signals` was measured to hold zero pre-rename
+>       fields. Only caveat: a device still on **131** reads `caseHolder` and would show
+>       every signal's reporter as its owner — update those devices (§4.8a).
 > - [x] ✅ **Signal removal (#68) steps 1 and 3** — `signalRemoval` and
 >       `purgeRemovedSignals` created (nothing deleted — checked by diffing the deployed
 >       export list against the built one), the additive `removedSignals` rules block and

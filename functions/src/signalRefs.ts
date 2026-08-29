@@ -170,14 +170,8 @@ export function signalOwnerOf(
   data: Record<string, unknown> | undefined
 ): FirebaseFirestore.DocumentReference | null {
   if (data == null) return null;
-  if ("signalOwner" in data) {
-    return (data.signalOwner as FirebaseFirestore.DocumentReference) ?? null;
+  if (!("signalOwner" in data)) {
+    return (data.reporter as FirebaseFirestore.DocumentReference) ?? null;
   }
-  // `caseHolder` is the field's pre-rename name, consulted only when the new
-  // one is ABSENT — an explicit null under the new name is a release, and
-  // falling through to the old name would undo it.
-  if ("caseHolder" in data) {
-    return (data.caseHolder as FirebaseFirestore.DocumentReference) ?? null;
-  }
-  return (data.reporter as FirebaseFirestore.DocumentReference) ?? null;
+  return (data.signalOwner as FirebaseFirestore.DocumentReference) ?? null;
 }

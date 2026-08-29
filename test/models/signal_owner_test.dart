@@ -44,49 +44,6 @@ void main() {
     test('does not invent an owner for a document with no reporter', () {
       expect(Signal.signalOwnerFrom(const {}), isNull);
     });
-
-    // `caseHolder` is the field's pre-rename name. Documents written before the
-    // case→signal rename are not rewritten, so all three of the edges above have
-    // to hold for the old name too — and the new name has to WIN when both are
-    // present, or a release recorded under `signalOwner` would be undone by a
-    // stale `caseHolder` left beside it.
-    test('falls back to the legacy caseHolder when signalOwner is absent', () {
-      expect(Signal.signalOwnerFrom(signalJson({'caseHolder': owner})), owner);
-    });
-
-    test('treats an explicit null caseHolder as released', () {
-      expect(Signal.signalOwnerFrom(signalJson({'caseHolder': null})), isNull);
-    });
-
-    // The stamp pair behaves the OPPOSITE way to the owner pair, and
-    // deliberately. No client may write either owner field, so those two cannot
-    // drift and the new name wins. Both stamps ARE client-writable, and each
-    // build writes only the name it knows — so the later value wins instead.
-    test('the activity stamp takes the later of the two names', () {
-      final older = Timestamp.fromDate(DateTime.utc(2026, 8, 1));
-      final newer = Timestamp.fromDate(DateTime.utc(2026, 8, 20));
-
-      expect(
-        Signal.latestStampFrom({'ownerActiveAt': older, 'holderActiveAt': newer}),
-        newer,
-      );
-      expect(
-        Signal.latestStampFrom({'ownerActiveAt': newer, 'holderActiveAt': older}),
-        newer,
-      );
-      expect(Signal.latestStampFrom({'holderActiveAt': older}), older);
-      expect(Signal.latestStampFrom({'ownerActiveAt': newer}), newer);
-      expect(Signal.latestStampFrom(const {}), isNull);
-    });
-
-    test('prefers signalOwner over a stale caseHolder', () {
-      expect(
-        Signal.signalOwnerFrom(
-          signalJson({'signalOwner': null, 'caseHolder': owner}),
-        ),
-        isNull,
-      );
-    });
   });
 
   group('Signal ownership helpers', () {
