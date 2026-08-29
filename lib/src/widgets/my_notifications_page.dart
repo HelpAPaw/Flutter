@@ -15,6 +15,7 @@ import '../utils/nav_extensions.dart';
 import 'app_bar_title.dart';
 import 'status_view.dart';
 import 'escape_leading.dart';
+import 'page_width.dart';
 
 /// The in-app notification inbox.
 ///
@@ -297,7 +298,7 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
             ),
         ],
       ),
-      body: user == null || stream == null
+      body: PageWidth(child: user == null || stream == null
           ? StatusView.empty(
               icon: Icons.notifications_off,
               title: l10n.pleaseSignInToViewNotifications,
@@ -461,6 +462,7 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
                 );
               },
             ),
+      ),
     );
   }
 

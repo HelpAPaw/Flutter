@@ -9,6 +9,7 @@ import '../config/routes.dart';
 import '../services/auth_service.dart';
 import '../services/public_profile_service.dart';
 import '../utils/error_text.dart';
+import '../utils/profile_validators.dart';
 
 class ProfileCompletionPage extends StatefulWidget {
   const ProfileCompletionPage({super.key});
@@ -197,15 +198,7 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
                       hintText: l10n.enterFullName,
                       prefixIcon: Icon(Icons.person, color: Theme.of(context).colorScheme.primary),
                     ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return l10n.nameIsRequired;
-                      }
-                      if (value.trim().length < 2) {
-                        return l10n.nameTooShort;
-                      }
-                      return null;
-                    },
+                    validator: (value) => validateDisplayName(l10n, value),
                     textCapitalization: TextCapitalization.words,
                     // Mirrors the publicProfiles rules' bounds, so an over-long
                     // or multi-line name is capped as it's typed instead of
@@ -227,15 +220,7 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
                       prefixIcon: Icon(Icons.phone, color: Theme.of(context).colorScheme.primary),
                     ),
                     keyboardType: TextInputType.phone,
-                    validator: (value) {
-                      if (value != null && value.isNotEmpty) {
-                        // Basic phone validation if provided
-                        if (value.length < 8) {
-                          return l10n.validPhoneNumber;
-                        }
-                      }
-                      return null;
-                    },
+                    validator: (value) => validatePhone(l10n, value),
                   ),
                   const SizedBox(height: 32),
 

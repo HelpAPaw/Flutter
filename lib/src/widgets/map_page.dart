@@ -42,6 +42,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   static const _kInfoWindowHeight = 80.0;
   static const _kPinHeight = 29.0;
 
+  /// How far the placement pin is lifted so its tip rests on the map centre.
+  /// `Icons.place` draws its tip just inside the bottom of a 48pt box.
+  static const _kPlacementPinLift = 22.0;
+
   // Null until the platform view calls onMapCreated, and never null again.
   // Deliberately nullable rather than `late` + a separate readiness bool: the
   // flag was a convention the compiler didn't enforce, and forgetting it is
@@ -750,27 +754,57 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     ),
                   ),
                 ),
-              // Crosshair for new signal placement
+              // The marker being placed.
+              //
+              // This was `Icons.gps_fixed`, which is the standard "centre the
+              // map on me" glyph: it said *where you are* at the one moment
+              // the reporter is saying where the animal is. It is a pin now,
+              // in the shape they will see on the map afterwards.
+              //
+              // The pin's **tip** is the location, so it is lifted by half its
+              // height to rest on the centre, and the dot underneath marks the
+              // exact point the tip claims — a pin alone is ambiguous by about
+              // its own height, which is tens of metres at this zoom.
+              //
+              // White over a dark halo because it has to read on every tile:
+              // satellite, park green, motorway, and the navy cluster bubble
+              // it lands on at the zoom this mode opens at.
               if (mapState.isAddingNewSignal)
                 IgnorePointer(
                   child: Center(
-                    // Default black on a map is unreadable wherever the map is
-                    // dark — it lands on the navy "10+" cluster bubble at the
-                    // zoom this mode opens at. White glyph over a dark halo
-                    // reads on every tile: satellite, park green, motorway.
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
-                        Icon(
-                          Icons.gps_fixed,
-                          size: 54.0,
-                          color: Colors.black.withAlpha(120),
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white,  // theme-independent: over the map
+                            border: Border.all(
+                              color: Colors.black.withAlpha(140),
+                              width: 1.5,
+                            ),
+                          ),
                         ),
-                        const Icon(
-                          Icons.gps_fixed,
-                          size: 50.0,
-                          color: Colors.white,  // theme-independent: over the map
-                        ),  // theme-independent: over the map
+                        Transform.translate(
+                          offset: const Offset(0, -_kPlacementPinLift),
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Icon(
+                                Icons.place,
+                                size: 52.0,
+                                color: Colors.black.withAlpha(120),
+                              ),
+                              const Icon(
+                                Icons.place,
+                                size: 48.0,
+                                color: Colors.white,  // theme-independent: over the map
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),

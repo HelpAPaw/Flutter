@@ -17,6 +17,8 @@ import '../utils/nav_extensions.dart';
 import 'app_bar_title.dart';
 import 'escape_leading.dart';
 import '../utils/error_text.dart';
+import 'page_width.dart';
+import '../utils/profile_validators.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -29,6 +31,7 @@ class _ProfilePageState extends State<ProfilePage> {
   final _displayNameController = TextEditingController();
   final _phoneController = TextEditingController();
   bool _isEditing = false;
+  final _formKey = GlobalKey<FormState>();
 
   /// What the fields held when the screen last loaded or saved — the baseline
   /// the X button compares against before offering to discard.
@@ -203,17 +206,13 @@ class _ProfilePageState extends State<ProfilePage> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
+    // The same rules the fields display, so Save cannot write something the
+    // form is already showing an error for. `PublicProfileService.setName`
+    // no-ops on a blank name, so saving one would report success while
+    // everyone else kept seeing the *old* name on this user's signals.
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
     final displayName = _displayNameController.text.trim();
-    // PublicProfileService.setName no-ops on a blank name, so saving one would
-    // report success while everyone else kept seeing the *old* name on this
-    // user's signals and comments. Profile completion already requires a name
-    // (it validates with this same message); the editor has to agree.
-    if (displayName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context).nameIsRequired)),
-      );
-      return;
-    }
 
     setState(() => _isLoading = true);
 
@@ -385,7 +384,7 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
         ],
       ),
-      body: user == null
+      body: PageWidth(child: user == null
           ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -403,7 +402,9 @@ class _ProfilePageState extends State<ProfilePage> {
             )
           : SingleChildScrollView(
               padding: const EdgeInsets.all(24),
-              child: Column(
+              child: Form(
+                key: _formKey,
+                child: Column(
                 children: [
                   const SizedBox(height: 20),
                   Stack(
@@ -434,8 +435,10 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                   const SizedBox(height: 24),
                   if (_isEditing) ...[
-                    TextField(
+                    TextFormField(
                       controller: _displayNameController,
+                      autovalidateMode: AutovalidateMode.onUserInteraction,
+                      validator: (value) => validateDisplayName(l10n, value),
                       decoration: InputDecoration(
                         labelText: l10n.displayName,
                         border: const OutlineInputBorder(),
@@ -451,8 +454,10 @@ class _ProfilePageState extends State<ProfilePage> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    TextField(
+                    TextFormField(
                       controller: _phoneController,
+                      autovalidateMode: AutovalidateMode.onUserInteraction,
+                      validator: (value) => validatePhone(l10n, value),
                       decoration: InputDecoration(
                         labelText: l10n.phoneNumber,
                         border: const OutlineInputBorder(),
@@ -563,7 +568,8 @@ class _ProfilePageState extends State<ProfilePage> {
                   ],
                 ],
               ),
-            ),
+              ),
+            )),
     );
   }
 }

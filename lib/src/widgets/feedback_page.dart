@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'section_header.dart';
 import 'escape_leading.dart';
 import '../utils/error_text.dart';
+import 'page_width.dart';
 
 /// Where feedback that does not go through the form ends up.
 const _contactEmail = 'contact@helpapaw.org';
@@ -169,7 +170,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
             ),
           title: AppBarTitle(l10n.sendFeedback),
         ),
-        body: SingleChildScrollView(
+        body: PageWidth(child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -301,7 +302,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
               ),
             ],
           ),
-        ),
+        )),
       ),
     );
   }

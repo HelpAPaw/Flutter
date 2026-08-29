@@ -52,6 +52,7 @@ import 'app_bar_title.dart';
 import 'status_view.dart';
 import 'sign_in_required_dialog.dart';
 import '../utils/error_text.dart';
+import 'page_width.dart';
 
 class SignalDetailsScreen extends StatefulWidget {
   const SignalDetailsScreen({super.key, required this.signalId});
@@ -288,17 +289,6 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     );
   }
 
-  /// Caps the reading column and centres what is left.
-  ///
-  /// 600 is about where a line of body text stops being comfortable to read,
-  /// and it is what stops the tablet laying this screen out as a single 800dp
-  /// column — which is how the Add Photo box ended up 1150px wide.
-  Widget _pageWidth({required Widget child}) => Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 600),
-          child: child,
-        ),
-      );
 
   /// Shown until the server has told us whether the signal exists. Waiting is
   /// not a reason to be trapped, so this carries the app bar too.
@@ -580,7 +570,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                 Expanded(
                   child: SingleChildScrollView(
                     controller: _scrollController,
-                    child: _pageWidth(
+                    child: PageWidth(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                         child: Column(
@@ -946,7 +936,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                       ),
                     ),
                   ),
-                  child: _pageWidth(
+                  child: PageWidth(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
                       // A moderator has locked comments (§18.3). The composer
