@@ -12,7 +12,7 @@ void main() {
     });
 
     test('an unknown code falls back to amber, not green or red', () {
-      // Green would hide a case that might be real; red would cry wolf and
+      // Green would hide a signal that might be real; red would cry wolf and
       // erode the level that has to stay rare to mean anything.
       expect(SignalUrgency.fromCode(99), SignalUrgency.amber);
       expect(SignalUrgency.fromCode(-1), SignalUrgency.amber);
@@ -89,7 +89,7 @@ void main() {
     });
 
     test('an explicit urgency wins over the status-derived fallback', () {
-      // A reporter can mark a resolved case Red (e.g. it has relapsed), and
+      // A reporter can mark a resolved signal Red (e.g. it has relapsed), and
       // the stored value must survive the legacy fallback.
       expect(
         Signal.urgencyFrom({

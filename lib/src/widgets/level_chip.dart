@@ -22,7 +22,7 @@ import 'package:flutter/material.dart';
 /// **Shape turned out not to be enough on its own.** On the details screen the
 /// two chips side by side still read as one scale — "Under control" beside
 /// "Needs help" looks like a disagreement rather than two answers to two
-/// questions — so `SignalCaseCard` names the field instead of relying on the
+/// questions — so `SignalStateCard` names the field instead of relying on the
 /// pill's shape, and gives status a three-step track rather than a chip. Two
 /// things followed from that and are worth knowing here:
 ///

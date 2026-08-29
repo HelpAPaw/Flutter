@@ -1,5 +1,5 @@
 /**
- * Case ownership (master spec §4.5) — who is currently responsible for a signal,
+ * Signal ownership (master spec §4.5) — who is currently responsible for a signal,
  * and how that responsibility moves.
  *
  * > The original poster becomes the initial case holder. Case ownership can be
@@ -7,8 +7,11 @@
  * > visible in the case timeline; the original poster and previous case holders
  * > remain visible. The current case holder can update status.
  *
- * **Why a callable and not rules.** `firestore.rules` can express "the holder may
- * change the status" — `isCaseHolderUpdate()` does — but it cannot express the
+ * The spec's "case" is this app's **signal**, and its "case holder" is the
+ * **signal owner**; the quotation above is left in the spec's own words.
+ *
+ * **Why a callable and not rules.** `firestore.rules` can express "the owner may
+ * change the status" — `isSignalOwnerUpdate()` does — but it cannot express the
  * *transfer*, for four reasons that compound:
  *
  *  1. A transfer is two documents (the signal and its timeline event) that must
@@ -21,15 +24,15 @@
  *  3. Approving a request must check that the request is real and pending, and
  *     mark it approved, in the same breath as the transfer.
  *  4. The staleness escape hatch needs a **server clock** compared against a
- *     field a client must not be able to choose. `isValidHolderStamp()` pins
- *     `holderActiveAt` to `request.time` for exactly this reason.
+ *     field a client must not be able to choose. `isValidOwnerStamp()` pins
+ *     `ownerActiveAt` to `request.time` for exactly this reason.
  *
- * **The deadlock this is shaped around.** Ownership that only the holder can
- * give away is ownership that a holder who stops answering keeps forever, and
- * the case with it. So there are three ways out and they escalate: ask the
- * holder (`requestTakeover`, which they approve or decline), take it when the
- * holder has released it, or take it when the holder has been silent for
- * {@link STALE_HOLDER_DAYS}. Nothing here needs a moderator, which matters —
+ * **The deadlock this is shaped around.** Ownership that only the owner can
+ * give away is ownership that an owner who stops answering keeps forever, and
+ * the signal with it. So there are three ways out and they escalate: ask the
+ * owner (`requestTakeover`, which they approve or decline), take it when the
+ * owner has released it, or take it when the owner has been silent for
+ * {@link STALE_OWNER_DAYS}. Nothing here needs a moderator, which matters —
  * moderators are scarce and a stray dog is not.
  */
 
@@ -38,7 +41,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 
 import { buildEventData, buildOwnershipEventData } from "./events";
 import {
-  caseHolderOf,
+  signalOwnerOf,
   db,
   requireId,
   requireNote,
@@ -47,24 +50,24 @@ import {
 } from "./signalRefs";
 
 /**
- * How long a case holder may be silent before anyone may take the case from
+ * How long a signal owner may be silent before anyone may take the signal from
  * them.
  *
  * Fourteen days. A rescue moves in hours or days, so two weeks of no status
- * change, no urgency change and no transfer is a case that has been abandoned
+ * change, no urgency change and no transfer is a signal that has been abandoned
  * rather than one being worked quietly. It is also comfortably inside the
- * ~6-month archive window (master spec §4.10), so a case cannot age out while
- * still stuck behind a silent holder.
+ * ~6-month archive window (master spec §4.10), so a signal cannot age out while
+ * still stuck behind a silent owner.
  *
  * **This is the enforcement**, and a claim it disagrees with comes back as
- * `failed-precondition`. `CaseOwnershipService.staleHolderAfter` mirrors the
+ * `failed-precondition`. `SignalOwnershipService.staleOwnerAfter` mirrors the
  * number so the client knows which of two buttons to draw — without it the
- * escape hatch is unreachable, because a case held by someone who stopped
+ * escape hatch is unreachable, because a signal held by someone who stopped
  * answering looks exactly like one held by someone active. That copy decides
  * nothing and grants nothing; drift there mis-draws a button, and
  * `test/takeover_cooldown_guard_test.dart` parses this line to catch it.
  */
-export const STALE_HOLDER_DAYS = 14;
+export const STALE_OWNER_DAYS = 14;
 
 /** Every action name. Stable strings — they land in the audit-shaped result. */
 const ACTIONS = [
@@ -86,7 +89,7 @@ const MAX_STATUS = 2;
  * app where that is true from day one. Signal and comment creation still accept
  * them (M-1, HelpAPaw/Flutter#67) only because already-released builds do it and
  * blocking them server-side would break those builds. Nothing has ever taken
- * ownership of a case, so there is no such client to protect, and taking
+ * ownership of a signal, so there is no such client to protect, and taking
  * responsibility for an animal is the last thing that should be attributable to
  * an account nobody can reach.
  */
@@ -94,24 +97,24 @@ export function requireRealAccount(auth: { uid: string; token: Record<string, un
   if (!auth?.uid) {
     throw new HttpsError(
       "unauthenticated",
-      "You must be signed in to take responsibility for a case."
+      "You must be signed in to take responsibility for a signal."
     );
   }
   const firebase = auth.token?.firebase as { sign_in_provider?: string } | undefined;
   if (firebase?.sign_in_provider === "anonymous") {
     throw new HttpsError(
       "permission-denied",
-      "Taking responsibility for a case needs a real account."
+      "Taking responsibility for a signal needs a real account."
     );
   }
   return auth.uid;
 }
 
-/** When the holder last did anything, falling back to when the signal was made. */
-export function holderActiveAtOf(
+/** When the owner last did anything, falling back to when the signal was made. */
+export function ownerActiveAtOf(
   data: Record<string, unknown> | undefined
 ): FirebaseFirestore.Timestamp | null {
-  const active = data?.holderActiveAt;
+  const active = data?.ownerActiveAt;
   if (active instanceof admin.firestore.Timestamp) return active;
   const created = data?.createdAt;
   if (created instanceof admin.firestore.Timestamp) return created;
@@ -119,56 +122,56 @@ export function holderActiveAtOf(
 }
 
 /**
- * Whether the current holder has been silent long enough to be displaced.
+ * Whether the current owner has been silent long enough to be displaced.
  *
  * A signal with no usable timestamp at all reads as **not** stale. That is the
  * safe direction: the failure of a missing field should be "you have to ask the
- * holder", never "anyone may take this".
+ * owner", never "anyone may take this".
  */
-export function isHolderStale(data: Record<string, unknown> | undefined): boolean {
-  const active = holderActiveAtOf(data);
+export function isOwnerStale(data: Record<string, unknown> | undefined): boolean {
+  const active = ownerActiveAtOf(data);
   if (active == null) return false;
   const ageMs = Date.now() - active.toMillis();
-  return ageMs > STALE_HOLDER_DAYS * 24 * 60 * 60 * 1000;
+  return ageMs > STALE_OWNER_DAYS * 24 * 60 * 60 * 1000;
 }
 
 /** What an action reports back, and what the ownership notification reads. */
 interface OwnershipResult {
   collection: SignalCollection;
   signalId: string;
-  previousHolderId: string | null;
-  newHolderId: string | null;
+  previousOwnerId: string | null;
+  newOwnerId: string | null;
 }
 
 /**
  * Every action's return value. Three of the four fields are the same each time;
- * only who ends up holding the case differs, so that is the only argument.
+ * only who ends up holding the signal differs, so that is the only argument.
  */
 function ownershipResult(
   ctx: ActionContext,
-  newHolderId: string | null
+  newOwnerId: string | null
 ): OwnershipResult {
   return {
     collection: ctx.collection,
     signalId: ctx.signalId,
-    previousHolderId: ctx.currentHolder?.id ?? null,
-    newHolderId,
+    previousOwnerId: ctx.currentOwner?.id ?? null,
+    newOwnerId,
   };
 }
 
 /**
- * The one case-ownership entry point.
+ * The one signal-ownership entry point.
  *
  * Sequence, in order: authenticate → validate → load → **inside a transaction**
- * re-read the signal, authorize against the *current* holder, and write the
+ * re-read the signal, authorize against the *current* owner, and write the
  * signal, the timeline event and the subscription together.
  *
  * The authorization is re-derived from the transactional read rather than
- * trusted from the client, because the client's view of who holds a case can be
+ * trusted from the client, because the client's view of who holds a signal can be
  * seconds stale — and "seconds stale" is exactly the window in which two
  * volunteers both tap Take responsibility.
  */
-export const caseOwnership = onCall({ enforceAppCheck: true }, async (request) => {
+export const signalOwnership = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = requireRealAccount(
     request.auth as { uid: string; token: Record<string, unknown> } | undefined
   );
@@ -176,7 +179,7 @@ export const caseOwnership = onCall({ enforceAppCheck: true }, async (request) =
   const data = (request.data ?? {}) as Record<string, unknown>;
   const action = data.action as OwnershipAction;
   if (!ACTIONS.includes(action)) {
-    throw new HttpsError("invalid-argument", "Unknown case-ownership action.");
+    throw new HttpsError("invalid-argument", "Unknown signal-ownership action.");
   }
   const note = requireNote(
     data.note,
@@ -189,11 +192,11 @@ export const caseOwnership = onCall({ enforceAppCheck: true }, async (request) =
   // A TRANSACTION, not a batch.
   //
   // Every action here decides what to do by reading who currently holds the
-  // case, and a batch takes no read lock — so two volunteers tapping Take
-  // responsibility within the same second would both read `caseHolder: null`,
+  // signal, and a batch takes no read lock — so two volunteers tapping Take
+  // responsibility within the same second would both read `signalOwner: null`,
   // both pass the guard, and both commit: two `ownership_transfer` rows on the
   // timeline, last-write-wins on the field, and the loser told they now hold a
-  // case they do not. `approveRequest` has the same shape, where a double-tap
+  // signal they do not. `approveRequest` has the same shape, where a double-tap
   // would transfer twice.
   //
   // The read has to happen INSIDE the transaction for the lock to mean
@@ -213,7 +216,7 @@ export const caseOwnership = onCall({ enforceAppCheck: true }, async (request) =
       note,
       data,
       signal,
-      currentHolder: caseHolderOf(signal),
+      currentOwner: signalOwnerOf(signal),
       collection,
       signalId,
       ref,
@@ -234,7 +237,7 @@ export interface ActionContext {
   note: string;
   data: Record<string, unknown>;
   signal: Record<string, unknown> | undefined;
-  currentHolder: FirebaseFirestore.DocumentReference | null;
+  currentOwner: FirebaseFirestore.DocumentReference | null;
   collection: SignalCollection;
   signalId: string;
   ref: FirebaseFirestore.DocumentReference;
@@ -271,20 +274,20 @@ async function runAction(ctx: ActionContext): Promise<OwnershipResult> {
  */
 function writeTransfer(
   ctx: ActionContext,
-  newHolder: FirebaseFirestore.DocumentReference | null,
+  newOwner: FirebaseFirestore.DocumentReference | null,
   extraSignalFields: Record<string, unknown> = {}
 ): void {
   ctx.tx.update(ctx.ref, {
-    caseHolder: newHolder,
-    holderActiveAt: ctx.now,
+    signalOwner: newOwner,
+    ownerActiveAt: ctx.now,
     lastUpdatedBy: ctx.actor,
     ...extraSignalFields,
   });
   ctx.tx.set(
     ctx.ref.collection("events").doc(),
     buildOwnershipEventData({
-      oldHolder: ctx.currentHolder,
-      newHolder,
+      oldOwner: ctx.currentOwner,
+      newOwner,
       note: ctx.note,
       actor: ctx.actor,
       createdAt: ctx.now,
@@ -304,30 +307,30 @@ function subscribe(ctx: ActionContext, uid: string): void {
 }
 
 /**
- * Take responsibility for a case (master spec §4.5).
+ * Take responsibility for a signal (master spec §4.5).
  *
- * Allowed when the case is unheld, when the holder has gone stale, or when the
+ * Allowed when the signal is unheld, when the owner has gone stale, or when the
  * caller already holds it (a no-op transfer that still refreshes the stamp — the
- * "I am still on this" case, which is what keeps an active holder from being
- * displaced by {@link isHolderStale}).
+ * "I am still on this" case, which is what keeps an active owner from being
+ * displaced by {@link isOwnerStale}).
  *
  * **The optional `status` is what makes claim-to-act one action instead of two.**
- * A volunteer who opens a case and moves it to "In progress" is doing one thing
+ * A volunteer who opens a signal and moves it to "In progress" is doing one thing
  * as far as they are concerned, and the note they write explains both halves. If
  * these were two round trips, the second could fail and leave someone owning a
- * case they only meant to update — so the field change, the status change and
+ * signal they only meant to update — so the field change, the status change and
  * *both* timeline events go in one batch.
  */
 function claim(ctx: ActionContext): OwnershipResult {
-  const { currentHolder, uid } = ctx;
+  const { currentOwner, uid } = ctx;
 
-  if (currentHolder != null && currentHolder.id !== uid && !isHolderStale(ctx.signal)) {
+  if (currentOwner != null && currentOwner.id !== uid && !isOwnerStale(ctx.signal)) {
     // `failed-precondition` rather than `permission-denied`: the caller is not
-    // forbidden, the case is simply already taken, and the app turns this into
+    // forbidden, the signal is simply already taken, and the app turns this into
     // an offer to request a takeover instead.
     throw new HttpsError(
       "failed-precondition",
-      "Someone else is responsible for this case. Ask them to hand it over."
+      "Someone else is responsible for this signal. Ask them to hand it over."
     );
   }
 
@@ -353,14 +356,14 @@ function claim(ctx: ActionContext): OwnershipResult {
   subscribe(ctx, uid);
 
   // A claim answers any request the CALLER had outstanding — they got what they
-  // asked for, by another route. Left pending it would sit in the holder's list
-  // forever, asking them to hand over a case they already hold.
+  // asked for, by another route. Left pending it would sit in the owner's list
+  // forever, asking them to hand over a signal they already hold.
   //
-  // Other people's pending requests are deliberately left alone. When a case is
-  // claimed from a stale holder, or after a release, those requests were
+  // Other people's pending requests are deliberately left alone. When a signal is
+  // claimed from a stale owner, or after a release, those requests were
   // addressed to somebody who is no longer responsible — but the thing they
   // actually say is "I am willing to take this on", which is still true and is
-  // exactly what the new holder wants to know if they cannot continue. Clearing
+  // exactly what the new owner wants to know if they cannot continue. Clearing
   // them would throw away a live offer to make the list tidier.
   ctx.tx.delete(ctx.ref.collection("takeoverRequests").doc(uid));
 
@@ -371,12 +374,12 @@ function claim(ctx: ActionContext): OwnershipResult {
  * Step down (master spec §4.8, "I cannot go anymore").
  *
  * Writes an **explicit null** rather than deleting the field. Deleting it would
- * make the signal indistinguishable from one written before case ownership
- * existed, which every reader derives back to *the reporter* — handing the case
+ * make the signal indistinguishable from one written before signal ownership
+ * existed, which every reader derives back to *the reporter* — handing the signal
  * straight to the one person who may have just stepped away from it.
  */
 function release(ctx: ActionContext): OwnershipResult {
-  requireCurrentHolder(ctx, "Only the current case holder can release a case.");
+  requireCurrentOwner(ctx, "Only the current signal owner can release a signal.");
   writeTransfer(ctx, null);
   return ownershipResult(ctx, null);
 }
@@ -389,7 +392,7 @@ function release(ctx: ActionContext): OwnershipResult {
  * transferring twice. Two copies would be two places to forget the `tx.` and
  * drop the lock, and two copies of a message a user actually sees.
  *
- * The callers' divergent halves — moving the case vs. persisting the reason —
+ * The callers' divergent halves — moving the signal vs. persisting the reason —
  * stay where they are, because they are genuinely different work.
  */
 async function answerRequest(
@@ -418,9 +421,9 @@ async function answerRequest(
   return requesterId;
 }
 
-/** Hand the case to someone who asked for it. */
+/** Hand the signal to someone who asked for it. */
 async function approveRequest(ctx: ActionContext): Promise<OwnershipResult> {
-  requireCurrentHolder(ctx, "Only the current case holder can hand a case over.");
+  requireCurrentOwner(ctx, "Only the current signal owner can hand a signal over.");
   const requesterId = await answerRequest(ctx, "approved");
 
   writeTransfer(ctx, db().collection("users").doc(requesterId));
@@ -432,40 +435,40 @@ async function approveRequest(ctx: ActionContext): Promise<OwnershipResult> {
 /**
  * Turn a request down.
  *
- * Writes **no timeline event**, because nothing happened to the case — ownership
+ * Writes **no timeline event**, because nothing happened to the signal — ownership
  * did not move, the status did not change. The requester is told directly (the
- * inbox entry `handleTakeoverResolved` writes); the public history of the case
+ * inbox entry `handleTakeoverResolved` writes); the public history of the signal
  * is not the place to record that someone was turned away.
  */
 async function declineRequest(ctx: ActionContext): Promise<OwnershipResult> {
-  requireCurrentHolder(ctx, "Only the current case holder can decline a request.");
+  requireCurrentOwner(ctx, "Only the current signal owner can decline a request.");
   // `resolvedNote` is persisted here and nowhere else. Every other action's note
   // lands on the timeline event it writes; a decline writes no event by design,
-  // so without this the holder is made to type a reason that is thrown away and
+  // so without this the owner is made to type a reason that is thrown away and
   // the requester is told "no" with nothing attached. They can read it.
   await answerRequest(ctx, "declined", { resolvedNote: ctx.note });
 
-  // Ownership did not move, so the "new" holder is the current one.
-  return ownershipResult(ctx, ctx.currentHolder?.id ?? null);
+  // Ownership did not move, so the "new" owner is the current one.
+  return ownershipResult(ctx, ctx.currentOwner?.id ?? null);
 }
 
 /**
- * Asserts the caller currently holds the case.
+ * Asserts the caller currently holds the signal.
  *
- * Note this is the *derived* holder, so on a signal written before case
+ * Note this is the *derived* owner, so on a signal written before signal
  * ownership the reporter passes — which is correct, and is why the derivation
- * lives in `caseHolderOf` rather than being inlined per call site.
+ * lives in `signalOwnerOf` rather than being inlined per call site.
  *
- * **A reporter who has handed the case on does NOT pass**, and that is the
+ * **A reporter who has handed the signal on does NOT pass**, and that is the
  * point of the check rather than an oversight. The app shows them the pending
  * offers read-only, so the temptation to "finish the job" by wiring up Hand
  * over / Decline for them lands here first; answering an offer moves
  * responsibility for an animal, and the person who currently carries it is the
- * one who gets to say. A holder who has gone quiet is what staleness is for.
+ * one who gets to say. An owner who has gone quiet is what staleness is for.
  * Exported so that stays pinned by a test.
  */
-export function requireCurrentHolder(ctx: ActionContext, message: string): void {
-  if (ctx.currentHolder?.id !== ctx.uid) {
+export function requireCurrentOwner(ctx: ActionContext, message: string): void {
+  if (ctx.currentOwner?.id !== ctx.uid) {
     throw new HttpsError("permission-denied", message);
   }
 }

@@ -84,7 +84,7 @@ sealed class SignalEventType {
   /// which bypasses rules entirely, so leaving it out of the client vocabulary
   /// costs nothing and buys a real property: an ownership transfer can never be
   /// forged by a client, and therefore the timeline's account of who took
-  /// responsibility for a case cannot be fabricated by the person claiming it.
+  /// responsibility for a signal cannot be fabricated by the person claiming it.
   ///
   /// This is why the drift guard compares [clientCodes] against the rules and
   /// [allCodes] against the functions — see
@@ -113,14 +113,14 @@ sealed class SignalEventType {
     historyKind: SignalHistoryKind.urgencyChange,
   );
 
-  /// Case ownership moved (master spec §4.5) — claimed, handed over or released.
+  /// Signal ownership moved (master spec §4.5) — claimed, handed over or released.
   ///
   /// The first **server-only** type. See [serverOnly].
-  static const HolderEventType ownershipTransfer = HolderEventType(
+  static const OwnerEventType ownershipTransfer = OwnerEventType(
     code: 'ownership_transfer',
-    signalField: 'caseHolder',
-    oldKey: 'oldHolder',
-    newKey: 'newHolder',
+    signalField: 'signalOwner',
+    oldKey: 'oldOwner',
+    newKey: 'newOwner',
     historyKind: SignalHistoryKind.ownershipTransfer,
     serverOnly: true,
   );
@@ -186,7 +186,7 @@ final class LevelEventType extends SignalEventType {
   /// could test that what one writes is what the other reads.
   ///
   /// Defined on this subtype and nowhere else: there is no client encoder for a
-  /// [HolderEventType], because no client writes one. That used to be a runtime
+  /// [OwnerEventType], because no client writes one. That used to be a runtime
   /// throw inside a shared method; here the call simply does not compile.
   Map<String, dynamic> eventData({
     required int oldValue,
@@ -208,15 +208,15 @@ final class LevelEventType extends SignalEventType {
 
 /// An event whose before/after values are references to `users/{uid}`.
 ///
-/// **Both are nullable, and both nulls are real**: `oldHolder` is null when a
-/// released case is claimed, `newHolder` when a case is released. A decoder
+/// **Both are nullable, and both nulls are real**: `oldOwner` is null when a
+/// released signal is claimed, `newOwner` when a signal is released. A decoder
 /// cannot tell "released" from "malformed" if the key is simply absent, so the
 /// writer must always emit both.
 ///
 /// No Dart encoder — `buildOwnershipEventData` in `functions/src/events.ts`
 /// writes these, through the Admin SDK.
-final class HolderEventType extends SignalEventType {
-  const HolderEventType({
+final class OwnerEventType extends SignalEventType {
+  const OwnerEventType({
     required super.code,
     required super.signalField,
     required super.oldKey,
@@ -259,7 +259,7 @@ class SignalHistoryEntry {
     required this.actorId,
     this.createdAt,
     this.level,
-    this.holderId,
+    this.ownerId,
     this.note,
     this.text,
   });
@@ -288,12 +288,12 @@ class SignalHistoryEntry {
   /// note existed — those are legacy rows in `comments` and must keep rendering.
   final String? note;
 
-  /// The uid this case was transferred **to**, on an ownership transfer.
+  /// The uid this signal was transferred **to**, on an ownership transfer.
   ///
   /// Null both on every other kind and on a *release*, where there is genuinely
-  /// no new holder. The renderer tells the two apart by [kind], which is why this
+  /// no new owner. The renderer tells the two apart by [kind], which is why this
   /// stays nullable rather than carrying a sentinel.
-  final String? holderId;
+  final String? ownerId;
 
   /// Comment body. Null on every other kind.
   final String? text;
@@ -371,8 +371,8 @@ class SignalHistoryEntry {
           note: note,
         );
 
-      case HolderEventType():
-        // A null new holder is a RELEASE, not a malformed document, so unlike a
+      case OwnerEventType():
+        // A null new owner is a RELEASE, not a malformed document, so unlike a
         // missing level it must not be rejected. Only a value of the wrong type
         // is unreadable.
         if (raw != null && raw is! DocumentReference) return null;
@@ -381,7 +381,7 @@ class SignalHistoryEntry {
           kind: type.historyKind,
           actorId: actor.id,
           createdAt: createdAt,
-          holderId: (raw as DocumentReference?)?.id,
+          ownerId: (raw as DocumentReference?)?.id,
           note: note,
         );
     }

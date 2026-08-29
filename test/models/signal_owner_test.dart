@@ -6,48 +6,48 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:help_a_paw/src/models/signal.dart';
 
-/// The case-holder derivation (master spec §4.5).
+/// The signal-owner derivation (master spec §4.5).
 ///
-/// `Signal.caseHolderFrom` is one of **three** copies of one rule — the others
-/// are `isCaseHolder()` in `firestore.rules` and `caseHolderOf` in
+/// `Signal.signalOwnerFrom` is one of **three** copies of one rule — the others
+/// are `isSignalOwner()` in `firestore.rules` and `signalOwnerOf` in
 /// `functions/src/signalRefs.ts`. All three have to agree about the same two
 /// edges, and both edges fail silently rather than loudly:
 ///
-///  * an **absent** field means the signal predates case ownership and its
+///  * an **absent** field means the signal predates signal ownership and its
 ///    reporter holds it. Nothing is backfilled and released builds keep creating
 ///    signals without the field, so this branch is permanent. Getting it wrong
 ///    makes every existing signal unowned, which locks its own reporter out of
 ///    changing its status.
-///  * an **explicit null** means the case was *released*. Collapsing it into the
-///    absent case hands the case straight back to the one person who just
+///  * an **explicit null** means the signal was *released*. Collapsing it into the
+///    absent case hands the signal straight back to the one person who just
 ///    stepped away from it, and they would have no way to refuse it.
 void main() {
   final reporter = _FakeRef('reporter-uid');
-  final holder = _FakeRef('holder-uid');
+  final owner = _FakeRef('owner-uid');
 
   Map<String, dynamic> signalJson([Map<String, dynamic> overrides = const {}]) =>
       {'reporter': reporter, ...overrides};
 
-  group('Signal.caseHolderFrom', () {
-    test('derives an absent caseHolder to the reporter', () {
-      expect(Signal.caseHolderFrom(signalJson()), reporter);
+  group('Signal.signalOwnerFrom', () {
+    test('derives an absent signalOwner to the reporter', () {
+      expect(Signal.signalOwnerFrom(signalJson()), reporter);
     });
 
     test('treats an explicit null as released, not as the reporter', () {
-      expect(Signal.caseHolderFrom(signalJson({'caseHolder': null})), isNull);
+      expect(Signal.signalOwnerFrom(signalJson({'signalOwner': null})), isNull);
     });
 
-    test('returns the stored holder when there is one', () {
-      expect(Signal.caseHolderFrom(signalJson({'caseHolder': holder})), holder);
+    test('returns the stored owner when there is one', () {
+      expect(Signal.signalOwnerFrom(signalJson({'signalOwner': owner})), owner);
     });
 
-    test('does not invent a holder for a document with no reporter', () {
-      expect(Signal.caseHolderFrom(const {}), isNull);
+    test('does not invent an owner for a document with no reporter', () {
+      expect(Signal.signalOwnerFrom(const {}), isNull);
     });
   });
 
   group('Signal ownership helpers', () {
-    Signal signalWith({Object? caseHolder = _absent}) => Signal(
+    Signal signalWith({Object? signalOwner = _absent}) => Signal(
           title: 'Injured dog near the park',
           description: 'Limping, seems friendly.',
           phoneNumber: '+359888123456',
@@ -56,39 +56,39 @@ void main() {
           contactPhone: '+359888123456',
           createdAt: Timestamp.now(),
           urgency: 1,
-          caseHolder: identical(caseHolder, _absent)
+          signalOwner: identical(signalOwner, _absent)
               ? reporter
-              : caseHolder as DocumentReference?,
+              : signalOwner as DocumentReference?,
         );
 
-    test('isHeldBy matches only the current holder', () {
-      final signal = signalWith(caseHolder: holder);
+    test('isHeldBy matches only the current owner', () {
+      final signal = signalWith(signalOwner: owner);
 
-      expect(signal.isHeldBy('holder-uid'), isTrue);
+      expect(signal.isHeldBy('owner-uid'), isTrue);
       expect(signal.isHeldBy('reporter-uid'), isFalse);
       expect(signal.isHeldBy(null), isFalse);
     });
 
-    test('isReleased is true only for an explicit null holder', () {
-      expect(signalWith(caseHolder: null).isReleased, isTrue);
+    test('isReleased is true only for an explicit null owner', () {
+      expect(signalWith(signalOwner: null).isReleased, isTrue);
       expect(signalWith().isReleased, isFalse);
     });
 
     // The reporter keeps every power over their own report whether or not they
-    // still hold the case — they own the photos, the description and the phone
+    // still hold the signal — they own the photos, the description and the phone
     // number, and master spec §5.2 names "the original poster/case holder" as
-    // one set. Mirrored by `isSignalReporter() || isCaseHolderUpdate()`.
-    test('canCoordinate covers the reporter and the holder, and nobody else', () {
-      final signal = signalWith(caseHolder: holder);
+    // one set. Mirrored by `isSignalReporter() || isSignalOwnerUpdate()`.
+    test('canCoordinate covers the reporter and the owner, and nobody else', () {
+      final signal = signalWith(signalOwner: owner);
 
-      expect(signal.canCoordinate('holder-uid'), isTrue);
+      expect(signal.canCoordinate('owner-uid'), isTrue);
       expect(signal.canCoordinate('reporter-uid'), isTrue);
       expect(signal.canCoordinate('stranger-uid'), isFalse);
       expect(signal.canCoordinate(null), isFalse);
     });
 
-    test('a released case still lets its reporter coordinate', () {
-      final signal = signalWith(caseHolder: null);
+    test('a released signal still lets its reporter coordinate', () {
+      final signal = signalWith(signalOwner: null);
 
       expect(signal.canCoordinate('reporter-uid'), isTrue);
       expect(signal.canCoordinate('stranger-uid'), isFalse);
@@ -96,10 +96,10 @@ void main() {
   });
 
   group('Signal.toJson', () {
-    // Written at creation so a future `where('caseHolder', ...)` query has
+    // Written at creation so a future `where('signalOwner', ...)` query has
     // something to match. It is NOT written by any update path — the rules
     // reject a client write that touches the field.
-    test('names the reporter as the initial case holder', () {
+    test('names the reporter as the initial signal owner', () {
       final json = Signal(
         title: 't',
         description: 'd',
@@ -111,16 +111,16 @@ void main() {
         urgency: 1,
       ).toJson();
 
-      expect(json['caseHolder'], reporter);
-      // holderActiveAt is deliberately absent: isValidHolderStamp pins it to
+      expect(json['signalOwner'], reporter);
+      // ownerActiveAt is deliberately absent: isValidOwnerStamp pins it to
       // `request.time`, which a create cannot express, and the server falls back
-      // to `createdAt` until the holder first acts.
-      expect(json.containsKey('holderActiveAt'), isFalse);
+      // to `createdAt` until the owner first acts.
+      expect(json.containsKey('ownerActiveAt'), isFalse);
     });
   });
 }
 
-/// Sentinel for "no `caseHolder` argument given", distinct from an explicit
+/// Sentinel for "no `signalOwner` argument given", distinct from an explicit
 /// null — the same distinction the field itself carries.
 const Object _absent = Object();
 

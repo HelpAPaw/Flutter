@@ -257,7 +257,7 @@ describe("self-moderation guard coverage", () => {
     expect(bodyOf("restoreSignal")).toContain("requireNotOwnContent");
     // Twice for a comment, which has two owners: its author, and the reporter
     // of the signal it sits under. Deleting the comment criticising your own
-    // case is the same conflict of interest as locking the thread.
+    // signal is the same conflict of interest as locking the thread.
     expect(bodyOf("deleteComment").match(/requireNotOwnContent/g)).toHaveLength(
       2
     );

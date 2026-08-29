@@ -58,7 +58,7 @@ class SignalWithId {
   /// marker building calls this twice per signal per rebuild.
   int get urgency => signal.urgency;
 
-  /// What this case needs — [HelpTag.code] values. Empty for signals written
+  /// What this signal needs — [HelpTag.code] values. Empty for signals written
   /// before the field existed.
   List<String> get helpNeededTags => signal.helpNeededTags;
 

@@ -11,14 +11,14 @@
  *     on the missing parent, so no client could ever go back and clean up.
  *  2. It forced the rules open. `comments`, `events` and `takeoverRequests` all
  *     granted the reporter a delete for no reason other than to let that
- *     cascade run. On `events` that made the case timeline tamper-evident at
+ *     cascade run. On `events` that made the signal timeline tamper-evident at
  *     best (HelpAPaw/Flutter#68); on `comments` it was worse than an audit
  *     problem, because there is no author-delete rule at all — the effect was
  *     that a comment's author could not delete their own comment but the
  *     signal's reporter could delete anyone's, unaudited.
- *  3. It was unrecoverable, which is why people used it as "this case is
- *     done" instead of marking the case Resolved, and why contribution
- *     statistics under-counted (master spec §3.5.1: stats must survive a case
+ *  3. It was unrecoverable, which is why people used it as "this signal is
+ *     done" instead of marking the signal Resolved, and why contribution
+ *     statistics under-counted (master spec §3.5.1: stats must survive a signal
  *     being deleted or archived).
  *
  * **Removal is a move, not a flag**, for exactly the reasons `hideSignal`
@@ -35,7 +35,7 @@
  * restores quarantine, and `listQuarantined` is a 50-item moderator worklist
  * that ordinary user removals would swamp.
  *
- * **Anonymous callers are allowed**, unlike `caseOwnership`, which rejects
+ * **Anonymous callers are allowed**, unlike `signalOwnership`, which rejects
  * them. Released builds create signals from anonymous sessions, so an
  * anonymous account is the reporter of real signals; refusing them here would
  * take away the ability to remove their own report.
@@ -153,7 +153,7 @@ async function loadRemoved(data: Record<string, unknown>): Promise<{
  *
  * Sequence: authenticate → validate → authorize against the stored `reporter`
  * → act. One dispatching callable rather than three, matching `moderateAction`
- * and `caseOwnership`: the authorization step is the one that must never be
+ * and `signalOwnership`: the authorization step is the one that must never be
  * skipped, and a shared preamble makes skipping it a compile error rather than
  * a review question.
  */

@@ -369,7 +369,7 @@ class NewSignalAnimalStep extends ConsumerWidget {
 // ============================================================
 
 /// Late in the flow on purpose: asked cold it invites a reflexive "Red,
-/// obviously", asked after the reporter has had to describe the case it is
+/// obviously", asked after the reporter has had to describe the signal it is
 /// calibrated. This is also the first place the per-level descriptions fit —
 /// the old inline form passed `showDescriptions: false` for space, hiding the
 /// guidance on the one field with real consequences.
@@ -406,7 +406,7 @@ class NewSignalUrgencyStep extends ConsumerWidget {
 // ============================================================
 
 /// The most derived question, and the last one asked: it decides who gets
-/// notified. It follows urgency because "what does this case need" is not
+/// notified. It follows urgency because "what does this signal need" is not
 /// answerable until "how bad is it" is settled.
 class NewSignalHelpTagsStep extends ConsumerWidget {
   const NewSignalHelpTagsStep({super.key});

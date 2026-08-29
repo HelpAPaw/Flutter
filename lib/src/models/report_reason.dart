@@ -32,7 +32,7 @@ enum ReportReason {
   spam(code: 'spam', icon: Icons.block),
   doxxing(code: 'doxxing', icon: Icons.privacy_tip),
   defamationRisk(code: 'defamationRisk', icon: Icons.gavel),
-  duplicateCase(code: 'duplicateCase', icon: Icons.copy_all),
+  duplicateSignal(code: 'duplicateSignal', icon: Icons.copy_all),
   other(code: 'other', icon: Icons.more_horiz);
 
   const ReportReason({
@@ -83,8 +83,8 @@ enum ReportReason {
         return l10n.reportReasonDoxxing;
       case ReportReason.defamationRisk:
         return l10n.reportReasonDefamationRisk;
-      case ReportReason.duplicateCase:
-        return l10n.reportReasonDuplicateCase;
+      case ReportReason.duplicateSignal:
+        return l10n.reportReasonDuplicateSignal;
       case ReportReason.other:
         return l10n.reportReasonOther;
     }

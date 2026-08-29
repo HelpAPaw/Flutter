@@ -4,7 +4,7 @@ import '../../l10n/app_localizations.dart';
 import '../models/help_tag.dart';
 import 'help_tag_selector.dart';
 
-/// Asks which needs a case has now (master spec §4.2).
+/// Asks which needs a signal has now (master spec §4.2).
 ///
 /// > As needs are resolved, the case holder removes/completes tags and the next
 /// > priority becomes active.
@@ -12,7 +12,7 @@ import 'help_tag_selector.dart';
 /// A sheet rather than a trip through the edit screen, because the two answer
 /// different questions. The edit screen carries the **reporter's account of what
 /// they saw** — the title, the description, the photos, the phone number — and
-/// stays theirs. What the case *needs right now* changes as the case is worked,
+/// stays theirs. What the signal *needs right now* changes as the signal is worked,
 /// and belongs to whoever is working it.
 ///
 /// Wraps [HelpTagSelector] rather than restating the chips: the cap, the
@@ -21,7 +21,7 @@ import 'help_tag_selector.dart';
 ///
 /// Returns null when the sheet was dismissed, which means "change nothing" —
 /// distinct from an empty selection, which the confirm button refuses because a
-/// case with no needs is one nobody can be matched to.
+/// signal with no needs is one nobody can be matched to.
 ///
 /// Returns a **List**, not a Set: array order is priority order on the signal
 /// document (SPECIFICATION 4.4, `helpNeededTags[0]` is the category), and a Set
@@ -49,7 +49,7 @@ class _HelpTagPickerSheet extends StatefulWidget {
 class _HelpTagPickerSheetState extends State<_HelpTagPickerSheet> {
   /// Codes rather than [HelpTag]s, because that is what [HelpTagSelector]
   /// speaks and what the signal document stores — and because **order is
-  /// priority** (`helpNeededTags[0]` is the case's category, SPECIFICATION
+  /// priority** (`helpNeededTags[0]` is the signal's category, SPECIFICATION
   /// §4.4). A `Set<HelpTag>` at the boundary would silently discard that
   /// ordering, so the list is what is edited here and the set is only the
   /// caller's convenience.

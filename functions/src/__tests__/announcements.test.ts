@@ -24,7 +24,7 @@ import { URGENCY_AMBER, URGENCY_RED } from "../urgency";
 
 const SIGNAL = "signal-1";
 const TITLE = "Injured dog near the park";
-const holder = { id: "holder-uid" } as never;
+const owner = { id: "owner-uid" } as never;
 
 /** The merge `handleSignalUpdated` performs when ownership outranks status. */
 function merge(winner: AnnouncedChange, loser: AnnouncedChange): AnnouncedChange {
@@ -72,45 +72,45 @@ describe("urgencyChangeOf", () => {
 });
 
 describe("ownershipChangeOf", () => {
-  it("names the new holder when one is known", () => {
-    const change = ownershipChangeOf(SIGNAL, TITLE, holder, "Ana");
+  it("names the new owner when one is known", () => {
+    const change = ownershipChangeOf(SIGNAL, TITLE, owner, "Ana");
     expect(change.body).toContain("Ana");
     expect(change.inboxField).toEqual({
-      newHolderId: "holder-uid",
-      newHolderName: "Ana",
+      newOwnerId: "owner-uid",
+      newOwnerName: "Ana",
     });
   });
 
   // A profile read can fail or the account can have no name; the push still has
   // to be a sentence.
   it("falls back to a generic actor when the name is unknown", () => {
-    const change = ownershipChangeOf(SIGNAL, TITLE, holder, undefined);
+    const change = ownershipChangeOf(SIGNAL, TITLE, owner, undefined);
     expect(change.body).toContain("A volunteer");
-    expect(change.inboxField.newHolderName).toBeUndefined();
+    expect(change.inboxField.newOwnerName).toBeUndefined();
   });
 
-  // A release is the same server type with a null holder — an answer, not a
+  // A release is the same server type with a null owner — an answer, not a
   // missing value, which is what lets the client render the two differently.
-  it("describes a release as nobody holding the case", () => {
+  it("describes a release as nobody holding the signal", () => {
     const change = ownershipChangeOf(SIGNAL, TITLE, null, undefined);
-    expect(change.title).toBe("This case needs someone");
-    expect(change.inboxField.newHolderId).toBeNull();
+    expect(change.title).toBe("This signal needs someone");
+    expect(change.inboxField.newOwnerId).toBeNull();
     expect(change.docId).toBe(`own_${SIGNAL}_none`);
   });
 
-  it("keys the doc id by the new holder, so two handovers are two rows", () => {
+  it("keys the doc id by the new owner, so two handovers are two rows", () => {
     const a = ownershipChangeOf(SIGNAL, TITLE, { id: "u1" } as never, undefined);
     const b = ownershipChangeOf(SIGNAL, TITLE, { id: "u2" } as never, undefined);
     expect(a.docId).not.toBe(b.docId);
   });
 });
 
-// `caseOwnership`'s `claim` writes `caseHolder` and `status` in one batch, so
+// `signalOwnership`'s `claim` writes `signalOwner` and `status` in one batch, so
 // this arrives as ONE trigger invocation with two diffs. It is one action to the
 // person who did it, and letting both announce is how a single tap becomes two
 // pushes.
 describe("a claim that also moved the status", () => {
-  const ownership = ownershipChangeOf(SIGNAL, TITLE, holder, "Ana");
+  const ownership = ownershipChangeOf(SIGNAL, TITLE, owner, "Ana");
   const status = statusChangeOf(SIGNAL, TITLE, 1);
   const merged = merge(ownership, status);
 
@@ -126,12 +126,12 @@ describe("a claim that also moved the status", () => {
 
   it("carries both codes, so the client can render either half", () => {
     expect(merged.inboxField).toEqual({
-      newHolderId: "holder-uid",
-      newHolderName: "Ana",
+      newOwnerId: "owner-uid",
+      newOwnerName: "Ana",
       statusCode: 1,
     });
     expect(merged.dataField).toEqual({
-      newHolderId: "holder-uid",
+      newOwnerId: "owner-uid",
       statusCode: "1",
     });
   });

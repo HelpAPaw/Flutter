@@ -22,7 +22,7 @@ import '../models/signal_event.dart';
 ///
 /// [headline] is the finished sentence shown above the field, and it must name
 /// the state the signal is moving *to* — "Changing to: Resolved", "Taking
-/// responsibility for this case". Callers on the status and urgency paths build
+/// responsibility for this signal". Callers on the status and urgency paths build
 /// it with `l10n.updateNoteChangingTo`; the ownership paths have their own
 /// strings. It takes a whole sentence rather than a label precisely so it
 /// cannot be handed a button verb: passing `confirmLabel` here once produced

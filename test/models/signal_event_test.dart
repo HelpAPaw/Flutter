@@ -101,7 +101,7 @@ void main() {
       // sentence in the history, and throwing would take out the whole thread.
       //
       // (This used to use `ownership_transfer` as the stand-in for "unknown",
-      // which stopped being unknown when case ownership shipped. The placeholder
+      // which stopped being unknown when signal ownership shipped. The placeholder
       // is deliberately not a code anyone plans to add.)
       expect(
         SignalHistoryEntry.fromDocument(
@@ -150,7 +150,7 @@ void main() {
     // field names were string literals in two widgets, and nothing could check
     // that what one writes is what the decoder reads.
     // Level types only. `eventData` is defined on `LevelEventType` and nowhere
-    // else — a `HolderEventType` has no Dart encoder, because no client writes
+    // else — a `OwnerEventType` has no Dart encoder, because no client writes
     // one. Their round trip is covered below against the shape the server
     // actually produces.
     for (final type in SignalEventType.values.whereType<LevelEventType>()) {
@@ -178,26 +178,26 @@ void main() {
     // the decoder accepts is pinned here against the shape that module produces.
     group('ownership_transfer (server-written)', () {
       Map<String, dynamic> ownershipEvent({
-        Object? oldHolder,
-        Object? newHolder,
+        Object? oldOwner,
+        Object? newOwner,
       }) =>
           {
             'type': 'ownership_transfer',
-            'oldHolder': oldHolder,
-            'newHolder': newHolder,
+            'oldOwner': oldOwner,
+            'newOwner': newOwner,
             'note': 'I can get there this afternoon.',
             'createdAt': DateTime(2026, 8, 19, 15),
             'actor': actor,
           };
 
-      test('decodes a handover to a new holder', () {
+      test('decodes a handover to a new owner', () {
         final entry = SignalHistoryEntry.fromDocument(
           'o1',
-          ownershipEvent(oldHolder: actor, newHolder: _FakeRef('u2')),
+          ownershipEvent(oldOwner: actor, newOwner: _FakeRef('u2')),
         )!;
 
         expect(entry.kind, SignalHistoryKind.ownershipTransfer);
-        expect(entry.holderId, 'u2');
+        expect(entry.ownerId, 'u2');
         expect(entry.actorId, 'u1');
         expect(entry.note, 'I can get there this afternoon.');
         expect(entry.isEvent, isTrue);
@@ -207,30 +207,30 @@ void main() {
       });
 
       // The release case, and the one a level-shaped decoder would have thrown
-      // away: a null new holder IS the event, not a malformed document.
-      test('decodes a release, keeping a null holder', () {
+      // away: a null new owner IS the event, not a malformed document.
+      test('decodes a release, keeping a null owner', () {
         final entry = SignalHistoryEntry.fromDocument(
           'o2',
-          ownershipEvent(oldHolder: actor, newHolder: null),
+          ownershipEvent(oldOwner: actor, newOwner: null),
         )!;
 
         expect(entry.kind, SignalHistoryKind.ownershipTransfer);
-        expect(entry.holderId, isNull);
+        expect(entry.ownerId, isNull);
       });
 
-      test('decodes a claim of a released case, with no previous holder', () {
+      test('decodes a claim of a released signal, with no previous owner', () {
         final entry = SignalHistoryEntry.fromDocument(
           'o3',
-          ownershipEvent(oldHolder: null, newHolder: _FakeRef('u3')),
+          ownershipEvent(oldOwner: null, newOwner: _FakeRef('u3')),
         )!;
 
-        expect(entry.holderId, 'u3');
+        expect(entry.ownerId, 'u3');
       });
 
-      test('skips a document whose new holder is the wrong type', () {
+      test('skips a document whose new owner is the wrong type', () {
         expect(
           SignalHistoryEntry.fromDocument(
-              'o4', ownershipEvent(newHolder: 'u2')),
+              'o4', ownershipEvent(newOwner: 'u2')),
           isNull,
         );
       });
@@ -244,8 +244,8 @@ void main() {
       //
       // What is still worth pinning is that the type IS the ref-payload
       // subtype, because that is what the compiler checks against.
-      test('is a holder-payload type, so it has no client encoder', () {
-        expect(SignalEventType.ownershipTransfer, isA<HolderEventType>());
+      test('is an owner-payload type, so it has no client encoder', () {
+        expect(SignalEventType.ownershipTransfer, isA<OwnerEventType>());
         expect(SignalEventType.ownershipTransfer, isNot(isA<LevelEventType>()));
         expect(SignalEventType.ownershipTransfer.serverOnly, isTrue);
       });

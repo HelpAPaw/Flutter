@@ -20,7 +20,7 @@ class Signal {
   /// [status], and the only thing the map pin color encodes.
   final int urgency;
 
-  /// What this case needs — [HelpTag.code] values, most urgent first.
+  /// What this signal needs — [HelpTag.code] values, most urgent first.
   ///
   /// Matched against a user's helper tags to decide who hears about the signal.
   /// Order is the priority the reporter gave, kept for display; matching itself
@@ -58,38 +58,38 @@ class Signal {
   /// Absent on every signal not moderated, which is nearly all of them.
   final Map<String, dynamic>? moderation;
 
-  /// Who is currently responsible for this case (master spec 4.5).
+  /// Who is currently responsible for this signal (master spec 4.5).
   ///
   /// **Three states, and the distinction between them is the whole design:**
   ///
-  /// * **absent** — a document written before case ownership existed. The
-  ///   reporter holds it, by derivation. See [caseHolderFrom].
+  /// * **absent** — a document written before signal ownership existed. The
+  ///   reporter holds it, by derivation. See [signalOwnerFrom].
   /// * **a reference** — held by that user.
   /// * **explicit null** — *released*. Nobody holds it and anyone may claim it.
   ///
   /// The absent/null split is the same one `animalTypes` carries in the
   /// notification preferences (SPECIFICATION 12.4), and it fails the same way if
-  /// it is collapsed: treating a released case as "held by the reporter" hands
-  /// the case back to someone who explicitly stepped away from it.
+  /// it is collapsed: treating a released signal as "held by the reporter" hands
+  /// the signal back to someone who explicitly stepped away from it.
   ///
   /// **Server-owned on transfer, and deliberately absent from [toJson]'s update
   /// path** — `firestore.rules` rejects any client write that touches this field
   /// (`isNotTouchingOwnership`), on the reporter branch too. Ownership moves only
-  /// through the `caseOwnership` callable. It *is* written once, at creation, by
+  /// through the `signalOwnership` callable. It *is* written once, at creation, by
   /// [toJson]; that is a create, which the rules validate separately.
-  final DocumentReference? caseHolder;
+  final DocumentReference? signalOwner;
 
-  /// When the case holder last did anything (a transfer, a status or urgency
+  /// When the signal owner last did anything (a transfer, a status or urgency
   /// change, a tag edit).
   ///
-  /// Drives the staleness rule that stops a case deadlocking behind a holder who
-  /// has gone quiet — the server compares it against `STALE_HOLDER_DAYS`. Null on
-  /// every signal whose holder has not acted since the field existed, where the
+  /// Drives the staleness rule that stops a signal deadlocking behind an owner who
+  /// has gone quiet — the server compares it against `STALE_OWNER_DAYS`. Null on
+  /// every signal whose owner has not acted since the field existed, where the
   /// server falls back to `createdAt`.
   ///
   /// Pinned to `request.time` by the rules whenever a client write touches it, so
   /// it is a server clock even though a client stamps it.
-  final Timestamp? holderActiveAt;
+  final Timestamp? ownerActiveAt;
 
   /// Whether a moderator has locked this signal's comments.
   ///
@@ -131,8 +131,8 @@ class Signal {
     this.animalType,
     this.legacySignalType,
     this.moderation,
-    this.caseHolder,
-    this.holderActiveAt,
+    this.signalOwner,
+    this.ownerActiveAt,
     this.photoUrls = const [],
     this.status = 0,
   });
@@ -154,13 +154,13 @@ class Signal {
       // and the fan-out's "absent means every species" check reads more
       // honestly when absent really means absent.
       if (animalType != null) 'animalType': animalType,
-      // The reporter is the initial case holder (master spec 4.5). Written at
-      // creation so a future `where('caseHolder', ...)` query has something to
+      // The reporter is the initial signal owner (master spec 4.5). Written at
+      // creation so a future `where('signalOwner', ...)` query has something to
       // match; it is NOT written by any update path, because the rules reject a
-      // client write that touches it. `holderActiveAt` is deliberately omitted —
+      // client write that touches it. `ownerActiveAt` is deliberately omitted —
       // the rules pin it to `request.time`, which a create cannot satisfy, and
-      // the server falls back to `createdAt` until the holder first acts.
-      'caseHolder': reporter,
+      // the server falls back to `createdAt` until the owner first acts.
+      'signalOwner': reporter,
       'photoUrls': photoUrls,
     };
   }
@@ -181,8 +181,8 @@ class Signal {
       legacySignalType: legacySignalTypeFrom(json),
       moderation: (json['moderation'] as Map<dynamic, dynamic>?)
           ?.cast<String, dynamic>(),
-      caseHolder: caseHolderFrom(json),
-      holderActiveAt: json['holderActiveAt'] as Timestamp?,
+      signalOwner: signalOwnerFrom(json),
+      ownerActiveAt: json['ownerActiveAt'] as Timestamp?,
       photoUrls: (json['photoUrls'] as List<dynamic>?)
           ?.map((e) => e as String)
           .toList() ?? [],
@@ -229,55 +229,55 @@ class Signal {
       json['urgency'] ??
       SignalUrgency.fromLegacyStatus(json['status'] ?? 0).code;
 
-  /// The current case holder of a raw signal document (master spec 4.5).
+  /// The current signal owner of a raw signal document (master spec 4.5).
   ///
   /// **This is where the "absent means the reporter" derivation lives**, and it is
   /// permanent rather than a migration step — exactly like [urgencyFrom]. Builds
-  /// released before case ownership keep creating signals with no `caseHolder`,
+  /// released before signal ownership keep creating signals with no `signalOwner`,
   /// so there is no version of this app that can assume the field is present, and
   /// nothing is backfilled.
   ///
   /// Note what this collapses and what it does not: an **absent** field resolves
-  /// to the reporter, while an **explicit null** stays null and means the case was
+  /// to the reporter, while an **explicit null** stays null and means the signal was
   /// released. Callers therefore see only two states — held by someone, or held by
   /// nobody — and never have to repeat the derivation.
   ///
   /// Pulled out of [fromJson] for the same reason as [urgencyFrom]: the factory's
   /// `reporter` fallback touches `FirebaseFirestore.instance`, so a test cannot
   /// reach this logic through it without a Firebase app.
-  static DocumentReference? caseHolderFrom(Map<String, dynamic> json) =>
-      json.containsKey('caseHolder')
-          ? json['caseHolder'] as DocumentReference?
+  static DocumentReference? signalOwnerFrom(Map<String, dynamic> json) =>
+      json.containsKey('signalOwner')
+          ? json['signalOwner'] as DocumentReference?
           : json['reporter'] as DocumentReference?;
 
-  /// Whether nobody currently holds this case, so anyone may take it on.
+  /// Whether nobody currently holds this signal, so anyone may take it on.
   ///
-  /// True only for a case whose holder explicitly released it — never for a
-  /// legacy document, which [caseHolderFrom] has already resolved to its
+  /// True only for a signal whose owner explicitly released it — never for a
+  /// legacy document, which [signalOwnerFrom] has already resolved to its
   /// reporter.
-  bool get isReleased => caseHolder == null;
+  bool get isReleased => signalOwner == null;
 
-  /// Whether [uid] is the current case holder.
-  bool isHeldBy(String? uid) => uid != null && caseHolder?.id == uid;
+  /// Whether [uid] is the current signal owner.
+  bool isHeldBy(String? uid) => uid != null && signalOwner?.id == uid;
 
-  /// When the case holder last did anything, falling back to when the signal
+  /// When the signal owner last did anything, falling back to when the signal
   /// was reported.
   ///
-  /// The fallback is not a nicety: `holderActiveAt` is absent on every signal
-  /// that existed before case ownership and on every one whose holder has not
+  /// The fallback is not a nicety: `ownerActiveAt` is absent on every signal
+  /// that existed before signal ownership and on every one whose owner has not
   /// acted since, so without it the staleness rule would never fire for exactly
-  /// the cases most likely to be abandoned. Mirrors `holderActiveAtOf` in
-  /// `functions/src/caseOwnership.ts`, which is the enforcement.
-  DateTime? get holderLastActiveAt =>
-      SignalHistoryEntry.dateFrom(holderActiveAt) ??
+  /// the signals most likely to be abandoned. Mirrors `ownerActiveAtOf` in
+  /// `functions/src/signalOwnership.ts`, which is the enforcement.
+  DateTime? get ownerLastActiveAt =>
+      SignalHistoryEntry.dateFrom(ownerActiveAt) ??
       SignalHistoryEntry.dateFrom(createdAt);
 
   /// Whether [uid] may change this signal's status, urgency and help tags.
   ///
   /// The reporter keeps every power over their own report whether or not they
-  /// still hold the case: they own the photos, the description and the phone
+  /// still hold the signal: they own the photos, the description and the phone
   /// number, and master spec 5.2 names "the original poster/case holder" as one
-  /// set. Mirrored by `isSignalReporter() || isCaseHolderUpdate()` in
+  /// set. Mirrored by `isSignalReporter() || isSignalOwnerUpdate()` in
   /// `firestore.rules`, which is the enforcement — this getter only decides which
   /// controls to draw.
   bool canCoordinate(String? uid) =>

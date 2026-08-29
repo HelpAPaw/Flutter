@@ -42,9 +42,9 @@ import { REMOVED_COLLECTION } from "./removeSignal";
 
 // Signal addressing (`db`, the collection list, `requireId`, the note bound, and
 // `loadSignal` — imported here as `loadSignalDocument`) lives in ./signalRefs so
-// `caseOwnership` uses the same definitions. The local `loadSignal` below wraps
+// `signalOwnership` uses the same definitions. The local `loadSignal` below wraps
 // it to add the self-moderation guard, which is a moderation concern and must
-// NOT move into the shared helper: acting on your own case is caseOwnership's
+// NOT move into the shared helper: acting on your own signal is signalOwnership's
 // normal path. `requireId` is re-exported because this module's own test suite
 // imports it by that path, and because it is a moderation-era decision that
 // happens to be shared rather than a signalRefs-era one.
@@ -122,7 +122,7 @@ function requireNote(raw: unknown): string {
  * Refuses an action whose target belongs to the moderator performing it.
  *
  * Moderator powers are for the community's content, not one's own. Without this
- * a moderator could quietly clear a `disputed` label off their own case, lock
+ * a moderator could quietly clear a `disputed` label off their own signal, lock
  * comments on the thread criticising it, or downgrade someone's Red Alert about
  * them — each one perfectly audited, and each one exactly the unchecked power
  * master spec §3.6.1 says the role must not carry ("Moderators are the first
@@ -159,8 +159,8 @@ export function requireNotOwnContent(owner: unknown, uid: string): void {
  * duplicating it, and adds the one thing that is a *moderation* concern rather
  * than an addressing one.
  *
- * **Deliberately not pushed down into the shared helper**: `caseOwnership` uses
- * it too, and there acting on your own case is the entire normal path — taking
+ * **Deliberately not pushed down into the shared helper**: `signalOwnership` uses
+ * it too, and there acting on your own signal is the entire normal path — taking
  * responsibility for a signal you reported is the default, not an abuse.
  *
  * The self-check is here rather than in each of the four callers, for the same
@@ -534,7 +534,7 @@ async function deleteComment(
   // that is the reporter's cascade, not a moderation action.
   requireNotOwnContent(snapshot.data()?.author, uid);
   // And the signal's reporter, because deleting the comment criticising your
-  // own case is the same conflict of interest as locking the thread it sits in.
+  // own signal is the same conflict of interest as locking the thread it sits in.
   // Read directly rather than through `loadSignal`, whose `not-found` would
   // break the one legitimate case where the parent is absent: a signal hidden
   // earlier keeps its comments, since subcollections survive the document. An

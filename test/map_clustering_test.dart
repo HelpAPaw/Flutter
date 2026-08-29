@@ -23,7 +23,7 @@ void main() {
 
   test('an unknown urgency code follows its fallback', () {
     // `fromCode` falls back to amber, deliberately — not green, which would
-    // hide a case that might be real. So an unknown code clusters.
+    // hide a signal that might be real. So an unknown code clusters.
     expect(MapMarkerBuilder.clusterOf(99, id), id);
   });
 

@@ -8,7 +8,7 @@ import '../models/signal_status.dart';
 import '../models/signal_urgency.dart';
 import 'level_chip.dart';
 
-/// The coordination state of a case, in one bounded surface.
+/// The coordination state of a signal, in one bounded surface.
 ///
 /// Urgency, status, who is responsible and what the animal needs used to be
 /// four sibling blocks with four headings, spread down the page between the
@@ -23,13 +23,13 @@ import 'level_chip.dart';
 /// opposite scales and colouring both put two contradictory traffic lights on
 /// one card (see the class doc on [LevelChip]).
 ///
-/// This widget renders; it does not write. [holder] is whatever the caller's
-/// case-holder block builds, and [onManage] opens the sheet that owns editing.
-class SignalCaseCard extends StatelessWidget {
-  const SignalCaseCard({
+/// This widget renders; it does not write. [owner] is whatever the caller's
+/// signal-owner block builds, and [onManage] opens the sheet that owns editing.
+class SignalStateCard extends StatelessWidget {
+  const SignalStateCard({
     super.key,
     required this.signal,
-    required this.holder,
+    required this.owner,
     required this.canCoordinate,
     required this.busy,
     required this.onManage,
@@ -37,8 +37,8 @@ class SignalCaseCard extends StatelessWidget {
 
   final Signal signal;
 
-  /// The case-holder row and its actions.
-  final Widget holder;
+  /// The signal-owner row and its actions.
+  final Widget owner;
 
   /// Whether this viewer may change urgency, status or the help tags.
   ///
@@ -125,12 +125,12 @@ class SignalCaseCard extends StatelessWidget {
                       _StatusTrack(status: SignalStatus.fromCode(signal.status)),
                       _divider(scheme),
                       _LabelledRow(
-                        label: l10n.caseHolder,
-                        child: holder,
+                        label: l10n.signalOwner,
+                        child: owner,
                       ),
                       // Two rows, not one. The species and the help tags used
                       // to share a single "Help needed" heading, which made
-                      // "Help needed: Dog" — and a dog is what the case is
+                      // "Help needed: Dog" — and a dog is what the signal is
                       // about, not what it needs. They are two different facts
                       // and the label column is what makes saying so free.
                       if (species case final species?) ...[
@@ -224,7 +224,7 @@ class _LabelledRow extends StatelessWidget {
   }
 }
 
-/// Status as three steps, with the case's own step marked.
+/// Status as three steps, with the signal's own step marked.
 ///
 /// A badge and a track cannot be mistaken for each other, which is the point:
 /// urgency keeps the filled coloured pill [LevelChip] gives it, and progress
@@ -233,9 +233,9 @@ class _LabelledRow extends StatelessWidget {
 /// in the FAQ.
 ///
 /// Three weights, not two. Filling every reached step in one ink drew a solid
-/// black rule across a resolved case and left "which one are we on" resting
+/// black rule across a resolved signal and left "which one are we on" resting
 /// entirely on the bold label. So a done step is a quiet grey, the step the
-/// case is actually on is the brand ink and a little taller, and steps still
+/// signal is actually on is the brand ink and a little taller, and steps still
 /// ahead are the faintest line on the card. Reading left to right you can see
 /// where it got to without reading a word.
 ///

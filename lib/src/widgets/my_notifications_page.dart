@@ -67,7 +67,7 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
         return Icons.priority_high;
       case 'nearby_signal':
         return Icons.location_on;
-      // Case ownership (master spec 4.5). An offer and its answer share the
+      // Signal ownership (master spec 4.5). An offer and its answer share the
       // "someone is asking you something" hand; a transfer gets the same icon
       // the details screen puts on the Take responsibility button.
       case 'ownership_change':
@@ -117,7 +117,7 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
       case 'urgency_change':
         return SignalUrgency.fromCode(data['urgency'] as int? ?? -1).color;
 
-      // Comments, status changes and everything about case ownership are
+      // Comments, status changes and everything about signal ownership are
       // progress, not severity.
       default:
         return neutral;
@@ -148,11 +148,11 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
       case 'nearby_signal':
         return l10n.signalNearbyNotificationTitle;
       // A transfer and a release are one server type, told apart by whether
-      // there is a new holder. `newHolderId` is explicitly null on a release —
+      // there is a new owner. `newOwnerId` is explicitly null on a release —
       // a real answer, not a missing field — so the two render differently
       // without needing two types on the wire.
       case 'ownership_change':
-        return data['newHolderId'] == null
+        return data['newOwnerId'] == null
             ? l10n.notificationOwnershipReleasedTitle
             : l10n.notificationOwnershipChangeTitle;
       case 'takeover_request':
@@ -208,18 +208,18 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
         );
       case 'new_comment':
         return data['commentExcerpt'] as String? ?? fallback;
-      // `newHolderName` is resolved server-side, once, rather than re-read per
+      // `newOwnerName` is resolved server-side, once, rather than re-read per
       // reader: a name is not a translatable string, and the alternative is a
       // publicProfiles read for every row in the list on every rebuild.
       case 'ownership_change':
-        if (data['newHolderId'] == null) {
+        if (data['newOwnerId'] == null) {
           return l10n.notificationOwnershipReleasedBody;
         }
-        final holderName = data['newHolderName'] as String?;
-        if (holderName == null) return fallback;
-        return l10n.notificationOwnershipChangeBody(holderName);
+        final ownerName = data['newOwnerName'] as String?;
+        if (ownerName == null) return fallback;
+        return l10n.notificationOwnershipChangeBody(ownerName);
       case 'takeover_request':
-        final requesterName = data['newHolderName'] as String?;
+        final requesterName = data['newOwnerName'] as String?;
         if (requesterName == null) return fallback;
         return l10n.notificationTakeoverRequestBody(requesterName);
       case 'takeover_approved':

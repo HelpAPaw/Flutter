@@ -73,7 +73,7 @@ void main() {
 
   group('MapFilterState.signalPassesFilter', () {
     test('urgency filters independently of status', () {
-      // The whole point of the urgency system: a case someone is already
+      // The whole point of the urgency system: a signal someone is already
       // working on (In progress) can still be critical (Red).
       final state = const MapFilterState()
           .toggleUrgency(SignalUrgency.red.code); // hide Red
@@ -99,9 +99,9 @@ void main() {
     });
 
     test('a signal passes if ANY of its needs is selected', () {
-      // A case can declare up to three needs. Someone filtering for fostering
-      // still wants the case that needs rescue *and* fostering — requiring all
-      // of them to match would hide exactly the multi-need cases that most need
+      // A signal can declare up to three needs. Someone filtering for fostering
+      // still wants the signal that needs rescue *and* fostering — requiring all
+      // of them to match would hide exactly the multi-need signals that most need
       // help.
       final state = const MapFilterState()
           .toggleHelpTag(HelpTag.rescue.code) // hide rescue

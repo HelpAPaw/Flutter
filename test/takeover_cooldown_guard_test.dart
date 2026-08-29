@@ -1,12 +1,12 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:help_a_paw/src/services/case_ownership_service.dart';
+import 'package:help_a_paw/src/services/signal_ownership_service.dart';
 
 /// Guards the takeover re-ask cooldown, which lives in two places.
 ///
 /// `isAfterReaskCooldown()` in `firestore.rules` is the **enforcement**;
-/// [CaseOwnershipService.reaskCooldown] exists only so the UI can say *when* the
+/// [SignalOwnershipService.reaskCooldown] exists only so the UI can say *when* the
 /// offer may be made again rather than just "not yet". They must describe the
 /// same interval, and both ways of drifting are bad in the ordinary,
 /// hard-to-notice way:
@@ -56,8 +56,8 @@ void main() {
 
     expect(
       units[unit]! * amount,
-      CaseOwnershipService.reaskCooldown,
-      reason: 'CaseOwnershipService.reaskCooldown has drifted from '
+      SignalOwnershipService.reaskCooldown,
+      reason: 'SignalOwnershipService.reaskCooldown has drifted from '
           'isAfterReaskCooldown() in firestore.rules. The UI would offer the '
           'button at the wrong moment — too early and the write is denied, too '
           'late and a permitted offer looks blocked.',
@@ -65,22 +65,22 @@ void main() {
   });
 
   // The other mirrored constant, and the one whose drift matters more: the
-  // staleness escape hatch is the only way a case gets out from under a holder
+  // staleness escape hatch is the only way a signal gets out from under an owner
   // who has stopped answering, so a Dart copy that is too long hides the button
   // during exactly the window it exists for.
-  test('both sides describe the same stale-holder threshold', () {
-    final source = File('functions/src/caseOwnership.ts').readAsStringSync();
-    final match = RegExp(r'STALE_HOLDER_DAYS\s*=\s*(\d+)').firstMatch(source);
+  test('both sides describe the same stale-owner threshold', () {
+    final source = File('functions/src/signalOwnership.ts').readAsStringSync();
+    final match = RegExp(r'STALE_OWNER_DAYS\s*=\s*(\d+)').firstMatch(source);
 
     expect(match, isNotNull,
-        reason: 'STALE_HOLDER_DAYS is gone from functions/src/caseOwnership.ts');
+        reason: 'STALE_OWNER_DAYS is gone from functions/src/signalOwnership.ts');
 
     expect(
       Duration(days: int.parse(match!.group(1)!)),
-      CaseOwnershipService.staleHolderAfter,
-      reason: 'CaseOwnershipService.staleHolderAfter has drifted from '
-          'STALE_HOLDER_DAYS. Too short and Take responsibility is offered on a '
-          'case the server will refuse; too long and a genuinely abandoned case '
+      SignalOwnershipService.staleOwnerAfter,
+      reason: 'SignalOwnershipService.staleOwnerAfter has drifted from '
+          'STALE_OWNER_DAYS. Too short and Take responsibility is offered on a '
+          'signal the server will refuse; too long and a genuinely abandoned signal '
           'shows no way to take it on.',
     );
   });

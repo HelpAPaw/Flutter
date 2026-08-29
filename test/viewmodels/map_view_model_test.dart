@@ -309,7 +309,7 @@ void main() {
     });
 
     test('submitSignal fails when no urgency was chosen', () async {
-      // Urgency is a required field on every case. Defaulting it would let
+      // Urgency is a required field on every signal. Defaulting it would let
       // people publish a level they never picked, which is how an urgency
       // system stops meaning anything.
       viewModel.updateFormTitle('Title');
@@ -718,7 +718,7 @@ void main() {
       const descOnly = NewSignalFormState(description: 'Desc');
       expect(descOnly.isValid, false);
 
-      // Urgency is a required field on every case (spec 4.4), so title +
+      // Urgency is a required field on every signal (spec 4.4), so title +
       // description alone is not publishable.
       const noUrgency = NewSignalFormState(title: 'Title', description: 'Desc');
       expect(noUrgency.isValid, false);

@@ -96,7 +96,7 @@
     }
   },
   "helperTagsOnboardingTitle": "How can you help?",
-  "helperTagsOnboardingIntro": "Pick what you can realistically do, and which animals you can help. We use this to send you the cases you can actually act on — you can change it any time in settings.",
+  "helperTagsOnboardingIntro": "Pick what you can realistically do, and which animals you can help. We use this to send you the signals you can actually act on — you can change it any time in settings.",
   "helperTagsOnboardingHelpSection": "What can you help with?",
   "helperTagsOnboardingAnimalSection": "Which animals can you help?",
   "helperTagsOnboardingContinue": "Continue",
@@ -263,19 +263,19 @@
       }
     }
   },
-  "updateNoteTakingCase": "Taking responsibility for this case",
-  "updateNoteTakingCaseAndChangingTo": "Taking responsibility, and changing to: {level}",
-  "@updateNoteTakingCaseAndChangingTo": {
+  "updateNoteTakingSignal": "Taking responsibility for this signal",
+  "updateNoteTakingSignalAndChangingTo": "Taking responsibility, and changing to: {level}",
+  "@updateNoteTakingSignalAndChangingTo": {
     "placeholders": {
       "level": {
         "type": "String"
       }
     }
   },
-  "updateNoteSteppingDown": "Stepping down from this case",
-  "updateNoteHandingOver": "Handing this case over",
+  "updateNoteSteppingDown": "Stepping down from this signal",
+  "updateNoteHandingOver": "Handing this signal over",
   "updateNoteDecliningOffer": "Declining this offer",
-  "updateNoteOfferingTakeover": "Offering to take this case on",
+  "updateNoteOfferingTakeover": "Offering to take this signal on",
   "updateNoteHint": "Add a short note for the signal history",
   "updateNoteRequired": "Please say what changed — everyone following this signal sees it.",
   "changedStatusTo": "{name} changed the status to {status}",
@@ -290,28 +290,28 @@
     }
   },
   "someone": "Someone",
-  "caseHolder": "Responsible",
-  "caseHolderNobody": "Nobody has taken this case on yet",
-  "caseHolderIsYou": "You are responsible for this case",
-  "caseHolderTakeResponsibility": "Take responsibility",
-  "caseHolderRequestTakeover": "Offer to take over",
-  "caseHolderRequestPending": "You have offered to take this over",
-  "caseHolderWithdrawRequest": "Withdraw offer",
-  "caseHolderRelease": "I can no longer do this",
-  "caseHolderHandOver": "Hand over",
-  "caseHolderDecline": "Decline",
-  "caseHolderOffers": "Offers to take over",
-  "caseHolderStale": "Nobody has updated this case in a while.",
-  "takeoverConfirmTitle": "Take responsibility for this case?",
-  "takeoverConfirmBody": "You become the person coordinating this case. You can change its status and urgency, and hand it on or step down at any time.",
+  "signalOwner": "Responsible",
+  "signalOwnerNobody": "Nobody has taken this signal on yet",
+  "signalOwnerIsYou": "You are responsible for this signal",
+  "signalOwnerTakeResponsibility": "Take responsibility",
+  "signalOwnerRequestTakeover": "Offer to take over",
+  "signalOwnerRequestPending": "You have offered to take this over",
+  "signalOwnerWithdrawRequest": "Withdraw offer",
+  "signalOwnerRelease": "I can no longer do this",
+  "signalOwnerHandOver": "Hand over",
+  "signalOwnerDecline": "Decline",
+  "signalOwnerOffers": "Offers to take over",
+  "signalOwnerStale": "Nobody has updated this signal in a while.",
+  "takeoverConfirmTitle": "Take responsibility for this signal?",
+  "takeoverConfirmBody": "You become the person coordinating this signal. You can change its status and urgency, and hand it on or step down at any time.",
   "takeoverConfirmAction": "Take it on",
-  "handOverConfirmTitle": "Hand this case over?",
-  "handOverConfirmBody": "They become the person coordinating this case. You stay on the signal and can offer to take it back later.",
-  "declineConfirmBody": "They are told you are keeping the case. They can offer again after a day.",
-  "releaseConfirmTitle": "Step down from this case?",
-  "releaseConfirmBody": "The case stays open and anyone can take it on. Everyone following it is told.",
+  "handOverConfirmTitle": "Hand this signal over?",
+  "handOverConfirmBody": "They become the person coordinating this signal. You stay subscribed to it and can offer to take it back later.",
+  "declineConfirmBody": "They are told you are keeping the signal. They can offer again after a day.",
+  "releaseConfirmTitle": "Step down from this signal?",
+  "releaseConfirmBody": "The signal stays open and anyone can take it on. Everyone following it is told.",
   "takeoverNoteHint": "Say what you plan to do",
-  "takeoverAlreadyHeld": "Someone else is responsible for this case. You can offer to take it over.",
+  "takeoverAlreadyOwned": "Someone else is responsible for this signal. You can offer to take it over.",
   "takeoverRequestSent": "Your offer was sent to the person responsible.",
   "takeoverAlreadyAsked": "You have already offered to take this over.",
   "takeoverAskAgainAfter": "You can offer again after {when}.",
@@ -322,8 +322,8 @@
       }
     }
   },
-  "errorChangingCaseHolder": "Could not change who is responsible.",
-  "tookResponsibility": "{name} took responsibility for this case",
+  "errorChangingSignalOwner": "Could not change who is responsible.",
+  "tookResponsibility": "{name} took responsibility for this signal",
   "@tookResponsibility": {
     "placeholders": {
       "name": {
@@ -331,8 +331,8 @@
       }
     }
   },
-  "handedCaseTo": "{name} handed this case to {other}",
-  "@handedCaseTo": {
+  "handedSignalTo": "{name} handed this signal to {other}",
+  "@handedSignalTo": {
     "placeholders": {
       "name": {
         "type": "String"
@@ -360,20 +360,20 @@
       }
     }
   },
-  "releasedCaseShort": "Stepped down from this case",
-  "@releasedCaseShort": {},
-  "tookResponsibilityShort": "Took responsibility for this case",
+  "releasedSignalShort": "Stepped down from this signal",
+  "@releasedSignalShort": {},
+  "tookResponsibilityShort": "Took responsibility for this signal",
   "@tookResponsibilityShort": {},
-  "handedCaseToShort": "Handed this case to {other}",
-  "@handedCaseToShort": {
+  "handedSignalToShort": "Handed this signal to {other}",
+  "@handedSignalToShort": {
     "placeholders": {
       "other": {
         "type": "String"
       }
     }
   },
-  "releasedCase": "{name} stepped down from this case",
-  "@releasedCase": {
+  "releasedSignal": "{name} stepped down from this signal",
+  "@releasedSignal": {
     "placeholders": {
       "name": {
         "type": "String"
@@ -381,7 +381,7 @@
     }
   },
   "notificationOwnershipChangeTitle": "Someone took responsibility",
-  "notificationOwnershipReleasedTitle": "This case needs someone",
+  "notificationOwnershipReleasedTitle": "This signal needs someone",
   "notificationOwnershipChangeBody": "{name} is now responsible",
   "@notificationOwnershipChangeBody": {
     "placeholders": {
@@ -390,7 +390,7 @@
       }
     }
   },
-  "notificationOwnershipReleasedBody": "Nobody is responsible for this case now",
+  "notificationOwnershipReleasedBody": "Nobody is responsible for this signal now",
   "notificationTakeoverRequestTitle": "Someone offered to take over",
   "notificationTakeoverRequestBody": "{name} asked to take responsibility",
   "@notificationTakeoverRequestBody": {
@@ -400,10 +400,10 @@
       }
     }
   },
-  "notificationTakeoverApprovedTitle": "You are now responsible for a case",
-  "notificationTakeoverApprovedBody": "The case is yours",
+  "notificationTakeoverApprovedTitle": "You are now responsible for a signal",
+  "notificationTakeoverApprovedBody": "The signal is yours",
   "notificationTakeoverDeclinedTitle": "Your offer was declined",
-  "notificationTakeoverDeclinedBody": "The current holder is keeping this case",
+  "notificationTakeoverDeclinedBody": "The current owner is keeping this signal",
   "deletePhoto": "Delete photo",
   "confirmDeletePhoto": "Are you sure you want to delete this photo?",
   "photoAddedSuccessfully": "Photo added successfully!",
@@ -828,8 +828,8 @@
   "backToMap": "Back to map",
   "failedToUpdateSignal": "Failed to update signal. Please try again.",
   "removeSignal": "Remove signal",
-  "removeSignalCaseOpenTitle": "Is this case resolved?",
-  "removeSignalCaseOpenBody": "If the animal has been helped, mark the case Resolved instead. Your report and its history stay on the map for others to learn from, and it still counts towards your profile.",
+  "removeSignalOpenTitle": "Is this signal resolved?",
+  "removeSignalOpenBody": "If the animal has been helped, mark the signal Resolved instead. Your report and its history stay on the map for others to learn from, and it still counts towards your profile.",
   "markAsResolved": "Mark as resolved",
   "removeAnyway": "Remove anyway",
   "confirmRemoveSignal": "This signal will be taken off the map. You can restore it from My Signals for the next {days} days, after which it is deleted permanently.",
@@ -898,7 +898,7 @@
   "reportReasonSpam": "Spam",
   "reportReasonDoxxing": "Shares private details",
   "reportReasonDefamationRisk": "Public accusation about a person",
-  "reportReasonDuplicateCase": "Duplicate of another signal",
+  "reportReasonDuplicateSignal": "Duplicate of another signal",
   "reportReasonOther": "Something else",
   "moderation": "Moderation",
   "moderationQueue": "Reports",

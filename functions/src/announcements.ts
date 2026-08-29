@@ -34,7 +34,7 @@ export type NotificationType =
   | "status_change"
   | "urgency_change"
   | "new_comment"
-  // Case ownership, master spec 4.5. `ownership_change` goes to a signal's
+  // Signal ownership, master spec 4.5. `ownership_change` goes to a signal's
   // subscribers; the two `takeover_*` types go to one person each.
   | "ownership_change"
   | "takeover_request"
@@ -88,8 +88,8 @@ export interface AnnouncedChange {
   inboxField: {
     urgency?: number;
     statusCode?: number;
-    newHolderId?: string | null;
-    newHolderName?: string;
+    newOwnerId?: string | null;
+    newOwnerName?: string;
   };
   dataField: Record<string, string>;
 }
@@ -134,33 +134,33 @@ export function urgencyChangeOf(
 }
 
 /**
- * Case ownership moved (master spec §4.5) — taken on, handed over or released.
+ * Signal ownership moved (master spec §4.5) — taken on, handed over or released.
  *
- * Keyed by the new holder so a case that changes hands twice produces two rows,
+ * Keyed by the new owner so a signal that changes hands twice produces two rows,
  * and a retry of either produces one. A release keys on `none`, which is the
  * only value it can have.
  */
 export function ownershipChangeOf(
   signalId: string,
   signalTitle: string,
-  newHolder: FirebaseFirestore.DocumentReference | null,
-  newHolderName: string | undefined
+  newOwner: FirebaseFirestore.DocumentReference | null,
+  newOwnerName: string | undefined
 ): AnnouncedChange {
-  const summary = newHolder
-    ? `${newHolderName ?? "A volunteer"} is now responsible`
-    : "nobody is responsible for this case now";
+  const summary = newOwner
+    ? `${newOwnerName ?? "A volunteer"} is now responsible`
+    : "nobody is responsible for this signal now";
   return {
-    docId: `own_${signalId}_${newHolder?.id ?? "none"}`,
+    docId: `own_${signalId}_${newOwner?.id ?? "none"}`,
     type: "ownership_change",
-    title: newHolder ? "Someone took responsibility" : "This case needs someone",
+    title: newOwner ? "Someone took responsibility" : "This signal needs someone",
     body: `${signalTitle}: ${summary}`,
     summary,
     inboxField: {
-      newHolderId: newHolder?.id ?? null,
-      ...(newHolderName ? { newHolderName } : {}),
+      newOwnerId: newOwner?.id ?? null,
+      ...(newOwnerName ? { newOwnerName } : {}),
     },
     dataField: {
-      ...(newHolder ? { newHolderId: newHolder.id } : {}),
+      ...(newOwner ? { newOwnerId: newOwner.id } : {}),
     },
   };
 }
