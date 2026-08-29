@@ -918,6 +918,10 @@ holderActiveAt with the server time"*.
 
 **Order:**
 
+**Step 1 was done 2026-08-29** — `signalOwnership` created, `caseOwnership` retained as
+an alias on the same build, live rules re-read and verified byte-identical. Steps 2–4 are
+tracked in HelpAPaw/Flutter#77.
+
 1. Deploy functions **and** rules together. The rules must not lag the functions:
    `ownerActiveAtOf` prefers `ownerActiveAt`, and until the new ruleset pins it a
    reporter could self-stamp a far-future value and disable the staleness escape

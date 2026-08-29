@@ -83,6 +83,12 @@
 >       change status, urgency or tags at all**. The reporter branch still passes, so
 >       this presents as intermittent. Deploy the two together, then release, then run
 >       `functions/scripts/backfill_case_to_signal.js` — never before the deploy.
+> - [x] ✅ **Case→signal deploy done 2026-08-29.** `signalOwnership` created, `caseOwnership`
+>       kept as an alias to the same handler (identical build hash), nothing deleted —
+>       `listQuarantined` verified present after. Live rules re-read and byte-identical to
+>       the branch. Behaviourally a no-op for **129**, which writes none of the renamed
+>       fields: every changed predicate is either vacuous or strictly wider. **Backfill and
+>       shim retirement tracked in #77**, and both wait for the app release.
 > - [x] ✅ **Signal removal (#68) steps 1 and 3** — `signalRemoval` and
 >       `purgeRemovedSignals` created (nothing deleted — checked by diffing the deployed
 >       export list against the built one), the additive `removedSignals` rules block and
