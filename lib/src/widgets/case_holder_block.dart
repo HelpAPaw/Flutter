@@ -109,13 +109,16 @@ class CaseHolderBlock extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final holder = signal.caseHolder;
 
+    // No heading of its own any more. This block is one row inside
+    // [SignalCaseCard], which is what now says "these facts belong together" —
+    // the old `Text(' ${l10n.caseHolder}')`, indented with a literal leading
+    // space and set two type steps below the headings beside it, was the
+    // clearest single symptom of the screen having four unequal peers.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 8),
-        Text(' ${l10n.caseHolder}'),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
+          padding: const EdgeInsets.only(right: 8),
           child: Row(
             children: [
               Icon(
@@ -125,7 +128,7 @@ class CaseHolderBlock extends StatelessWidget {
                 // drawing the eye to: it is an ask, not a status.
                 color: holder == null ? Theme.of(context).colorScheme.primary : null,
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 8),
               Expanded(
                 child: _isHolder
                     ? Text(l10n.caseHolderIsYou)
@@ -162,6 +165,15 @@ class CaseHolderBlock extends StatelessWidget {
     );
   }
 
+  /// Strips a `TextButton`'s default horizontal padding so its icon lines up
+  /// with the person icon on the row above. Left in place for the tonal
+  /// "take responsibility" button, which is a filled surface and needs its
+  /// padding to look like one.
+  static final ButtonStyle _flushLeft = TextButton.styleFrom(
+    padding: const EdgeInsets.symmetric(horizontal: 4),
+    minimumSize: const Size(0, 40),
+  );
+
   /// The one action this viewer is offered, if any.
   Widget _buildActions(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -170,6 +182,7 @@ class CaseHolderBlock extends StatelessWidget {
       return Align(
         alignment: Alignment.centerLeft,
         child: TextButton.icon(
+          style: _flushLeft,
           icon: const Icon(Icons.logout, size: 16),
           label: Text(l10n.caseHolderRelease),
           onPressed: busy ? null : () => _release(context),
@@ -221,7 +234,7 @@ class CaseHolderBlock extends StatelessWidget {
         // button whose write the rules would refuse.
         if (mine?.reaskableAt case final until?) {
           return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
+            padding: const EdgeInsets.only(top: 4),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -242,7 +255,7 @@ class CaseHolderBlock extends StatelessWidget {
 
         if (mine != null && mine.isPending) {
           return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
+            padding: const EdgeInsets.only(top: 4),
             child: Row(
               children: [
                 Expanded(
@@ -263,6 +276,7 @@ class CaseHolderBlock extends StatelessWidget {
         return Align(
           alignment: Alignment.centerLeft,
           child: TextButton.icon(
+            style: _flushLeft,
             icon: const Icon(Icons.pan_tool_alt_outlined, size: 16),
             label: Text(l10n.caseHolderRequestTakeover),
             onPressed: busy ? null : () => _request(context),

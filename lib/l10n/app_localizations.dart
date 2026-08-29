@@ -185,13 +185,13 @@ abstract class AppLocalizations {
   /// No description provided for @statusNeedsHelp.
   ///
   /// In en, this message translates to:
-  /// **'Needs help'**
+  /// **'Waiting for help'**
   String get statusNeedsHelp;
 
   /// No description provided for @statusInProgress.
   ///
   /// In en, this message translates to:
-  /// **'In progress'**
+  /// **'Someone is helping'**
   String get statusInProgress;
 
   /// No description provided for @statusResolved.
@@ -209,7 +209,7 @@ abstract class AppLocalizations {
   /// No description provided for @urgencyGreen.
   ///
   /// In en, this message translates to:
-  /// **'Green — under control'**
+  /// **'Low'**
   String get urgencyGreen;
 
   /// No description provided for @urgencyGreenDescription.
@@ -221,7 +221,7 @@ abstract class AppLocalizations {
   /// No description provided for @urgencyAmber.
   ///
   /// In en, this message translates to:
-  /// **'Amber — support needed ASAP'**
+  /// **'Medium'**
   String get urgencyAmber;
 
   /// No description provided for @urgencyAmberDescription.
@@ -233,7 +233,7 @@ abstract class AppLocalizations {
   /// No description provided for @urgencyRed.
   ///
   /// In en, this message translates to:
-  /// **'Red — immediate critical help'**
+  /// **'Critical'**
   String get urgencyRed;
 
   /// No description provided for @urgencyRedDescription.
@@ -1430,6 +1430,42 @@ abstract class AppLocalizations {
   /// **'{name} handed this case to {other}'**
   String handedCaseTo(String name, String other);
 
+  /// No description provided for @reportedThisSignalShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Reported this signal'**
+  String get reportedThisSignalShort;
+
+  /// No description provided for @statusSetTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Status set to {status}'**
+  String statusSetTo(String status);
+
+  /// No description provided for @urgencySetTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Urgency set to {urgency}'**
+  String urgencySetTo(String urgency);
+
+  /// No description provided for @releasedCaseShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Stepped down from this case'**
+  String get releasedCaseShort;
+
+  /// No description provided for @tookResponsibilityShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Took responsibility for this case'**
+  String get tookResponsibilityShort;
+
+  /// No description provided for @handedCaseToShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Handed this case to {other}'**
+  String handedCaseToShort(String other);
+
   /// No description provided for @releasedCase.
   ///
   /// In en, this message translates to:
@@ -2135,7 +2171,7 @@ abstract class AppLocalizations {
   /// No description provided for @faqWhatStatusesMeanAnswer.
   ///
   /// In en, this message translates to:
-  /// **'Needs help: Nobody has taken this on yet.\nIn progress: Someone is working on helping.\nResolved: The animal has received help or the situation is resolved.\n\nStatus is about how far along the response is. It is separate from urgency, which is what the pin colour shows.'**
+  /// **'Waiting for help: Nobody has taken this on yet.\nSomeone is helping: Someone is working on helping.\nResolved: The animal has received help or the situation is resolved.\n\nStatus is about how far along the response is. It is separate from urgency, which is what the pin colour shows.'**
   String get faqWhatStatusesMeanAnswer;
 
   /// No description provided for @faqWhatUrgencyMeans.
@@ -2147,7 +2183,7 @@ abstract class AppLocalizations {
   /// No description provided for @faqWhatUrgencyMeansAnswer.
   ///
   /// In en, this message translates to:
-  /// **'Pin colour shows urgency — how serious things are if nobody acts:\n\nGreen (Under control): The animal is not in immediate danger, or the situation is being managed.\nAmber (Support needed ASAP): Help is needed quickly, but it is not life-or-death within hours.\nRed (Immediate critical help): The animal may die, disappear or be seriously harmed if help does not happen now.\n\nOnly the person who created a signal can change its urgency. Please keep Red for genuine emergencies — if it is overused it stops meaning anything and help gets pulled away from animals truly at risk.'**
+  /// **'Pin colour shows urgency — how serious things are if nobody acts:\n\nLow (green pin): The animal is not in immediate danger, or the situation is being managed.\nMedium (amber pin): Help is needed quickly, but it is not life-or-death within hours.\nCritical (red pin): The animal may die, disappear or be seriously harmed if help does not happen now.\n\nOnly the person who created a signal can change its urgency. Please keep Critical for genuine emergencies — if it is overused it stops meaning anything and help gets pulled away from animals truly at risk.'**
   String get faqWhatUrgencyMeansAnswer;
 
   /// No description provided for @faqCantHelpDirectly.
@@ -3359,7 +3395,7 @@ abstract class AppLocalizations {
   /// No description provided for @mapLegendUrgencyNote.
   ///
   /// In en, this message translates to:
-  /// **'Pin colour shows urgency — how serious it gets if nobody acts. Red signals are never grouped into a cluster, so they stay visible at every zoom.'**
+  /// **'Pin colour shows urgency — how serious it gets if nobody acts. Critical signals are never grouped into a cluster, so they stay visible at every zoom.'**
   String get mapLegendUrgencyNote;
 
   /// No description provided for @mapLegendVetClinic.

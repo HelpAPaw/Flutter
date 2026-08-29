@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 /// A small pill naming one level of a signal — its urgency or its status.
 ///
 /// The two look deliberately *unalike*, and that is the whole point. They sit
-/// side by side in the same row (My Signals, the details header), and while
-/// both were traffic-light coloured a reader had two colour scales to hold at
-/// once, running in opposite directions: red urgency means "act now", red
-/// status means "nobody has acted". Green+red, red+green, green+green and
-/// red+red all appear on one list.
+/// side by side in the same row (My Signals), and while both were traffic-light
+/// coloured a reader had two colour scales to hold at once, running in opposite
+/// directions: red urgency means "act now", red status means "nobody has
+/// acted". Green+red, red+green, green+green and red+red all appear on one
+/// list.
 ///
 /// So the app keeps one colour axis:
 ///
@@ -16,9 +16,23 @@ import 'package:flutter/material.dart';
 /// * [LevelChip.status] is **neutral and outlined**, and carries a progress
 ///   glyph. It reads as a state, not as a severity.
 ///
-/// The shape alone tells you which axis you are looking at before you have
-/// read either label, which matters most in Bulgarian, where the labels are
-/// near-homographs.
+/// The shape alone tells you which axis you are looking at before you have read
+/// either label.
+///
+/// **Shape turned out not to be enough on its own.** On the details screen the
+/// two chips side by side still read as one scale — "Under control" beside
+/// "Needs help" looks like a disagreement rather than two answers to two
+/// questions — so `SignalCaseCard` names the field instead of relying on the
+/// pill's shape, and gives status a three-step track rather than a chip. Two
+/// things followed from that and are worth knowing here:
+///
+///  * the labels were renamed (Low/Medium/Critical, Waiting for help/Someone is
+///    helping/Resolved), which is what ended the Bulgarian near-homograph this
+///    doc used to warn about — `Оранжево — нужна е помощ скоро` against
+///    `Нужна е помощ`;
+///  * `LevelChip.status` therefore has one caller left, My Signals. Keep it or
+///    fold it into that screen, but do not reintroduce the bare urgency-chip
+///    beside status-chip pairing this class was shaped for.
 class LevelChip extends StatelessWidget {
   /// The coloured, filled variant — severity.
   const LevelChip.urgency({

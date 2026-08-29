@@ -14,15 +14,15 @@
   "error": "Error",
   "loading": "Loading...",
   "somethingWentWrong": "Something went wrong",
-  "statusNeedsHelp": "Needs help",
-  "statusInProgress": "In progress",
+  "statusNeedsHelp": "Waiting for help",
+  "statusInProgress": "Someone is helping",
   "statusResolved": "Resolved",
   "urgency": "Urgency",
-  "urgencyGreen": "Green — under control",
+  "urgencyGreen": "Low",
   "urgencyGreenDescription": "Not in immediate danger, or the situation is being managed.",
-  "urgencyAmber": "Amber — support needed ASAP",
+  "urgencyAmber": "Medium",
   "urgencyAmberDescription": "Needs help quickly, but is not life-or-death within hours.",
-  "urgencyRed": "Red — immediate critical help",
+  "urgencyRed": "Critical",
   "urgencyRedDescription": "Serious harm, death or disappearance may follow if help does not happen now.",
   "pleaseSelectUrgency": "Please select how urgent this is",
   "errorUpdatingUrgency": "Failed to update urgency. Please try again.",
@@ -342,6 +342,36 @@
       }
     }
   },
+  "reportedThisSignalShort": "Reported this signal",
+  "@reportedThisSignalShort": {},
+  "statusSetTo": "Status set to {status}",
+  "@statusSetTo": {
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "urgencySetTo": "Urgency set to {urgency}",
+  "@urgencySetTo": {
+    "placeholders": {
+      "urgency": {
+        "type": "String"
+      }
+    }
+  },
+  "releasedCaseShort": "Stepped down from this case",
+  "@releasedCaseShort": {},
+  "tookResponsibilityShort": "Took responsibility for this case",
+  "@tookResponsibilityShort": {},
+  "handedCaseToShort": "Handed this case to {other}",
+  "@handedCaseToShort": {
+    "placeholders": {
+      "other": {
+        "type": "String"
+      }
+    }
+  },
   "releasedCase": "{name} stepped down from this case",
   "@releasedCase": {
     "placeholders": {
@@ -560,9 +590,9 @@
   "faqHowHelp": "How can I help with a signal?",
   "faqHowHelpAnswer": "When you see a signal on the map, tap it to view details. You can leave a comment to coordinate with others, update the signal status if you're helping, or contact the person who created the signal.",
   "faqWhatStatusesMean": "What do the signal statuses mean?",
-  "faqWhatStatusesMeanAnswer": "Needs help: Nobody has taken this on yet.\nIn progress: Someone is working on helping.\nResolved: The animal has received help or the situation is resolved.\n\nStatus is about how far along the response is. It is separate from urgency, which is what the pin colour shows.",
+  "faqWhatStatusesMeanAnswer": "Waiting for help: Nobody has taken this on yet.\nSomeone is helping: Someone is working on helping.\nResolved: The animal has received help or the situation is resolved.\n\nStatus is about how far along the response is. It is separate from urgency, which is what the pin colour shows.",
   "faqWhatUrgencyMeans": "What do the pin colours mean?",
-  "faqWhatUrgencyMeansAnswer": "Pin colour shows urgency — how serious things are if nobody acts:\n\nGreen (Under control): The animal is not in immediate danger, or the situation is being managed.\nAmber (Support needed ASAP): Help is needed quickly, but it is not life-or-death within hours.\nRed (Immediate critical help): The animal may die, disappear or be seriously harmed if help does not happen now.\n\nOnly the person who created a signal can change its urgency. Please keep Red for genuine emergencies — if it is overused it stops meaning anything and help gets pulled away from animals truly at risk.",
+  "faqWhatUrgencyMeansAnswer": "Pin colour shows urgency — how serious things are if nobody acts:\n\nLow (green pin): The animal is not in immediate danger, or the situation is being managed.\nMedium (amber pin): Help is needed quickly, but it is not life-or-death within hours.\nCritical (red pin): The animal may die, disappear or be seriously harmed if help does not happen now.\n\nOnly the person who created a signal can change its urgency. Please keep Critical for genuine emergencies — if it is overused it stops meaning anything and help gets pulled away from animals truly at risk.",
   "faqCantHelpDirectly": "I'm not able to help directly. What can I do?",
   "faqCantHelpDirectlyAnswer": "You can share the signal with friends who might be able to help, leave helpful comments with advice or contacts of local animal rescue organizations, or simply spread awareness about the app to grow our community of helpers.",
   "faqHowNotificationsWork": "How do notifications work?",
@@ -921,7 +951,7 @@
   "moderationRestoreBody": "It goes back on the map for everyone. Its comments and history are still there.",
   "moderationRestore": "Restore",
   "mapLegend": "What the pins mean",
-  "mapLegendUrgencyNote": "Pin colour shows urgency — how serious it gets if nobody acts. Red signals are never grouped into a cluster, so they stay visible at every zoom.",
+  "mapLegendUrgencyNote": "Pin colour shows urgency — how serious it gets if nobody acts. Critical signals are never grouped into a cluster, so they stay visible at every zoom.",
   "mapLegendVetClinic": "Vet clinic",
   "done": "Done",
   "signOutFailed": "Could not sign out. Please try again.",

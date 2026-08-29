@@ -51,33 +51,33 @@ class AppLocalizationsBg extends AppLocalizations {
   String get somethingWentWrong => 'Нещо се обърка';
 
   @override
-  String get statusNeedsHelp => 'Нужна е помощ';
+  String get statusNeedsHelp => 'Чака помощ';
 
   @override
-  String get statusInProgress => 'В процес';
+  String get statusInProgress => 'Някой помага';
 
   @override
-  String get statusResolved => 'Решен';
+  String get statusResolved => 'Приключен';
 
   @override
   String get urgency => 'Спешност';
 
   @override
-  String get urgencyGreen => 'Зелено — под контрол';
+  String get urgencyGreen => 'Ниска';
 
   @override
   String get urgencyGreenDescription =>
       'Животното не е в непосредствена опасност или ситуацията е овладяна.';
 
   @override
-  String get urgencyAmber => 'Оранжево — нужна е помощ скоро';
+  String get urgencyAmber => 'Средна';
 
   @override
   String get urgencyAmberDescription =>
       'Нужна е бърза помощ, но не е въпрос на живот и смърт в рамките на часове.';
 
   @override
-  String get urgencyRed => 'Червено — незабавна критична помощ';
+  String get urgencyRed => 'Критична';
 
   @override
   String get urgencyRedDescription =>
@@ -759,6 +759,30 @@ class AppLocalizationsBg extends AppLocalizations {
   }
 
   @override
+  String get reportedThisSignalShort => 'Подаде този сигнал';
+
+  @override
+  String statusSetTo(String status) {
+    return 'Статусът е променен на $status';
+  }
+
+  @override
+  String urgencySetTo(String urgency) {
+    return 'Спешността е променена на $urgency';
+  }
+
+  @override
+  String get releasedCaseShort => 'Отказа се от този случай';
+
+  @override
+  String get tookResponsibilityShort => 'Пое отговорност за този случай';
+
+  @override
+  String handedCaseToShort(String other) {
+    return 'Предаде този случай на $other';
+  }
+
+  @override
   String releasedCase(String name) {
     return '$name се отказа от този случай';
   }
@@ -1167,14 +1191,14 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get faqWhatStatusesMeanAnswer =>
-      'Нужна е помощ: Все още никой не се е заел със сигнала.\nВ процес: Някой работи по проблема.\nРешен: Животното е получило помощ или ситуацията е разрешена.\n\nСтатусът показва докъде е стигнала реакцията. Той е отделен от спешността, която се вижда по цвета на маркера.';
+      'Чака помощ: Все още никой не се е заел със сигнала.\nНякой помага: Някой работи по проблема.\nПриключен: Животното е получило помощ или ситуацията е разрешена.\n\nСтатусът показва докъде е стигнала реакцията. Той е отделен от спешността, която се вижда по цвета на маркера.';
 
   @override
   String get faqWhatUrgencyMeans => 'Какво означават цветовете на маркерите?';
 
   @override
   String get faqWhatUrgencyMeansAnswer =>
-      'Цветът на маркера показва спешността — колко сериозно е положението, ако никой не реагира:\n\nЗелено (Под контрол): Животното не е в непосредствена опасност или ситуацията е овладяна.\nОранжево (Нужна е помощ скоро): Помощта е нужна бързо, но не е въпрос на живот и смърт в рамките на часове.\nЧервено (Незабавна критична помощ): Животното може да умре, да изчезне или да бъде сериозно наранено, ако помощта не дойде сега.\n\nСамо създателят на сигнала може да променя спешността. Моля, пазете червеното за истински спешни случаи — при злоупотреба то губи смисъл и помощта се отклонява от животните в реален риск.';
+      'Цветът на маркера показва спешността — колко сериозно е положението, ако никой не реагира:\n\nНиска (зелен маркер): Животното не е в непосредствена опасност или ситуацията е овладяна.\nСредна (оранжев маркер): Помощта е нужна бързо, но не е въпрос на живот и смърт в рамките на часове.\nКритична (червен маркер): Животното може да умре, да изчезне или да бъде сериозно наранено, ако помощта не дойде сега.\n\nСамо създателят на сигнала може да променя спешността. Моля, пазете „Критична“ за истински спешни случаи — при злоупотреба тя губи смисъл и помощта се отклонява от животните в реален риск.';
 
   @override
   String get faqCantHelpDirectly =>
@@ -1575,7 +1599,7 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get removeSignalCaseOpenBody =>
-      'Ако животното е получило помощ, отбележете случая като Решен. Сигналът и неговата история остават на картата, за да послужат на другите, и продължават да се броят в профила ви.';
+      'Ако животното е получило помощ, отбележете случая като Приключен. Сигналът и неговата история остават на картата, за да послужат на другите, и продължават да се броят в профила ви.';
 
   @override
   String get markAsResolved => 'Отбележи като решен';
@@ -1866,7 +1890,7 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get mapLegendUrgencyNote =>
-      'Цветът на маркера показва спешността — колко сериозно става, ако никой не реагира. Червените сигнали никога не се групират, така че остават видими при всяко приближение.';
+      'Цветът на маркера показва спешността — колко сериозно става, ако никой не реагира. Критичните сигнали никога не се групират, така че остават видими при всяко приближение.';
 
   @override
   String get mapLegendVetClinic => 'Ветеринарна клиника';

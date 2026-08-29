@@ -51,10 +51,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get somethingWentWrong => 'Something went wrong';
 
   @override
-  String get statusNeedsHelp => 'Needs help';
+  String get statusNeedsHelp => 'Waiting for help';
 
   @override
-  String get statusInProgress => 'In progress';
+  String get statusInProgress => 'Someone is helping';
 
   @override
   String get statusResolved => 'Resolved';
@@ -63,21 +63,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get urgency => 'Urgency';
 
   @override
-  String get urgencyGreen => 'Green — under control';
+  String get urgencyGreen => 'Low';
 
   @override
   String get urgencyGreenDescription =>
       'Not in immediate danger, or the situation is being managed.';
 
   @override
-  String get urgencyAmber => 'Amber — support needed ASAP';
+  String get urgencyAmber => 'Medium';
 
   @override
   String get urgencyAmberDescription =>
       'Needs help quickly, but is not life-or-death within hours.';
 
   @override
-  String get urgencyRed => 'Red — immediate critical help';
+  String get urgencyRed => 'Critical';
 
   @override
   String get urgencyRedDescription =>
@@ -748,6 +748,30 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get reportedThisSignalShort => 'Reported this signal';
+
+  @override
+  String statusSetTo(String status) {
+    return 'Status set to $status';
+  }
+
+  @override
+  String urgencySetTo(String urgency) {
+    return 'Urgency set to $urgency';
+  }
+
+  @override
+  String get releasedCaseShort => 'Stepped down from this case';
+
+  @override
+  String get tookResponsibilityShort => 'Took responsibility for this case';
+
+  @override
+  String handedCaseToShort(String other) {
+    return 'Handed this case to $other';
+  }
+
+  @override
   String releasedCase(String name) {
     return '$name stepped down from this case';
   }
@@ -1151,14 +1175,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get faqWhatStatusesMeanAnswer =>
-      'Needs help: Nobody has taken this on yet.\nIn progress: Someone is working on helping.\nResolved: The animal has received help or the situation is resolved.\n\nStatus is about how far along the response is. It is separate from urgency, which is what the pin colour shows.';
+      'Waiting for help: Nobody has taken this on yet.\nSomeone is helping: Someone is working on helping.\nResolved: The animal has received help or the situation is resolved.\n\nStatus is about how far along the response is. It is separate from urgency, which is what the pin colour shows.';
 
   @override
   String get faqWhatUrgencyMeans => 'What do the pin colours mean?';
 
   @override
   String get faqWhatUrgencyMeansAnswer =>
-      'Pin colour shows urgency — how serious things are if nobody acts:\n\nGreen (Under control): The animal is not in immediate danger, or the situation is being managed.\nAmber (Support needed ASAP): Help is needed quickly, but it is not life-or-death within hours.\nRed (Immediate critical help): The animal may die, disappear or be seriously harmed if help does not happen now.\n\nOnly the person who created a signal can change its urgency. Please keep Red for genuine emergencies — if it is overused it stops meaning anything and help gets pulled away from animals truly at risk.';
+      'Pin colour shows urgency — how serious things are if nobody acts:\n\nLow (green pin): The animal is not in immediate danger, or the situation is being managed.\nMedium (amber pin): Help is needed quickly, but it is not life-or-death within hours.\nCritical (red pin): The animal may die, disappear or be seriously harmed if help does not happen now.\n\nOnly the person who created a signal can change its urgency. Please keep Critical for genuine emergencies — if it is overused it stops meaning anything and help gets pulled away from animals truly at risk.';
 
   @override
   String get faqCantHelpDirectly =>
@@ -1838,7 +1862,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get mapLegendUrgencyNote =>
-      'Pin colour shows urgency — how serious it gets if nobody acts. Red signals are never grouped into a cluster, so they stay visible at every zoom.';
+      'Pin colour shows urgency — how serious it gets if nobody acts. Critical signals are never grouped into a cluster, so they stay visible at every zoom.';
 
   @override
   String get mapLegendVetClinic => 'Vet clinic';

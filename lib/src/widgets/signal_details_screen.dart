@@ -28,10 +28,11 @@ import '../models/signal_event.dart';
 import '../models/signal.dart';
 import '../models/signal_doc_state.dart';
 import '../models/signal_status.dart';
-import '../models/animal_type.dart';
 import '../models/help_tag.dart';
 import '../models/signal_urgency.dart';
 import 'case_holder_block.dart';
+import 'manage_case_sheet.dart';
+import 'signal_case_card.dart';
 import 'help_tag_picker_sheet.dart';
 import 'report_dialog.dart';
 import 'update_note_dialog.dart';
@@ -123,9 +124,6 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   final Map<String, Future<String?>> _nameFutures = {};
   // uids whose lookup has already been given a second chance — see _nameFor.
   final Set<String> _nameRetried = {};
-  // Memoized name PAIRS, for rows whose sentence names two people. Keyed on both
-  // uids because `FutureBuilder` compares by identity — see _namePairFor.
-  final Map<String, Future<List<String?>>> _namePairFutures = {};
   final TextEditingController _newCommentController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _imagePicker = ImagePicker();
@@ -288,6 +286,18 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       actions: actions,
     );
   }
+
+  /// Caps the reading column and centres what is left.
+  ///
+  /// 600 is about where a line of body text stops being comfortable to read,
+  /// and it is what stops the tablet laying this screen out as a single 800dp
+  /// column — which is how the Add Photo box ended up 1150px wide.
+  Widget _pageWidth({required Widget child}) => Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: child,
+        ),
+      );
 
   /// Shown until the server has told us whether the signal exists. Waiting is
   /// not a reason to be trapped, so this carries the app bar too.
@@ -551,24 +561,29 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                     ),
                   ),
               ]),
-            body: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Column(
-                  children: [
-                    // A Column, not a Stack. The composer used to be
-                    // Positioned(bottom: 0) over the same scroll view, with no
-                    // bottom padding underneath it, so it permanently hid the
-                    // last ~90px of the page — and more at larger text sizes,
-                    // where it swallowed the whole "Red — immediate critical
-                    // help" option. Making it a sibling means the overlap
-                    // cannot come back, and no padding constant has to track
-                    // the composer's height.
-                    Expanded(
-                      child: SingleChildScrollView(
-                        controller: _scrollController,
+            // One left-aligned column, capped in width.
+            //
+            // This was `Center(Padding(Column(...)))`, and `Column`'s default
+            // `crossAxisAlignment` is centre — so "Urgency", "Status" and
+            // "Signal history" centred while every child that filled its width
+            // (the tag `Wrap`, the help-needed `Row`, the case-holder block)
+            // sat left. The page stopped centring halfway down, which is most
+            // of why it read as disorganised, and no amount of fixing an
+            // individual heading could have shown up while the wrapper stayed.
+            //
+            // The width cap is the tablet half of the same problem: at 800dp
+            // "Navigate Me" and the phone number sat at opposite edges with
+            // 700px of nothing between them, and read as unrelated controls.
+            body: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    controller: _scrollController,
+                    child: _pageWidth(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                         child: Column(
-                          mainAxisAlignment: MainAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
                             // A moderator's warning label (§18.3). Above the
                             // photos on purpose: the whole point of "possible
@@ -580,7 +595,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   SizedBox(
-                                    height: 250,
+                                    height: 170,
                                     child: PageView.builder(
                                       controller: _photoPageController,
                                       onPageChanged: (index) {
@@ -594,7 +609,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                         // Show "Add Photo" page if this is the last index and user is author
                                         if (index >= signal.photoUrls.length) {
                                           return Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                            padding: const EdgeInsets.symmetric(horizontal: 4.0),
                                             child: GestureDetector(
                                               onTap: _isUploadingPhoto ? null : _showImageSourceDialog,
                                               child: Container(
@@ -649,7 +664,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
 
                                         // Show photo
                                         return Padding(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                          padding: const EdgeInsets.symmetric(horizontal: 4.0),
                                           child: GestureDetector(
                                             onTap: () {
                                               Navigator.push(
@@ -767,331 +782,258 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                   const SizedBox(height: 8),
                                 ],
                               ),
-                            // Left-aligned, and on the type scale. The title
-                            // and description used to be centred at a
-                            // hardcoded 30/20 while every value below them —
-                            // urgency, status, history — was left-aligned, so
-                            // the page stopped centring halfway down. Obvious
-                            // on a phone, glaring at 800dp on a tablet.
                             Text(
                               signal.title,
-                              style: Theme.of(context).textTheme.headlineSmall,
+                              style: Theme.of(context).textTheme.titleLarge,
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 4),
+                            // Reporter and date in one line, resolved together.
+                            // They used to be a `spaceBetween` row, which on a
+                            // phone crammed them against both bezels and on a
+                            // tablet flung them apart. Built as one sentence
+                            // rather than two widgets because `_actorText`
+                            // renders nothing until the name lookup lands
+                            // (R4-OBS-01), and a separator that appears before
+                            // the name it separates is worse than a beat of
+                            // nothing.
+                            _actorText(
+                              signal.reporter.id,
+                              (name) =>
+                                  '$name \u00b7 ${dateFormat.format((signal.createdAt as Timestamp).toDate())}',
+                              fallback: l10n.unknown,
+                              maxLines: 1,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  ),
+                            ),
+                            const SizedBox(height: 10),
                             Text(
                               signal.description,
                               style: Theme.of(context).textTheme.bodyLarge,
                             ),
-                            // No type line: what the signal needs is shown as the
-                            // help-tag chips below, which carry the same
-                            // information with more precision.
+                            const SizedBox(height: 16),
+                            // The two things a volunteer opens a signal to do.
+                            // Equal width and a full 48dp tall: as bare
+                            // `TextButton`s pushed to the two ends of the row
+                            // they were the loudest colour on the screen and
+                            // the smallest targets on it at the same time.
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Flexible(
-                                  child: Text(
-                                    dateFormat.format((signal.createdAt as Timestamp).toDate()),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Flexible(
-                                  // Same helper the history rows use, so the
-                                  // "don't flash the fallback before the lookup
-                                  // lands" rule (R4-OBS-01) has one home rather
-                                  // than a copy here and a copy per row type.
-                                  child: _actorText(
-                                    signal.reporter.id,
-                                    (name) => name,
-                                    fallback: l10n.unknown,
-                                    textAlign: TextAlign.end,
-                                    maxLines: 1,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                TextButton.icon(
-                                  onPressed: () async {
-                                    GeoPoint location = signal.location['geopoint'];
-                                    final coords = Coords(location.latitude, location.longitude);
-                                    await NavigationService.navigateTo(
-                                      context: context,
-                                      coords: coords,
-                                      destinationTitle: signal.title,
-                                    );
-                                  },
-                                  icon: const Icon(Icons.directions),
-                                  label: Text(l10n.navigateMe),
-                                  // Colours come from elevatedButtonTheme.
-                                ),
-                                if (signal.contactPhone.isNotEmpty)
-                                  TextButton.icon(
-                                    onPressed: () async {
-                                      Uri phoneUri = Uri(scheme: 'tel', path: signal.contactPhone);
-                                      if (await canLaunchUrl(phoneUri)) {
-                                        launchUrl(phoneUri);
-                                      } else {
-                                        if (context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                              content: Text(l10n.cannotCall(signal.contactPhone)),
-                                            ),
-                                          );
-                                        }
-                                      }
-                                    },
-                                    icon: const Icon(Icons.phone),
-                                    label: Text(signal.contactPhone),
-                                    // Colours come from elevatedButtonTheme.
-                                  ),
-                              ],
-                            ),
-                            SectionHeader(l10n.urgency),
-                            // Master spec §5.2 restricts marking a case Red to
-                            // "the original poster/case holder, a moderator or an
-                            // admin". Until case ownership existed the reporter
-                            // was the whole of that set by default; now the case
-                            // holder is in it too, which is the spec being
-                            // implemented rather than the rule being relaxed.
-                            //
-                            // A moderator does NOT reach it here: they use the
-                            // shield in the app bar, which routes through the
-                            // `moderateAction` callable so the correction is
-                            // audited and carries a note (§5.3).
-                            //
-                            // `isCaseHolderUpdate` enforces the same line, so
-                            // hiding this picker is UI courtesy, not the security
-                            // boundary. Everyone else sees the level read-only.
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
-                              child: canCoordinate
-                                  ? UrgencyPicker(
-                                      value: signal.urgency,
-                                      enabled: !_isApplyingLevelChange,
-                                      onChanged: (value) => _updateSignalUrgency(
-                                        signal.urgency,
-                                        value,
-                                      ),
-                                    )
-                                  : Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: UrgencyChip(urgency: signal.urgency),
+                                Expanded(
+                                  child: FilledButton.icon(
+                                    style: FilledButton.styleFrom(
+                                      minimumSize: const Size.fromHeight(48),
                                     ),
-                            ),
-                            // What the signal needs. Master spec §4.2: "as needs
-                            // are resolved, the case holder removes/completes tags
-                            // and the next priority becomes active" — so the
-                            // holder edits these here, rather than through the
-                            // edit screen, which carries the reporter's own
-                            // account of what they saw and stays theirs.
-                            //
-                            // Signals from before tags existed have none, so the
-                            // block is omitted rather than showing an empty
-                            // heading — but a coordinator still needs a way to add
-                            // the first one, which is why the edit affordance is
-                            // not inside the `if`.
-                            if (signal.helpNeededTags.isNotEmpty ||
-                                signal.animalType != null ||
-                                canCoordinate) ...[
-                              const SizedBox(height: 8),
-                              // Only when there is actually a need to head. A
-                              // signal with a species and no tags (legacy, or
-                              // edited by an older build) would otherwise read
-                              // "Help needed" above a lone Cat chip.
-                              if (signal.helpNeededTags.isNotEmpty ||
-                                  canCoordinate)
-                                Row(
-                                  children: [
-                                    SectionHeader(l10n.helpNeeded),
-                                    const Spacer(),
-                                    if (canCoordinate)
-                                      TextButton.icon(
-                                        icon: const Icon(Icons.edit, size: 16),
-                                        label: Text(l10n.change),
-                                        onPressed: _isApplyingLevelChange
-                                            ? null
-                                            : () => _editHelpTags(signal),
-                                      ),
-                                  ],
+                                    onPressed: () async {
+                                      GeoPoint location = signal.location['geopoint'];
+                                      final coords = Coords(location.latitude, location.longitude);
+                                      await NavigationService.navigateTo(
+                                        context: context,
+                                        coords: coords,
+                                        destinationTitle: signal.title,
+                                      );
+                                    },
+                                    icon: const Icon(Icons.directions, size: 20),
+                                    label: Text(
+                                      l10n.navigateMe,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
                                 ),
-                              Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 8),
-                                child: Wrap(
-                                  spacing: 6,
-                                  runSpacing: 4,
-                                  children: [
-                                    if (AnimalType.fromCode(signal.animalType)
-                                        case final species?)
-                                      Chip(
-                                        avatar: Icon(species.icon, size: 16),
-                                        label: Text(species.label(l10n)),
-                                        visualDensity: VisualDensity.compact,
+                                if (signal.contactPhone.isNotEmpty) ...[
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      style: OutlinedButton.styleFrom(
+                                        minimumSize: const Size.fromHeight(48),
                                       ),
-                                    // Unknown codes are dropped: one means the
-                                    // signal came from a newer build, and there is
-                                    // no label for it here.
-                                    for (final tag in HelpTag.fromCodes(
-                                        signal.helpNeededTags))
-                                      Chip(
-                                        avatar: Icon(tag.icon, size: 16),
-                                        label: Text(tag.label(l10n)),
-                                        visualDensity: VisualDensity.compact,
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                            // Who is responsible, immediately above the control
-                            // that responsibility gates. The holder is *who*, the
-                            // status is *how far along*, and putting them next to
-                            // each other is what makes "take responsibility, then
-                            // move it" read as one idea rather than two.
-                            CaseHolderBlock(
-                              signal: signal,
-                              signalId: widget.signalId,
-                              uid: uid,
-                              busy: _isApplyingLevelChange,
-                              runGuarded: _runGuarded,
-                              nameOf: _nameWidget,
-                              onClaim: _claimCase,
-                              onSignInRequired: _showSignInDialog,
-                            ),
-                            const SizedBox(height: 8),
-                            SectionHeader(l10n.status),
-                            DropdownButton<int>(
-                              itemHeight: 64,
-                              isExpanded: true,
-                              value: signal.status,
-                                items: SignalStatus.values
-                                    .map(
-                                      (status) => DropdownMenuItem(
-                                        value: status.code,
-                                        child: Row(
-                                          children: [
-                                            // A neutral glyph, not a map pin and
-                                            // not a coloured dot: colour is the
-                                            // urgency vocabulary, and status
-                                            // borrowing it put two traffic
-                                            // lights with opposite meanings on
-                                            // the same screen.
-                                            Padding(
-                                              padding: const EdgeInsets.all(12.0),
-                                              child: Icon(status.icon, size: 20),
-                                            ),
-                                            SizedBox.fromSize(size: const Size(8, 8)),
-                                            Text(status.label(l10n)),
-                                          ],
-                                        ),
-                                      ),
-                                    )
-                                    .toList(),
-                                // Disabled mid-write for the same reason as the
-                                // urgency picker: a second selection before the
-                                // first lands posts a duplicate timeline entry.
-                                onChanged: _isApplyingLevelChange
-                                    ? null
-                                    : (value) {
-                                        if (value != null) {
-                                          _updateSignalStatus(
-                                              signal, signal.status, value);
+                                      onPressed: () async {
+                                        Uri phoneUri = Uri(scheme: 'tel', path: signal.contactPhone);
+                                        if (await canLaunchUrl(phoneUri)) {
+                                          launchUrl(phoneUri);
+                                        } else {
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text(l10n.cannotCall(signal.contactPhone)),
+                                              ),
+                                            );
+                                          }
                                         }
                                       },
-                            ),
-                            _buildSignalHistory(signal, dateFormat),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surface,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: Theme.of(context).colorScheme.outline,
-                          width: 1,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Theme.of(context).colorScheme.shadow
-                                .withAlpha(40),
-                            blurRadius: 5.0,
-                          ),
-                        ],
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        // A moderator has locked comments (§18.3). The
-                        // composer is replaced rather than merely disabled:
-                        // a greyed-out field invites people to keep tapping
-                        // it, while a sentence explains what happened. The
-                        // rules deny the write regardless — this is the
-                        // courtesy, not the enforcement.
-                        child: signal.commentsLocked
-                            ? Row(
-                                children: [
-                                  Icon(Icons.lock_outline,
-                                      size: 20,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      l10n.moderationCommentsLocked,
-                                      style: TextStyle(
-                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                        fontStyle: FontStyle.italic,
+                                      icon: const Icon(Icons.phone, size: 20),
+                                      label: Text(
+                                        signal.contactPhone,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
                                   ),
                                 ],
-                              )
-                            : Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: _newCommentController,
-                                textCapitalization: TextCapitalization.sentences,
-                                // Matches the rules' 2000-char cap, so over-long
-                                // input is stopped at the keyboard rather than
-                                // failing the write. No counter — this is a
-                                // chat-style field, not a form.
-                                inputFormatters: [
-                                  LengthLimitingTextInputFormatter(2000),
-                                ],
-                                decoration: InputDecoration(
-                                  hintText: l10n.enterYourComment,
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            // Urgency, status, who holds the case and what the
+                            // animal needs, in one bounded surface — see
+                            // [SignalCaseCard]. They were four sibling blocks
+                            // with four headings at three different type sizes,
+                            // and the editing controls for three of them were
+                            // inline, so a reader who could change nothing
+                            // still scrolled past a six-line radio group and a
+                            // full-width dropdown to reach the timeline.
+                            SignalCaseCard(
+                              signal: signal,
+                              canCoordinate: canCoordinate,
+                              busy: _isApplyingLevelChange,
+                              onManage: () => showManageCaseSheet(
+                                context,
+                                signal: signal,
+                                busy: _isApplyingLevelChange,
+                                // Master spec §5.2 restricts marking a case Red
+                                // to "the original poster/case holder, a
+                                // moderator or an admin"; `isCaseHolderUpdate`
+                                // in the rules enforces it, so gating the sheet
+                                // on `canCoordinate` is UI courtesy rather than
+                                // the security boundary. A moderator does NOT
+                                // reach it here — they use the app-bar shield,
+                                // which routes through `moderateAction` so the
+                                // correction is audited (§5.3).
+                                onUrgencyChanged: (value) =>
+                                    _updateSignalUrgency(signal.urgency, value),
+                                onStatusChanged: (value) => _updateSignalStatus(
+                                  signal,
+                                  signal.status,
+                                  value,
                                 ),
+                                onEditTags: () => _editHelpTags(signal),
+                              ),
+                              // Who is responsible, immediately above the
+                              // control that responsibility gates.
+                              holder: CaseHolderBlock(
+                                signal: signal,
+                                signalId: widget.signalId,
+                                uid: uid,
+                                busy: _isApplyingLevelChange,
+                                runGuarded: _runGuarded,
+                                nameOf: _nameWidget,
+                                onClaim: _claimCase,
+                                onSignInRequired: _showSignInDialog,
                               ),
                             ),
-                            Semantics(
-                              label: l10n.sendComment,
-                              button: true,
-                              enabled: true,
-                              child: IconButton(
-                                icon: const Icon(Icons.send),
-                                onPressed: () {
-                                  if (!RepositoryProvider.instance.userRepository.canModifyData) {
-                                    _showSignInDialog();
-                                  } else {
-                                    _addComment();
-                                  }
-                                }
-                              ),
-                            ),
+                            const SizedBox(height: 22),
+                            _buildSignalHistory(signal, dateFormat),
+                            const SizedBox(height: 16),
                           ],
-                              ),
+                        ),
                       ),
                     ),
-
-                  ],
+                  ),
                 ),
-              ),
+                // A sibling of the scroll view, not a `Positioned` over it: as
+                // an overlay, with no bottom padding underneath, it permanently
+                // hid the last ~90px of the page — and more at larger text
+                // sizes, where it swallowed the whole "Red — immediate critical
+                // help" option. As a sibling the overlap cannot come back and
+                // no padding constant has to track the composer's height.
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    border: Border(
+                      top: BorderSide(
+                        color: Theme.of(context).colorScheme.outlineVariant,
+                      ),
+                    ),
+                  ),
+                  child: _pageWidth(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+                      // A moderator has locked comments (§18.3). The composer
+                      // is replaced rather than merely disabled: a greyed-out
+                      // field invites people to keep tapping it, while a
+                      // sentence explains what happened. The rules deny the
+                      // write regardless — this is the courtesy, not the
+                      // enforcement.
+                      child: signal.commentsLocked
+                          ? Row(
+                              children: [
+                                Icon(Icons.lock_outline,
+                                    size: 20,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    l10n.moderationCommentsLocked,
+                                    style: TextStyle(
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: _newCommentController,
+                                    textCapitalization: TextCapitalization.sentences,
+                                    // Matches the rules' 2000-char cap, so
+                                    // over-long input is stopped at the keyboard
+                                    // rather than failing the write. No counter —
+                                    // this is a chat-style field, not a form.
+                                    inputFormatters: [
+                                      LengthLimitingTextInputFormatter(2000),
+                                    ],
+                                    decoration: InputDecoration(
+                                      hintText: l10n.enterYourComment,
+                                      isDense: true,
+                                      contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 12,
+                                      ),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(24),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(24),
+                                        borderSide: BorderSide(
+                                          color: Theme.of(context).colorScheme.outline,
+                                        ),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(24),
+                                        borderSide: BorderSide(
+                                          color: Theme.of(context).colorScheme.secondary,
+                                          width: 2,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Semantics(
+                                  label: l10n.sendComment,
+                                  button: true,
+                                  enabled: true,
+                                  child: IconButton(
+                                    icon: const Icon(Icons.send),
+                                    onPressed: () {
+                                      if (!RepositoryProvider.instance.userRepository.canModifyData) {
+                                        _showSignInDialog();
+                                      } else {
+                                        _addComment();
+                                      }
+                                    }
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -1131,7 +1073,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   Widget _historyNotice(String message) {
     final l10n = AppLocalizations.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.only(top: 4),
       child: Row(
         children: [
           const Icon(Icons.error_outline, size: 18),
@@ -1188,6 +1130,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     );
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SectionHeader(l10n.signalHistory),
         // Exactly one source failed. The list below is missing rows and would
@@ -1197,10 +1140,9 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         if (_historySources.any((s) => s.error != null))
           _historyNotice(l10n.historyPartiallyUnavailable),
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
+          padding: const EdgeInsets.only(top: 8, bottom: 14),
           child: Wrap(
             spacing: 8,
-            alignment: WrapAlignment.center,
             children: [
               for (final filter in SignalHistoryFilter.values)
                 _historyFilterChip(filter),
@@ -1208,13 +1150,16 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
           ),
         ),
         ListView.builder(
-          padding: const EdgeInsets.fromLTRB(0, 0, 0, 80),
+          padding: EdgeInsets.zero,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: entries.length,
           itemBuilder: (context, index) => _buildHistoryRow(
             entries[index],
             dateFormat,
+            // The last row draws no connector below its dot; without this the
+            // rail runs on into the composer with nothing to join.
+            isLast: index == entries.length - 1,
             // Computed once for the whole list rather than per row. A moderator
             // may not act on comments under their OWN signal — deleting the
             // comment criticising your case is the conflict of interest the
@@ -1231,20 +1176,116 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     SignalHistoryEntry entry,
     DateFormat dateFormat, {
     required bool canModerateComments,
+    required bool isLast,
   }) =>
       switch (entry.kind) {
-        SignalHistoryKind.created => _buildCreatedRow(entry, dateFormat),
+        SignalHistoryKind.created => _buildCreatedRow(entry, dateFormat, isLast),
         SignalHistoryKind.statusChange ||
         SignalHistoryKind.urgencyChange =>
-          _buildEventRow(entry, dateFormat),
+          _buildEventRow(entry, dateFormat, isLast),
         SignalHistoryKind.ownershipTransfer =>
-          _buildOwnershipRow(entry, dateFormat),
+          _buildOwnershipRow(entry, dateFormat, isLast),
         SignalHistoryKind.comment => _buildCommentRow(
             entry,
             dateFormat,
             canModerateComments: canModerateComments,
+            isLast: isLast,
           ),
       };
+
+  /// The one shape every timeline row has.
+  ///
+  /// The four kinds used to be four differently coloured cards — grey for the
+  /// opening row, brand orange for a status or urgency change, raw
+  /// `Colors.blue.shade50` for an ownership transfer, white for a comment —
+  /// with the actor's name *inside* three of them and *underneath* the fourth.
+  /// Five consecutive status changes by one person therefore printed that
+  /// person's name five times, in italics, on five orange cards, which is what
+  /// made a normal case read as a wall of warnings. The blue was also the only
+  /// colour on this screen outside `AppColors`, so it had no dark-mode form.
+  ///
+  /// Now the kind is carried by one 28dp dot on a rail and nothing else; the
+  /// actor and the time share a single small line above the sentence; and the
+  /// connector between the dots supplies the "these happened in order" that the
+  /// gaps between cards used to have to imply. Colour is spent only where it
+  /// already means something: an urgency change wears the urgency's own colour,
+  /// a status change the brand container, and everything else is neutral.
+  Widget _timelineRow({
+    required IconData icon,
+    required Color iconBackground,
+    required Color iconColor,
+    required Widget sentence,
+    required String actorId,
+    required String? date,
+    required bool isLast,
+    String? note,
+    VoidCallback? onLongPress,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final meta = Theme.of(context)
+        .textTheme
+        .bodySmall
+        ?.copyWith(color: scheme.onSurfaceVariant);
+
+    return InkWell(
+      onLongPress: onLongPress,
+      // The rail has to run the full height of whatever the sentence wraps to.
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Column(
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: iconBackground,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, size: 15, color: iconColor),
+                ),
+                if (!isLast)
+                  Expanded(
+                    child: Container(
+                      width: 1,
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      color: scheme.outlineVariant,
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(top: 2, bottom: isLast ? 0 : 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Renders nothing until the name lands, then the whole line
+                    // at once — see [_actorText] and R4-OBS-01.
+                    _actorText(
+                      actorId,
+                      (name) => date == null ? name : '$name · $date',
+                      fallback: AppLocalizations.of(context).someone,
+                      style: meta,
+                      maxLines: 1,
+                    ),
+                    const SizedBox(height: 2),
+                    sentence,
+                    if (note != null && note.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(note, style: meta),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   /// "Ownership history is visible in the case timeline" (master spec §4.5).
   ///
@@ -1259,162 +1300,92 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// The previous holder stays visible because the row above it in the thread is
   /// theirs — the spec's "previous case holders remain visible" is satisfied by
   /// the timeline being a thread, with no per-row restatement.
-  Widget _buildOwnershipRow(SignalHistoryEntry entry, DateFormat dateFormat) {
+  ///
+  /// Only the third sentence still names anybody: the actor moved to the row's
+  /// meta line, so the two-name lookup this used to need is now a one-name one.
+  Widget _buildOwnershipRow(
+      SignalHistoryEntry entry, DateFormat dateFormat, bool isLast) {
     final l10n = AppLocalizations.of(context);
     final holderId = entry.holderId;
 
     final Widget sentence;
     if (holderId == null) {
-      sentence = _actorText(
-        entry.actorId,
-        (name) => l10n.releasedCase(name),
-        fallback: l10n.someone,
-      );
+      sentence = Text(l10n.releasedCaseShort);
     } else if (holderId == entry.actorId) {
-      sentence = _actorText(
-        entry.actorId,
-        (name) => l10n.tookResponsibility(name),
-        fallback: l10n.someone,
-      );
+      sentence = Text(l10n.tookResponsibilityShort);
     } else {
-      // Two names in one sentence, which is the one case `_actorText` cannot
-      // serve — it resolves a single uid. Memoized as a *pair*, not just built
-      // from two memoized halves: `FutureBuilder` compares futures by identity,
-      // so a fresh `Future.wait` each build restarts it at `waiting` and the
-      // sentence collapses to zero height for a frame. This screen rebuilds on
-      // every signal, comment and event snapshot, so that was every row
-      // flickering on each one.
-      sentence = FutureBuilder<List<String?>>(
-        future: _namePairFor(entry.actorId, holderId),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const SizedBox.shrink();
-          }
-          final names = snapshot.data ?? const [null, null];
-          final actorName =
-              (names[0]?.isNotEmpty ?? false) ? names[0]! : l10n.someone;
-          // Same fallback as the actor above — one sentence should not mix
-          // "Someone" and "Unknown" for two people in the same position.
-          final holderName =
-              (names[1]?.isNotEmpty ?? false) ? names[1]! : l10n.someone;
-          return Text(l10n.handedCaseTo(actorName, holderName));
-        },
+      sentence = _actorText(
+        holderId,
+        (name) => l10n.handedCaseToShort(name),
+        fallback: l10n.someone,
       );
     }
 
-    return ListTile(
-      title: _historyCard(
-        // The same blue the case-holder block uses, so a transfer reads as
-        // belonging to that part of the screen rather than to the orange
-        // status/urgency events.
-        background: Colors.blue.shade50,
-        border: Colors.blue.shade200,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  holderId == null
-                      ? Icons.person_off_outlined
-                      : Icons.volunteer_activism,
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                Expanded(child: sentence),
-              ],
-            ),
-            if (entry.note case final note? when note.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(note),
-            ],
-          ],
-        ),
-      ),
-      // The same subtitle slot every other history row uses, so the timeline's
-      // dates stay in one column and `_formatDate` remains the single place a
-      // change to date presentation has to be made.
-      subtitle: _dateSubtitle(entry, dateFormat),
+    return _timelineRow(
+      icon: holderId == null
+          ? Icons.person_off_outlined
+          : Icons.volunteer_activism,
+      iconBackground: Theme.of(context).colorScheme.surfaceContainerHigh,
+      iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
+      sentence: sentence,
+      actorId: entry.actorId,
+      date: _formatDate(entry, dateFormat),
+      note: entry.note,
+      isLast: isLast,
     );
   }
 
   /// The row every timeline opens with. Not stored — see
   /// [SignalHistoryEntry.created].
-  Widget _buildCreatedRow(SignalHistoryEntry entry, DateFormat dateFormat) {
-    final l10n = AppLocalizations.of(context);
-    return ListTile(
-      title: _historyCard(
-        background: Theme.of(context).colorScheme.surfaceContainer,
-        border: Theme.of(context).colorScheme.outline,
-        child: Row(
-          children: [
-            const Icon(Icons.flag_outlined, size: 20),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _actorText(
-                entry.actorId,
-                (name) => l10n.reportedThisSignal(name),
-                fallback: l10n.someone,
-              ),
-            ),
-          ],
-        ),
-      ),
-      subtitle: _dateSubtitle(entry, dateFormat),
+  Widget _buildCreatedRow(
+      SignalHistoryEntry entry, DateFormat dateFormat, bool isLast) {
+    return _timelineRow(
+      icon: Icons.flag_outlined,
+      iconBackground: Theme.of(context).colorScheme.surfaceContainerHigh,
+      iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
+      sentence: Text(AppLocalizations.of(context).reportedThisSignalShort),
+      actorId: entry.actorId,
+      date: _formatDate(entry, dateFormat),
+      isLast: isLast,
     );
   }
 
   /// A status or urgency change, with the update note that explains it.
-  Widget _buildEventRow(SignalHistoryEntry entry, DateFormat dateFormat) {
+  Widget _buildEventRow(
+      SignalHistoryEntry entry, DateFormat dateFormat, bool isLast) {
     final l10n = AppLocalizations.of(context);
+    final scheme = Theme.of(context).colorScheme;
     final isUrgency = entry.kind == SignalHistoryKind.urgencyChange;
     final level = entry.level!;
-    final note = entry.note;
 
-    return ListTile(
-      title: _historyCard(
-        background: Theme.of(context).colorScheme.primaryContainer,
-        border: Theme.of(context).colorScheme.primary,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                isUrgency
-                    ? urgencyBadge(SignalUrgency.fromCode(level))
-                    : statusBadge(SignalStatus.fromCode(level)),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _actorText(
-                    entry.actorId,
-                    (name) => isUrgency
-                        ? l10n.changedUrgencyTo(
-                            name,
-                            SignalUrgency.fromCode(level).label(l10n),
-                          )
-                        : l10n.changedStatusTo(
-                            name,
-                            SignalStatus.fromCode(level).label(l10n),
-                          ),
-                    fallback: l10n.someone,
-                    style: const TextStyle(fontStyle: FontStyle.italic),
-                  ),
-                ),
-              ],
-            ),
-            // Absent on entries written before the note was mandatory. Those
-            // are the legacy rows still living in `comments`, and they have to
-            // keep rendering exactly as they always did.
-            if (note != null && note.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(note),
-            ],
-          ],
-        ),
+    // An urgency change keeps the urgency's own colour, because that colour is
+    // already the app's vocabulary for severity — it is what the map pin and
+    // the card's rail use. A status change does not borrow it: status runs on
+    // the opposite scale, and colouring both put two contradictory traffic
+    // lights in one thread (see the class doc on [LevelChip]).
+    final urgency = isUrgency ? SignalUrgency.fromCode(level) : null;
+
+    return _timelineRow(
+      icon: isUrgency ? Icons.place : SignalStatus.fromCode(level).icon,
+      iconBackground: urgency == null
+          ? scheme.primaryContainer
+          : urgency.color.withAlpha(38),
+      iconColor: urgency == null ? scheme.onPrimaryContainer : urgency.color,
+      sentence: Text(
+        isUrgency
+            ? l10n.urgencySetTo(urgency!.label(l10n))
+            : l10n.statusSetTo(SignalStatus.fromCode(level).label(l10n)),
       ),
-      subtitle: _dateSubtitle(entry, dateFormat),
+      actorId: entry.actorId,
+      date: _formatDate(entry, dateFormat),
+      // Absent on entries written before the note was mandatory. Those are the
+      // legacy rows still living in `comments`, and they have to keep rendering
+      // exactly as they always did.
+      note: entry.note,
+      isLast: isLast,
     );
   }
+
 
   /// Opens the moderator action sheet for this signal.
   ///
@@ -1506,13 +1477,21 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     SignalHistoryEntry entry,
     DateFormat dateFormat, {
     required bool canModerateComments,
+    required bool isLast,
   }) {
-    final l10n = AppLocalizations.of(context);
     final currentUid = FirebaseAuth.instance.currentUser?.uid;
     // Reporting your own comment is meaningless; deleting it is what you want,
     // and that is the reporter's cascade or a moderator's job.
     final canReport = currentUid != null && entry.actorId != currentUid;
-    return ListTile(
+
+    return _timelineRow(
+      icon: Icons.chat_bubble_outline,
+      iconBackground: Theme.of(context).colorScheme.surfaceContainerHigh,
+      iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
+      sentence: Text(entry.text ?? ''),
+      actorId: entry.actorId,
+      date: _formatDate(entry, dateFormat),
+      isLast: isLast,
       // Long-press rather than a per-row menu button: a comment list with a
       // trailing overflow icon on every row reads as an admin tool, and the
       // rows are already dense. Long-press is the platform gesture for "more
@@ -1537,35 +1516,6 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                       reportedUserId: entry.actorId,
                     ),
                   ),
-      title: _historyCard(
-        background: Theme.of(context).colorScheme.surface,
-        border: Theme.of(context).colorScheme.outline,
-        child: Text(entry.text ?? ''),
-      ),
-      subtitle: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Flexible(
-            child: Text(
-              _formatDate(entry, dateFormat) ?? '',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: 8),
-          // The author name is user-supplied and capped at 100 chars, so it must
-          // be allowed to shrink instead of overflowing the row.
-          Flexible(
-            child: _actorText(
-              entry.actorId,
-              (name) => name,
-              fallback: l10n.unknown,
-              textAlign: TextAlign.end,
-              maxLines: 1,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -1602,28 +1552,6 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         ],
       ),
     );
-  }
-
-  /// The bubble every history row sits in. One definition so the three rows
-  /// cannot drift apart visually; they differ only in their two colours.
-  Widget _historyCard({
-    required Color background,
-    required Color border,
-    required Widget child,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: border, width: 1),
-      ),
-      child: Padding(padding: const EdgeInsets.all(8.0), child: child),
-    );
-  }
-
-  Widget? _dateSubtitle(SignalHistoryEntry entry, DateFormat dateFormat) {
-    final text = _formatDate(entry, dateFormat);
-    return text == null ? null : Text(text);
   }
 
   /// Null while a write is still in flight and has no timestamp yet — the row
@@ -1749,15 +1677,6 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       return null;
     });
   }
-
-  /// Both names for a row that names two people, as one stable future.
-  ///
-  /// Composed from [_nameFor], so the underlying reads stay memoized per uid and
-  /// shared with every other row; this memo exists only so the *combined* future
-  /// keeps its identity across rebuilds.
-  Future<List<String?>> _namePairFor(String first, String second) =>
-      _namePairFutures['$first|$second'] ??=
-          Future.wait([_nameFor(first), _nameFor(second)]);
 
   /// Reads a name from the world-readable public profile, retrying a failed
   /// read. The `publicProfiles` read is auth-gated, and right after a fresh
