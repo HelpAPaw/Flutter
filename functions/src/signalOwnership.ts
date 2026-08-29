@@ -110,11 +110,27 @@ export function requireRealAccount(auth: { uid: string; token: Record<string, un
   return auth.uid;
 }
 
-/** When the owner last did anything, falling back to when the signal was made. */
+/**
+ * When the owner last did anything, falling back to when the signal was made.
+ *
+ * **The LATER of the two names, not a preference order.** `ownerActiveAt` and
+ * its pre-rename twin `holderActiveAt` are the one pair a *client* may write
+ * (`isSignalOwnerUpdate` allows both), and each build writes only the name it
+ * knows — so on a signal whose owner coordinates from a pre-rename build, the
+ * new name sits frozen at whatever the last server transfer stamped while the
+ * old one keeps moving. Preferring the new name would then read an active owner
+ * as silent, and after {@link STALE_OWNER_DAYS} anyone could displace them.
+ *
+ * Taking the later value is correct under any mix of builds and needs no
+ * assumption about which one is live. Mirrored by `Signal.ownerActiveAt`.
+ */
 export function ownerActiveAtOf(
   data: Record<string, unknown> | undefined
 ): FirebaseFirestore.Timestamp | null {
-  const active = data?.ownerActiveAt ?? data?.holderActiveAt;
+  const stamps = [data?.ownerActiveAt, data?.holderActiveAt].filter(
+    (v): v is FirebaseFirestore.Timestamp => v instanceof admin.firestore.Timestamp
+  );
+  const active = stamps.sort((a, b) => b.toMillis() - a.toMillis())[0];
   if (active instanceof admin.firestore.Timestamp) return active;
   const created = data?.createdAt;
   if (created instanceof admin.firestore.Timestamp) return created;

@@ -88,7 +88,9 @@
 >       `listQuarantined` verified present after. Live rules re-read and byte-identical to
 >       the branch. Behaviourally a no-op for **129**, which writes none of the renamed
 >       fields: every changed predicate is either vacuous or strictly wider. **Backfill and
->       shim retirement tracked in #77**, and both wait for the app release.
+>       shim retirement tracked in #77**. The backfill's phase A (additive) waits only
+>       for the app release; **phase A must not delete the pre-rename names**, and
+>       `--drop-legacy` waits for the installed base to turn over, not for the release.
 > - [x] ✅ **Signal removal (#68) steps 1 and 3** — `signalRemoval` and
 >       `purgeRemovedSignals` created (nothing deleted — checked by diffing the deployed
 >       export list against the built one), the additive `removedSignals` rules block and

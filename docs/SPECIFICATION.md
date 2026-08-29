@@ -926,15 +926,36 @@ tracked in HelpAPaw/Flutter#77.
    `ownerActiveAtOf` prefers `ownerActiveAt`, and until the new ruleset pins it a
    reporter could self-stamp a far-future value and disable the staleness escape
    hatch on their own signal, silently and permanently.
-2. Ship the app release.
-3. Only then run `functions/scripts/backfill_case_to_signal.js`. Before step 1 it
-   would push a spurious "someone took responsibility" for every signal it
-   touches, because `onSignalUpdated` would compare a derived reporter against a
-   real owner. After it, before and after compare equal and the handler returns
-   silently.
-4. Once the pre-rename builds are out of use, delete the dual writes, the legacy
+2. Ship the app release. **This is a rollout, not a moment** — it takes weeks and
+   some users never update, so no step below may assume the old builds are gone.
+3. Run `functions/scripts/backfill_case_to_signal.js` — **phase A, its default**,
+   which writes the new names and *keeps* the old ones. Safe under any mix of
+   builds. Before step 1 it would push a spurious "someone took responsibility"
+   for every signal it touches, because `onSignalUpdated` would compare a derived
+   reporter against a real owner; after it, before and after compare equal and
+   the handler returns silently.
+4. **Only once the pre-rename builds are off the installed base** (the condition
+   #70 already tracks, not "after the release"): run the backfill again with
+   `--drop-legacy`, and in the same change delete the dual writes, the legacy
    read branches, the legacy key in the `hasOnly` list, the `caseOwnership` alias
-   and this section in one change.
+   and this section.
+
+Deleting the old names early is silent and wrong in the worst direction. A
+pre-rename build reads a deleted `caseHolder` as **absent**, and absent means the
+reporter — so every *released* signal hands itself straight back to the person
+who stepped away from it, and every transferred signal shows its reporter as the
+owner. The rules read both names throughout, so nothing is denied and no
+permission is widened; the old app simply shows the wrong person.
+
+**The one pair that can genuinely disagree is the activity stamp.** Neither owner
+field is client-writable — `isNotTouchingOwnership()` blocks both names on every
+update branch, so only the callable writes them and it writes both together. But
+`isSignalOwnerUpdate()` *must* allow both stamps (§4.8a above), and each build
+writes only the name it knows, so an owner coordinating from a pre-rename build
+leaves `ownerActiveAt` frozen at the last server transfer while `holderActiveAt`
+keeps moving. `ownerActiveAtOf` and `Signal.latestStampFrom` therefore take the
+**later of the two**, not a preferred name — preferring the new one would read an
+active owner as silent and let anyone displace them after `STALE_OWNER_DAYS`.
 
 
 ## 5. Security model (`firestore.rules`, `storage.rules`)

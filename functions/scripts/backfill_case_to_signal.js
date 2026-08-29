@@ -19,6 +19,28 @@
  * — still accepts the old names. This exists so those legacy branches can
  * eventually be deleted, not to make anything work.
  *
+ * TWO PHASES, because "after the app release" is not a moment
+ * -----------------------------------------------------------
+ * A release rolls out over weeks and some users never update, so there is no
+ * point at which the old builds are simply gone. The migration is therefore
+ * split, and only the first half is safe to run while any of them are live:
+ *
+ *   PHASE A (default) — ADDITIVE. Writes the new names, keeps the old ones.
+ *     Safe with any mix of builds: old ones keep reading the name they know,
+ *     new ones read theirs, and the two always agree because the server writes
+ *     both on every transfer.
+ *
+ *   PHASE B (--drop-legacy) — DESTRUCTIVE. Deletes the old names. Only once the
+ *     pre-rename builds are off the installed base (HelpAPaw/Flutter#77), and
+ *     in the same change that retires the read shims.
+ *
+ * Running phase B early is silent and wrong in the worst direction: a
+ * pre-rename build reads the deleted `caseHolder` as *absent*, and absent means
+ * the reporter — so every RELEASED signal hands itself straight back to the
+ * person who stepped away from it, and every transferred signal shows its
+ * reporter as the owner. The rules stay correct throughout (they read both), so
+ * nothing is denied; the old app just shows the wrong person.
+ *
  * ORDER MATTERS, and getting it wrong is loud
  * -------------------------------------------
  * **Deploy the functions and the rules that read both names BEFORE running
@@ -40,11 +62,12 @@
  *   re-run after a partial failure resumes rather than redoing work. Where both
  *   names are present the NEW one wins and the old is simply dropped — the
  *   server wrote it, and it is the authority.
- * - The old field is DELETED once the new one is written. Leaving both would
- *   mean a later client write to one of them could disagree with the other,
- *   and the readers deliberately prefer the new name — a stale `caseHolder`
- *   beside a `signalOwner: null` is exactly the shape that would resurrect an
- *   owner who had released the signal.
+ * - The old field is kept unless --drop-legacy is passed. The two cannot drift
+ *   while both are present: no client may write EITHER owner field (the rules
+ *   block both names on every update branch), so only the callable writes them
+ *   and it writes both together. The one pair a client *can* write is the
+ *   activity stamp, which is why `ownerActiveAtOf` takes the LATER of the two
+ *   rather than preferring a name.
  * - An **explicit null** `caseHolder` is a *release* and is copied across as an
  *   explicit null. Treating it as "no value to copy" would delete it, and every
  *   reader derives an absent field back to the reporter — handing the signal to
@@ -69,6 +92,9 @@
  *   # 5. reports are a single global collection, so they are done once, not per collection
  *   node scripts/backfill_case_to_signal.js --project help-a-paw-dev --reports --apply
  *
+ *   # PHASE B, much later, only once #77's installed-base condition is met:
+ *   node scripts/backfill_case_to_signal.js --project help-a-paw-dev --collection signals --drop-legacy --apply
+ *
  * Credentials come from GOOGLE_APPLICATION_CREDENTIALS or `gcloud auth
  * application-default login`.
  */
@@ -83,10 +109,11 @@ const LEGACY_REPORT_REASON = "duplicateCase";
 const REPORT_REASON = "duplicateSignal";
 
 function parseArgs(argv) {
-  const args = { apply: false, collection: "signals", reports: false };
+  const args = { apply: false, collection: "signals", reports: false, dropLegacy: false };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--apply") args.apply = true;
+    else if (arg === "--drop-legacy") args.dropLegacy = true;
     else if (arg === "--reports") args.reports = true;
     else if (arg === "--collection") args.collection = argv[++i];
     else if (arg === "--project") args.project = argv[++i];
@@ -151,7 +178,7 @@ async function* pages(query) {
  * Renames the two ownership fields on every signal that still carries the old
  * ones, and returns the ids whose event history is worth scanning.
  */
-async function migrateSignals(db, collection, writer) {
+async function migrateSignals(db, collection, writer, dropLegacy) {
   const stats = { scanned: 0, migrated: 0, releases: 0 };
   const touched = [];
 
@@ -175,12 +202,15 @@ async function migrateSignals(db, collection, writer) {
           update.signalOwner = data.caseHolder ?? null;
           if (data.caseHolder == null) stats.releases++;
         }
-        update.caseHolder = admin.firestore.FieldValue.delete();
+        if (dropLegacy) update.caseHolder = admin.firestore.FieldValue.delete();
       }
       if (hasLegacyStamp) {
         if (!("ownerActiveAt" in data)) update.ownerActiveAt = data.holderActiveAt;
-        update.holderActiveAt = admin.firestore.FieldValue.delete();
+        if (dropLegacy) update.holderActiveAt = admin.firestore.FieldValue.delete();
       }
+
+      // Phase A on a document already carrying both names has nothing to do.
+      if (Object.keys(update).length === 0) continue;
 
       stats.migrated++;
       touched.push(docSnap.ref);
@@ -196,7 +226,7 @@ async function migrateSignals(db, collection, writer) {
 }
 
 /** Renames the ownership-transfer payload keys under the signals we touched. */
-async function migrateEvents(refs, writer) {
+async function migrateEvents(refs, writer, dropLegacy) {
   const stats = { scanned: 0, migrated: 0 };
   for (const signalRef of refs) {
     const snapshot = await signalRef
@@ -212,11 +242,11 @@ async function migrateEvents(refs, writer) {
       // row indistinguishable from a malformed one to the decoder.
       if ("oldHolder" in data) {
         if (!("oldOwner" in data)) update.oldOwner = data.oldHolder ?? null;
-        update.oldHolder = admin.firestore.FieldValue.delete();
+        if (dropLegacy) update.oldHolder = admin.firestore.FieldValue.delete();
       }
       if ("newHolder" in data) {
         if (!("newOwner" in data)) update.newOwner = data.newHolder ?? null;
-        update.newHolder = admin.firestore.FieldValue.delete();
+        if (dropLegacy) update.newHolder = admin.firestore.FieldValue.delete();
       }
       if (Object.keys(update).length === 0) continue;
       stats.migrated++;
@@ -246,7 +276,8 @@ async function main() {
   if (args.help) {
     console.log(
       "Usage: node scripts/backfill_case_to_signal.js " +
-        "[--project <id>] [--collection signals|signals_test] [--reports] [--apply]"
+        "[--project <id>] [--collection signals|signals_test] [--reports] " +
+        "[--drop-legacy] [--apply]"
     );
     return;
   }
@@ -266,6 +297,11 @@ async function main() {
   console.log(`Target     : ${args.reports ? "reports" : args.collection}`);
   console.log(`Project    : ${args.project || "(from credentials)"}`);
   console.log(`Mode       : ${args.apply ? "APPLY (writing)" : "DRY RUN (no writes)"}`);
+  console.log(
+    `Phase      : ${args.dropLegacy
+      ? "B — DESTRUCTIVE, deletes the pre-rename names (old builds must be gone)"
+      : "A — additive, keeps the pre-rename names"}`
+  );
   console.log("");
 
   if (args.reports) {
@@ -274,8 +310,8 @@ async function main() {
     console.log(`Reports with "${LEGACY_REPORT_REASON}" : ${reports.scanned}`);
     console.log(`Rewritten                          : ${written}`);
   } else {
-    const { stats, touched } = await migrateSignals(db, args.collection, writer);
-    const events = await migrateEvents(touched, writer);
+    const { stats, touched } = await migrateSignals(db, args.collection, writer, args.dropLegacy);
+    const events = await migrateEvents(touched, writer, args.dropLegacy);
     const written = await writer.flush();
 
     if (process.stdout.isTTY) process.stdout.write("\r" + " ".repeat(48) + "\r");

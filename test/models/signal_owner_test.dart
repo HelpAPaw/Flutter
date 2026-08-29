@@ -58,6 +58,27 @@ void main() {
       expect(Signal.signalOwnerFrom(signalJson({'caseHolder': null})), isNull);
     });
 
+    // The stamp pair behaves the OPPOSITE way to the owner pair, and
+    // deliberately. No client may write either owner field, so those two cannot
+    // drift and the new name wins. Both stamps ARE client-writable, and each
+    // build writes only the name it knows — so the later value wins instead.
+    test('the activity stamp takes the later of the two names', () {
+      final older = Timestamp.fromDate(DateTime.utc(2026, 8, 1));
+      final newer = Timestamp.fromDate(DateTime.utc(2026, 8, 20));
+
+      expect(
+        Signal.latestStampFrom({'ownerActiveAt': older, 'holderActiveAt': newer}),
+        newer,
+      );
+      expect(
+        Signal.latestStampFrom({'ownerActiveAt': newer, 'holderActiveAt': older}),
+        newer,
+      );
+      expect(Signal.latestStampFrom({'holderActiveAt': older}), older);
+      expect(Signal.latestStampFrom({'ownerActiveAt': newer}), newer);
+      expect(Signal.latestStampFrom(const {}), isNull);
+    });
+
     test('prefers signalOwner over a stale caseHolder', () {
       expect(
         Signal.signalOwnerFrom(

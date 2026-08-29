@@ -90,6 +90,29 @@ describe("isOwnerStale", () => {
     expect(isOwnerStale({ ownerActiveAt: daysAgo(1) })).toBe(false);
   });
 
+  // THE MIXED-BUILD CASE. `ownerActiveAt` and `holderActiveAt` are the one
+  // ownership pair a client may write, and each build writes only the name it
+  // knows — so an owner coordinating from a pre-rename build leaves the new name
+  // frozen at the last server transfer. Preferring a name (rather than taking
+  // the later value) reads that owner as silent and lets anyone displace them.
+  it("takes the later stamp, not the renamed one, when they disagree", () => {
+    expect(
+      isOwnerStale({
+        ownerActiveAt: daysAgo(STALE_OWNER_DAYS + 5),
+        holderActiveAt: daysAgo(1),
+      })
+    ).toBe(false);
+  });
+
+  it("still goes stale when the pre-rename stamp is the older one", () => {
+    expect(
+      isOwnerStale({
+        ownerActiveAt: daysAgo(STALE_OWNER_DAYS + 1),
+        holderActiveAt: daysAgo(STALE_OWNER_DAYS + 9),
+      })
+    ).toBe(true);
+  });
+
   it(`is true past ${STALE_OWNER_DAYS} days of silence`, () => {
     expect(isOwnerStale({ ownerActiveAt: daysAgo(STALE_OWNER_DAYS + 1) })).toBe(
       true

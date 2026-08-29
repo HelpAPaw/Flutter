@@ -189,9 +189,7 @@ class Signal {
       moderation: (json['moderation'] as Map<dynamic, dynamic>?)
           ?.cast<String, dynamic>(),
       signalOwner: signalOwnerFrom(json),
-      // `holderActiveAt` is the pre-rename name; see [signalOwnerFrom].
-      ownerActiveAt:
-          (json['ownerActiveAt'] ?? json['holderActiveAt']) as Timestamp?,
+      ownerActiveAt: latestStampFrom(json),
       photoUrls: (json['photoUrls'] as List<dynamic>?)
           ?.map((e) => e as String)
           .toList() ?? [],
@@ -269,6 +267,24 @@ class Signal {
       return json['caseHolder'] as DocumentReference?;
     }
     return json['reporter'] as DocumentReference?;
+  }
+
+  /// The later of `ownerActiveAt` and its pre-rename twin `holderActiveAt`.
+  ///
+  /// **The later, not a preference order.** This pair is the one part of
+  /// ownership a *client* may write, and each build writes only the name it
+  /// knows — so on a signal coordinated from a pre-rename build the new name
+  /// stays frozen at the last server transfer while the old one keeps moving.
+  /// Preferring the new name would draw "Nobody has updated this signal in a
+  /// while" over an owner who is actively working it, and offer Take
+  /// responsibility to everyone else. Mirrors `ownerActiveAtOf` in
+  /// `functions/src/signalOwnership.ts`, which is the enforcement.
+  static Timestamp? latestStampFrom(Map<String, dynamic> json) {
+    final owner = json['ownerActiveAt'] as Timestamp?;
+    final holder = json['holderActiveAt'] as Timestamp?;
+    if (owner == null) return holder;
+    if (holder == null) return owner;
+    return owner.compareTo(holder) >= 0 ? owner : holder;
   }
 
   /// Whether nobody currently holds this signal, so anyone may take it on.
