@@ -134,6 +134,27 @@ abstract final class AppColors {
   /// Ink on [errorDark].
   static const onErrorDark = Color(0xFF690005);
 
+  /// The quieter half of the error pair: a tinted *block* carrying a warning,
+  /// rather than a control shouting one.
+  ///
+  /// These have to be declared. An unset [ColorScheme] slot falls back to its
+  /// base colour — `errorContainer` becomes `error` and `onErrorContainer`
+  /// becomes `onError` — which put a light salmon card with near-black text
+  /// into the middle of the dark theme, and a saturated red block with white
+  /// text into the light one. One card uses this pair (the background-location
+  /// warning); both readings were wrong.
+  static const errorContainerLight = Color(0xFFFDE4E1);
+
+  /// Ink on [errorContainerLight] (8.65:1).
+  static const onErrorContainerLight = Color(0xFF7A1C18);
+
+  /// Dark enough to sit on black and still read as a block (1.75:1 against the
+  /// surface, which is what a tinted card needs — it is not text).
+  static const errorContainerDark = Color(0xFF63201A);
+
+  /// Ink on [errorContainerDark] (9.28:1).
+  static const onErrorContainerDark = Color(0xFFFFDAD6);
+
   // ---------------------------------------------------------------------
   // Scrim
   // ---------------------------------------------------------------------

@@ -76,6 +76,8 @@ abstract final class AppTheme {
     onTertiary: AppColors.onBrandLight,
     error: AppColors.errorLight,
     onError: AppColors.onErrorLight,
+    errorContainer: AppColors.errorContainerLight,
+    onErrorContainer: AppColors.onErrorContainerLight,
     surface: AppColors.surfaceLight,
     onSurface: AppColors.onSurfaceLight,
     surfaceContainerLowest: AppColors.surfaceLight,
@@ -106,6 +108,8 @@ abstract final class AppTheme {
     onTertiary: AppColors.onBrandDark,
     error: AppColors.errorDark,
     onError: AppColors.onErrorDark,
+    errorContainer: AppColors.errorContainerDark,
+    onErrorContainer: AppColors.onErrorContainerDark,
     surface: AppColors.surfaceDark,
     onSurface: AppColors.onSurfaceDark,
     surfaceContainerLowest: AppColors.surfaceDark,
@@ -248,6 +252,10 @@ abstract final class AppTheme {
               : scheme.outline,
         ),
       ),
+      // Shaped for a TabBar on a *surface*, which is where the moderation
+      // queue puts one. My Signals is the exception — its tabs are in the
+      // `bottom` slot of the orange app bar — and it overrides these locally
+      // with `onPrimary`, because no single default can serve both grounds.
       tabBarTheme: TabBarThemeData(
         labelColor: onGroundBrand,
         unselectedLabelColor: scheme.onSurfaceVariant,
