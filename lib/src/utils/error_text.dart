@@ -46,20 +46,52 @@ String reportAndDescribe(
   required String where,
   required String fallback,
 }) {
+  reportError(error, stack, where: where);
+  return _describe(l10n, error) ?? fallback;
+}
+
+/// Records [error] and shows the user nothing.
+///
+/// For the one shape [reportAndDescribe] cannot serve: a failure that lands
+/// after the screen is gone. Reading `AppLocalizations` needs a live context,
+/// so there is no sentence to produce — but the report still has to happen,
+/// and "the user left" must not be what stops it.
+///
+/// The pairing this file exists to enforce only runs one way: showing a
+/// message without logging the cause is the mistake, logging without a
+/// message is just a failure nobody was waiting on.
+void reportError(
+  Object error,
+  StackTrace? stack, {
+  required String where,
+}) {
   debugPrint('Handled error in $where: $error');
+
+  // A refused camera or photos permission is a person saying no, not a
+  // failure: reporting it would fill the console with the one state we
+  // already answer with a specific sentence, and bury the ones we cannot.
+  if (_isUserChoice(error)) return;
+
   try {
-    FirebaseCrashlytics.instance.recordError(
-      error,
-      stack,
-      reason: where,
-      fatal: false,
-    );
+    // The future has to be guarded too, not just the getter. An async failure
+    // inside `recordError` escapes to `PlatformDispatcher.onError`, which
+    // records it as **fatal** — a handled error turning into a crash report is
+    // the exact opposite of the point.
+    FirebaseCrashlytics.instance
+        .recordError(error, stack, reason: where, fatal: false)
+        .catchError((_) {});
   } catch (_) {
     // Crashlytics is not initialized in tests, and a failure to report must
     // never swallow the message the user is waiting for.
   }
-  return _describe(l10n, error) ?? fallback;
 }
+
+/// Whether [error] is the user having declined something, rather than
+/// something having gone wrong.
+bool _isUserChoice(Object error) =>
+    error is PlatformException &&
+    (error.code == 'camera_access_denied' ||
+        error.code == 'photo_access_denied');
 
 /// The user-facing sentence for [error], or null when nothing specific is
 /// known about it.
@@ -86,7 +118,9 @@ String? _describe(AppLocalizations l10n, Object error) {
       case 'quota-exceeded':
         return l10n.serverBusyError;
     }
-    return null;
+    // No early return: Android Storage reports a connection lost mid-upload as
+    // `unknown` with a SocketException inside the message, and that is exactly
+    // the case the text match below exists for.
   }
 
   // image_picker reports a refused OS permission as a PlatformException, and
@@ -99,7 +133,6 @@ String? _describe(AppLocalizations l10n, Object error) {
       case 'photo_access_denied':
         return l10n.photosPermissionDenied;
     }
-    return null;
   }
 
   // No `dart:io` import: this file is reached from the web entrypoint too, so

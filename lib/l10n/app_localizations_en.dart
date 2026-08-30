@@ -1321,11 +1321,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'This account has been disabled. Please contact support.';
 
   @override
-  String errorWithCode(String message) {
-    return 'Error: $message';
-  }
-
-  @override
   String resendInSeconds(int seconds) {
     return 'Resend in ${seconds}s';
   }

@@ -140,7 +140,13 @@ class _EmailVerificationPageState extends State<EmailVerificationPage>
         // Restart the resend cooldown.
         _startResendCountdown();
       }
-    } on FirebaseAuthException catch (e) {
+    } on FirebaseAuthException catch (e, stack) {
+      // Outside the `mounted` guard on purpose: backing out of this screen
+      // while the send is in flight must not be what stops the failure being
+      // recorded. There is no sentence to produce without a context, and
+      // nobody to read one.
+      reportError(e, stack, where: 'emailVerification.send');
+
       if (mounted) {
         final l10n = AppLocalizations.of(context);
         String errorMessage;
@@ -153,10 +159,8 @@ class _EmailVerificationPageState extends State<EmailVerificationPage>
           errorMessage = l10n.networkError;
         } else {
           // The SDK's own `e.message` is an English sentence about our auth
-          // configuration; it is logged, not shown.
-          errorMessage = reportAndDescribe(l10n, e,
-              where: 'emailVerification.send',
-              fallback: l10n.unexpectedError);
+          // configuration; it is logged above, not shown.
+          errorMessage = l10n.unexpectedError;
         }
 
         ScaffoldMessenger.of(context).showSnackBar(

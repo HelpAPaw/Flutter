@@ -23,7 +23,13 @@ class PageWidth extends StatelessWidget {
   final double maxWidth;
 
   @override
-  Widget build(BuildContext context) => Center(
+  Widget build(BuildContext context) => Align(
+        // `topCenter`, not `Center`: a Scaffold body gets loose height
+        // constraints, so a scroll view shorter than the screen shrink-wraps —
+        // and `Center` would then float it half way down with a gap above it.
+        // Feedback and Profile are exactly that shape on a tablet, which is
+        // the device this exists for.
+        alignment: Alignment.topCenter,
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: maxWidth),
           child: child,

@@ -2438,12 +2438,6 @@ abstract class AppLocalizations {
   /// **'This account has been disabled. Please contact support.'**
   String get accountDisabled;
 
-  /// No description provided for @errorWithCode.
-  ///
-  /// In en, this message translates to:
-  /// **'Error: {message}'**
-  String errorWithCode(String message);
-
   /// No description provided for @resendInSeconds.
   ///
   /// In en, this message translates to:

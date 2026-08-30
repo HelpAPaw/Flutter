@@ -80,6 +80,21 @@ void main() {
       );
     });
 
+    test('a Firebase error carrying a socket failure still reads as offline',
+        () {
+      // Android Storage reports a connection lost mid-upload as `unknown` with
+      // a SocketException inside, which used to fall out of the FirebaseException
+      // branch before the text match could see it.
+      expect(
+        describe(FirebaseException(
+          plugin: 'firebase_storage',
+          code: 'unknown',
+          message: 'SocketException: Connection reset by peer',
+        )),
+        l10n.networkError,
+      );
+    });
+
     test('falls back to the caller sentence for anything unrecognised', () {
       expect(describe(StateError('boom')), 'FALLBACK');
       expect(

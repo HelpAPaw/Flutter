@@ -493,7 +493,6 @@
   "verificationEmailSentCheck": "Имейл за потвърждение е изпратен! Проверете входящата си поща (или SPAM).",
   "tooManyRequests": "Твърде много заявки. Моля, опитайте по-късно или се свържете с поддръжката.",
   "accountDisabled": "Този акаунт е деактивиран. Моля, свържете се с поддръжката.",
-  "errorWithCode": "Грешка: {message}",
   "resendInSeconds": "Изпрати отново след {seconds}с",
   "resendVerificationEmail": "Изпрати отново имейл за потвърждение",
   "iveVerifiedMyEmail": "Потвърдих имейла си",

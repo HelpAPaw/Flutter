@@ -27,6 +27,11 @@ void showMapLegendSheet(BuildContext context) {
     // should have been. Scroll-controlled and scrollable, so it can be as
     // tall as it needs and still never clip.
     isScrollControlled: true,
+    // Required *because* of the line above: `isScrollControlled` lets the sheet
+    // reach the top of the screen, and `ModalBottomSheetRoute` removes the top
+    // padding in that mode, so the SafeArea below cannot keep the title out
+    // from under the status bar on its own.
+    useSafeArea: true,
     builder: (context) => const _MapLegendSheet(),
   );
 }

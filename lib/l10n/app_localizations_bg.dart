@@ -1339,11 +1339,6 @@ class AppLocalizationsBg extends AppLocalizations {
       'Този акаунт е деактивиран. Моля, свържете се с поддръжката.';
 
   @override
-  String errorWithCode(String message) {
-    return 'Грешка: $message';
-  }
-
-  @override
   String resendInSeconds(int seconds) {
     return 'Изпрати отново след $secondsс';
   }

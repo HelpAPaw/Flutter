@@ -582,14 +582,6 @@
   "verificationEmailSentCheck": "Verification email sent! Check your inbox (or SPAM).",
   "tooManyRequests": "Too many requests. Please try again later or contact support.",
   "accountDisabled": "This account has been disabled. Please contact support.",
-  "errorWithCode": "Error: {message}",
-  "@errorWithCode": {
-    "placeholders": {
-      "message": {
-        "type": "String"
-      }
-    }
-  },
   "resendInSeconds": "Resend in {seconds}s",
   "@resendInSeconds": {
     "placeholders": {

@@ -71,8 +71,11 @@ class _MapStyleBuilderState extends State<MapStyleBuilder> {
     }).catchError((Object error) {
       // A missing or malformed asset must not take the map with it — an
       // unstyled map is a cosmetic problem, no map is not.
-      // No `return` here: the future is a `Future<void>`, so returning a
-      // String makes the handler itself throw on the one path it exists to
+      // No `return` here. `.then` with a callback that returns nothing infers
+      // `Future<Null>` — not `Future<void>`, where a String would be fine —
+      // and `catchError` type-checks its handler's result against that, so
+      // `return '';` threw "The error handler of Future.catchError must
+      // return a value of the future's type" on the one path this exists to
       // protect.
       debugPrint('Could not load $_darkAsset: $error');
     });
