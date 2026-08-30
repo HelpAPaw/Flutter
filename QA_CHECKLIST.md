@@ -33,6 +33,25 @@
 > | **Signal ownership** | New `signalOwner` axis. Status/urgency/tags become **reporter-or-owner**; a non-owner gets **claim-to-act**. Three escapes from a silent owner: offer, released signal, stale signal (14 days). Transfers go through the `signalOwnership` callable, which **rejects anonymous callers**. | **§3.9 NEW** |
 > | **Moderation & reporting** | Report any signal or comment (12 reasons, one report per user per target). A `moderators/{uid}` **document** grants a drawer entry, a Reports queue, a **Hidden** tab, and eight actions behind one `moderateAction` callable — reachable both from the queue and **in-context** from the signal app bar / comment long-press. A moderator **cannot act on their own content**. | **§16 NEW** |
 > | **Test mode on the account (#72)** | `users/{uid}.testMode` gets a single writer (`AuthService.syncTestMode`) that runs at launch, on a new anonymous session, on sign-in and on the toggle — **independently of notification preferences**. An unrecorded mode used to cost the account its inbox entry as well as its push. | §12.1 |
+>
+> **And one more merge after those — the design review.** This one changes **how every
+> screen in the app looks**, not what it does, which makes it the hardest thing in this
+> release to QA: there is no new button to go and press, and three of its four failure
+> modes are invisible to anyone testing in English, in light mode, on a happy path.
+> Budget a **full pass in Bulgarian** and a **full pass with the OS in dark mode**, on a
+> phone *and* a tablet. Nothing below has ever been in front of a user.
+>
+> | Area | What changed | Where |
+> |---|---|---|
+> | **Dark mode is ON** | `darkTheme` + `themeMode` are wired up for the first time. Every screen, dialog, sheet and the **map tiles** now have a night appearance nobody outside this repo has seen. Previously the app rendered light regardless. | **§14.1 (rewritten)** |
+> | **M3 purple is gone** | The app was `primarySwatch: orange` + `useMaterial3: true`, which M3 **ignores** — so all 45 dialog Cancels, switches, sliders, checkboxes, both TabBars, focus rings, most spinners and the whole sign-in screen were rendering **purple on lavender**. A real `ColorScheme` replaces ~294 colour literals. | §14.1 |
+> | **Status lost its colour** | Status and urgency were both red/amber/green running in **opposite directions**. Status is now a **glyph + neutral outlined chip**; urgency keeps the traffic light. Both scales were **relabelled**: *Low / Medium / Critical* and *Waiting for help / Someone is helping*. FAQ copy moved with them. | §2.2, §3.2, §3.3, §3.3b, §9 |
+> | **Red never clusters** | A critical signal stays its own pin at every zoom; amber and green still cluster. The Maps SDK draws the cluster bubble navy and Dart cannot restyle it, so this is the only lever there was. A new **map legend** explains the colours. | §2.2 |
+> | **Signal details restructured** | Eight peer blocks became **one `SignalStateCard`** (urgency / status / responsible / tags, with an urgency rail) plus a **Manage sheet** that owns every control that changes the signal — drawn only for someone who may coordinate. Timeline is one rail row per entry. | §3.2, §3.3, §3.3b |
+> | **Users never see an exception** | 14 `catch` blocks used to print `[firebase_storage/unauthorized] …` on screen and log **nothing**. `reportAndDescribe` now shows a sentence and records the real error to Crashlytics; the ARB strings lost their `{error}` placeholders; every empty/failed screen has one shape with a **working** retry. | **§11.3 (rewritten)**, §14.3 |
+> | **Bulgarian layout** | Three overflows shipped in `7.0.0+131` and none was visible in English — release builds paint no overflow stripe. App-bar titles now **shrink instead of truncating** (all 15 bars); the chip and filter-header overflows are fixed. | §9, §14.1 |
+> | **Tablets** | Six screens took a 600dp content cap so a phone layout is no longer stretched across 800dp. Not a tablet *layout* — a centred column. | **§14.7 NEW** |
+> | **Four controls made live** | Filter sheet **Cancel now restores** what you opened with (it used to apply-and-keep even on a back gesture); the feedback contact button opens mail; a drawer `FutureBuilder` that was never mounted is gone; the comment composer no longer covers the last ~90px of the page. | §4.1, §8.1, §8.3, §3.2 |
 
 > ## 🚀 Deploy gates — ⚠️ NOT CLEAR. One must be done before the device pass
 >
@@ -53,9 +72,12 @@
 >       off it) reverts moderation instead. If you deploy rules at all, deploy from the
 >       merged branch and re-read the live ruleset afterwards — `events`, `helpNeededTags`,
 >       `animalType`, `urgency` **and** `isModerator`/`isCommentsLocked` all present.
-> - [ ] 🔴 **Version is still `6.0.2+129` in `pubspec.yaml`.** Bump before building, or
->       the upgrade-path test in §17.4 has nothing to upgrade *to* and Crashlytics
->       attributes new crashes to the old build.
+> - [x] ✅ **Version bumped — `pubspec.yaml` reads `7.0.0+132`.** (`129` was the last
+>       release; `131` is what the QA devices are on. §17.4 upgrades *from* the released
+>       build, so read its "129" as "whatever is in the field", and note that a device
+>       left on **131** is a *different* case: it predates the case→signal rename and
+>       reads `caseHolder`, so it shows every signal's reporter as its owner. Update
+>       those devices rather than testing ownership on them.)
 > - [ ] **Functions deployed** from this branch — the fan-out, `recipientSelection`, the
 >       urgency/tag headline shims and the share-page badge all changed. Confirm the
 >       deployed runtime reports **Node 24**.
@@ -114,7 +136,9 @@
 > - [ ] 🔴 **The 30-day retention window is not disclosed anywhere users can read it.** "Restorable for 30 days" is the whole basis for removal being a bin rather than indefinite retention, and `privacy_policy_page.dart` is a **WebView onto `https://www.helpapaw.org/privacypolicy`** — so this is an edit on the site, by somebody outside this repo, not a code change. Verify the live page states the window before shipping (§3.7).
 > - [ ] **The moderator role has no verified grant path on this machine.** `functions/scripts/grant_moderator.js` needs the same Application Default Credentials the backfill does, and has never been run. §16 cannot be tested at all until at least one test account holds a `moderators/{uid}` document — arrange that first (§17.0-C).
 > - [ ] **Contribution stats under-report, permanently, for accounts that already deleted signals.** The backfill counts the live collection, so anything erased under the old hard-delete path is not there to count. Not fixable; do not file it again (§1.6).
-> - [ ] **Light theme only.** No dark theme is defined; verify rendering under OS dark mode. See §14.1.
+> - [ ] 🔴 **Dark mode is on for the first time and has never had a full device QA pass.** `themeMode` follows the OS, so on the day this ships every user who has had their phone in dark mode all along gets a version of this app nobody has looked at. The map style was verified on the Android 14 tablet and `test/theme_contrast_test.dart` covers the surface/ink relationships, but a contrast test cannot see a layout that only reads wrong. **Walk the whole checklist once with the OS dark.** See §14.1.
+> - [ ] **White on the brand orange is 2.16:1 and is staying that way.** Every app bar title and filled button. It predates this work, it is a brand decision, and `theme_contrast_test` asserts it at its *measured* value rather than skipping it — so a failure there means somebody changed the orange, not that the test is stale. Do not file it again; the dark theme puts black on the same orange for 9.74:1.
+> - [ ] **The two relabelled scales are user-visible copy changes, not code changes.** *Needs help → Waiting for help*, *In progress → Someone is helping*, *Green/Amber/Red → Low/Medium/Critical*. The FAQ answers and the map legend carry the same words. Anyone testing from memory of `129` will read the new wording as a regression; confirm the copy is what the owner wants **before** the build goes out, because changing it afterwards is another release.
 > - [ ] **Debug assetlinks fingerprint is still published.** `hosting/public/.well-known/assetlinks.json` lists a machine-local debug keystore alongside the release one. Decide whether to strip it before the release deploy (§15.1).
 
 ## 1. Authentication & Account Management
@@ -178,6 +202,17 @@
 - [ ] Shows email verification status ("Yes"/"No") with "Verify" button if unverified
 - [ ] Shows "Member Since" date
 - [ ] Shows statistics: total signals created, total comments made
+- [ ] On a **tablet**, the page is a centred ~600dp column — a settings row must not put its control a hand's width from its own label, and the form must sit at the **top**, not floating half way down with a gap above it
+
+**Edit-mode validation and discard (CHANGED)**
+> The editor and "Complete your profile" (§1.5) collect the same two fields and had drifted: one required ≥2 characters and a dialable number **inline under the field**, the other checked only that the name was not blank and said so **in a snackbar**. One set of rules now, shown the same way in both.
+- [ ] The **editor** rejects an empty name and a name of one character, **inline under the field** — not in a snackbar
+- [ ] The editor rejects a phone number shorter than 8 characters, and accepts an **empty** one (the phone is optional on both screens)
+- [ ] The same input produces the **same message in the same place** on §1.5 and here — a name that cannot be entered on one screen must not be saveable on the other
+- [ ] 🔴 **Tapping X after typing asks before discarding.** Edit the name, tap X → "Discard changes?" with Discard / Keep editing. It used to throw the edits away silently, one tap from Save.
+- [ ] Tapping X on an **untouched** form just closes — no dialog
+- [ ] The comparison is against **what was loaded or last saved**: save, then reopen, then close without typing → no dialog
+- [ ] The X, the save tick, and the change-photo button all have accessibility labels (long-press shows a tooltip) — §14.5
 
 **Contribution stats — now server-counted (NEW)**
 > The signal count used to be a live `count()` over `signals`, which measured *signals
@@ -245,6 +280,9 @@
 - [ ] ⚠️ **Marker colour is now URGENCY, not status** — Red / Orange (amber) / Green pin assets follow `SignalUrgency`. A signal that is *resolved* but was reported Red still shows a **red** pin; status appears only as a text chip on details and in My Signals. Anyone testing from memory of the last release will read this as a bug.
 - [ ] A signal created **before** the urgency system (no `urgency` field) renders as **amber** — unless its status is Solved, which renders green. Nothing legacy is ever derived as red.
 - [ ] Marker clustering works for nearby signals
+- [ ] 🔴 **A RED signal is never clustered.** Zoom out until amber and green signals collapse into navy cluster bubbles: every red pin must **still be drawn individually**, at every zoom level. This is the whole reason the map can say anything is critical — the SDK draws the bubble navy and Dart cannot restyle it, so a clustered red signal is invisible as an emergency. Guarded by `test/map_clustering_test.dart`; verify it on a device too, with ≥3 red signals close together.
+- [ ] Amber and green **do** still cluster (this is what keeps a city readable — a map of 200 individual pins is not the fix)
+- [ ] A signal with an **unrecognised** urgency code clusters (it falls back to amber, deliberately)
 - [ ] Tapping a marker shows an info window (title + description snippet)
 - [ ] Tapping the info window navigates to Signal Details screen
 - [ ] Tapping the map dismisses open info windows
@@ -258,9 +296,28 @@
 - [ ] Changing a filter while an info window is open re-asserts the window if the signal still matches, and dismisses it cleanly if it no longer does
 - [ ] A signal **removed or hidden** by another device while its window is open dismisses cleanly — no `PlatformException: Invalid markerId`, and the ghost tap target does not navigate (§10.2)
 
+### 2.2b Map Legend (NEW)
+> Nothing anywhere in the app had ever said what the pin colours meant. Opened from the map's own app bar.
+- [ ] The legend opens from the map app bar and lists **most urgent first**: Critical, Medium, Low, then the vet clinic pin
+- [ ] Each row shows the **real pin asset** — compare against the pins on the map behind it; they must be the same images
+- [ ] The note explains that critical signals are never grouped into a cluster (§2.2)
+- [ ] 🔴 **In Bulgarian at font scale 1.3, the last row (vet clinic) is fully visible.** This sheet overflowed by 43px and lost that row entirely at 411dp — the exact bug that reached `131`. Test on the smallest device available (SM J610FN, 411dp), not the tablet.
+- [ ] The sheet's title is not under the status bar, and the sheet scrolls rather than clipping when it cannot fit
+- [ ] Renders correctly in dark mode
+
+### 2.2c Map dark style (NEW)
+- [ ] With the OS in **dark mode**, the map draws **dark tiles** — not a lit daylight city in a black app
+- [ ] With the OS in **light mode**, the map is Google's ordinary default styling (unchanged from `129`)
+- [ ] **Toggle the system theme with the map open**: it restyles in place, no restart, no blank map
+- [ ] All three pin colours are still distinguishable against the dark roads — check a **red pin sitting on a motorway**, which is the worst case the palette was designed around
+- [ ] Vet clinic (blue) pins are still visible against the dark ground
+- [ ] Business POIs and their labels are **off** in dark mode (they competed with the signal pins)
+- [ ] The map still renders if the style asset fails to load — worst case it is unstyled, never absent
+
 ### 2.3 Real-Time Updates
 - [ ] New signals from other users appear on the map in real time (Firestore stream)
-- [ ] Status changes to signals update marker color in real time
+- [ ] **Urgency** changes update marker colour in real time (a *status* change does not — pin colour is urgency, §2.2)
+- [ ] Escalating a signal to Red while the map is open makes it **leave its cluster** and become its own pin
 - [ ] Stream updates when map center changes significantly or filter changes
 
 ---
@@ -274,10 +331,13 @@
 > then the description, then the judgements *about* what was just described.
 
 **Steps and per-step validation**
-- [ ] FAB → map enters add mode: crosshair at map centre + a location bar; **the FAB hides** while the bar is up
-- [ ] Anonymous user tapping the FAB gets the sign-in dialog, not the wizard
+- [ ] FAB → map enters add mode: **a pin at map centre** (CHANGED — it was `Icons.gps_fixed`, the standard "centre the map on *me*" glyph, shown at the one moment the reporter is saying where the **animal** is) + a location bar; **the FAB hides** while the bar is up
+- [ ] The placement pin is drawn with **its tip on the point**, not its middle, and a dot underneath marks what the tip claims — a pin alone is ambiguous by about its own height, which is tens of metres at this zoom
+- [ ] The pin is the **same shape the reporter will see afterwards** on the map
+- [ ] Anonymous user tapping the FAB gets the sign-in dialog, not the wizard — and it is the **same dialog** wherever a sign-in is required (it existed twice, with its confirm styled as a `TextButton` on one screen and an `ElevatedButton` on the other)
 - [ ] Step order is exactly: **Location → Photo → Details → Animal → Urgency → Help needed → Review**
-- [ ] Progress indicator reads "Step N of 7" and matches the step actually shown
+- [ ] 🔴 **Progress looks the same on step 1 as on steps 2–7.** Step 1 lives on the map and the rest on `/new_signal`; they used to draw two different things — a counter and a bar in the body, versus a bar welded to the bottom of the orange app bar with **no counter**, white on pale orange, reading as a seam. Progress must not appear to vanish when the wizard is pushed.
+- [ ] Progress indicator reads "Step N of 7" — **of 7, not of 8** — and matches the step actually shown
 - [ ] **Next is disabled until the current question is answered** — the reporter can never reach Review in a state submit would reject
 - [ ] **1 Location** (required): confirming pushes the wizard; the pin is where the crosshair was
 - [ ] **2 Photo** (optional): camera/gallery sheet, preview with delete, max 1920 px @ 85%, one photo; Next works with no photo
@@ -347,9 +407,19 @@
 - [ ] An oversized image (>5 MB after re-encode) is rejected with a message, not a silent drop
 
 ### 3.2 Signal Details Screen
+> **Restructured this release.** Eight peer blocks with headings at three type sizes became one **state card** plus a **Manage sheet**. If you are testing from memory of `129`, the urgency radio group and the status dropdown are no longer on the page — that is the change, not a missing feature.
 - [ ] Displays: title, description, **the primary help tag as the category** (not a signal type), creation date/time, reporter name, contact phone
-- [ ] **Urgency** is shown — as an editable picker for the reporter, a read-only chip for everyone else (§3.3b)
-- [ ] **Status** is shown as a text chip; it is *not* what the map pin encodes
+- [ ] Title and description are **left-aligned**, like everything below them (they used to be centred, which made the page look like it stopped centring half way down)
+- [ ] **One bounded card** carries Urgency, Status, Responsible and Help needed as **labelled rows**, with an **urgency-coloured rail** down its edge
+- [ ] The rail follows **urgency only** — a Critical signal that is Resolved still has a red rail
+- [ ] **Status** shows as a **three-step track** with a glyph, not a coloured badge; the steps either side of the current one are visible
+- [ ] A viewer who **cannot** coordinate (not the reporter, not the owner) sees **no Manage button** — and no radio group or dropdown anywhere on the page
+- [ ] The reporter or signal owner sees **one Manage button**, which opens a sheet containing the urgency picker, the status dropdown and Change-tags (§3.3, §3.3b)
+- [ ] The sheet **closes** when a change is applied — it must not sit open showing pre-write values over a screen that has moved on
+- [ ] Backing out of the sheet without choosing anything writes nothing
+- [ ] 🔴 **The comment composer does not cover the bottom of the page.** Scroll to the very end at **font scale 1.3**: the last element must be fully readable and tappable. The composer used to be positioned over the scroll view and permanently hid ~90px.
+- [ ] The **timeline is one row per entry** on a shared rail — not four differently-coloured cards, and the actor's name is not repeated on every row
+- [ ] On a **tablet**, the content column is capped (~600dp) and centred; the description does not run the full 800dp width
 - [ ] **Photo carousel**: swipeable PageView with photo counter (e.g., "1/5")
 - [ ] Tap photo for full-screen gallery (PhotoView)
 - [ ] Creator can delete individual photos (X button in corner)
@@ -373,8 +443,9 @@
 > event are one atomic batch, so a denied event takes the status change down with it and
 > you see only `errorUpdatingStatus`. A whole-section failure here means the rules
 > reverted again; check the live ruleset before filing anything.
-- [ ] Status dropdown visible on details screen (authenticated users only)
-- [ ] 3 options with colored icons: Help Needed (red), Somebody On The Way (orange), Solved (green)
+- [ ] Status dropdown lives **in the Manage sheet** (§3.2), not on the page — reachable by any authenticated user who taps Manage
+- [ ] 3 options, each with its **glyph**: Waiting for help (hourglass), Someone is helping (sync), Resolved (check) — **no red/amber/green icons any more** (§2.2)
+- [ ] ⚠️ **The labels changed**: "Needs help" → **Waiting for help**, "In progress" → **Someone is helping**. Verify in both languages, and in the FAQ answer, the map legend and the filter sheet, which all carry the same words.
 - [ ] **Choosing a status opens the mandatory update-note dialog first** — nothing is written before it is confirmed
 - [ ] The dialog shows **the same badge the resulting history row will show** ("Changing to: Resolved")
 - [ ] **Confirm stays disabled while the note is empty or whitespace-only** (it is trimmed)
@@ -389,7 +460,9 @@
 - [ ] The reporter and the current owner both change status **without** being asked to claim anything
 
 ### 3.3b Urgency Change — reporter **or signal owner** (NEW; CHANGED by §3.9)
-- [ ] **The reporter AND the current signal owner** see the urgency picker; everyone else sees a read-only chip (CHANGED — signal ownership, §3.9)
+- [ ] **The reporter AND the current signal owner** see the urgency picker **in the Manage sheet**; everyone else sees the read-only urgency row on the state card and **no Manage button at all** (CHANGED — signal ownership, §3.9; §3.2)
+- [ ] ⚠️ **The urgency labels changed**: "Green — under control" / "Amber — support needed ASAP" / "Red — immediate critical help" are now **Low / Medium / Critical**. The colour and the pin are unchanged. Check the picker, the state card, My Signals, the filter sheet, the map legend and `faqWhatUrgencyMeansAnswer`.
+- [ ] "**Red Alert**" is deliberately *not* renamed — it is the name of the confirmation rule, not a level. If the confirm dialog says "Critical Alert", that is a regression.
 - [ ] A user who is **neither reporter nor owner** cannot change urgency by any route — the enforcement moved from the field allow-list into `isSignalOwner()`, so `urgency` is now *in* that list and is still safe (§11.5). Verify by direct write, not just by the UI.
 - [ ] Changing urgency asks for an update note, exactly as status does
 - [ ] **Escalating to Red: the Red-Alert confirm comes FIRST, then the note dialog** — confirm the intent, then explain it
@@ -437,7 +510,13 @@
 ### 3.5 My Signals Page — now TWO tabs (**Active** / **Removed**)
 - [ ] Lists all signals created by current user
 - [ ] Ordered by creation date (newest first)
-- [ ] Card-based layout with status colour indicator and **the primary help tag's icon** (no signal-type icon any more)
+- [ ] Card-based layout with **the primary help tag's icon** (no signal-type icon any more)
+- [ ] 🔴 **A row carries at most one traffic light.** Urgency is a **filled** coloured chip; status is a **neutral outlined** chip with a glyph. Two coloured chips side by side — which is what `129` showed, running in opposite directions — is the bug this replaced.
+- [ ] 🔴 **In Bulgarian, the urgency chip fits the row at 411dp.** It used to render the whole sentence ("Оранжево — нужна е помощ скоро", 403px on a 411dp phone) and overflowed **every** row by 161px. The label ellipsises if it ever cannot fit.
+- [ ] Both tabs show **"Couldn't load your signals"** with a working **Try again** on a failed listen — never a raw exception, and the retry must start a *new* stream rather than rebuilding the dead one
+- [ ] Empty states on both tabs use the same shape as every other empty state in the app (icon, sentence, hint)
+- [ ] On a **tablet**, the list is a centred ~600dp column
+- [ ] The My Signals tab bar sits on the orange app bar and its labels/indicator are **legible against it** (this bar keeps a deliberate local override — it is the one place tabs are on orange)
 - [ ] A signal with no title falls back to the tag's "needed" label, not to "Rescue" for everything
 - [ ] Tap card navigates to Signal Details
 - [ ] Requires authentication — shows sign-in prompt if not logged in
@@ -629,6 +708,12 @@
 ### 4.1 Filter Bottom Sheet
 - [ ] Filter icon in AppBar opens filter bottom sheet
 - [ ] Red dot indicator on filter icon when non-default filters are active
+- [ ] Toggles still apply to the map **immediately** — you watch pins appear and disappear as you tick (this is deliberate and unchanged)
+- [ ] 🔴 **Cancel restores the state the sheet opened with.** Untick Red, watch the pins go, tap **Cancel** → the red pins come back. Previously "Apply Filters" only closed the sheet and there was **no way to undo** except re-ticking from memory.
+- [ ] **A back gesture or a tap on the scrim behaves as Cancel**, not as Done — this is the path that used to silently keep the edits
+- [ ] **Done** keeps the edits
+- [ ] The header's title, **Select all** and **Clear all** all fit on screen **in Bulgarian** at 411dp — "Изчисти всички" used to run off the right edge, so the one control that undoes a filter could not be reached at all
+- [ ] The sheet's corner radius matches every other modal sheet in the app (it used to be visibly a different shape)
 
 ### 4.2 Time Range Filter
 - [ ] Last 24 hours
@@ -637,13 +722,14 @@
 - [ ] All time
 
 ### 4.3 Status Filter
-- [ ] Toggle: Help Needed (status 0)
-- [ ] Toggle: Somebody On The Way (status 1)
-- [ ] Toggle: Solved (status 2)
+- [ ] Toggle: **Waiting for help** (status 0)
+- [ ] Toggle: **Someone is helping** (status 1)
+- [ ] Toggle: Resolved (status 2)
 - [ ] All enabled by default
+- [ ] Status rows carry **glyphs, not colours** — and the wording matches §3.3 exactly
 
 ### 4.4 Urgency Filter (NEW)
-- [ ] Toggle Green / Amber / Red independently, each with its pin icon
+- [ ] Toggle **Low / Medium / Critical** independently, each with its pin icon
 - [ ] All enabled by default
 - [ ] Deselecting Red hides red-pinned signals only; status selection is unaffected (the two axes are independent — verify by filtering to Red + Solved and confirming a resolved red signal still shows)
 
@@ -796,6 +882,10 @@
 - [ ] List shows newest-first, max 50, with icon/color per type
 - [ ] Unread items are bold with an orange dot; tapping marks read and deep-links to the signal
 - [ ] Swipe-to-delete removes a single notification; a failed delete now shows an error (previously silent)
+- [ ] **Swipe-to-delete offers Undo**, and Undo actually restores the row (a signal the user removes sits in a 30-day bin; deleting an inbox row outright was the odd one out)
+- [ ] Letting the Undo snackbar time out leaves the row deleted
+- [ ] **Row accent colours mean urgency and nothing else.** A `nearby_signal` row is no longer red — only rows that announce an urgency are coloured, and the icon says what kind of row it is. Two different reds meaning "an animal may die" and "a signal exists near you" was the bug.
+- [ ] A failed listen shows **"Couldn't load your notifications"** with a working **Try again** — not a raw exception, and the retry must tear down the dead stream and start a new one (tap it with the network still off, then restore the network and tap again)
 - [ ] "Mark all as read" and "Clear all" work, including with more than 50 notifications
 - [ ] Empty state and unauthenticated ("please sign in") states render correctly
 
@@ -1011,6 +1101,12 @@
 - [ ] **The drawer must be opened at least once for this to be observable** — a closed drawer does not build its child, so a role change while it has never been opened is not a bug
 - [ ] For a non-moderator the entry is absent, and navigating to `/moderation` directly shows "You do not have moderator access." rather than a queue
 
+**Drawer changes this release**
+- [ ] **No tile is drawn as "selected".** This drawer pushes routes *on top of itself*, so there is no current tile to mark; a persistent highlight pointing at a screen you have left is the bug that was removed.
+- [ ] **Notifications and Notification Settings use related icons** (they used to be `notifications_active` and `notifications`, which read as two unrelated features one above the other)
+- [ ] 🔴 **A failed Sign Out now tells the user.** Force a failure (airplane mode mid-sign-out) — you must get an error, not silence. It used to be a `debugPrint`, leaving the user looking at an account they believed they had left.
+- [ ] No stale status widget under the header (a `FutureBuilder` was constructed and never mounted, so it could never render — it and its field are gone)
+
 ### 8.2 About Screen
 - [ ] Shows app version and build number (from `package_info_plus`)
 - [ ] Logo and description
@@ -1033,6 +1129,17 @@
 - [ ] **Anti-spoof**: a submission cannot claim another user's `userId` (rules pin it to `request.auth.uid`) — see §11.8
 - [ ] Unauthenticated writes are rejected (the app always has at least an anonymous session)
 - [ ] **HTML injection**: submit a message containing `<script>alert(1)</script>` and `<b>x</b>` — the received email renders them as **literal text**, not markup
+- [ ] 🔴 **The "contact us" button actually opens the mail app.** It was an enabled `TextButton` wired to a comment reading `// Would launch email client` — it looked live and did nothing. With no mail app configured it must say so **and name the address** so the user can write from somewhere else.
+- [ ] The mail draft opens with the feedback subject pre-filled
+- [ ] Section headings on this page match every other screen's (it used to write its own ad-hoc 16px/w500 heading)
+- [ ] On a **tablet** the form is a centred ~600dp column, sitting at the top of the page
+
+### 8.4 Privacy Policy (CHANGED)
+- [ ] The screen's title is **localized** — it was `const Text('Privacy Policy')`, the app's last untranslated string, on the screen a Bulgarian user is most likely to reach from a consent prompt
+- [ ] 🔴 **Open it in airplane mode.** You get "Couldn't load the privacy policy" with a hint naming `helpapaw.org/privacypolicy` and a working **Try again** — not a blank white page under a spinner that never stops, which is what it did before (there was no `onWebResourceError` at all)
+- [ ] Restoring the network and tapping Try again loads the page
+- [ ] A **sub-resource** failure (a blocked font or image) does **not** throw the page away — only main-frame failures show the error state
+- [ ] The external website link still works
 
 ---
 
@@ -1043,6 +1150,24 @@
 - [ ] All UI strings use `AppLocalizations` (no hardcoded strings)
 - [ ] Date/time formatting is locale-aware
 - [ ] Help tag names, animal types, urgency levels, status labels, error messages, FAQ content all localized
+
+**Relabelled this release — existing keys, new values. Check every surface that carries them**
+> The ARB **keys** did not change, so nothing in the code moved; the words a user reads did. Anyone testing from memory of `129` will read these as regressions.
+- [ ] **Status**: "Needs help" → **Waiting for help**, "In progress" → **Someone is helping**. Surfaces: the manage sheet's dropdown (§3.3), the state card's status track (§3.2), My Signals rows, the filter sheet (§4.3), `faqWhatStatusesMeanAnswer`.
+- [ ] **Urgency**: "Green — under control" / "Amber — support needed ASAP" / "Red — immediate critical help" → **Low / Medium / Critical**. Surfaces: the urgency picker, the state card, My Signals, the filter sheet (§4.4), the **map legend** (§2.2b), `faqWhatUrgencyMeansAnswer`.
+- [ ] The two scales no longer share vocabulary in Bulgarian. `urgencyAmber` used to be "Оранжево — нужна е помощ скоро" against `statusNeedsHelp` "Нужна е помощ" — three shared words on two axes that answer different questions.
+- [ ] "**Red Alert**" is *not* renamed (§3.3b)
+- [ ] The **FAQ answers and the legend say the same words as the chips.** These are three separate strings describing one vocabulary; a partial rename is the silent failure here.
+
+**🔴 Bulgarian layout pass — this is where this release breaks, and a release build will not tell you**
+> `RenderFlex` only paints its overflow stripes in **debug**. Three overflows shipped in `7.0.0+131` and none was visible in English. Run this on the **smallest** device available (SM J610FN, 411dp), in `bg`, at font scale **1.0 and 1.3**. `test/widgets/bulgarian_layout_test.dart` covers the three known ones; the device pass is for the rest.
+- [ ] **App bar titles shrink rather than truncate.** No title anywhere ends in "…" — check signal details ("Детайли за сигнала" is the known worst case), and every screen with two or more app-bar actions. All 15 bars take `AppBarTitle`.
+- [ ] The **map**'s title is included — and `Help a Paw (TEST)` in test mode must render in full, because that title is also the seven-tap test-mode target (§12.1)
+- [ ] **My Signals urgency chips** fit their rows (§3.5)
+- [ ] The **filter sheet header** keeps "Изчисти всички" on screen (§4.1)
+- [ ] The **map legend** shows its last row (§2.2b)
+- [ ] No overflow stripes anywhere in a **debug** build while walking §1–§8 in Bulgarian
+- [ ] Long snackbar strings (`locationAlwaysPermissionRequired`) still wrap rather than clip
 
 **New strings this release — ~144 new ARB keys. Verify in Bulgarian on a `bg` device**
 - [ ] **Help tag names in BOTH forms** — the plain name ("Rescue") and the "needed" form ("Rescue needed"). Bulgarian does **not** build the second by suffixing the first, which is why it is a separate label per tag rather than a `+ " needed"` string. Check every one of the 13 reads naturally.
@@ -1064,6 +1189,15 @@
 - [ ] Inbox row strings: `notificationNewSignalTitle/Body`, `notificationStatusChangeTitle/Body`, `notificationNewCommentTitle`, `notificationNearbySignalBody` — rendered from structured fields, **not** from the English `title`/`body` stored on the document (§6.6)
 - [ ] An unsupported device locale falls back to English rather than crashing
 - [ ] The **hosted share page** localizes client-side (§15.3) — its Bulgarian **help-tag** names (`HELP_TAG_NAMES_BY_LANG.bg`) are a second copy of the vocabulary; confirm they match the app's
+- [ ] **Map legend** (§2.2b): `mapLegend`, `mapLegendUrgencyNote`, `mapLegendVetClinic`
+- [ ] **Error sentences** (§11.3): `notAllowedError`, `serverBusyError`, `cameraPermissionDenied`, `photosPermissionDenied`, and the eight rewritten `failedTo…` / `error…` strings, **none of which carries an `{error}` placeholder any more**
+- [ ] **Empty and failed states** (§11.3): `couldNotLoadSignals(+Hint)`, `couldNotLoadNotifications`, `couldNotLoadPrivacyPolicy(+Hint)`
+- [ ] **Discard-changes dialog** (§1.6): `discardChanges`, `discardChangesHint`, `discard`, `keepEditing`
+- [ ] **Inbox undo** (§6.6): `notificationDeleted`, `undo`
+- [ ] **Feedback** (§8.3): `couldNotOpenEmail` (which interpolates the address), `feedbackEmailSubject`
+- [ ] **Drawer** (§8.1): `signOutFailed`
+- [ ] **Tooltips** (§14.5): `close`, `editProfile`, `changeProfilePhoto`, `deletePhoto`, `done`
+- [ ] The **privacy policy screen title** is localized (§8.4)
 - [ ] The **push body** for a new signal reads "urgency · primary tag needed — title" in Bulgarian too, and the inbox row for the same event says the same thing (§3.8)
 
 ---
@@ -1118,7 +1252,23 @@
 - [ ] Unverified email users redirected to verification screen
 - [ ] Profile page shows sign-in prompt for unauthenticated users
 
-### 11.3 Error States
+### 11.3 Error States (REWRITTEN — 14 catch blocks changed)
+> Fourteen `catch` blocks used to put the raw exception on screen and log **nothing**: a Storage rule denial read as *"Failed to upload photo: [firebase_storage/unauthorized] User does not have permission to access this object."* — untranslated, unactionable, alarming, and invisible to the only people who could fix it. `reportAndDescribe` now shows a sentence **and** records the real error to Crashlytics in one call.
+- [ ] 🔴 **No screen anywhere shows an exception, a Firebase error code, a stack trace or an English SDK sentence.** Walk the failure paths below and read what appears. `PERMISSION_DENIED: Missing or insufficient permissions` is a fact about our security rules, not something a person can act on.
+- [ ] Every error message is **localized** — check in Bulgarian, which is where an untranslated SDK string is most obvious
+- [ ] **Offline** produces its own sentence (the answer is to reconnect), distinct from the generic one
+- [ ] **Signed out / not allowed** produces `notAllowedError` ("Signing in again may help")
+- [ ] **Server busy** produces `serverBusyError`
+- [ ] **A denied camera or photos permission** produces the Settings-pointing sentence — the only cause the user fixes in Settings rather than by retrying
+- [ ] Everything unrecognised falls back to **the caller's own sentence naming what failed** ("Could not upload the photo. Please try again."), never to a generic "Error"
+- [ ] 🔴 **A connection dropped mid-upload says "check your connection", not "try again".** Android Storage reports this as `unknown` with a `SocketException` inside; the mapping has to fall through the unmapped-code branch to reach it. Test by cutting the network **during** a photo upload.
+- [ ] **The errors reach Crashlytics as non-fatals**, each with a readable breadcrumb (`signalDetails.uploadPhoto`). Trigger one, then confirm it appears in the console within a few minutes.
+- [ ] 🔴 **A handled error must not be recorded as a crash.** Crashlytics failing internally used to escape to `PlatformDispatcher.onError`, which files it as **fatal** — check the console for fatals that correspond to ordinary handled failures.
+- [ ] **A declined camera/photos permission is NOT reported to Crashlytics** — it is a person saying no, and it would bury the reports that matter
+- [ ] **An error that lands after the screen is gone is still recorded.** Start an email verification send and back out of the screen immediately: the failure must reach Crashlytics even though there is nobody to show it to.
+- [ ] **Every failed screen offers a way forward.** My Signals (both tabs), the inbox and the privacy policy all show icon + sentence + **Try again**; there are no dead ends and no bare `Center(Text(error))`.
+- [ ] 🔴 **Try again actually retries.** A Firestore listener *ends* on error, so rebuilding the same stream does nothing. With the network off, tap Try again (it fails again); restore the network, tap it once more — it must recover. Test on My Signals **and** the inbox.
+- [ ] Empty states and error states use the **same shape** across screens (they used to be three hand-rolled implementations, two of them in one file)
 - [ ] Network errors display appropriate messages
 - [ ] Photo upload failures show partial success state
 - [ ] Vet clinic search timeout (15s) shows error
@@ -1253,6 +1403,7 @@
 
 ### 12.1 Test Mode
 - [ ] Activated by tapping app title 7 times, each tap within 2 seconds of the last
+- [ ] **The map's title is the tap target and it now scales rather than ellipsising** (§9). Once test mode is on the title reads `Help a Paw (TEST)`, which used to truncate to `Help a Paw (TES…` in a narrow bar — verify the **whole** title renders and the whole of it stays tappable, in Bulgarian too, so turning test mode back off is not harder than turning it on
 - [ ] Toggles between `signals` and `signals_test` Firestore collections
 - [ ] Cloud Functions have separate test triggers
 - [ ] Users marked with `testMode: true` in Firestore
@@ -1319,10 +1470,44 @@
 
 ## 14. Robustness & Non-Functional
 
-### 14.1 Theming
-- [ ] App uses a single light theme (`ThemeData(primarySwatch: orange, useMaterial3: true)`) — **no dark theme defined**
-- [ ] Verify all screens render correctly when the OS is in **dark mode** (native dialogs, keyboards, system pickers, share sheet)
-- [ ] Text remains legible and contrast acceptable throughout
+### 14.1 Theming (REWRITTEN — dark mode is ON, and M3 purple is gone)
+> **The single highest-effort item in this release's device pass, and the one with no new
+> button to press.** `themeMode` follows the OS, so the day this ships, every user whose
+> phone has been in dark mode all along gets a version of this app that nobody has
+> walked end to end. `test/theme_contrast_test.dart` covers surface/ink *relationships*
+> in both brightnesses; it cannot see a layout that merely reads wrong.
+
+**Light mode — the purple that was there all along**
+> The app was `ThemeData(primarySwatch: Colors.orange, useMaterial3: true)`. **M3 ignores
+> `primarySwatch`**, so with no `colorScheme` it fell through to the M3 baseline: purple
+> `#6750A4` on a lavender `#FEF7FF` scaffold. The ~294 colour literals in `lib/` existed
+> to paint around exactly that, which is why deleting them and adding a real
+> `ColorScheme` is one change and not two.
+- [ ] **Nothing anywhere is purple or lavender.** The known sites: all 45 dialog Cancel buttons, switches, sliders, checkboxes, both TabBars, text-field focus rings, most spinners, the drawer's selected tile, and the **whole `firebase_ui_auth` sign-in screen** (§1.2) — which was never ours to style and is the easiest one to miss.
+- [ ] Scaffold backgrounds are neutral, not lavender
+- [ ] The brand orange `#FF9800` is **unchanged** on app bars and the FAB — this release deliberately keeps the app's identity
+- [ ] Orange used as **content** (text buttons, tab labels, focus rings, hairlines, indicators) is the darker `#A85700`, not `#FF9800`. Both appear on one screen and they are supposed to differ.
+- [ ] Notification Settings and Region Selection have app bars matching every other screen (they had no override and were rendering a default M3 bar)
+- [ ] Dialogs and modal sheets all share **one corner radius** — the filter sheet was visibly a different shape from every other sheet
+- [ ] Text sizes are consistent between screens showing the same kind of content (~59 loose `fontSize` values moved onto a named scale; this should look **identical** to `129` — a visible size change is a regression, not the intent)
+
+**Dark mode — first contact**
+- [ ] 🔴 **Walk §1–§8 end to end with the OS in dark mode.** Every screen, every dialog, every bottom sheet, both tabs of My Signals, the wizard's 7 steps, the moderation queue.
+- [ ] **No white-on-white and no black-on-black.** Any leftover hardcoded light-mode colour presents exactly this way.
+- [ ] 🔴 **The background-location warning card on Notification Settings.** This is the one an unset `ColorScheme` slot actually produced: a **light salmon card with near-black text in the middle of a black screen**, because `errorContainer` silently falls back to `error`. Check every *container* colour — warnings, banners, tinted rows.
+- [ ] Content on the brand orange is **black** in dark mode, not white (the same orange, with the ink flipped: 2.16:1 becomes 9.74:1). Check the app bar title, the My Signals tab bar, the wizard's progress spinner and the feedback button's spinner.
+- [ ] The **map** draws dark tiles and restyles live when the system theme changes (§2.2c)
+- [ ] The **fullscreen photo viewer stays black with white ink in both themes** — that is deliberate (a photograph does not want a theme), not a missed screen
+- [ ] The **moderation queue's TabBar indicator** is legible — its tabs are in the page body on a light/dark ground, not on the orange bar, and it used to be `#FF9800` on white at 2.16:1 for a 3px line
+- [ ] The **status bar / system UI overlay** style flips with the theme; icons stay legible over the app bar
+- [ ] Switching the theme **while the app is running** (Android quick settings, iOS Control Centre) repaints everything without a restart and without losing state
+- [ ] Native surfaces still look right: keyboards, system pickers, the share sheet, permission dialogs, the OS date picker
+- [ ] **WebView content** (privacy policy, §8.4) is legible against the dark app around it
+
+**Contrast**
+- [ ] Text remains legible and contrast acceptable throughout, in **both** themes
+- [ ] Secondary/hint text is readable — it moved off `grey[500]` (2.68:1) onto `#5F5F5F` (6.39:1)
+- [ ] ⚠️ **White on brand orange is 2.16:1 and is staying.** App bar titles and filled buttons. Known, accepted, pinned by a test at its measured value. **Do not file it.**
 
 ### 14.2 Permission Denial Paths
 - [ ] **Camera** denied → photo capture (signal & profile) degrades gracefully with a message
@@ -1350,6 +1535,22 @@
 - [ ] Tap targets are adequately sized; dynamic/large font sizes don't break layouts
 - [ ] Color is not the only status indicator (marker/status colors paired with labels/icons)
 
+**Icon-only buttons (NEW — seven had nothing to announce)**
+> Most controls on these screens are buttons with text, which a screen reader already announces. The real gap was seven **icon-only** buttons. Each now takes a `tooltip`, which sets the semantics label *and* gives a long-press hint in one argument.
+- [ ] With the screen reader on, each of these announces a name: **save**, **back**, **close**, **cancel**, **edit profile**, **change photo**, **delete photo**
+- [ ] Long-pressing each shows the same text as a tooltip (a quick way to check without a screen reader)
+- [ ] The labels are **localized** — check in Bulgarian
+
+**Colour is not the only encoding (CHANGED — this was the point of §2.2 / §3.2)**
+- [ ] 🔴 **Status is readable with colour ignored.** It carries a **glyph** and a neutral outlined chip; urgency carries the traffic light and a filled chip. Squint, or use a greyscale/colour-blindness simulation: the two axes must still be distinguishable **by shape** before either label is read.
+- [ ] The two scales never appear as two traffic lights on one row (§3.5)
+- [ ] Pin colour on the map is explained by the **legend** (§2.2b) — a legend does not fix hue-only encoding, but it makes it teachable, and it is reachable from the screen where the question arises
+- [ ] Inbox rows are not coloured by *kind* — only by urgency (§6.6)
+
+**Back affordances**
+- [ ] Pushed screens show the **platform's own** back affordance — on iOS a "Back" naming the screen you came from, not a bare arrow. Eight screens used to hardcode `arrow_back` and override it.
+- [ ] A screen reached by a **cold deep link** (the only route in the stack) still draws an explicit labelled arrow — without it there is no way out but a force-quit (§15.5)
+
 ### 14.6 Startup Robustness (NEW)
 > Several launch-path crashes and hangs were fixed this cycle. All of them present as "the app doesn't start", so test cold launches deliberately and repeatedly.
 - [ ] **Cold launch reaches the map** on both platforms, from a fully terminated state, 5+ times in a row
@@ -1359,6 +1560,22 @@
 - [ ] Launching with **no network** does not hang: the anonymous sign-in is time-boxed and the first frame still renders
 - [ ] Launching **signed out** (first install) completes bootstrap in order: router attached → deep-link listener → anonymous sign-in → notifications + location restore → badge sync
 - [ ] A failure in notification init does **not** prevent background-location restore, and vice versa (each has its own catch)
+
+### 14.7 Tablet & Large-Screen Layout (NEW)
+> Six screens laid out as a single column across the full width of an 800dp tablet, so a
+> settings row put its switch a hand's width from its own label and the signal
+> description ran to ~110 characters a line. They now share a **600dp content cap**.
+> **This is not a tablet layout** — a list/detail split would use the space rather than
+> centre a column in it — so "there is empty space either side" is the design, not a bug.
+> Run this on the SM X205.
+- [ ] The six capped screens are centred and readable: **My Signals**, the **inbox**, **Notification Settings**, **Feedback**, **FAQs**, **Profile** — plus **Signal Details**, which already had its own cap
+- [ ] 🔴 **A settings row's control sits next to its label**, not at the far edge of the screen
+- [ ] 🔴 **A form shorter than the screen sits at the TOP**, not floating half way down with a gap above it. Feedback and Profile are exactly that shape on a tablet — this is what the `Align(topCenter)` fix addressed.
+- [ ] The signal description does not run the full 800dp width
+- [ ] The "Add photo" box is not drawn absurdly wide
+- [ ] All of the above hold in **both orientations**, and in **both themes**
+- [ ] Screens deliberately *not* capped (the map, the wizard's map step) still use the full width — that is correct
+- [ ] Nothing regressed on a **phone**: the cap is above every phone width, so all seven screens must look exactly as they did on the SM J610FN
 
 ---
 
@@ -1586,10 +1803,17 @@
   - `test/removal_retention_guard_test.dart` — the 30-day window in two languages. Dart *longer* than the server is the worse direction: the app promises time the user does not have, and a bin that empties early is a delete with extra steps (§3.5b)
   - `test/signal_event_vocabulary_guard_test.dart` also asserts that **`ownership_transfer` is ABSENT from the rules** — do not "fix" a failure there by adding it, which would make a timeline entry claiming responsibility forgeable (§11.5)
 - [ ] **New unit suites pass**: `test/models/signal_owner_test.dart` (the absent / ref / null derivation — §11.12), `test/models/moderation_target_test.dart` (never defaults `collection` to `signals`; narrows on an unknown `targetType` — §16.3), `test/signal_doc_state_test.dart` (the details-screen state machine; R5-004/R6-001/R6-002 each broke in a shipped build), `test/test_mode_sync_cache_test.dart` (the write-avoidance cache **fails towards writing** — §12.1)
+- [ ] 🔴 **Presentation guards pass — these four cover the regressions a device pass in English, in light mode, on a happy path cannot see (§14.1, §9, §11.3):**
+  - `test/theme_contrast_test.dart` — every surface against the ink named for it, in **both** brightnesses. This is what an unset `ColorScheme` slot breaks, and it would have caught the salmon-card-on-black. It also **pins white-on-brand-orange at its measured 2.16:1**: a failure there means somebody changed the orange, not that the assertion is stale.
+  - `test/theme_literal_guard_test.dart` — fails the build if a colour literal returns to `lib/`. Deliberate exceptions are marked `// theme-independent` with a reason.
+  - `test/error_text_test.dart` — fails if an ARB string regains an `{error}` placeholder (a slot for an exception is an invitation to pass one), and covers the fall-through for a Firebase `unknown` wrapping a `SocketException`
+  - `test/widgets/bulgarian_layout_test.dart` — pumps at **411dp in `bg`** and fails on an overflow, a chip wider than the screen, an off-screen "Clear all", or an app-bar title that truncates rather than scales
+- [ ] `test/map_clustering_test.dart` passes — **red must never cluster** (§2.2), and this is the only automated statement of it
+- [ ] `test/profile_validators_test.dart` passes — the name/phone rules the editor and the completion screen now share (§1.6)
 - [ ] `cd firestore-tests && npm ci && npm test` — Firestore **and** Storage rules suites pass, **including the new `events` cases**. Required before **every** rules deploy; device testing cannot validate undeployed rules because `help-a-paw-dev` is production.
 - [ ] `cd functions && npm ci && npm test` — covers `recipientSelection` tier ranking and the floor, the legacy headline shims (`displayTagsOf` / `signalHeadline`), the `events` encoder parity, and now `moderation`, `signalOwnership` and `removeSignal`. Every failure mode here is silent in production.
 - [ ] **The self-moderation guard coverage test passes.** It *reads the source* of `functions/src/moderation.ts` — a new moderator action that skipped `requireNotOwnContent` would compile perfectly and fail silently, so this is the only thing that catches it (§16.7).
-- [ ] Expected suite sizes on this branch: **258 rules tests, 260 Dart tests, 112 functions tests**. A sharp drop means a suite stopped being discovered, not that it got faster.
+- [ ] Expected suite sizes on this branch: **258 rules tests, 293 Dart tests, 112 functions tests** (verified 2026-08-30). A sharp drop means a suite stopped being discovered, not that it got faster.
 - [ ] Kotlin: `android/app/src/test/.../GeohashTest.kt` passes (guards the Dart↔Kotlin geohash parity the fan-out depends on)
 - [ ] Swift: `ios/RunnerTests/GeohashTest.swift` passes — and afterwards, restore/verify `build/native_assets/ios/objective_c.framework` before any device build
 - [ ] `cd functions && npm run build` — TypeScript compiles
@@ -1644,6 +1868,29 @@
 >
 > ⚠️ Run this on a device still on **129**, before it auto-updates. Roll one back to the
 > previous closed-track release if necessary.
+>
+> **"129" here means "the release currently in the field."** Every `129` in this
+> section is the *previous closed-track release*, not that literal build forever — read
+> it as the outgoing version each release. References to 129 **outside** §17.4 (the #71
+> regression window, the deploy gates) do mean that specific build.
+
+#### Phase 0 — Upgrade smoke test (10 minutes, run on EVERY build handover)
+
+> Run this the moment a build is handed over, even between full QA rounds — it is the
+> subset below that catches an upgrade which is outright broken. It does **not** replace
+> the observed procedure: this proves the app still *starts*, Phases 1–6 prove the data
+> *survived*. If any box here fails, stop and run the whole of §17.4 before anything else.
+
+- [ ] Start from a device already on the **previous released build**, signed in, notifications on — **do not uninstall**
+- [ ] Note the uid, notification radius and `versionCode` before upgrading (30 seconds; without it the checks below are unfalsifiable)
+- [ ] Upgrade **in place** — Play closed track, `adb install -r`, or TestFlight. A fresh install tests nothing here
+- [ ] New `versionCode` reported, `firstInstallTime` **unchanged**, `lastUpdateTime` moved (Android)
+- [ ] App launches to the map — no crash, no launch-screen hang, no forced re-auth
+- [ ] **Same uid** as before the upgrade
+- [ ] Signals load, and a signal created on the old build still opens
+- [ ] Notification radius and toggle read back unchanged
+- [ ] A push sent now arrives **exactly once**
+- [ ] Crashlytics shows no new fatal against this `versionCode` after ~5 minutes of use
 
 #### Phase 1 — Establish 129 state (BEFORE upgrading)
 
@@ -1665,6 +1912,7 @@
 #### Phase 2 — Upgrade in place (do NOT uninstall)
 
 - [ ] Start `adb logcat` **before** the upgrade and keep it running — `MY_PACKAGE_REPLACED` fires during install and is easy to miss
+- [ ] Do **not** `force-stop` the app first. Android delivers no broadcasts to an app in the stopped state, `MY_PACKAGE_REPLACED` included, so Phase 3 silently produces no re-arm line and looks exactly like a broken `BootReceiver`. Background it with HOME instead (this invalidated a run in Round 10)
 - [ ] Update via the Play closed track (preferred — matches what real users get) or `adb install -r`
 - [ ] Confirm the new `versionCode`, and that `firstInstallTime` is **unchanged** while `lastUpdateTime` moves — that proves it was an upgrade, not a reinstall
 
@@ -1692,6 +1940,7 @@
 
 #### Phase 5 — iOS-specific (TestFlight upgrade over the old build)
 
+- [ ] **It was an upgrade, not a reinstall.** iOS exposes no `firstInstallTime`/`lastUpdateTime` equivalent, so *surviving app state is the proof*: before touching any toggle, the account is still signed in with the same uid, test mode is still on, and the notification radius still reads its pre-upgrade value. If any of those reset, the container was replaced and everything below is testing a clean install
 - [ ] The gate behaves identically on iOS, including the offline path
 - [ ] Universal Links still work after the upgrade — tap a shared link, and confirm it **bypasses the gate** and opens the signal
 - [ ] Badge count still reconciles on first resume
