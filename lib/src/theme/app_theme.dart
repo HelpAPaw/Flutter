@@ -41,7 +41,12 @@ abstract final class AppTheme {
 
   /// Light theme — visually identical to what shipped in 7.0.0+131, minus the
   /// purple defaults and the lavender ground.
-  static ThemeData get light => _build(_lightScheme, Brightness.light);
+  ///
+  /// `final`, not a getter: both are read from the root `build`, and a getter
+  /// rebuilt a whole `ThemeData` — a `ColorScheme` plus twenty component
+  /// themes — on every root rebuild, handing descendants a new theme identity
+  /// each time. A static final is built once, lazily.
+  static final ThemeData light = _build(_lightScheme, Brightness.light);
 
   /// Dark theme — the same brand orange on black, with the ink on it flipped
   /// from white to black (2.16:1 becomes 9.74:1).
@@ -56,7 +61,7 @@ abstract final class AppTheme {
   /// itself, which keeps rendering daylight tiles. A dark map needs a
   /// `setMapStyle` JSON asset and pins drawn for it; until then a bright map
   /// under a dark app is the honest state, not a regression.
-  static ThemeData get dark => _build(_darkScheme, Brightness.dark);
+  static final ThemeData dark = _build(_darkScheme, Brightness.dark);
 
   // ---------------------------------------------------------------------
   // Schemes
