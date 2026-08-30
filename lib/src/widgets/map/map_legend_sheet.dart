@@ -20,6 +20,18 @@ import '../section_header.dart';
 void showMapLegendSheet(BuildContext context) {
   showModalBottomSheet<void>(
     context: context,
+    // The sheet is as tall as its content, and its content is nine lines of
+    // prose whose length depends on the language and the reader's text size.
+    // Left to the default half-screen it overflowed by 43px in Bulgarian at
+    // 411dp — the vet clinic row simply gone, with a debug stripe where it
+    // should have been. Scroll-controlled and scrollable, so it can be as
+    // tall as it needs and still never clip.
+    isScrollControlled: true,
+    // Required *because* of the line above: `isScrollControlled` lets the sheet
+    // reach the top of the screen, and `ModalBottomSheetRoute` removes the top
+    // padding in that mode, so the SafeArea below cannot keep the title out
+    // from under the status bar on its own.
+    useSafeArea: true,
     builder: (context) => const _MapLegendSheet(),
   );
 }
@@ -33,7 +45,8 @@ class _MapLegendSheet extends StatelessWidget {
     final theme = Theme.of(context);
 
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
+        child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -69,6 +82,7 @@ class _MapLegendSheet extends StatelessWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }

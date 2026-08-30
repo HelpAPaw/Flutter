@@ -974,6 +974,30 @@ abstract class AppLocalizations {
   /// **'Network error. Please check your connection.'**
   String get networkError;
 
+  /// No description provided for @notAllowedError.
+  ///
+  /// In en, this message translates to:
+  /// **'You are not allowed to do that. Signing in again may help.'**
+  String get notAllowedError;
+
+  /// No description provided for @serverBusyError.
+  ///
+  /// In en, this message translates to:
+  /// **'The server is busy right now. Please try again in a moment.'**
+  String get serverBusyError;
+
+  /// No description provided for @cameraPermissionDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Help a Paw needs camera access. You can allow it in Settings.'**
+  String get cameraPermissionDenied;
+
+  /// No description provided for @photosPermissionDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Help a Paw needs access to your photos. You can allow it in Settings.'**
+  String get photosPermissionDenied;
+
   /// No description provided for @failedToCreateSignal.
   ///
   /// In en, this message translates to:
@@ -1031,14 +1055,14 @@ abstract class AppLocalizations {
   /// No description provided for @errorAccessingCamera.
   ///
   /// In en, this message translates to:
-  /// **'Error accessing camera: {error}'**
-  String errorAccessingCamera(String error);
+  /// **'Could not open the camera. Please try again.'**
+  String get errorAccessingCamera;
 
   /// No description provided for @errorAccessingGallery.
   ///
   /// In en, this message translates to:
-  /// **'Error accessing gallery: {error}'**
-  String errorAccessingGallery(String error);
+  /// **'Could not open your photos. Please try again.'**
+  String get errorAccessingGallery;
 
   /// No description provided for @signInSubtitle.
   ///
@@ -1559,14 +1583,14 @@ abstract class AppLocalizations {
   /// No description provided for @failedToUploadPhoto.
   ///
   /// In en, this message translates to:
-  /// **'Failed to upload photo: {error}'**
-  String failedToUploadPhoto(String error);
+  /// **'Could not upload the photo. Please try again.'**
+  String get failedToUploadPhoto;
 
   /// No description provided for @failedToDeletePhoto.
   ///
   /// In en, this message translates to:
-  /// **'Failed to delete photo: {error}'**
-  String failedToDeletePhoto(String error);
+  /// **'Could not delete the photo. Please try again.'**
+  String get failedToDeletePhoto;
 
   /// No description provided for @photoOf.
   ///
@@ -1649,8 +1673,8 @@ abstract class AppLocalizations {
   /// No description provided for @errorUpdatingProfile.
   ///
   /// In en, this message translates to:
-  /// **'Error updating profile: {error}'**
-  String errorUpdatingProfile(String error);
+  /// **'Could not save your profile. Please try again.'**
+  String get errorUpdatingProfile;
 
   /// No description provided for @photoUpdatedSuccessfully.
   ///
@@ -1661,14 +1685,14 @@ abstract class AppLocalizations {
   /// No description provided for @errorUploadingPhoto.
   ///
   /// In en, this message translates to:
-  /// **'Error uploading photo: {error}'**
-  String errorUploadingPhoto(String error);
+  /// **'Could not upload your photo. Please try again.'**
+  String get errorUploadingPhoto;
 
   /// No description provided for @errorLoadingStatistics.
   ///
   /// In en, this message translates to:
-  /// **'Error loading statistics: {error}'**
-  String errorLoadingStatistics(String error);
+  /// **'Could not load your statistics.'**
+  String get errorLoadingStatistics;
 
   /// No description provided for @saveChanges.
   ///
@@ -1805,8 +1829,8 @@ abstract class AppLocalizations {
   /// No description provided for @errorSubmittingFeedback.
   ///
   /// In en, this message translates to:
-  /// **'Error submitting feedback: {error}'**
-  String errorSubmittingFeedback(String error);
+  /// **'Could not send your feedback. Please try again.'**
+  String get errorSubmittingFeedback;
 
   /// No description provided for @otherWaysToReach.
   ///
@@ -1970,12 +1994,6 @@ abstract class AppLocalizations {
   /// **'Unknown date'**
   String get unknownDate;
 
-  /// No description provided for @errorWithMessage.
-  ///
-  /// In en, this message translates to:
-  /// **'Error: {error}'**
-  String errorWithMessage(String error);
-
   /// No description provided for @navigationDrawer.
   ///
   /// In en, this message translates to:
@@ -2023,12 +2041,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Launching Browser'**
   String get launchingBrowser;
-
-  /// No description provided for @snapshotError.
-  ///
-  /// In en, this message translates to:
-  /// **'Snapshot Error: {error}'**
-  String snapshotError(String error);
 
   /// No description provided for @faqsTitle.
   ///
@@ -2426,18 +2438,6 @@ abstract class AppLocalizations {
   /// **'This account has been disabled. Please contact support.'**
   String get accountDisabled;
 
-  /// No description provided for @unexpectedErrorWithMessage.
-  ///
-  /// In en, this message translates to:
-  /// **'Unexpected error: {error}'**
-  String unexpectedErrorWithMessage(String error);
-
-  /// No description provided for @errorWithCode.
-  ///
-  /// In en, this message translates to:
-  /// **'Error: {message}'**
-  String errorWithCode(String message);
-
   /// No description provided for @resendInSeconds.
   ///
   /// In en, this message translates to:
@@ -2663,8 +2663,8 @@ abstract class AppLocalizations {
   /// No description provided for @errorSavingProfile.
   ///
   /// In en, this message translates to:
-  /// **'Error saving profile: {error}'**
-  String errorSavingProfile(String error);
+  /// **'Could not save your profile. Please try again.'**
+  String get errorSavingProfile;
 
   /// No description provided for @clinicDetails.
   ///

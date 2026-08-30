@@ -18,6 +18,7 @@ import '../utils/nav_extensions.dart';
 import 'app_bar_title.dart';
 import 'status_view.dart';
 import 'escape_leading.dart';
+import 'page_width.dart';
 
 
 Color _urgencyColor(int urgency) => SignalUrgency.fromCode(urgency).color;
@@ -64,7 +65,7 @@ class MySignalsPage extends StatelessWidget {
             ],
           ),
         ),
-        body: StreamBuilder<User?>(
+        body: PageWidth(child: StreamBuilder<User?>(
           initialData: FirebaseAuth.instance.currentUser,
           stream: FirebaseAuth.instance.authStateChanges(),
           builder: (context, authSnapshot) {
@@ -101,6 +102,7 @@ class MySignalsPage extends StatelessWidget {
               ],
             );
           },
+        ),
         ),
       ),
     );

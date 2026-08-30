@@ -4,6 +4,7 @@ import 'package:help_a_paw/l10n/app_localizations.dart';
 import '../utils/nav_extensions.dart';
 import 'app_bar_title.dart';
 import 'escape_leading.dart';
+import 'page_width.dart';
 
 class FaqsPage extends StatelessWidget {
   const FaqsPage({super.key});
@@ -20,7 +21,7 @@ class FaqsPage extends StatelessWidget {
           ),
         title: AppBarTitle(l10n.faqsTitle),
       ),
-      body: ListView(
+      body: PageWidth(child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           _FaqSection(
@@ -110,7 +111,7 @@ class FaqsPage extends StatelessWidget {
           ),
           const SizedBox(height: 32),
         ],
-      ),
+      )),
     );
   }
 }

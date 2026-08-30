@@ -16,6 +16,7 @@ import '../services/notification_service.dart';
 import 'help_tag_selector.dart';
 import 'app_bar_title.dart';
 import 'section_header.dart';
+import 'page_width.dart';
 
 class NotificationSettingsPage extends StatefulWidget {
   const NotificationSettingsPage({super.key});
@@ -329,11 +330,11 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage>
       appBar: AppBar(
         title: AppBarTitle(l10n.notificationSettings),
       ),
-      body: _isLoading
+      body: PageWidth(child: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _loaded
               ? _buildSettingsContent()
-              : _buildLoadFailed(l10n),
+              : _buildLoadFailed(l10n)),
     );
   }
 

@@ -28,6 +28,7 @@ import 'helper_tags_gate.dart';
 import 'notification_onboarding_sheet.dart';
 import 'sign_in_required_dialog.dart';
 import 'map/map_style_builder.dart';
+import 'app_bar_title.dart';
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -750,31 +751,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     ),
                   ),
                 ),
-              // Crosshair for new signal placement
-              if (mapState.isAddingNewSignal)
-                IgnorePointer(
-                  child: Center(
-                    // Default black on a map is unreadable wherever the map is
-                    // dark — it lands on the navy "10+" cluster bubble at the
-                    // zoom this mode opens at. White glyph over a dark halo
-                    // reads on every tile: satellite, park green, motorway.
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Icon(
-                          Icons.gps_fixed,
-                          size: 54.0,
-                          color: Colors.black.withAlpha(120),
-                        ),
-                        const Icon(
-                          Icons.gps_fixed,
-                          size: 50.0,
-                          color: Colors.white,  // theme-independent: over the map
-                        ),  // theme-independent: over the map
-                      ],
-                    ),
-                  ),
-                ),
+              if (mapState.isAddingNewSignal) const _PlacementPin(),
               // Step 1 of the new-signal wizard. The remaining steps live on
               // the /new_signal route, pushed once the pin is confirmed.
               if (mapState.isAddingNewSignal)
@@ -857,7 +834,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           title: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: _handleTitleTap,
-            child: Text(
+            // The one app bar title that was still a bare Text. With three
+            // actions beside it, "Help a Paw (TEST)" ellipsises at 411dp and a
+            // larger text size — and this title is also the seven-tap target
+            // for test mode, so shrinking beats clipping the tap area.
+            child: AppBarTitle(
               ref.watch(testModeProvider) ? 'Help a Paw (TEST)' : 'Help a Paw',
             ),
           ),
@@ -953,6 +934,71 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               ),
         floatingActionButtonLocation:
             FloatingActionButtonLocation.centerFloat,
+      ),
+    );
+  }
+}
+
+/// The marker the reporter is about to drop, over the centre of the map.
+///
+/// This was `Icons.gps_fixed`, which is the standard "centre the map on me"
+/// glyph: it said *where you are* at the one moment the reporter is saying
+/// where the animal is. It is a pin now, in the shape they will see on the map
+/// afterwards.
+///
+/// The pin's **tip** is the location, so it is lifted by half its height to
+/// rest on the centre, and the dot underneath marks the exact point the tip
+/// claims — a pin alone is ambiguous by about its own height, which is tens of
+/// metres at this zoom.
+///
+/// White over a dark halo because it has to read on every tile: satellite,
+/// park green, motorway, and the navy cluster bubble it lands on at the zoom
+/// this mode opens at.
+class _PlacementPin extends StatelessWidget {
+  const _PlacementPin();
+
+  /// `Icons.place` draws its tip just inside the bottom of its box.
+  static const _lift = 22.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Center(
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white,  // theme-independent: over the map
+                border: Border.all(
+                  color: Colors.black.withAlpha(140),
+                  width: 1.5,
+                ),
+              ),
+            ),
+            Transform.translate(
+              offset: const Offset(0, -_lift),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Icon(
+                    Icons.place,
+                    size: 52.0,
+                    color: Colors.black.withAlpha(120),
+                  ),
+                  const Icon(
+                    Icons.place,
+                    size: 48.0,
+                    color: Colors.white,  // theme-independent: over the map
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

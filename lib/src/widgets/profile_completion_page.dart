@@ -8,6 +8,8 @@ import 'package:go_router/go_router.dart';
 import '../config/routes.dart';
 import '../services/auth_service.dart';
 import '../services/public_profile_service.dart';
+import '../utils/error_text.dart';
+import '../utils/profile_validators.dart';
 
 class ProfileCompletionPage extends StatefulWidget {
   const ProfileCompletionPage({super.key});
@@ -130,12 +132,15 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
         // Pop back through auth screens to return to original screen
         _popAuthStack(context);
       }
-    } catch (e) {
+    } catch (e, stack) {
       if (mounted) {
         final l10n = AppLocalizations.of(context);
+        final message = reportAndDescribe(l10n, e, stack: stack,
+            where: 'profileCompletion.save',
+            fallback: l10n.errorSavingProfile);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(l10n.errorSavingProfile(e.toString())),
+            content: Text(message),
             backgroundColor: Colors.red,
           ),
         );
@@ -193,15 +198,7 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
                       hintText: l10n.enterFullName,
                       prefixIcon: Icon(Icons.person, color: Theme.of(context).colorScheme.primary),
                     ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return l10n.nameIsRequired;
-                      }
-                      if (value.trim().length < 2) {
-                        return l10n.nameTooShort;
-                      }
-                      return null;
-                    },
+                    validator: (value) => validateDisplayName(l10n, value),
                     textCapitalization: TextCapitalization.words,
                     // Mirrors the publicProfiles rules' bounds, so an over-long
                     // or multi-line name is capped as it's typed instead of
@@ -223,15 +220,7 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
                       prefixIcon: Icon(Icons.phone, color: Theme.of(context).colorScheme.primary),
                     ),
                     keyboardType: TextInputType.phone,
-                    validator: (value) {
-                      if (value != null && value.isNotEmpty) {
-                        // Basic phone validation if provided
-                        if (value.length < 8) {
-                          return l10n.validPhoneNumber;
-                        }
-                      }
-                      return null;
-                    },
+                    validator: (value) => validatePhone(l10n, value),
                   ),
                   const SizedBox(height: 32),
 

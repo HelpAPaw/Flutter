@@ -102,7 +102,6 @@ class _ModerationQueuePageState extends State<ModerationQueuePage> {
       child: Column(
         children: [
           TabBar(
-            indicatorColor: Theme.of(context).colorScheme.primary,
             tabs: [
               Tab(text: l10n.moderationTabReports),
               Tab(text: l10n.moderationTabHidden),
