@@ -571,365 +571,363 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                 Expanded(
                   child: SingleChildScrollView(
                     controller: _scrollController,
-                    // Everything anybody typed on this screen — the title, the
-                    // description, every comment, every update note — is text a
-                    // volunteer may need to pass on: an address to copy into a
-                    // map, a name to paste into a message. One wrap here rather
-                    // than one per widget, so a drag can start in the title and
-                    // finish inside a comment, and so `SelectableRegion` never
-                    // has to negotiate with the timeline rows' `IntrinsicHeight`.
+                    // Selection is NOT wrapped around the page. Everything
+                    // anybody typed here is selectable, but each such string
+                    // owns its own `SelectionArea` inside [LinkifiedText] — so
+                    // a selection can only ever contain content, never the
+                    // labels, chips and headings around it. See that widget for
+                    // why that trade is worth losing the cross-widget drag.
                     //
-                    // This is also what pays for the comment rows' long-press:
-                    // selection claims that gesture, so the report action moved
-                    // to a visible button. See [_buildCommentRow].
-                    child: SelectionArea(
-                      child: PageWidth(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              // A moderator's warning label (§18.3). Above the
-                              // photos on purpose: the whole point of "possible
-                              // duplicate" or "disputed" is to be read *before* the
-                              // content it qualifies, not after scrolling past it.
-                              _moderationLabelBanner(signal, l10n),
-                              if (signal.photoUrls.isNotEmpty || isAuthor)
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    SizedBox(
-                                      height: 170,
-                                      child: PageView.builder(
-                                        controller: _photoPageController,
-                                        onPageChanged: (index) {
-                                          setState(() {
-                                            _currentPhotoPage = index;
-                                          });
-                                        },
-                                        itemCount: signal.photoUrls.length +
-                                            (isAuthor && signal.photoUrls.length < 5 ? 1 : 0),
-                                        itemBuilder: (context, index) {
-                                          // Show "Add Photo" page if this is the last index and user is author
-                                          if (index >= signal.photoUrls.length) {
-                                            return Padding(
-                                              padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                                              child: GestureDetector(
-                                                onTap: _isUploadingPhoto ? null : _showImageSourceDialog,
-                                                child: Container(
-                                                  decoration: BoxDecoration(
-                                                    color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                                                    borderRadius: BorderRadius.circular(12),
-                                                    border: Border.all(
-                                                      color: Theme.of(context).colorScheme.primary,
-                                                      width: 2,
-                                                      style: BorderStyle.solid,
-                                                    ),
-                                                  ),
-                                                  child: Center(
-                                                    child: _isUploadingPhoto
-                                                        ? Column(
-                                                            mainAxisAlignment: MainAxisAlignment.center,
-                                                            children: [
-                                                              const CircularProgressIndicator(
-                                                              ),
-                                                              const SizedBox(height: 16),
-                                                              Text(
-                                                                l10n.uploadingPhoto,
-                                                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                                              ),
-                                                            ],
-                                                          )
-                                                        : Column(
-                                                            mainAxisAlignment: MainAxisAlignment.center,
-                                                            children: [
-                                                              Icon(
-                                                                Icons.add_photo_alternate,
-                                                                size: 48,
-                                                                color: Theme.of(context).colorScheme.primary,
-                                                              ),
-                                                              const SizedBox(height: 8),
-                                                              Text(
-                                                                signal.photoUrls.isEmpty ? l10n.addPhoto : l10n.addAnotherPhoto,
-                                                                style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.bold),
-                                                              ),
-                                                              const SizedBox(height: 4),
-                                                              Text(
-                                                                l10n.photosCount(signal.photoUrls.length, 5),
-                                                                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                  ),
-                                                ),
-                                              ),
-                                            );
-                                          }
-
-                                          // Show photo
+                    // Selection is still what the comment rows' long-press was
+                    // spent on: it claims that gesture wherever it applies, so
+                    // the report action moved to a visible button. See
+                    // [_buildCommentRow].
+                    child: PageWidth(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            // A moderator's warning label (§18.3). Above the
+                            // photos on purpose: the whole point of "possible
+                            // duplicate" or "disputed" is to be read *before* the
+                            // content it qualifies, not after scrolling past it.
+                            _moderationLabelBanner(signal, l10n),
+                            if (signal.photoUrls.isNotEmpty || isAuthor)
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SizedBox(
+                                    height: 170,
+                                    child: PageView.builder(
+                                      controller: _photoPageController,
+                                      onPageChanged: (index) {
+                                        setState(() {
+                                          _currentPhotoPage = index;
+                                        });
+                                      },
+                                      itemCount: signal.photoUrls.length +
+                                          (isAuthor && signal.photoUrls.length < 5 ? 1 : 0),
+                                      itemBuilder: (context, index) {
+                                        // Show "Add Photo" page if this is the last index and user is author
+                                        if (index >= signal.photoUrls.length) {
                                           return Padding(
                                             padding: const EdgeInsets.symmetric(horizontal: 4.0),
                                             child: GestureDetector(
-                                              onTap: () {
-                                                Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (context) => _FullScreenPhotoGallery(
-                                                      photoUrls: signal.photoUrls,
-                                                      initialIndex: index,
-                                                    ),
+                                              onTap: _isUploadingPhoto ? null : _showImageSourceDialog,
+                                              child: Container(
+                                                decoration: BoxDecoration(
+                                                  color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                                                  borderRadius: BorderRadius.circular(12),
+                                                  border: Border.all(
+                                                    color: Theme.of(context).colorScheme.primary,
+                                                    width: 2,
+                                                    style: BorderStyle.solid,
                                                   ),
-                                                );
-                                              },
-                                              child: Stack(
-                                                children: [
-                                                  ClipRRect(
-                                                    borderRadius: BorderRadius.circular(12.0),
-                                                    child: CachedNetworkImage(
-                                                      imageUrl: signal.photoUrls[index],
-                                                      width: double.infinity,
-                                                      fit: BoxFit.cover,
-                                                      placeholder: (context, url) => Container(
-                                                        color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                                                        child: const Center(
-                                                          child: CircularProgressIndicator(),
+                                                ),
+                                                child: Center(
+                                                  child: _isUploadingPhoto
+                                                      ? Column(
+                                                          mainAxisAlignment: MainAxisAlignment.center,
+                                                          children: [
+                                                            const CircularProgressIndicator(
+                                                            ),
+                                                            const SizedBox(height: 16),
+                                                            Text(
+                                                              l10n.uploadingPhoto,
+                                                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                                            ),
+                                                          ],
+                                                        )
+                                                      : Column(
+                                                          mainAxisAlignment: MainAxisAlignment.center,
+                                                          children: [
+                                                            Icon(
+                                                              Icons.add_photo_alternate,
+                                                              size: 48,
+                                                              color: Theme.of(context).colorScheme.primary,
+                                                            ),
+                                                            const SizedBox(height: 8),
+                                                            Text(
+                                                              signal.photoUrls.isEmpty ? l10n.addPhoto : l10n.addAnotherPhoto,
+                                                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.bold),
+                                                            ),
+                                                            const SizedBox(height: 4),
+                                                            Text(
+                                                              l10n.photosCount(signal.photoUrls.length, 5),
+                                                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                                            ),
+                                                          ],
                                                         ),
-                                                      ),
-                                                      errorWidget: (context, url, error) => Container(
-                                                        color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                                                        child: Center(
-                                                          child: Column(
-                                                            mainAxisAlignment: MainAxisAlignment.center,
-                                                            children: [
-                                                              Icon(Icons.broken_image, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                                              const SizedBox(height: 8),
-                                                              Text(l10n.failedToLoadImage,
-                                                                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  if (isAuthor)
-                                                    Positioned(
-                                                      top: 8,
-                                                      right: 8,
-                                                      child: Semantics(
-                                                        label: l10n.deletePhoto,
-                                                        button: true,
-                                                        enabled: true,
-                                                        child: IconButton(
-                                                          icon: const Icon(Icons.delete, color: Colors.white),  // theme-independent: over a photo
-                                                          style: IconButton.styleFrom(
-                                                            backgroundColor: Colors.red,
-                                                          ),
-                                                          onPressed: () => _deletePhoto(signal.photoUrls[index]),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  Positioned(
-                                                    bottom: 8,
-                                                    right: 8,
-                                                    child: Container(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                                      decoration: BoxDecoration(
-                                                        color: Colors.black54,
-                                                        borderRadius: BorderRadius.circular(20),
-                                                      ),
-                                                      child: Text(
-                                                        '${index + 1}/${signal.photoUrls.length}',
-                                                        style: const TextStyle(
-                                                          color: Colors.white,  // theme-independent: over a photo
-                                                          fontSize: 12,
-                                                          fontWeight: FontWeight.bold,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
+                                                ),
                                               ),
                                             ),
                                           );
-                                        },
-                                      ),
+                                        }
+
+                                        // Show photo
+                                        return Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                                          child: GestureDetector(
+                                            onTap: () {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (context) => _FullScreenPhotoGallery(
+                                                    photoUrls: signal.photoUrls,
+                                                    initialIndex: index,
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                            child: Stack(
+                                              children: [
+                                                ClipRRect(
+                                                  borderRadius: BorderRadius.circular(12.0),
+                                                  child: CachedNetworkImage(
+                                                    imageUrl: signal.photoUrls[index],
+                                                    width: double.infinity,
+                                                    fit: BoxFit.cover,
+                                                    placeholder: (context, url) => Container(
+                                                      color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                                                      child: const Center(
+                                                        child: CircularProgressIndicator(),
+                                                      ),
+                                                    ),
+                                                    errorWidget: (context, url, error) => Container(
+                                                      color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                                                      child: Center(
+                                                        child: Column(
+                                                          mainAxisAlignment: MainAxisAlignment.center,
+                                                          children: [
+                                                            Icon(Icons.broken_image, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                                            const SizedBox(height: 8),
+                                                            Text(l10n.failedToLoadImage,
+                                                                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                if (isAuthor)
+                                                  Positioned(
+                                                    top: 8,
+                                                    right: 8,
+                                                    child: Semantics(
+                                                      label: l10n.deletePhoto,
+                                                      button: true,
+                                                      enabled: true,
+                                                      child: IconButton(
+                                                        icon: const Icon(Icons.delete, color: Colors.white),  // theme-independent: over a photo
+                                                        style: IconButton.styleFrom(
+                                                          backgroundColor: Colors.red,
+                                                        ),
+                                                        onPressed: () => _deletePhoto(signal.photoUrls[index]),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                Positioned(
+                                                  bottom: 8,
+                                                  right: 8,
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.black54,
+                                                      borderRadius: BorderRadius.circular(20),
+                                                    ),
+                                                    child: Text(
+                                                      '${index + 1}/${signal.photoUrls.length}',
+                                                      style: const TextStyle(
+                                                        color: Colors.white,  // theme-independent: over a photo
+                                                        fontSize: 12,
+                                                        fontWeight: FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      },
                                     ),
-                                    // Page indicator dots
-                                    if ((signal.photoUrls.length +
-                                            (isAuthor && signal.photoUrls.length < 5 ? 1 : 0)) >
-                                        1)
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 8.0),
-                                        child: Row(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: List.generate(
-                                            signal.photoUrls.length +
-                                                (isAuthor && signal.photoUrls.length < 5 ? 1 : 0),
-                                            (index) => Container(
-                                              margin: const EdgeInsets.symmetric(horizontal: 4.0),
-                                              width: 8.0,
-                                              height: 8.0,
-                                              decoration: BoxDecoration(
-                                                shape: BoxShape.circle,
-                                                color: _currentPhotoPage == index
-                                                    ? Theme.of(context)
-                                                        .colorScheme
-                                                        .primary
-                                                    : Theme.of(context)
-                                                        .colorScheme
-                                                        .outline,
-                                              ),
+                                  ),
+                                  // Page indicator dots
+                                  if ((signal.photoUrls.length +
+                                          (isAuthor && signal.photoUrls.length < 5 ? 1 : 0)) >
+                                      1)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 8.0),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: List.generate(
+                                          signal.photoUrls.length +
+                                              (isAuthor && signal.photoUrls.length < 5 ? 1 : 0),
+                                          (index) => Container(
+                                            margin: const EdgeInsets.symmetric(horizontal: 4.0),
+                                            width: 8.0,
+                                            height: 8.0,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              color: _currentPhotoPage == index
+                                                  ? Theme.of(context)
+                                                      .colorScheme
+                                                      .primary
+                                                  : Theme.of(context)
+                                                      .colorScheme
+                                                      .outline,
                                             ),
                                           ),
                                         ),
                                       ),
-                                    const SizedBox(height: 8),
-                                  ],
-                                ),
-                              LinkifiedText(
-                                signal.title,
-                                style: Theme.of(context).textTheme.titleLarge,
-                              ),
-                              const SizedBox(height: 4),
-                              // Reporter and date in one line, resolved together.
-                              // They used to be a `spaceBetween` row, which on a
-                              // phone crammed them against both bezels and on a
-                              // tablet flung them apart. Built as one sentence
-                              // rather than two widgets because `_actorText`
-                              // renders nothing until the name lookup lands
-                              // (R4-OBS-01), and a separator that appears before
-                              // the name it separates is worse than a beat of
-                              // nothing.
-                              _actorText(
-                                signal.reporter.id,
-                                (name) =>
-                                    '$name \u00b7 ${dateFormat.format((signal.createdAt as Timestamp).toDate())}',
-                                fallback: l10n.unknown,
-                                maxLines: 1,
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                                     ),
+                                  const SizedBox(height: 8),
+                                ],
                               ),
-                              const SizedBox(height: 10),
-                              LinkifiedText(
-                                signal.description,
-                                style: Theme.of(context).textTheme.bodyLarge,
-                              ),
-                              const SizedBox(height: 16),
-                              // The two things a volunteer opens a signal to do.
-                              // Equal width and a full 48dp tall: as bare
-                              // `TextButton`s pushed to the two ends of the row
-                              // they were the loudest colour on the screen and
-                              // the smallest targets on it at the same time.
-                              Row(
-                                children: [
+                            LinkifiedText(
+                              signal.title,
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const SizedBox(height: 4),
+                            // Reporter and date in one line, resolved together.
+                            // They used to be a `spaceBetween` row, which on a
+                            // phone crammed them against both bezels and on a
+                            // tablet flung them apart. Built as one sentence
+                            // rather than two widgets because `_actorText`
+                            // renders nothing until the name lookup lands
+                            // (R4-OBS-01), and a separator that appears before
+                            // the name it separates is worse than a beat of
+                            // nothing.
+                            _actorText(
+                              signal.reporter.id,
+                              (name) =>
+                                  '$name \u00b7 ${dateFormat.format((signal.createdAt as Timestamp).toDate())}',
+                              fallback: l10n.unknown,
+                              maxLines: 1,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  ),
+                            ),
+                            const SizedBox(height: 10),
+                            LinkifiedText(
+                              signal.description,
+                              style: Theme.of(context).textTheme.bodyLarge,
+                            ),
+                            const SizedBox(height: 16),
+                            // The two things a volunteer opens a signal to do.
+                            // Equal width and a full 48dp tall: as bare
+                            // `TextButton`s pushed to the two ends of the row
+                            // they were the loudest colour on the screen and
+                            // the smallest targets on it at the same time.
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: FilledButton.icon(
+                                    style: FilledButton.styleFrom(
+                                      minimumSize: const Size.fromHeight(48),
+                                    ),
+                                    onPressed: () async {
+                                      GeoPoint location = signal.location['geopoint'];
+                                      final coords = Coords(location.latitude, location.longitude);
+                                      await NavigationService.navigateTo(
+                                        context: context,
+                                        coords: coords,
+                                        destinationTitle: signal.title,
+                                      );
+                                    },
+                                    icon: const Icon(Icons.directions, size: 20),
+                                    label: Text(
+                                      l10n.navigateMe,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
+                                if (signal.contactPhone.isNotEmpty) ...[
+                                  const SizedBox(width: 10),
                                   Expanded(
-                                    child: FilledButton.icon(
-                                      style: FilledButton.styleFrom(
+                                    child: OutlinedButton.icon(
+                                      style: OutlinedButton.styleFrom(
                                         minimumSize: const Size.fromHeight(48),
                                       ),
                                       onPressed: () async {
-                                        GeoPoint location = signal.location['geopoint'];
-                                        final coords = Coords(location.latitude, location.longitude);
-                                        await NavigationService.navigateTo(
-                                          context: context,
-                                          coords: coords,
-                                          destinationTitle: signal.title,
-                                        );
+                                        Uri phoneUri = Uri(scheme: 'tel', path: signal.contactPhone);
+                                        if (await canLaunchUrl(phoneUri)) {
+                                          launchUrl(phoneUri);
+                                        } else {
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text(l10n.cannotCall(signal.contactPhone)),
+                                              ),
+                                            );
+                                          }
+                                        }
                                       },
-                                      icon: const Icon(Icons.directions, size: 20),
+                                      icon: const Icon(Icons.phone, size: 20),
                                       label: Text(
-                                        l10n.navigateMe,
+                                        signal.contactPhone,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
                                   ),
-                                  if (signal.contactPhone.isNotEmpty) ...[
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: OutlinedButton.icon(
-                                        style: OutlinedButton.styleFrom(
-                                          minimumSize: const Size.fromHeight(48),
-                                        ),
-                                        onPressed: () async {
-                                          Uri phoneUri = Uri(scheme: 'tel', path: signal.contactPhone);
-                                          if (await canLaunchUrl(phoneUri)) {
-                                            launchUrl(phoneUri);
-                                          } else {
-                                            if (context.mounted) {
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                SnackBar(
-                                                  content: Text(l10n.cannotCall(signal.contactPhone)),
-                                                ),
-                                              );
-                                            }
-                                          }
-                                        },
-                                        icon: const Icon(Icons.phone, size: 20),
-                                        label: Text(
-                                          signal.contactPhone,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
                                 ],
-                              ),
-                              const SizedBox(height: 16),
-                              // Urgency, status, who holds the signal and what the
-                              // animal needs, in one bounded surface — see
-                              // [SignalStateCard]. They were four sibling blocks
-                              // with four headings at three different type sizes,
-                              // and the editing controls for three of them were
-                              // inline, so a reader who could change nothing
-                              // still scrolled past a six-line radio group and a
-                              // full-width dropdown to reach the timeline.
-                              SignalStateCard(
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            // Urgency, status, who holds the signal and what the
+                            // animal needs, in one bounded surface — see
+                            // [SignalStateCard]. They were four sibling blocks
+                            // with four headings at three different type sizes,
+                            // and the editing controls for three of them were
+                            // inline, so a reader who could change nothing
+                            // still scrolled past a six-line radio group and a
+                            // full-width dropdown to reach the timeline.
+                            SignalStateCard(
+                              signal: signal,
+                              canCoordinate: canCoordinate,
+                              busy: _isApplyingLevelChange,
+                              onManage: () => showManageSignalSheet(
+                                context,
                                 signal: signal,
-                                canCoordinate: canCoordinate,
                                 busy: _isApplyingLevelChange,
-                                onManage: () => showManageSignalSheet(
-                                  context,
-                                  signal: signal,
-                                  busy: _isApplyingLevelChange,
-                                  // Master spec §5.2 restricts marking a signal Red
-                                  // to "the original poster/case holder, a
-                                  // moderator or an admin"; `isSignalOwnerUpdate`
-                                  // in the rules enforces it, so gating the sheet
-                                  // on `canCoordinate` is UI courtesy rather than
-                                  // the security boundary. A moderator does NOT
-                                  // reach it here — they use the app-bar shield,
-                                  // which routes through `moderateAction` so the
-                                  // correction is audited (§5.3).
-                                  onUrgencyChanged: (value) =>
-                                      _updateSignalUrgency(signal.urgency, value),
-                                  onStatusChanged: (value) => _updateSignalStatus(
-                                    signal,
-                                    signal.status,
-                                    value,
-                                  ),
-                                  onEditTags: () => _editHelpTags(signal),
+                                // Master spec §5.2 restricts marking a signal Red
+                                // to "the original poster/case holder, a
+                                // moderator or an admin"; `isSignalOwnerUpdate`
+                                // in the rules enforces it, so gating the sheet
+                                // on `canCoordinate` is UI courtesy rather than
+                                // the security boundary. A moderator does NOT
+                                // reach it here — they use the app-bar shield,
+                                // which routes through `moderateAction` so the
+                                // correction is audited (§5.3).
+                                onUrgencyChanged: (value) =>
+                                    _updateSignalUrgency(signal.urgency, value),
+                                onStatusChanged: (value) => _updateSignalStatus(
+                                  signal,
+                                  signal.status,
+                                  value,
                                 ),
-                                // Who is responsible, immediately above the
-                                // control that responsibility gates.
-                                owner: SignalOwnerBlock(
-                                  signal: signal,
-                                  signalId: widget.signalId,
-                                  uid: uid,
-                                  busy: _isApplyingLevelChange,
-                                  runGuarded: _runGuarded,
-                                  nameOf: _nameWidget,
-                                  onClaim: _claimCase,
-                                  onSignInRequired: _showSignInDialog,
-                                ),
+                                onEditTags: () => _editHelpTags(signal),
                               ),
-                              const SizedBox(height: 22),
-                              _buildSignalHistory(signal, dateFormat),
-                              const SizedBox(height: 16),
-                            ],
-                          ),
+                              // Who is responsible, immediately above the
+                              // control that responsibility gates.
+                              owner: SignalOwnerBlock(
+                                signal: signal,
+                                signalId: widget.signalId,
+                                uid: uid,
+                                busy: _isApplyingLevelChange,
+                                runGuarded: _runGuarded,
+                                nameOf: _nameWidget,
+                                onClaim: _claimCase,
+                                onSignInRequired: _showSignInDialog,
+                              ),
+                            ),
+                            const SizedBox(height: 22),
+                            _buildSignalHistory(signal, dateFormat),
+                            const SizedBox(height: 16),
+                          ],
                         ),
                       ),
                     ),

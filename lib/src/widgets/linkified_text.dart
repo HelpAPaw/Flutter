@@ -6,13 +6,27 @@ import 'package:help_a_paw/l10n/app_localizations.dart';
 
 import '../utils/link_parser.dart';
 
-/// User-written text with its URLs, addresses and phone numbers made tappable.
+/// User-written text: selectable, with its URLs, addresses and phone numbers
+/// made tappable.
 ///
 /// A drop-in replacement for a plain [Text] showing something a person typed.
-/// It does not make the text *selectable* — that comes from a [SelectionArea]
-/// higher up the tree, which is deliberately one wrap per screen rather than
-/// one per widget so a drag can run from the signal's title all the way into a
-/// comment.
+///
+/// ## Why the [SelectionArea] is here and not around the screen
+///
+/// One wrap around the whole scroll body is less code, and it lets a drag run
+/// from the title all the way into a comment. It also makes *every* word on
+/// the screen selectable, and most of them are not content: "Select all" then
+/// highlights "Urgency", "Status", "Waiting for help", "Signal history" and
+/// every chip label — furniture the reader did not write and would never want
+/// to copy, which buries the two or three lines they did.
+///
+/// Scoping it per widget costs the cross-widget drag and buys a selection that
+/// only ever contains what a person typed. The reason to select anything on
+/// this screen is to pass it on — an address, a phone number, a description to
+/// paste into a message — and dragging the labels along with it is not a
+/// smaller version of that, it is noise. Every caller of this widget is
+/// user-written text, so the rule holds by construction rather than by
+/// remembering to wrap the right things.
 ///
 /// ## Why this is a StatefulWidget for what looks like a pure render
 ///
@@ -117,10 +131,12 @@ class _LinkifiedTextState extends State<LinkifiedText> {
   @override
   Widget build(BuildContext context) {
     if (_tokens.isEmpty) {
-      return Text(widget.text,
-          style: widget.style,
-          maxLines: widget.maxLines,
-          overflow: widget.overflow);
+      return SelectionArea(
+        child: Text(widget.text,
+            style: widget.style,
+            maxLines: widget.maxLines,
+            overflow: widget.overflow),
+      );
     }
 
     // `secondary` rather than `primary`: primary is #FF9800 in both schemes,
@@ -136,23 +152,25 @@ class _LinkifiedTextState extends State<LinkifiedText> {
       decorationColor: Theme.of(context).colorScheme.secondary,
     );
 
-    return Text.rich(
-      TextSpan(
-        children: [
-          for (var i = 0; i < _tokens.length; i++)
-            switch (_tokens[i]) {
-              PlainToken(:final text) => TextSpan(text: text),
-              LinkToken(:final text) => TextSpan(
-                  text: text,
-                  style: linkStyle,
-                  recognizer: _recognizers[i],
-                ),
-            },
-        ],
+    return SelectionArea(
+      child: Text.rich(
+        TextSpan(
+          children: [
+            for (var i = 0; i < _tokens.length; i++)
+              switch (_tokens[i]) {
+                PlainToken(:final text) => TextSpan(text: text),
+                LinkToken(:final text) => TextSpan(
+                    text: text,
+                    style: linkStyle,
+                    recognizer: _recognizers[i],
+                  ),
+              },
+          ],
+        ),
+        style: widget.style,
+        maxLines: widget.maxLines,
+        overflow: widget.overflow ?? TextOverflow.clip,
       ),
-      style: widget.style,
-      maxLines: widget.maxLines,
-      overflow: widget.overflow ?? TextOverflow.clip,
     );
   }
 }

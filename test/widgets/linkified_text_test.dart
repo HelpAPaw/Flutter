@@ -114,35 +114,33 @@ void main() {
 
   group('inside a timeline row', () {
     // A faithful copy of `_timelineRow`'s skeleton: a rail that has to stretch
-    // to the height of whatever the text wraps to, inside the screen-wide
-    // `SelectionArea`. The pairing is the one structural unknown in making this
-    // screen selectable — `IntrinsicHeight` asks its children for a height they
-    // do not normally have to report, and `SelectableRegion` sits between them.
+    // to the height of whatever the text wraps to. The `SelectionArea` now sits
+    // *inside* it, around the body alone, which is the structural unknown —
+    // `IntrinsicHeight` asks its children for a height they do not normally
+    // have to report, and `SelectableRegion` is now one of those children.
     Widget timelineRow({required String body, Widget? action}) {
-      return SelectionArea(
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Column(children: [
-                Container(width: 28, height: 28, color: const Color(0xFF888888)),
-                const Expanded(child: SizedBox(width: 1)),
-              ]),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      const Expanded(child: Text('Мария · 12 авг, 14:02')),
-                      if (action != null) action,
-                    ]),
-                    LinkifiedText(body),
-                  ],
-                ),
+      return IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Column(children: [
+              Container(width: 28, height: 28, color: const Color(0xFF888888)),
+              const Expanded(child: SizedBox(width: 1)),
+            ]),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    const Expanded(child: Text('Мария · 12 авг, 14:02')),
+                    if (action != null) action,
+                  ]),
+                  LinkifiedText(body),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       );
     }
@@ -197,6 +195,33 @@ void main() {
       expect(tester.getSize(find.byType(IconButton)).height,
           greaterThanOrEqualTo(40));
     });
+  });
+
+  testWidgets('brings its own selection, scoped to the text it renders',
+      (tester) async {
+    // The screen deliberately does NOT wrap its body in one SelectionArea, so
+    // that a selection can never pick up the labels and headings around the
+    // content. Each LinkifiedText is its own region.
+    await pump(
+      tester,
+      const Column(children: [
+        Text('Urgency'), // furniture: must not be selectable
+        LinkifiedText('what the reporter wrote'),
+      ]),
+    );
+
+    final region = find.byType(SelectionArea);
+    expect(region, findsOneWidget);
+    expect(
+      find.descendant(of: region, matching: find.text('Urgency')),
+      findsNothing,
+      reason: 'a label must not fall inside the selectable region',
+    );
+    expect(
+      find.descendant(of: region, matching: find.byType(LinkifiedText)),
+      findsNothing,
+      reason: 'the region is inside LinkifiedText, not around it',
+    );
   });
 
   testWidgets('a tap on a link is handled, not passed through',
