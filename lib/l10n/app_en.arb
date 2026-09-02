@@ -788,6 +788,7 @@
     "description": "Shown when the user grants only while-in-use location permission but background monitoring needs always-on access"
   },
   "reportSignal": "Report this signal",
+  "commentOptions": "Comment options",
   "reportComment": "Report this comment",
   "reportTitle": "Report",
   "reportReasonPrompt": "What is wrong with this?",

@@ -3044,6 +3044,12 @@ abstract class AppLocalizations {
   /// **'Report this signal'**
   String get reportSignal;
 
+  /// No description provided for @commentOptions.
+  ///
+  /// In en, this message translates to:
+  /// **'Comment options'**
+  String get commentOptions;
+
   /// No description provided for @reportComment.
   ///
   /// In en, this message translates to:

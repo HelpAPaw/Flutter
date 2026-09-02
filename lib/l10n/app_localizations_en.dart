@@ -1666,6 +1666,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get reportSignal => 'Report this signal';
 
   @override
+  String get commentOptions => 'Comment options';
+
+  @override
   String get reportComment => 'Report this comment';
 
   @override
