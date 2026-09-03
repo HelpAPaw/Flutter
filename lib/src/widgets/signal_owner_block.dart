@@ -242,7 +242,7 @@ class SignalOwnerBlock extends StatelessWidget {
                 // The owner's reason, when they gave one. They were required to
                 // type it; showing it is what makes that requirement honest.
                 if (mine?.resolvedNote case final why? when why.isNotEmpty)
-                  Text(why),
+                  LinkifiedText(why),
                 Text(
                   l10n.takeoverAskAgainAfter(
                     DateFormat.yMMMd().add_jm().format(until),

@@ -12,12 +12,7 @@ void main() {
       .toList();
 
   /// Every token's text, concatenated.
-  String rendered(String input) => parseLinks(input)
-      .map((t) => switch (t) {
-            PlainToken(:final text) => text,
-            LinkToken(:final text) => text,
-          })
-      .join();
+  String rendered(String input) => parseLinks(input).map((t) => t.text).join();
 
   group('nothing is lost', () {
     test('the tokens always reproduce the input exactly', () {
@@ -83,6 +78,21 @@ void main() {
       }
     });
 
+    test('rejects a URL that hides its real host behind userInfo', () {
+      // Renders reading as helpapaw.org and opens evil.example. On the one
+      // screen where strangers write to each other, that is a phishing link.
+      expect(links('https://helpapaw.org@evil.example/login'), isEmpty);
+      expect(links('http://bank.bg:x@evil.example'), isEmpty);
+      expect(rendered('https://helpapaw.org@evil.example/login'),
+          'https://helpapaw.org@evil.example/login');
+    });
+
+    test('declines a non-ASCII host rather than offering a dead link', () {
+      // Uri.parse percent-escapes rather than punycoding, so linkifying this
+      // would underline something that cannot resolve when tapped.
+      expect(links('https://дарение.бг'), isEmpty);
+    });
+
     test('a rejected scheme is swallowed whole, not mined for its host', () {
       // The bare-domain branch must not get a second bite at `evil.example`.
       expect(links('intent://evil.example/x'), isEmpty);
@@ -115,6 +125,32 @@ void main() {
     test('a number longer than E.164 is not a phone number', () {
       expect(links('chip 9851123456789031'), isEmpty);
     });
+
+    test('a dot is never a phone separator', () {
+      // dd.mm.yyyy is *the* Bulgarian date format and appears in status notes
+      // constantly; opening hours and IP addresses share the shape.
+      for (final notPhone in [
+        'Намерено на 12.03.2026 до блока',
+        'found on 12.03.2026',
+        'work 08.00-18.00 daily',
+        'ip 192.168.1.1',
+      ]) {
+        expect(links(notPhone), isEmpty, reason: notPhone);
+      }
+    });
+
+    test('a separated run must carry a + or 0 prefix, and start one', () {
+      // Without the prefix rule these matched from their second group on,
+      // because that group happens to begin with a zero — and the separator
+      // class contains a space, so the match ran across unrelated numbers.
+      for (final notPhone in [
+        'cost 1 000 000 leva',
+        'IBAN BG80 BNBG 9661 1020 3456 78',
+        'ID 2026-09-04 12:30',
+      ]) {
+        expect(links(notPhone), isEmpty, reason: notPhone);
+      }
+    });
   });
 
   group('email', () {
@@ -144,8 +180,19 @@ void main() {
 
     test('keeps the leading plus and drops every other separator', () {
       final token =
-          parseLinks('+359 (88) 812.3456').whereType<LinkToken>().single;
+          parseLinks('+359 (88) 812-3456').whereType<LinkToken>().single;
       expect(token.uri, Uri.parse('tel:+359888123456'));
+    });
+
+    test('a dot-separated number is deliberately given up on', () {
+      // The price of refusing `.` as a separator — and worth paying, because
+      // the same shape is the Bulgarian date format. See _minPhoneDigits.
+      expect(links('call 0888.123.456'), isEmpty);
+    });
+
+    test('a bare digit run is taken as a number, over-matching on purpose', () {
+      expect(links('order 987654321 shipped'),
+          ['987654321 -> tel:987654321']);
     });
 
     test('does not run across a line break', () {
@@ -165,10 +212,6 @@ void main() {
       );
     });
 
-    test('the memo cache returns an equal result', () {
-      const input = 'twice: example.com';
-      expect(parseLinks(input), parseLinks(input));
-    });
   });
 
   group('cost', () {

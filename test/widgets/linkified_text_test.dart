@@ -43,7 +43,10 @@ void main() {
       }
     }
 
-    walk(text.textSpan!);
+    // Link-free text takes the plain `Text` path and carries no spans at all —
+    // which is the point of that path, so it is an answer, not a failure.
+    final span = text.textSpan;
+    if (span != null) walk(span);
     return out;
   }
 

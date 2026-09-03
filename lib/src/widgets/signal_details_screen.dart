@@ -1222,7 +1222,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     required String? date,
     required bool isLast,
     String? note,
-    Widget? action,
+    VoidCallback? onOptions,
   }) {
     final scheme = Theme.of(context).colorScheme;
     final meta = Theme.of(context)
@@ -1266,13 +1266,20 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                   // Renders nothing until the name lands, then the whole line
                   // at once — see [_actorText] and R4-OBS-01.
                   //
-                  // [action] rides on this line rather than in a trailing
+                  // The `⋮` rides on this line rather than in a trailing
                   // column of its own: a column would cost every row a fixed
                   // gutter and read as the per-row admin control this screen
                   // deliberately avoids, while here it costs no width at all
                   // and only appears on the rows that have something to
                   // offer. It is allowed to show before the name resolves —
                   // it sits at the far end, so nothing looks half-drawn.
+                  //
+                  // A callback rather than a `Widget` slot: the button is the
+                  // same one every time, so building it here keeps its sizing
+                  // and its accessibility contract (see [_rowMenuButton])
+                  // structural rather than advisory — a caller cannot pass
+                  // something that overflows this row or ships a tap target
+                  // under 48dp.
                   Row(
                     children: [
                       Expanded(
@@ -1284,7 +1291,8 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                           maxLines: 1,
                         ),
                       ),
-                      if (action != null) action,
+                      if (onOptions != null)
+                        _rowMenuButton(onPressed: onOptions),
                     ],
                   ),
                   const SizedBox(height: 2),
@@ -1431,8 +1439,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// A chooser rather than going straight to one or the other, because both
   /// remain meaningful: reporting puts the comment in the queue for whoever is
   /// on duty, while deleting is the moderator acting now. Ordinary users never
-  /// see this — for them the long-press goes straight to the report dialog, as
-  /// it always has.
+  /// see this — for them the row's `⋮` opens the report dialog directly.
   Future<void> _showCommentModeratorMenu(SignalHistoryEntry entry) async {
     final l10n = AppLocalizations.of(context);
     final collection = AppPreferencesService().signalsCollectionName;
@@ -1521,46 +1528,48 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       // is answered by placement rather than by hiding it: it rides on the
       // existing name-and-date line (see [_timelineRow]), so it adds no gutter,
       // and it appears only where there is something to do.
-      action: !canReport
+      //
+      // A moderator gets a chooser rather than going straight to the report
+      // dialog, which is how they act on a comment without waiting for somebody
+      // to report it first.
+      onOptions: !canReport
           ? null
-          : _rowMenuButton(
-              // A moderator gets a chooser rather than going straight to the
-              // report dialog, which is how they act on a comment without
-              // waiting for somebody to report it first.
-              onPressed: canModerateComments
-                  ? () => _showCommentModeratorMenu(entry)
-                  : () => showReportDialog(
-                        context,
-                        target: ReportTarget.comment(
-                          commentId: entry.id,
-                          signalId: widget.signalId,
-                          collection:
-                              AppPreferencesService().signalsCollectionName,
-                          reportedUserId: entry.actorId,
-                        ),
-                      ),
-            ),
+          : canModerateComments
+              ? () => _showCommentModeratorMenu(entry)
+              : () => showReportDialog(
+                    context,
+                    target: ReportTarget.comment(
+                      commentId: entry.id,
+                      signalId: widget.signalId,
+                      collection: AppPreferencesService().signalsCollectionName,
+                      reportedUserId: entry.actorId,
+                    ),
+                  ),
     );
   }
 
-  /// The `⋮` a timeline row hands to [_timelineRow] as its `action`.
+  /// The `⋮` [_timelineRow] draws when it is given an `onOptions`.
   ///
   /// Sized down to sit inside a small-text meta line without dominating it, but
   /// [IconButton]'s own 48dp minimum tap target is left alone underneath —
   /// shrinking the glyph must not shrink the thing you have to hit.
+  ///
+  /// `tooltip` is the whole accessibility story here, and deliberately the only
+  /// one: it names the button for a screen reader *and* gives a long-press hint
+  /// on Android. Wrapping this in a `Semantics(label:, button: true)` as well —
+  /// which is what the rest of this codebase does for bare widgets — produced
+  /// **two** button nodes, an outer one carrying the label but no tap action and
+  /// an inner one carrying the action but no label. TalkBack then stopped on a
+  /// dead control and announced "Comment options" twice.
   Widget _rowMenuButton({required VoidCallback onPressed}) {
-    return Semantics(
-      label: AppLocalizations.of(context).commentOptions,
-      button: true,
-      child: IconButton(
-        icon: const Icon(Icons.more_vert),
-        iconSize: 18,
-        visualDensity: VisualDensity.compact,
-        padding: EdgeInsets.zero,
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-        tooltip: AppLocalizations.of(context).commentOptions,
-        onPressed: onPressed,
-      ),
+    return IconButton(
+      icon: const Icon(Icons.more_vert),
+      iconSize: 18,
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+      tooltip: AppLocalizations.of(context).commentOptions,
+      onPressed: onPressed,
     );
   }
 

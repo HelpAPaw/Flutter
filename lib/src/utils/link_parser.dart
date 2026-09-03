@@ -6,7 +6,7 @@
 /// A `linkify` package would do it, but the whole job is one regular
 /// expression and a loop, and `CLAUDE.md` asks for a real reason before a new
 /// pub dependency joins the tree. The interesting part is not the matching —
-/// it is the [_schemeFor] allowlist below, which a general-purpose package
+/// it is the [_allowedSchemes] allowlist below, which a general-purpose package
 /// would not give us.
 ///
 /// ## What it deliberately does not do
@@ -22,43 +22,37 @@ library;
 /// A run of text, either plain or something that can be opened.
 sealed class TextToken {
   const TextToken();
+
+  /// The characters this run occupies in the original string.
+  ///
+  /// On the base class so the "concatenating every token reproduces the input"
+  /// invariant can be *read* off the type, and so a caller that only wants the
+  /// text does not have to switch on the subclass to get it.
+  String get text;
 }
 
 /// Text with nothing to open in it.
 final class PlainToken extends TextToken {
   const PlainToken(this.text);
 
+  @override
   final String text;
-
-  @override
-  bool operator ==(Object other) =>
-      other is PlainToken && other.text == text;
-
-  @override
-  int get hashCode => text.hashCode;
 
   @override
   String toString() => 'PlainToken($text)';
 }
 
 /// Text that resolves to a [Uri] the OS can handle.
-///
-/// [text] is what the user typed and is what gets drawn; [uri] is where the tap
-/// goes. They differ whenever the typed form is not directly launchable —
-/// `www.example.com` displays as typed and opens as `https://www.example.com`,
-/// and `0888 123 456` opens as `tel:0888123456`.
 final class LinkToken extends TextToken {
   const LinkToken(this.text, this.uri);
 
+  @override
   final String text;
+
+  /// Where a tap goes. Differs from [text] whenever the typed form is not
+  /// directly launchable — `www.example.com` displays as typed and opens as
+  /// `https://www.example.com`, `0888 123 456` opens as `tel:0888123456`.
   final Uri uri;
-
-  @override
-  bool operator ==(Object other) =>
-      other is LinkToken && other.text == text && other.uri == uri;
-
-  @override
-  int get hashCode => Object.hash(text, uri);
 
   @override
   String toString() => 'LinkToken($text -> $uri)';
@@ -82,15 +76,37 @@ final class LinkToken extends TextToken {
 final _linkPattern = RegExp(
   // scheme://…
   r'(?<scheme>[a-zA-Z][a-zA-Z0-9+.\-]*://\S+)'
-  // mailto:someone@example.com
-  r'|(?<mailto>mailto:[^\s@]+@[a-zA-Z0-9\-]+(?:\.[a-zA-Z0-9\-]+)*\.[a-zA-Z]{2,24})'
-  // someone@example.com
-  r'|(?<email>[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9\-]+(?:\.[a-zA-Z0-9\-]+)*\.[a-zA-Z]{2,24})'
+  // someone@example.com, with or without an explicit mailto:
+  r'|(?<email>(?:mailto:)?[a-zA-Z0-9._%+\-]+'
+  r'@[a-zA-Z0-9\-]+(?:\.[a-zA-Z0-9\-]+)*\.[a-zA-Z]{2,24})'
   // www.example.com/path — see below for why the TLD must be lower case
   r'|(?<domain>(?:www\.)?[a-zA-Z0-9\-]+(?:\.[a-zA-Z0-9\-]+)*\.[a-z]{2,24}(?:/\S*)?)'
-  // +359 88 812 3456 — length is re-checked in _uriFor
-  r'|(?<phone>\+?\d[\d ().\-]{4,18}\d)',
+  // A phone number, in two shapes. Both were narrowed after the first cut lit
+  // up ordinary text, and the two rules are worth spelling out:
+  //
+  //  * **A dot is never a separator here.** `12.03.2026` is the Bulgarian date
+  //    format and appears in status notes constantly; `08.00-18.00` is opening
+  //    hours and `192.168.1.1` is an address. Allowing `.` made dialer links of
+  //    all three. Somebody writing `0888.123.456` loses their link — a fair
+  //    trade for not linkifying every date in the app's main locale.
+  //  * **A separated run must start `+` or `0`.** Real numbers carry a country
+  //    or trunk prefix; `1 000 000` and an IBAN's `9661 1020 3456 78` do not,
+  //    and the separator class contains a space, so without this the match ran
+  //    straight across the gaps between unrelated numbers.
+  //
+  // The lookbehind stops a run beginning *inside* a longer number — without it
+  // both examples above still matched from their second group on, because that
+  // group happens to start with a zero.
+  r'|(?<phone>(?<![\d.\-])(?<!\d[ .\-])(?:'
+  r'[+0]\d[\d ()\-]{4,18}\d'   // +359 88 812 3456, 0888 123 456, 02-981-6212
+  r'|\d{6,15}(?![\d.\-])'      // 0888123456, written with no separators at all
+  r'))',
 );
+
+/// Everything that is not a digit, for normalising a matched number into the
+/// `tel:` path. Hoisted because Dart compiles a `RegExp` on construction and
+/// caches nothing — built inline, this recompiled on every phone match.
+final _nonDigits = RegExp(r'[^\d]');
 
 /// Characters a sentence puts *after* a link, which are not part of it.
 ///
@@ -127,18 +143,29 @@ const _maxPhoneDigits = 15;
 
 /// Where a tap on [text] should go, or null to leave it as plain text.
 Uri? _uriFor(RegExpMatch match, String text) {
-  if (text.isEmpty) return null;
-
   try {
     if (match.namedGroup('scheme') != null) {
       final uri = Uri.parse(text);
-      return _allowedSchemes.contains(uri.scheme.toLowerCase()) ? uri : null;
-    }
-    if (match.namedGroup('mailto') != null) {
-      return Uri(scheme: 'mailto', path: text.substring('mailto:'.length));
+      if (!_allowedSchemes.contains(uri.scheme.toLowerCase())) return null;
+      // `https://helpapaw.org@evil.example/login` is a valid https URL whose
+      // host is `evil.example` — the part before the `@` is a username. It
+      // renders reading as the site somebody trusts and opens somewhere else,
+      // which on a screen where strangers write to each other is a working
+      // phishing link. Nothing legitimate in this app carries credentials in a
+      // URL, so any userInfo at all disqualifies it.
+      if (uri.userInfo.isNotEmpty) return null;
+      // A non-ASCII host survives `Uri.parse` percent-escaped rather than
+      // punycoded, so `https://дарение.бг` becomes a link that cannot resolve.
+      // Leaving it as plain text is honest; underlining a dead link is not.
+      if (uri.host.contains('%')) return null;
+      return uri;
     }
     if (match.namedGroup('email') != null) {
-      return Uri(scheme: 'mailto', path: text);
+      const prefix = 'mailto:';
+      return Uri(
+        scheme: 'mailto',
+        path: text.startsWith(prefix) ? text.substring(prefix.length) : text,
+      );
     }
     if (match.namedGroup('domain') != null) {
       return Uri.parse('https://$text');
@@ -147,7 +174,7 @@ Uri? _uriFor(RegExpMatch match, String text) {
       // The regex bounds the *length* of the run; this bounds the number of
       // actual digits in it, which is the part that decides whether it is a
       // phone number at all.
-      final digits = text.replaceAll(RegExp(r'[^\d]'), '');
+      final digits = text.replaceAll(_nonDigits, '');
       if (digits.length < _minPhoneDigits || digits.length > _maxPhoneDigits) {
         return null;
       }
@@ -168,25 +195,14 @@ Uri? _uriFor(RegExpMatch match, String text) {
 /// dropped, so the rendered text always reads the same as what was typed even
 /// when the parser declines to linkify something.
 ///
-/// Results are memoised: this runs from `build()`, and re-scanning a 2000
-/// character comment on every frame would be the one way to make link
-/// detection cost anything measurable.
+/// Deliberately **not** memoised. This looks like it wants a cache — it is a
+/// regex sweep over a string that can run to the composer's 2000-character cap
+/// — but the only caller is [LinkifiedText], which parses in `initState` and
+/// again only when the text actually changes. The widget's `State` already is
+/// the memo, and a second one underneath it would be process-global mutable
+/// state in a `utils/` file, bought with nothing.
 List<TextToken> parseLinks(String input) {
   if (input.isEmpty) return const [];
-
-  final hit = _cache.remove(input);
-  if (hit != null) {
-    _cache[input] = hit; // re-inserting moves it to the young end
-    return hit;
-  }
-
-  final tokens = _parse(input);
-  _cache[input] = tokens;
-  if (_cache.length > _cacheLimit) _cache.remove(_cache.keys.first);
-  return tokens;
-}
-
-List<TextToken> _parse(String input) {
   final out = <TextToken>[];
   var index = 0;
 
@@ -207,10 +223,3 @@ List<TextToken> _parse(String input) {
   if (index < input.length) out.add(PlainToken(input.substring(index)));
   return List.unmodifiable(out);
 }
-
-/// Small enough to stay invisible, large enough to cover a screenful of
-/// comments plus the title and description above them.
-const _cacheLimit = 64;
-
-/// Insertion-ordered, so the first key is the least recently used.
-final _cache = <String, List<TextToken>>{};
