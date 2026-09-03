@@ -22,6 +22,7 @@ import '../config/routes.dart';
 import '../services/navigation_service.dart';
 import '../utils/nav_extensions.dart';
 import 'escape_leading.dart';
+import 'linkified_text.dart';
 import 'level_badge.dart';
 
 import '../models/signal_event.dart';
@@ -570,6 +571,17 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                 Expanded(
                   child: SingleChildScrollView(
                     controller: _scrollController,
+                    // Selection is NOT wrapped around the page. Everything
+                    // anybody typed here is selectable, but each such string
+                    // owns its own `SelectionArea` inside [LinkifiedText] — so
+                    // a selection can only ever contain content, never the
+                    // labels, chips and headings around it. See that widget for
+                    // why that trade is worth losing the cross-widget drag.
+                    //
+                    // Selection is still what the comment rows' long-press was
+                    // spent on: it claims that gesture wherever it applies, so
+                    // the report action moved to a visible button. See
+                    // [_buildCommentRow].
                     child: PageWidth(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -773,7 +785,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                   const SizedBox(height: 8),
                                 ],
                               ),
-                            Text(
+                            LinkifiedText(
                               signal.title,
                               style: Theme.of(context).textTheme.titleLarge,
                             ),
@@ -798,7 +810,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                   ),
                             ),
                             const SizedBox(height: 10),
-                            Text(
+                            LinkifiedText(
                               signal.description,
                               style: Theme.of(context).textTheme.bodyLarge,
                             ),
@@ -1210,7 +1222,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     required String? date,
     required bool isLast,
     String? note,
-    VoidCallback? onLongPress,
+    VoidCallback? onOptions,
   }) {
     final scheme = Theme.of(context).colorScheme;
     final meta = Theme.of(context)
@@ -1218,62 +1230,82 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         .bodySmall
         ?.copyWith(color: scheme.onSurfaceVariant);
 
-    return InkWell(
-      onLongPress: onLongPress,
-      // The rail has to run the full height of whatever the sentence wraps to.
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Column(
-              children: [
-                Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: iconBackground,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(icon, size: 15, color: iconColor),
+    // The rail has to run the full height of whatever the sentence wraps to.
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Column(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: iconBackground,
+                  shape: BoxShape.circle,
                 ),
-                if (!isLast)
-                  Expanded(
-                    child: Container(
-                      width: 1,
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      color: scheme.outlineVariant,
-                    ),
+                child: Icon(icon, size: 15, color: iconColor),
+              ),
+              if (!isLast)
+                Expanded(
+                  child: Container(
+                    width: 1,
+                    margin: const EdgeInsets.symmetric(vertical: 4),
+                    color: scheme.outlineVariant,
                   ),
-              ],
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Padding(
-                padding: EdgeInsets.only(top: 2, bottom: isLast ? 0 : 18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Renders nothing until the name lands, then the whole line
-                    // at once — see [_actorText] and R4-OBS-01.
-                    _actorText(
-                      actorId,
-                      (name) => date == null ? name : '$name · $date',
-                      fallback: AppLocalizations.of(context).someone,
-                      style: meta,
-                      maxLines: 1,
-                    ),
-                    const SizedBox(height: 2),
-                    sentence,
-                    if (note != null && note.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(note, style: meta),
+                ),
+            ],
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(top: 2, bottom: isLast ? 0 : 18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Renders nothing until the name lands, then the whole line
+                  // at once — see [_actorText] and R4-OBS-01.
+                  //
+                  // The `⋮` rides on this line rather than in a trailing
+                  // column of its own: a column would cost every row a fixed
+                  // gutter and read as the per-row admin control this screen
+                  // deliberately avoids, while here it costs no width at all
+                  // and only appears on the rows that have something to
+                  // offer. It is allowed to show before the name resolves —
+                  // it sits at the far end, so nothing looks half-drawn.
+                  //
+                  // A callback rather than a `Widget` slot: the button is the
+                  // same one every time, so building it here keeps its sizing
+                  // and its accessibility contract (see [_rowMenuButton])
+                  // structural rather than advisory — a caller cannot pass
+                  // something that overflows this row or ships a tap target
+                  // under 48dp.
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _actorText(
+                          actorId,
+                          (name) => date == null ? name : '$name · $date',
+                          fallback: AppLocalizations.of(context).someone,
+                          style: meta,
+                          maxLines: 1,
+                        ),
+                      ),
+                      if (onOptions != null)
+                        _rowMenuButton(onPressed: onOptions),
                     ],
+                  ),
+                  const SizedBox(height: 2),
+                  sentence,
+                  if (note != null && note.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    LinkifiedText(note, style: meta),
                   ],
-                ),
+                ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1407,8 +1439,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// A chooser rather than going straight to one or the other, because both
   /// remain meaningful: reporting puts the comment in the queue for whoever is
   /// on duty, while deleting is the moderator acting now. Ordinary users never
-  /// see this — for them the long-press goes straight to the report dialog, as
-  /// it always has.
+  /// see this — for them the row's `⋮` opens the report dialog directly.
   Future<void> _showCommentModeratorMenu(SignalHistoryEntry entry) async {
     final l10n = AppLocalizations.of(context);
     final collection = AppPreferencesService().signalsCollectionName;
@@ -1479,21 +1510,29 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       icon: Icons.chat_bubble_outline,
       iconBackground: Theme.of(context).colorScheme.surfaceContainerHigh,
       iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
-      sentence: Text(entry.text ?? ''),
+      sentence: LinkifiedText(entry.text ?? ''),
       actorId: entry.actorId,
       date: _formatDate(entry, dateFormat),
       isLast: isLast,
-      // Long-press rather than a per-row menu button: a comment list with a
-      // trailing overflow icon on every row reads as an admin tool, and the
-      // rows are already dense. Long-press is the platform gesture for "more
-      // about this item" and costs no layout.
+      // This was a long-press on the whole row, which was wrong twice over.
       //
-      // A moderator gets a chooser here instead of going straight to the report
+      // It was the *only* route to reporting a comment — the flag in the app
+      // bar reports the signal — and it advertised itself nowhere, so the one
+      // safety valve on the one screen where strangers write to each other was
+      // reachable only by guessing. And it claimed the gesture that selecting
+      // text needs, which is why none of this screen's text could be copied.
+      //
+      // A button costs a gesture nobody could find and buys back the one
+      // everybody already knows. The original objection to it — that an
+      // overflow icon on every row turns a comment thread into an admin tool —
+      // is answered by placement rather than by hiding it: it rides on the
+      // existing name-and-date line (see [_timelineRow]), so it adds no gutter,
+      // and it appears only where there is something to do.
+      //
+      // A moderator gets a chooser rather than going straight to the report
       // dialog, which is how they act on a comment without waiting for somebody
-      // to report it first. The gesture is deliberately the same one — adding a
-      // visible moderator control per row would turn the list into the admin
-      // tool the comment above rules out.
-      onLongPress: !canReport
+      // to report it first.
+      onOptions: !canReport
           ? null
           : canModerateComments
               ? () => _showCommentModeratorMenu(entry)
@@ -1502,11 +1541,35 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                     target: ReportTarget.comment(
                       commentId: entry.id,
                       signalId: widget.signalId,
-                      collection:
-                          AppPreferencesService().signalsCollectionName,
+                      collection: AppPreferencesService().signalsCollectionName,
                       reportedUserId: entry.actorId,
                     ),
                   ),
+    );
+  }
+
+  /// The `⋮` [_timelineRow] draws when it is given an `onOptions`.
+  ///
+  /// Sized down to sit inside a small-text meta line without dominating it, but
+  /// [IconButton]'s own 48dp minimum tap target is left alone underneath —
+  /// shrinking the glyph must not shrink the thing you have to hit.
+  ///
+  /// `tooltip` is the whole accessibility story here, and deliberately the only
+  /// one: it names the button for a screen reader *and* gives a long-press hint
+  /// on Android. Wrapping this in a `Semantics(label:, button: true)` as well —
+  /// which is what the rest of this codebase does for bare widgets — produced
+  /// **two** button nodes, an outer one carrying the label but no tap action and
+  /// an inner one carrying the action but no label. TalkBack then stopped on a
+  /// dead control and announced "Comment options" twice.
+  Widget _rowMenuButton({required VoidCallback onPressed}) {
+    return IconButton(
+      icon: const Icon(Icons.more_vert),
+      iconSize: 18,
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+      tooltip: AppLocalizations.of(context).commentOptions,
+      onPressed: onPressed,
     );
   }
 

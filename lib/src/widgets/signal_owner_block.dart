@@ -5,6 +5,7 @@ import '../../l10n/app_localizations.dart';
 import '../models/signal.dart';
 import '../services/callable_client.dart';
 import '../services/signal_ownership_service.dart';
+import 'linkified_text.dart';
 import 'update_note_dialog.dart';
 
 /// Renders a name for a uid. Supplied by the host screen so the memoized
@@ -241,7 +242,7 @@ class SignalOwnerBlock extends StatelessWidget {
                 // The owner's reason, when they gave one. They were required to
                 // type it; showing it is what makes that requirement honest.
                 if (mine?.resolvedNote case final why? when why.isNotEmpty)
-                  Text(why),
+                  LinkifiedText(why),
                 Text(
                   l10n.takeoverAskAgainAfter(
                     DateFormat.yMMMd().add_jm().format(until),
@@ -330,7 +331,7 @@ class SignalOwnerBlock extends StatelessWidget {
                           style: Theme.of(context).textTheme.titleSmall,
                           maxLines: 1,
                         ),
-                        if (request.note.isNotEmpty) Text(request.note),
+                        if (request.note.isNotEmpty) LinkifiedText(request.note),
                         if (answerable)
                           Row(
                             mainAxisAlignment: MainAxisAlignment.end,

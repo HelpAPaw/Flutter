@@ -1690,6 +1690,9 @@ class AppLocalizationsBg extends AppLocalizations {
   String get reportSignal => 'Докладване на сигнала';
 
   @override
+  String get commentOptions => 'Опции за коментара';
+
+  @override
   String get reportComment => 'Докладване на коментара';
 
   @override
