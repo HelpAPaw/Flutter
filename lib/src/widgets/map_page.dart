@@ -43,6 +43,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   static const _kInfoWindowHeight = 80.0;
   static const _kPinHeight = 29.0;
 
+  /// Zoom the map opens at before the user has moved it.
+  static const _kInitialZoom = 11.0;
+
   // Null until the platform view calls onMapCreated, and never null again.
   // Deliberately nullable rather than `late` + a separate readiness bool: the
   // flag was a convention the compiler didn't enforce, and forgetting it is
@@ -51,6 +54,25 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   // `!` where a live map is a precondition, a null check where it isn't.
   GoogleMapController? _mapController;
   final _markerBuilder = MapMarkerBuilder();
+
+  // The Maps SDK picks its label language when the platform view is created and
+  // never revisits it, so a locale change leaves the map drawing the old
+  // language until the app restarts. We rebuild the view under a locale-keyed
+  // Key instead, which means replaying the camera ourselves.
+  //
+  // It has to be recorded here rather than read back from the view model:
+  // updateMapCenter deliberately ignores moves under its 30km re-query
+  // threshold, so the centre it holds can be up to 30km from where the user
+  // actually is. Restoring from it would teleport someone who panned a couple
+  // of streets. onCameraMove hands over target, zoom, bearing and tilt
+  // together, so the rebuilt view resumes exactly where the old one stood.
+  CameraPosition? _lastCamera;
+
+  // The locale the live platform view was created for; a change is what
+  // triggers the rebuild. Maintained in didChangeDependencies, which is where
+  // an inherited Localizations change surfaces.
+  String? _mapLocale;
+
   bool _showOnboardingButton = false;
   bool _onboardingSheetShown = false;
 
@@ -107,6 +129,25 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
     WidgetsBinding.instance
         .addPostFrameCallback((_) => _checkOnboardingState());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final locale = Localizations.localeOf(context).languageCode;
+    if (_mapLocale != null && _mapLocale != locale) {
+      // The locale-keyed GoogleMap below is about to discard the platform
+      // view, and the native InfoWindow goes with it. Drop the matching
+      // overlay state now: otherwise the invisible tap target keeps hovering
+      // over a window that no longer exists, and the reconcile pass in build()
+      // re-asserts the window through the disposed controller — which throws
+      // MissingPluginException, and that is not a PlatformException, so
+      // _showMarkerInfoWindow's catch does not cover it.
+      _selectedSignal = null;
+      _overlayX = null;
+      _overlayY = null;
+    }
+    _mapLocale = locale;
   }
 
   @override
@@ -684,18 +725,33 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             children: [
               MapStyleBuilder(
                 builder: (context, mapStyle) => GoogleMap(
+                // Discards and rebuilds the platform view when the app locale
+                // changes, which is the only way to re-language the map's
+                // labels. Nothing else changes this key, so the view is created
+                // once per locale, not once per rebuild.
+                key: ValueKey(_mapLocale),
                 style: mapStyle,
-                initialCameraPosition: CameraPosition(
-                  bearing: 0.0,
-                  target: LatLng(
-                    mapState.centerLatitude,
-                    mapState.centerLongitude,
-                  ),
-                  tilt: 0.0,
-                  zoom: 11.0,
-                ),
+                initialCameraPosition: _lastCamera ??
+                    CameraPosition(
+                      bearing: 0.0,
+                      target: LatLng(
+                        mapState.centerLatitude,
+                        mapState.centerLongitude,
+                      ),
+                      tilt: 0.0,
+                      zoom: _kInitialZoom,
+                    ),
                 onMapCreated: (GoogleMapController controller) async {
+                  // Read before the assignment below overwrites it: the field
+                  // is null only until the first platform view appears, which
+                  // makes it the record of whether this is a rebuild.
+                  final isFirstCreation = _mapController == null;
                   _mapController = controller;
+
+                  // A rebuild for a locale change. Flying to the user's
+                  // location is first-launch behaviour, and initialCameraPosition
+                  // has already restored where they were, so leave it alone.
+                  if (!isFirstCreation) return;
 
                   // A deep link that arrived before the map existed outranks
                   // the initial move to the user's own location — but fall
@@ -710,6 +766,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   _flyToUserLocation();
                 },
                 onTap: (_) => _dismissOverlay(),
+                onCameraMove: (position) => _lastCamera = position,
                 onCameraIdle: () {
                   _onCameraIdle();
                   _updateOverlayPosition();
