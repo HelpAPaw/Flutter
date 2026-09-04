@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The app's own Bulgarian Android resources. The translations users see are
+     Dart-side (lib/l10n/app_bg.arb), so this file looks redundant — it is not.
+     Android decides which locale to hand the activity by matching the device's
+     locale list against the locales the APK actually has resources for, and
+     Flutter's LocalizationPlugin then reads that decision. Without a values-bg
+     of our own, the only thing putting `bg` in that set is AndroidX/Play
+     Services shipping their own translations, so a dependency bump that drops
+     them would silently send every Bulgarian user back to English — the exact
+     field bug this branch fixes. Declaring it here makes it ours. -->
+<resources>
+    <!-- Brand name: identical in both languages, and deliberately so. -->
+    <string name="app_name">Help a Paw</string>
+</resources>
