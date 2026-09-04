@@ -37,11 +37,15 @@ class MapScreen extends ConsumerStatefulWidget {
   ConsumerState<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends ConsumerState<MapScreen> {
+class _MapScreenState extends ConsumerState<MapScreen>
+    with WidgetsBindingObserver {
   // Approximate native InfoWindow dimensions for invisible tap target
   static const _kInfoWindowWidth = 220.0;
   static const _kInfoWindowHeight = 80.0;
   static const _kPinHeight = 29.0;
+
+  /// Zoom the map opens at before the user has moved it.
+  static const _kInitialZoom = 11.0;
 
   // Null until the platform view calls onMapCreated, and never null again.
   // Deliberately nullable rather than `late` + a separate readiness bool: the
@@ -51,6 +55,25 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   // `!` where a live map is a precondition, a null check where it isn't.
   GoogleMapController? _mapController;
   final _markerBuilder = MapMarkerBuilder();
+
+  // The Maps SDK picks its label language when the platform view is created and
+  // never revisits it, so a locale change leaves the map drawing the old
+  // language until the app restarts. We rebuild the view under a locale-keyed
+  // Key instead, which means replaying the camera ourselves.
+  //
+  // It has to be recorded here rather than read back from the view model:
+  // updateMapCenter deliberately ignores moves under its 30km re-query
+  // threshold, so the centre it holds can be up to 30km from where the user
+  // actually is. Restoring from it would teleport someone who panned a couple
+  // of streets. onCameraMove hands over target, zoom, bearing and tilt
+  // together, so the rebuilt view resumes exactly where the old one stood.
+  CameraPosition? _lastCamera;
+
+  // The locale the live platform view was created for; a change is what
+  // triggers the rebuild. Maintained in didChangeDependencies, which is where
+  // an inherited Localizations change surfaces.
+  String? _mapLocale;
+
   bool _showOnboardingButton = false;
   bool _onboardingSheetShown = false;
 
@@ -96,23 +119,80 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   void initState() {
     super.initState();
     _markerBuilder.loadAllPins();
+    WidgetsBinding.instance.addObserver(this);
 
     // Initialize location in ViewModel, then animate camera to it — unless a
     // deep link got there first. The GPS fix can land seconds after the map,
     // long after a notification tap has already focused its signal.
-    ref.read(mapViewModelProvider.notifier).getUserLocation().then((_) {
-      if (_deepLinkOwnsCamera) return;
-      _flyToUserLocation();
-    });
+    unawaited(_locateAndFly());
 
     WidgetsBinding.instance
         .addPostFrameCallback((_) => _checkOnboardingState());
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final locale = Localizations.localeOf(context).languageCode;
+    if (_mapLocale != null && _mapLocale != locale) {
+      // The locale-keyed GoogleMap below is about to discard the platform
+      // view, and the native InfoWindow goes with it. Drop the matching
+      // overlay state now: otherwise the invisible tap target keeps hovering
+      // over a window that no longer exists, and the reconcile pass in build()
+      // re-asserts the window through the disposed controller — which throws
+      // MissingPluginException, and that is not a PlatformException, so
+      // _showMarkerInfoWindow's catch does not cover it.
+      _selectedSignal = null;
+      _overlayX = null;
+      _overlayY = null;
+    }
+    _mapLocale = locale;
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pendingInfoWindowSub?.close();
     super.dispose();
+  }
+
+  /// Take a fix and centre the map on it, unless a deep link owns the camera.
+  ///
+  /// [_flyToUserLocation] declines on its own when the widget is gone, the map
+  /// isn't built yet, or no fix ever landed.
+  Future<void> _locateAndFly() async {
+    await ref.read(mapViewModelProvider.notifier).getUserLocation();
+    if (_deepLinkOwnsCamera) return;
+    _flyToUserLocation();
+  }
+
+  /// Re-read the location permission whenever the app comes forward.
+  ///
+  /// The permission the map draws its my-location layer from was decided in
+  /// [initState] and never revisited, so someone who granted location from
+  /// system Settings — or switched the GPS on — came back to a map still
+  /// convinced it had nothing, and no "locate me" button, until the next cold
+  /// start.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycleState) {
+    if (lifecycleState != AppLifecycleState.resumed) return;
+    unawaited(_refreshLocationPermission());
+  }
+
+  Future<void> _refreshLocationPermission() async {
+    if (ref.read(mapViewModelProvider).hasLocationPermission) {
+      // Already granted before we went away, so there is nothing new to fly
+      // to. Just keep the flag honest — this is what catches a revoke.
+      await ref.read(mapViewModelProvider.notifier).checkLocationPermission();
+      return;
+    }
+
+    // It may have arrived while we were away, and while the map is up nothing
+    // in the app asks — so it came from system Settings, which is exactly the
+    // moment someone expects the map to find them. [getUserLocation] re-reads
+    // the permission itself and takes the fix in the same pass, so the grant
+    // costs one platform read rather than two.
+    await _locateAndFly();
   }
 
   Future<void> _checkOnboardingState() async {
@@ -212,9 +292,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         onComplete: () {
           Navigator.pop(context);
           setState(() => _showOnboardingButton = false);
-          ref.read(mapViewModelProvider.notifier).getUserLocation().then((_) {
-            _flyToUserLocation();
-          });
+          unawaited(_locateAndFly());
         },
         onDismiss: () async {
           Navigator.pop(context);
@@ -684,18 +762,33 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             children: [
               MapStyleBuilder(
                 builder: (context, mapStyle) => GoogleMap(
+                // Discards and rebuilds the platform view when the app locale
+                // changes, which is the only way to re-language the map's
+                // labels. Nothing else changes this key, so the view is created
+                // once per locale, not once per rebuild.
+                key: ValueKey(_mapLocale),
                 style: mapStyle,
-                initialCameraPosition: CameraPosition(
-                  bearing: 0.0,
-                  target: LatLng(
-                    mapState.centerLatitude,
-                    mapState.centerLongitude,
-                  ),
-                  tilt: 0.0,
-                  zoom: 11.0,
-                ),
+                initialCameraPosition: _lastCamera ??
+                    CameraPosition(
+                      bearing: 0.0,
+                      target: LatLng(
+                        mapState.centerLatitude,
+                        mapState.centerLongitude,
+                      ),
+                      tilt: 0.0,
+                      zoom: _kInitialZoom,
+                    ),
                 onMapCreated: (GoogleMapController controller) async {
+                  // Read before the assignment below overwrites it: the field
+                  // is null only until the first platform view appears, which
+                  // makes it the record of whether this is a rebuild.
+                  final isFirstCreation = _mapController == null;
                   _mapController = controller;
+
+                  // A rebuild for a locale change. Flying to the user's
+                  // location is first-launch behaviour, and initialCameraPosition
+                  // has already restored where they were, so leave it alone.
+                  if (!isFirstCreation) return;
 
                   // A deep link that arrived before the map existed outranks
                   // the initial move to the user's own location — but fall
@@ -710,6 +803,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   _flyToUserLocation();
                 },
                 onTap: (_) => _dismissOverlay(),
+                onCameraMove: (position) => _lastCamera = position,
                 onCameraIdle: () {
                   _onCameraIdle();
                   _updateOverlayPosition();

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The languages lib/l10n/*.arb actually provides. Android 13+ reads this to
+     offer a per-app Language picker (Settings > Apps > Help a Paw > Language).
+     That is a convenience — letting someone run the app in a language other
+     than their phone's — not the fix for the split-delivery bug; build.gradle's
+     bundle{} block is what fixes that. Kept in sync with
+     AppLocalizations.supportedLocales by localization_config_guard_test.dart. -->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en"/>
+    <locale android:name="bg"/>
+</locale-config>

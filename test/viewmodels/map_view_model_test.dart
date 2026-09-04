@@ -4,6 +4,8 @@ import 'package:firebase_core_platform_interface/test.dart';
 import 'package:firebase_crashlytics_platform_interface/firebase_crashlytics_platform_interface.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:geolocator_platform_interface/geolocator_platform_interface.dart';
+import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:image_picker/image_picker.dart' show XFile;
 import 'package:help_a_paw/src/models/animal_type.dart';
 import 'package:help_a_paw/src/models/help_tag.dart';
@@ -58,6 +60,49 @@ class _MockFirebaseApp implements TestFirebaseCoreHostApi {
     );
   }
 }
+
+/// A [GeolocatorPlatform] that answers from fixed values, so the tests can
+/// separate "permission granted" from "location services switched on" — the
+/// two conditions the map used to conflate.
+class _FakeGeolocator extends GeolocatorPlatform with MockPlatformInterfaceMixin {
+  _FakeGeolocator({
+    required this.permission,
+    this.serviceEnabled = true,
+    this.position,
+  });
+
+  final LocationPermission permission;
+  final bool serviceEnabled;
+  final Position? position;
+
+  @override
+  Future<LocationPermission> checkPermission() async => permission;
+
+  @override
+  Future<bool> isLocationServiceEnabled() async => serviceEnabled;
+
+  @override
+  Future<Position> getCurrentPosition({LocationSettings? locationSettings}) async {
+    final fix = position;
+    if (fix == null) {
+      throw const LocationServiceDisabledException();
+    }
+    return fix;
+  }
+}
+
+Position _positionAt(double latitude, double longitude) => Position(
+      latitude: latitude,
+      longitude: longitude,
+      timestamp: DateTime.utc(2026),
+      accuracy: 1,
+      altitude: 0,
+      altitudeAccuracy: 1,
+      heading: 0,
+      headingAccuracy: 1,
+      speed: 0,
+      speedAccuracy: 1,
+    );
 
 void main() {
   setUpAll(() async {
@@ -130,6 +175,87 @@ void main() {
     test('vet clinics are hidden initially', () {
       expect(viewModel.state.vetClinicState.showVetClinics, false);
       expect(viewModel.state.vetClinicState.clinics, isEmpty);
+    });
+  });
+
+  // The map's "locate me" button is the Maps SDK's own, and it is only drawn
+  // when the my-location layer is on — which is gated on hasLocationPermission.
+  // So a flag that reads false for someone who has actually granted location is
+  // a missing button, not just a missing blue dot.
+  group('Location permission', () {
+    // Each test installs its own fake; this puts the real implementation back.
+    // A fake left installed would leak into every group that runs after this
+    // one and surface as an UnimplementedError from an unrelated test.
+    late GeolocatorPlatform realGeolocator;
+    setUp(() => realGeolocator = GeolocatorPlatform.instance);
+    tearDown(() => GeolocatorPlatform.instance = realGeolocator);
+
+    test('getUserLocation grants the layer with location services off', () async {
+      GeolocatorPlatform.instance = _FakeGeolocator(
+        permission: LocationPermission.whileInUse,
+        serviceEnabled: false,
+      );
+
+      await viewModel.getUserLocation();
+
+      expect(viewModel.state.hasLocationPermission, true);
+      // No fix to be had, so the centre stays on the fallback.
+      expect(viewModel.state.centerLatitude, MapScreenState.defaultLatitude);
+    });
+
+    test('getUserLocation centres on the fix when everything is available',
+        () async {
+      GeolocatorPlatform.instance = _FakeGeolocator(
+        permission: LocationPermission.always,
+        position: _positionAt(40.0, 25.0),
+      );
+
+      await viewModel.getUserLocation();
+
+      expect(viewModel.state.hasLocationPermission, true);
+      expect(viewModel.state.centerLatitude, 40.0);
+      expect(viewModel.state.centerLongitude, 25.0);
+    });
+
+    test('getUserLocation withholds the layer when permission is denied',
+        () async {
+      // A fix is there for the taking; the denial is what must stop it.
+      GeolocatorPlatform.instance = _FakeGeolocator(
+        permission: LocationPermission.deniedForever,
+        position: _positionAt(40.0, 25.0),
+      );
+
+      await viewModel.getUserLocation();
+
+      expect(viewModel.state.hasLocationPermission, false);
+      expect(viewModel.state.centerLatitude, MapScreenState.defaultLatitude);
+    });
+
+    test('checkLocationPermission picks up a grant made outside the app',
+        () async {
+      GeolocatorPlatform.instance = _FakeGeolocator(
+        permission: LocationPermission.denied,
+      );
+      await viewModel.checkLocationPermission();
+      expect(viewModel.state.hasLocationPermission, false);
+
+      // What returning from system Settings looks like.
+      GeolocatorPlatform.instance = _FakeGeolocator(
+        permission: LocationPermission.whileInUse,
+      );
+      await viewModel.checkLocationPermission();
+
+      expect(viewModel.state.hasLocationPermission, true);
+    });
+
+    test('unableToDetermine is not a grant', () async {
+      GeolocatorPlatform.instance = _FakeGeolocator(
+        permission: LocationPermission.unableToDetermine,
+      );
+
+      await viewModel.checkLocationPermission();
+
+      expect(viewModel.state.hasLocationPermission, false);
     });
   });
 

@@ -51,10 +51,7 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
 
     // Check location permission
     final locationPermission = await Geolocator.checkPermission();
-    final locationGranted =
-        locationPermission == LocationPermission.whileInUse ||
-        locationPermission == LocationPermission.always;
-    if (!locationGranted) steps.add(_OnboardingStep.location);
+    if (!locationPermission.grantsLocation) steps.add(_OnboardingStep.location);
 
     // Check region selection — use timeout to prevent hang while waiting for App Check token
     final user = FirebaseAuth.instance.currentUser;

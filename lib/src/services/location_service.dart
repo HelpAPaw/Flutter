@@ -35,6 +35,21 @@ enum LocationTrackingResult {
   denied,
 }
 
+/// Whether this permission lets the app show or use the user's position.
+///
+/// `unableToDetermine` is the platform saying it does not know, which is not
+/// a grant — the map must not draw someone's position on the strength of it.
+///
+/// Named once because several screens ask this question and their inline
+/// answers had begun to drift: the sites still written as
+/// `!= denied && != deniedForever` additionally count `unableToDetermine` as
+/// a grant. Whether they should adopt this reading is a separate audit.
+extension LocationPermissionGrant on LocationPermission {
+  bool get grantsLocation =>
+      this == LocationPermission.always ||
+      this == LocationPermission.whileInUse;
+}
+
 class LocationService with WidgetsBindingObserver {
   static final LocationService _instance = LocationService._internal();
   factory LocationService() => _instance;

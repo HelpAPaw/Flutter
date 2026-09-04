@@ -58,6 +58,27 @@ android {
         versionName flutterVersionName
     }
 
+    // Play splits the bundle by language and installs only the splits matching
+    // the device's locales AT INSTALL TIME. Our translations live in Dart
+    // (lib/l10n/*.arb, compiled into libapp.so), so Play's split logic cannot
+    // see them — it decides purely from Android resources, of which we ship
+    // none in Bulgarian. A user who installed while their phone was in English
+    // therefore got no split_config.bg.apk; switching the system language to
+    // Bulgarian afterwards does not reliably make Play backfill it, and with no
+    // bg Android resources present Android resolves the activity config away
+    // from bg, so Flutter's LocalizationPlugin reads `en` and the whole app
+    // falls back to English. Reported from the field against the shipped
+    // build 132, and reproduced here by removing that one 25KB split. Shipping
+    // every language in the base APK removes the failure mode for about a
+    // kilobyte: our only per-language Android resources are the two
+    // strings.xml files, since the real translations live in the ARBs compiled
+    // into libapp.so either way.
+    bundle {
+        language {
+            enableSplit = false
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix ".debug"
