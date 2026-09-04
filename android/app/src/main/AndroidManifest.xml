@@ -17,7 +17,8 @@
     <application
         android:label="@string/app_name"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:localeConfig="@xml/locales_config">
         <meta-data android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyDFn3Cexv_aWaSIQ6w4i53YQJf-j5_EsNk"/>
         <!-- launchMode=singleTask keeps the app to a single instance in its own
