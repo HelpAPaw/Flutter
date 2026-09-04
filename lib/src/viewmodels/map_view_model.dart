@@ -12,6 +12,7 @@ import '../models/vet_clinic.dart';
 import '../repositories/repository_provider.dart';
 import '../repositories/signal_repository.dart';
 import '../services/app_preferences_service.dart';
+import '../services/location_service.dart';
 import '../services/vet_clinic_service.dart';
 import '../state/map_state.dart';
 
@@ -91,28 +92,34 @@ class MapViewModel extends Notifier<MapScreenState> {
     );
   }
 
-  /// Check and update location permission status
-  Future<void> checkLocationPermission() async {
-    final permission = await Geolocator.checkPermission();
-    final hasPermission = permission != LocationPermission.denied &&
-        permission != LocationPermission.deniedForever;
-
-    state = state.copyWith(hasLocationPermission: hasPermission);
+  /// Re-read the location permission into
+  /// [MapScreenState.hasLocationPermission], and report what it found.
+  ///
+  /// Costs a permission read and no GPS fix, and only publishes state when the
+  /// answer actually changed — `Notifier` notifies on identity, so an
+  /// unconditional write would rebuild the whole map screen. Both matter
+  /// because this runs on every resume.
+  Future<bool> checkLocationPermission() async {
+    final granted = (await Geolocator.checkPermission()).grantsLocation;
+    if (granted != state.hasLocationPermission) {
+      state = state.copyWith(hasLocationPermission: granted);
+    }
+    return granted;
   }
 
   /// Get user location and update map center
   Future<void> getUserLocation() async {
+    // Record the permission before anything else can return early. The map's
+    // my-location layer — and with it the "locate me" button — is gated on
+    // that flag, and it answers "may we show where they are", not "is there a
+    // fix available right now". Checking the location *services* switch first
+    // conflated the two: opening the map with GPS switched off left the flag
+    // at its `false` default even for a user who had granted permission, and
+    // nothing recomputed it until the next cold start.
+    if (!await checkLocationPermission()) return;
+
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return;
-
-    final permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      state = state.copyWith(hasLocationPermission: false);
-      return;
-    }
-
-    state = state.copyWith(hasLocationPermission: true);
 
     try {
       final position = await Geolocator.getCurrentPosition(

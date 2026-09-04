@@ -37,7 +37,8 @@ class MapScreen extends ConsumerStatefulWidget {
   ConsumerState<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends ConsumerState<MapScreen> {
+class _MapScreenState extends ConsumerState<MapScreen>
+    with WidgetsBindingObserver {
   // Approximate native InfoWindow dimensions for invisible tap target
   static const _kInfoWindowWidth = 220.0;
   static const _kInfoWindowHeight = 80.0;
@@ -118,14 +119,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   void initState() {
     super.initState();
     _markerBuilder.loadAllPins();
+    WidgetsBinding.instance.addObserver(this);
 
     // Initialize location in ViewModel, then animate camera to it — unless a
     // deep link got there first. The GPS fix can land seconds after the map,
     // long after a notification tap has already focused its signal.
-    ref.read(mapViewModelProvider.notifier).getUserLocation().then((_) {
-      if (_deepLinkOwnsCamera) return;
-      _flyToUserLocation();
-    });
+    unawaited(_locateAndFly());
 
     WidgetsBinding.instance
         .addPostFrameCallback((_) => _checkOnboardingState());
@@ -152,8 +151,48 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pendingInfoWindowSub?.close();
     super.dispose();
+  }
+
+  /// Take a fix and centre the map on it, unless a deep link owns the camera.
+  ///
+  /// [_flyToUserLocation] declines on its own when the widget is gone, the map
+  /// isn't built yet, or no fix ever landed.
+  Future<void> _locateAndFly() async {
+    await ref.read(mapViewModelProvider.notifier).getUserLocation();
+    if (_deepLinkOwnsCamera) return;
+    _flyToUserLocation();
+  }
+
+  /// Re-read the location permission whenever the app comes forward.
+  ///
+  /// The permission the map draws its my-location layer from was decided in
+  /// [initState] and never revisited, so someone who granted location from
+  /// system Settings — or switched the GPS on — came back to a map still
+  /// convinced it had nothing, and no "locate me" button, until the next cold
+  /// start.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycleState) {
+    if (lifecycleState != AppLifecycleState.resumed) return;
+    unawaited(_refreshLocationPermission());
+  }
+
+  Future<void> _refreshLocationPermission() async {
+    if (ref.read(mapViewModelProvider).hasLocationPermission) {
+      // Already granted before we went away, so there is nothing new to fly
+      // to. Just keep the flag honest — this is what catches a revoke.
+      await ref.read(mapViewModelProvider.notifier).checkLocationPermission();
+      return;
+    }
+
+    // It may have arrived while we were away, and while the map is up nothing
+    // in the app asks — so it came from system Settings, which is exactly the
+    // moment someone expects the map to find them. [getUserLocation] re-reads
+    // the permission itself and takes the fix in the same pass, so the grant
+    // costs one platform read rather than two.
+    await _locateAndFly();
   }
 
   Future<void> _checkOnboardingState() async {
@@ -253,9 +292,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         onComplete: () {
           Navigator.pop(context);
           setState(() => _showOnboardingButton = false);
-          ref.read(mapViewModelProvider.notifier).getUserLocation().then((_) {
-            _flyToUserLocation();
-          });
+          unawaited(_locateAndFly());
         },
         onDismiss: () async {
           Navigator.pop(context);
