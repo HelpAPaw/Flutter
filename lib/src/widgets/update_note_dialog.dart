@@ -75,9 +75,14 @@ class _UpdateNoteDialogState extends State<_UpdateNoteDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
     final canSubmit = _note.isNotEmpty;
 
     return AlertDialog(
+      // The helper sentence below wraps to three lines at a large system font
+      // scale, and the keyboard is up the whole time this dialog is open, so
+      // the content has to be able to scroll rather than overflow.
+      scrollable: true,
       title: Text(l10n.updateNoteTitle),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -123,8 +128,23 @@ class _UpdateNoteDialogState extends State<_UpdateNoteDialog> {
               // on the first keystroke shrank the field and jumped the whole
               // dialog upward under the user's finger — and put it back if they
               // deleted down to empty again.
-              helperText: l10n.updateNoteRequired,
-              helperMaxLines: 2,
+              //
+              // Given as a `helper` widget rather than `helperText` because
+              // `helperText` is rendered with a hardcoded
+              // `TextOverflow.ellipsis` and is clipped to `helperMaxLines` —
+              // which was 2, and ellipsised the sentence mid-word at a large
+              // system font scale. Leaving `helperMaxLines` null does not fix
+              // it: null means *one* line there, not unlimited. Own the Text
+              // and the sentence can simply wrap, at any font scale, in either
+              // language.
+              helper: Text(
+                l10n.updateNoteRequired,
+                // What `helperText` would have been given: the M3 default
+                // helper style, which the app's InputDecorationTheme does not
+                // override.
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
             ),
           ),
         ],
