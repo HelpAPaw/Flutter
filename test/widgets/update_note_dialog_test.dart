@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:help_a_paw/src/models/signal_event.dart';
@@ -10,13 +11,18 @@ import 'package:help_a_paw/src/widgets/update_note_dialog.dart';
 void main() {
   /// Opens the dialog and hands back the box its result will land in. Read the
   /// box only after the interaction under test has settled.
-  Future<_Result> open(WidgetTester tester) async {
+  Future<_Result> open(WidgetTester tester, {double textScale = 1.0}) async {
     final result = _Result();
 
     await tester.pumpWidget(
       MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: TextScaler.linear(textScale)),
+          child: child!,
+        ),
         home: Builder(
           builder: (context) => ElevatedButton(
             onPressed: () async {
@@ -88,6 +94,27 @@ void main() {
     // string would not do — the caller would happily write that.
     expect(result.returned, isTrue);
     expect(result.note, isNull);
+  });
+
+  /// The helper sentence explains *why* the field is mandatory, so it is the
+  /// one piece of text in this dialog that must survive a large system font
+  /// scale. It used to carry `helperMaxLines: 2` and was ellipsised mid-word on
+  /// a phone at the biggest accessibility text size.
+  testWidgets('the helper sentence is never line-clipped', (tester) async {
+    await open(tester, textScale: 2.0);
+
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    final helper = find.text(l10n.updateNoteRequired);
+
+    // The real assertion: the laid-out paragraph, not the widget's maxLines.
+    // `helperText` renders with a hardcoded ellipsis and treats a null
+    // `helperMaxLines` as *one* line, so asserting `maxLines == null` passes
+    // while the device still shows "...everyone following this signal se...".
+    expect(
+      tester.renderObject<RenderParagraph>(helper).didExceedMaxLines,
+      isFalse,
+      reason: 'the helper sentence is ellipsised instead of wrapping',
+    );
   });
 
   testWidgets('the note cannot exceed what the rules accept', (tester) async {
