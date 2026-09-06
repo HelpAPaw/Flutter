@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:help_a_paw/src/models/signal.dart';
+import 'package:help_a_paw/src/models/vet_clinic.dart';
 import 'package:help_a_paw/src/repositories/signal_repository.dart';
 import 'package:help_a_paw/src/widgets/map/cluster_items_sheet.dart';
 
@@ -98,6 +99,64 @@ void main() {
     await tester.pump();
 
     expect(tapped?.id, 'b');
+  });
+
+  testWidgets('clinic rows show name and address and report a tap',
+      (tester) async {
+    String? tapped;
+    final clinics = [
+      VetClinic(
+        id: 'c1',
+        name: 'Central Vet',
+        address: '1 Vitosha Blvd',
+        latitude: 42.69,
+        longitude: 23.32,
+      ),
+      VetClinic(
+        id: 'c2',
+        name: 'Paws & Claws',
+        address: '',
+        latitude: 42.69,
+        longitude: 23.32,
+      ),
+    ];
+    tester.view.physicalSize = const Size(1233, 2154);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => Center(
+              child: ElevatedButton(
+                onPressed: () => showClusterItemsSheet(
+                  context: context,
+                  title: AppLocalizations.of(context)
+                      .clusterClinicsHere(clinics.length),
+                  itemCount: clinics.length,
+                  itemBuilder: (_, i) => ClinicClusterRow(
+                    clinic: clinics[i],
+                    onTap: () => tapped = clinics[i].id,
+                  ),
+                ),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 vet clinics here'), findsOneWidget);
+    expect(find.bySemanticsIdentifier('clusterClinicRow'), findsNWidgets(2));
+    expect(find.text('1 Vitosha Blvd'), findsOneWidget);
+    await tester.tap(find.text('Paws & Claws'));
+    await tester.pump();
+    expect(tapped, 'c2');
   });
 
   testWidgets('the title pluralises in Bulgarian', (tester) async {

@@ -415,7 +415,6 @@ class NewSignalFormState {
 class VetClinicState {
   final bool showVetClinics;
   final List<VetClinic> clinics;
-  final Set<Marker> clinicMarkers;
   final LatLng? lastSearchCenter;
   final double? lastSearchZoom;
   final bool showSearchThisAreaButton;
@@ -424,7 +423,6 @@ class VetClinicState {
   const VetClinicState({
     this.showVetClinics = false,
     this.clinics = const [],
-    this.clinicMarkers = const {},
     this.lastSearchCenter,
     this.lastSearchZoom,
     this.showSearchThisAreaButton = false,
@@ -434,7 +432,6 @@ class VetClinicState {
   VetClinicState copyWith({
     bool? showVetClinics,
     List<VetClinic>? clinics,
-    Set<Marker>? clinicMarkers,
     LatLng? lastSearchCenter,
     double? lastSearchZoom,
     bool? showSearchThisAreaButton,
@@ -444,7 +441,6 @@ class VetClinicState {
     return VetClinicState(
       showVetClinics: showVetClinics ?? this.showVetClinics,
       clinics: clinics ?? this.clinics,
-      clinicMarkers: clinicMarkers ?? this.clinicMarkers,
       lastSearchCenter:
           clearLastSearch ? null : (lastSearchCenter ?? this.lastSearchCenter),
       lastSearchZoom:
@@ -466,7 +462,6 @@ class VetClinicState {
     return other is VetClinicState &&
         other.showVetClinics == showVetClinics &&
         listEquals(other.clinics, clinics) &&
-        setEquals(other.clinicMarkers, clinicMarkers) &&
         other.lastSearchCenter == lastSearchCenter &&
         other.lastSearchZoom == lastSearchZoom &&
         other.showSearchThisAreaButton == showSearchThisAreaButton &&
@@ -477,7 +472,6 @@ class VetClinicState {
   int get hashCode => Object.hash(
         showVetClinics,
         Object.hashAll(clinics),
-        Object.hashAll(clinicMarkers),
         lastSearchCenter,
         lastSearchZoom,
         showSearchThisAreaButton,

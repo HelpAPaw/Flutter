@@ -2,14 +2,12 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
-import 'package:flutter/foundation.dart' show VoidCallback;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../models/new_signal_step.dart';
-import '../models/vet_clinic.dart';
 import '../repositories/repository_provider.dart';
 import '../repositories/signal_repository.dart';
 import '../services/app_preferences_service.dart';
@@ -480,7 +478,6 @@ class MapViewModel extends Notifier<MapScreenState> {
         showVetClinics: show,
         // Clear data when hiding
         clinics: show ? state.vetClinicState.clinics : [],
-        clinicMarkers: show ? state.vetClinicState.clinicMarkers : {},
         showSearchThisAreaButton: false,
         clearLastSearch: !show,
       ),
@@ -488,12 +485,12 @@ class MapViewModel extends Notifier<MapScreenState> {
   }
 
   /// Load vet clinics for the current map area
+  ///
+  /// Only the clinics are stored. Their markers are built on the map screen,
+  /// which clusters them for the current zoom — see `MapMarkerBuilder`.
   Future<void> loadVetClinics({
     required LatLng center,
     required double zoomLevel,
-    required BitmapDescriptor? hospitalPin,
-    required void Function(String clinicId) onClinicTap,
-    required VoidCallback onClinicMarkerTap,
   }) async {
     state = state.copyWith(
       vetClinicState: state.vetClinicState.copyWith(isLoading: true),
@@ -505,17 +502,9 @@ class MapViewModel extends Notifier<MapScreenState> {
 
       final clinics = await _vetClinicService.searchNearby(center, radiusMeters);
 
-      final markers = _buildClinicMarkers(
-        clinics: clinics,
-        hospitalPin: hospitalPin,
-        onClinicTap: onClinicTap,
-        onClinicMarkerTap: onClinicMarkerTap,
-      );
-
       state = state.copyWith(
         vetClinicState: state.vetClinicState.copyWith(
           clinics: clinics,
-          clinicMarkers: markers,
           lastSearchCenter: center,
           lastSearchZoom: zoomLevel,
           showSearchThisAreaButton: false,
@@ -579,32 +568,5 @@ class MapViewModel extends Notifier<MapScreenState> {
   double _calculateSearchRadius(double zoomLevel) {
     final radiusKm = 20000 / (1 << zoomLevel.round());
     return radiusKm.clamp(1.0, 100.0);
-  }
-
-  Set<Marker> _buildClinicMarkers({
-    required List<VetClinic> clinics,
-    required BitmapDescriptor? hospitalPin,
-    required void Function(String clinicId) onClinicTap,
-    required VoidCallback onClinicMarkerTap,
-  }) {
-    return clinics.map((clinic) {
-      return Marker(
-        markerId: MarkerId('clinic_${clinic.id}'),
-        position: LatLng(clinic.latitude, clinic.longitude),
-        icon: hospitalPin ??
-            BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-        infoWindow: InfoWindow(
-          title: clinic.name,
-          snippet: clinic.address,
-          onTap: () => onClinicTap(clinic.id),
-        ),
-        // Clinics keep their native InfoWindow, and the SDK consumes a tap on
-        // them rather than passing it to GoogleMap.onTap — so without this a
-        // clinic window would open on top of an already-open signal bubble.
-        // When both windows were native the SDK's one-at-a-time rule closed
-        // the signal's for us; now the map screen has to be told.
-        onTap: onClinicMarkerTap,
-      );
-    }).toSet();
   }
 }

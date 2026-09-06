@@ -869,9 +869,19 @@
       }
     }
   },
+  "clusterClinicsHere": "{count, plural, =1{1 vet clinic here} other{{count} vet clinics here}}",
+  "@clusterClinicsHere": {
+    "description": "Title of the sheet listing the vet clinics inside a cluster bubble that max zoom cannot split",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "mapLegend": "What the pins mean",
   "mapLegendUrgencyNote": "Pin colour shows urgency — how serious it gets if nobody acts. Signals close together are grouped into a bubble, which takes the colour of the most urgent one inside it. Tap a bubble to zoom in, or to list what is in it when they are too close to separate.",
   "mapLegendCluster": "Several signals; the number is how many",
+  "mapLegendClinicCluster": "Several vet clinics; the number is how many",
   "mapLegendVetClinic": "Vet clinic",
   "done": "Done",
   "signOutFailed": "Could not sign out. Please try again.",

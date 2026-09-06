@@ -3398,6 +3398,12 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{1 signal here} other{{count} signals here}}'**
   String clusterSignalsHere(int count);
 
+  /// Title of the sheet listing the vet clinics inside a cluster bubble that max zoom cannot split
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 vet clinic here} other{{count} vet clinics here}}'**
+  String clusterClinicsHere(int count);
+
   /// No description provided for @mapLegend.
   ///
   /// In en, this message translates to:
@@ -3415,6 +3421,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Several signals; the number is how many'**
   String get mapLegendCluster;
+
+  /// No description provided for @mapLegendClinicCluster.
+  ///
+  /// In en, this message translates to:
+  /// **'Several vet clinics; the number is how many'**
+  String get mapLegendClinicCluster;
 
   /// No description provided for @mapLegendVetClinic.
   ///

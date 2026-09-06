@@ -675,9 +675,19 @@
       }
     }
   },
+  "clusterClinicsHere": "{count, plural, =1{1 ветеринарна клиника тук} other{{count} ветеринарни клиники тук}}",
+  "@clusterClinicsHere": {
+    "description": "Title of the sheet listing the vet clinics inside a cluster bubble that max zoom cannot split",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "mapLegend": "Какво означават маркерите",
   "mapLegendUrgencyNote": "Цветът на маркера показва спешността — колко сериозно става, ако никой не реагира. Близки сигнали се групират в кръг, който взима цвета на най-спешния от тях. Докоснете кръга, за да приближите, или за да видите списъка, когато са твърде близо, за да се разделят.",
   "mapLegendCluster": "Няколко сигнала; числото показва колко са",
+  "mapLegendClinicCluster": "Няколко ветеринарни клиники; числото показва колко са",
   "mapLegendVetClinic": "Ветеринарна клиника",
   "done": "Готово",
   "signOutFailed": "Неуспешно излизане. Моля, опитайте отново.",

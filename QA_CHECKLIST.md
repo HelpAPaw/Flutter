@@ -317,7 +317,7 @@
 
 ### 2.2b Map Legend (NEW)
 > Nothing anywhere in the app had ever said what the pin colours meant. Opened from the map's own app bar.
-- [ ] The legend opens from the map app bar and lists **most urgent first**: Critical, Medium, Low, then the vet clinic pin
+- [ ] The legend opens from the map app bar and lists **most urgent first**: Critical, Medium, Low, then the signal bubble, then the vet clinic pin and the clinic bubble
 - [ ] Each row shows the **real pin asset** — compare against the pins on the map behind it; they must be the same images
 - [ ] A **bubble row** ("Several signals; the number is how many") sits after the three pins, and the note explains that a bubble takes the colour of its most urgent signal and that tapping one zooms or lists (§2.2)
 - [ ] 🔴 **In Bulgarian at font scale 1.3, the last row (vet clinic) is fully visible.** This sheet overflowed by 43px and lost that row entirely at 411dp — the exact bug that reached `131`. Test on the smallest device available (SM J610FN, 411dp), not the tablet.
@@ -779,6 +779,9 @@
 - [ ] Hospital icon in AppBar toggles vet clinic mode on/off
 - [ ] Active state indicated by darker background on toggle
 - [ ] Vet clinics shown as blue hospital pin markers
+- [ ] Clinics close together collapse into a **blue bubble** with a count — the clinic pin's blue, never red/amber/green, so it cannot be read as a signal bubble; a clinic never shares a bubble with a signal
+- [ ] Tapping a clinic bubble zooms to its clinics; if they are too close to split (or the camera is at zoom ≥ 20) a sheet titled "N vet clinics here" lists them by name and address, and a row opens the clinic's details
+- [ ] Toggling the clinic layer off removes clinic pins **and** bubbles together
 - [ ] "Search This Area" button appears when map panned >2km or zoom changes >2 levels
 - [ ] Button auto-hides after search and has 1-second debounce
 - [ ] Search radius calculated from zoom level (formula-based, 1-100km)
@@ -1208,7 +1211,7 @@
 - [ ] Inbox row strings: `notificationNewSignalTitle/Body`, `notificationStatusChangeTitle/Body`, `notificationNewCommentTitle`, `notificationNearbySignalBody` — rendered from structured fields, **not** from the English `title`/`body` stored on the document (§6.6)
 - [ ] An unsupported device locale falls back to English rather than crashing
 - [ ] The **hosted share page** localizes client-side (§15.3) — its Bulgarian **help-tag** names (`HELP_TAG_NAMES_BY_LANG.bg`) are a second copy of the vocabulary; confirm they match the app's
-- [ ] **Map legend** (§2.2b): `mapLegend`, `mapLegendUrgencyNote`, `mapLegendVetClinic`
+- [ ] **Map legend** (§2.2b): `mapLegend`, `mapLegendUrgencyNote`, `mapLegendCluster`, `mapLegendVetClinic`, `mapLegendClinicCluster`; cluster sheet titles `clusterSignalsHere` / `clusterClinicsHere` pluralise ("1 сигнал тук" / "4 сигнала тук")
 - [ ] **Error sentences** (§11.3): `notAllowedError`, `serverBusyError`, `cameraPermissionDenied`, `photosPermissionDenied`, and the eight rewritten `failedTo…` / `error…` strings, **none of which carries an `{error}` placeholder any more**
 - [ ] **Empty and failed states** (§11.3): `couldNotLoadSignals(+Hint)`, `couldNotLoadNotifications`, `couldNotLoadPrivacyPolicy(+Hint)`
 - [ ] **Discard-changes dialog** (§1.6): `discardChanges`, `discardChangesHint`, `discard`, `keepEditing`

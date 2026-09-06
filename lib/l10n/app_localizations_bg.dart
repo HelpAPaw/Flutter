@@ -1886,6 +1886,17 @@ class AppLocalizationsBg extends AppLocalizations {
   }
 
   @override
+  String clusterClinicsHere(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count ветеринарни клиники тук',
+      one: '1 ветеринарна клиника тук',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get mapLegend => 'Какво означават маркерите';
 
   @override
@@ -1894,6 +1905,10 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get mapLegendCluster => 'Няколко сигнала; числото показва колко са';
+
+  @override
+  String get mapLegendClinicCluster =>
+      'Няколко ветеринарни клиники; числото показва колко са';
 
   @override
   String get mapLegendVetClinic => 'Ветеринарна клиника';

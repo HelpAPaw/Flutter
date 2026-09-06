@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../models/signal_urgency.dart';
+import '../models/vet_clinic.dart';
 import '../repositories/signal_repository.dart';
 import 'cluster_bubble_icons.dart';
 import 'map_clusterer.dart';
@@ -117,6 +118,61 @@ class MapMarkerBuilder {
   /// Marker ids of cluster bubbles start with this, so the screen can tell a
   /// bubble from a signal pin in the marker set without parsing signal ids.
   static const clusterMarkerIdPrefix = 'signal-cluster:';
+
+  /// The blue of `local_hospital_blue.png`, so a clinic bubble is recognisably
+  /// the clinic pin's colour and never one of the three urgency colours — a
+  /// clinic bubble must not be readable as "several signals".
+  static const clinicBlue = Color(0xFF2854C5); // theme-independent: over the map
+
+  /// Build the vet clinic layer's markers: the hospital pin per single clinic
+  /// and a blue bubble per cluster. Clinics are clustered separately from
+  /// signals, so a signal never shares a bubble with a clinic.
+  ///
+  /// Clinics keep their native [InfoWindow] (name and address, tap for
+  /// details). The SDK consumes a tap on a marker that has one rather than
+  /// passing it to `GoogleMap.onTap`, so [onClinicMarkerTap] exists to let the
+  /// screen close an open signal bubble — when both windows were native, the
+  /// SDK's one-at-a-time rule did that for us.
+  Set<Marker> buildClinicMarkers({
+    required ClusterResult<VetClinic> clustered,
+    required ClusterBubbleIcons bubbleIcons,
+    required void Function(String clinicId) onClinicTap,
+    required VoidCallback onClinicMarkerTap,
+    required void Function(MapCluster<VetClinic> cluster) onClusterTap,
+  }) {
+    final markers = <Marker>{};
+    for (final clinic in clustered.singles) {
+      markers.add(Marker(
+        markerId: MarkerId('clinic_${clinic.id}'),
+        position: LatLng(clinic.latitude, clinic.longitude),
+        icon: hospitalPin ??
+            BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+        infoWindow: InfoWindow(
+          title: clinic.name,
+          snippet: clinic.address,
+          onTap: () => onClinicTap(clinic.id),
+        ),
+        onTap: onClinicMarkerTap,
+      ));
+    }
+    for (final cluster in clustered.clusters) {
+      final icon = bubbleIcons.get(clinicBubbleKeyFor(cluster));
+      if (icon == null) continue;
+      markers.add(Marker(
+        markerId: MarkerId('clinic-cluster:${cluster.key}'),
+        position: cluster.position,
+        icon: icon,
+        anchor: const Offset(0.5, 0.5),
+        consumeTapEvents: true,
+        zIndexInt: 1,
+        onTap: () => onClusterTap(cluster),
+      ));
+    }
+    return markers;
+  }
+
+  static ClusterBubbleKey clinicBubbleKeyFor(MapCluster<VetClinic> cluster) =>
+      ClusterBubbleKey.count(fill: clinicBlue, count: cluster.count);
 
   /// The bubble a signal cluster is drawn with: the colour of its most urgent
   /// member, and its count.

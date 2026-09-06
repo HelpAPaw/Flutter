@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 
 import '../../models/signal_urgency.dart';
+import '../../models/vet_clinic.dart';
 import '../../repositories/signal_repository.dart';
+import '../../utils/map_marker_builder.dart';
 import '../urgency_picker.dart';
 
 /// Lists what is inside a cluster bubble the map cannot split any further.
@@ -120,6 +122,37 @@ class SignalClusterRow extends StatelessWidget {
             child: UrgencyChip(urgency: signal.urgency),
           ),
         ),
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
+/// One vet clinic inside a cluster: name and address, with the clinic pin's
+/// blue so the row matches the bubble it came out of.
+class ClinicClusterRow extends StatelessWidget {
+  const ClinicClusterRow({super.key, required this.clinic, required this.onTap});
+
+  final VetClinic clinic;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      identifier: 'clusterClinicRow',
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: MapMarkerBuilder.clinicBlue.withAlpha(51),
+          child: const Icon(
+            Icons.local_hospital,
+            color: MapMarkerBuilder.clinicBlue,
+          ),
+        ),
+        title: Text(clinic.name, maxLines: 2, overflow: TextOverflow.ellipsis),
+        subtitle: clinic.address.isEmpty
+            ? null
+            : Text(clinic.address,
+                maxLines: 2, overflow: TextOverflow.ellipsis),
         onTap: onTap,
       ),
     );

@@ -4,6 +4,7 @@ import 'package:help_a_paw/l10n/app_localizations.dart';
 
 import '../../models/signal_urgency.dart';
 import '../../utils/cluster_bubble_icons.dart';
+import '../../utils/map_marker_builder.dart';
 import '../section_header.dart';
 
 /// Explains the map's colour code.
@@ -88,6 +89,13 @@ class _MapLegendSheet extends StatelessWidget {
                 height: 28,
               ),
               label: l10n.mapLegendVetClinic,
+            ),
+            _LegendRow(
+              icon: const _LegendBubble(
+                count: 2,
+                color: MapMarkerBuilder.clinicBlue,
+              ),
+              label: l10n.mapLegendClinicCluster,
             ),
           ],
         ),

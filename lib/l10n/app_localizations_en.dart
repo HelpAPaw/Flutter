@@ -1858,6 +1858,17 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String clusterClinicsHere(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count vet clinics here',
+      one: '1 vet clinic here',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get mapLegend => 'What the pins mean';
 
   @override
@@ -1866,6 +1877,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get mapLegendCluster => 'Several signals; the number is how many';
+
+  @override
+  String get mapLegendClinicCluster =>
+      'Several vet clinics; the number is how many';
 
   @override
   String get mapLegendVetClinic => 'Vet clinic';
