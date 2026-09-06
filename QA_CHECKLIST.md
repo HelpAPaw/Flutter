@@ -283,18 +283,33 @@
 - [ ] 🔴 **A RED signal is never clustered.** Zoom out until amber and green signals collapse into navy cluster bubbles: every red pin must **still be drawn individually**, at every zoom level. This is the whole reason the map can say anything is critical — the SDK draws the bubble navy and Dart cannot restyle it, so a clustered red signal is invisible as an emergency. Guarded by `test/map_clustering_test.dart`; verify it on a device too, with ≥3 red signals close together.
 - [ ] Amber and green **do** still cluster (this is what keeps a city readable — a map of 200 individual pins is not the fix)
 - [ ] A signal with an **unrecognised** urgency code clusters (it falls back to amber, deliberately)
-- [ ] Tapping a marker shows an info window (title + description snippet)
-- [ ] Tapping the info window navigates to Signal Details screen
-- [ ] Tapping the map dismisses open info windows
+**Signal bubble** (`SignalInfoCard` — replaced the native InfoWindow)
+> Automation note: the bubble is a Flutter widget with the semantic identifier **`signalInfoCard`**. Target it by element, not by hunting the old native window's cream RGB(255,243,219) — that surface no longer exists.
+> Verified 2026-09-06 on Android (Galaxy Tab A8, light + dark, bg) and iOS (iPad 6th gen, dark, en). Light mode on iOS and phone-width iOS are the gaps.
+- [ ] Tapping a marker opens a bubble showing the signal's **photo, title and needs pills**
+- [ ] A signal with **no photo** shows the primary-need icon on an urgency tint instead (not a blank or broken-image box)
+- [ ] A signal with **no title** shows its need instead ("Rescue needed"), not an empty line
+- [ ] A signal with **no tags** (pre-tags document) shows photo + title with no pills, and does not invent "Rescue"
+- [ ] Tapping anywhere on the bubble — including on a pill — navigates to Signal Details
+- [ ] Tapping the map dismisses the bubble
+- [ ] Returning from Signal Details leaves the bubble open and correctly positioned over its pin
 
-**Distant-pin info window (regression fix — recurring bug)**
-> Tapping a far pin makes the SDK auto-pan to centre it; that pan crosses the re-query threshold, the marker set rebuilds, the native `ClusterManager` reclusters, and the open InfoWindow is torn down. The fix re-asserts the window (immediately + a 350 ms follow-up).
-- [ ] Tap a pin **near the edge of the visible map** (far enough that the map auto-pans): the info window **stays open** after the pan settles
-- [ ] The re-asserted window is still tappable and navigates to the correct signal
-- [ ] No re-query loop / flicker: the map settles and does not keep panning or repeatedly rebuilding markers
-- [ ] Near-pin taps are unaffected (window opens once, no double-show flicker)
-- [ ] Changing a filter while an info window is open re-asserts the window if the signal still matches, and dismisses it cleanly if it no longer does
-- [ ] A signal **removed or hidden** by another device while its window is open dismisses cleanly — no `PlatformException: Invalid markerId`, and the ghost tap target does not navigate (§10.2)
+**Bubble tracking**
+> The bubble is drawn by Flutter, not the Maps SDK, so it is repositioned per frame from the camera and reconciled when the camera settles.
+- [ ] **Pan** with a bubble open: it stays glued to its pin, with no visible lag or rubber-banding, and is exactly on the pin once the pan settles
+- [ ] **Pinch-zoom** with a bubble open: same, at both extremes of the zoom range
+- [ ] **Two-finger rotate** with a bubble open: the bubble stays over its pin (bearing is handled; getting the sign wrong puts it on the opposite side)
+- [ ] The map **cannot be tilted** (two-finger vertical drag does nothing) — the projection is only exact for a flat map
+- [ ] Tap a pin near the **top edge**: the bubble flips **below** the pin with its tail pointing up
+- [ ] Tap a pin near the **left/right edge**: the bubble stays fully on screen
+
+**Distant-pin bubble (recurring bug — now structurally removed)**
+> Tapping a marker still recentres the camera on it — that is the SDK's default, not something the info window brought — so a far pin still crosses the re-query threshold and rebuilds the marker set. What is gone is the recluster tearing the window down, because the bubble is a Flutter widget the ClusterManager cannot remove. **Do not "fix" a regression here by lowering the re-query threshold.**
+- [ ] Tap a pin **near the edge of the visible map**: the bubble opens and **stays open** through the recentre
+- [ ] The bubble stays glued to its pin *during* the recentre, and is exactly on it once the map settles
+- [ ] No flicker: the bubble appears once, not twice
+- [ ] Changing a filter while a bubble is open keeps it if the signal still matches, and dismisses it cleanly if it no longer does
+- [ ] A signal **removed or hidden** by another device while its bubble is open dismisses cleanly — no crash, and tapping where the bubble was does **not** navigate (§10.2)
 
 ### 2.2b Map Legend (NEW)
 > Nothing anywhere in the app had ever said what the pin colours meant. Opened from the map's own app bar.
@@ -365,7 +380,7 @@
 
 **Submit**
 - [ ] Loading state during submission; Back, Next **and ×** are all disabled while submitting
-- [ ] On success: map centres on the new signal and its info window auto-shows
+- [ ] On success: map centres on the new signal and its bubble auto-shows
 - [ ] Creator is auto-subscribed to the signal
 - [ ] Signal stores `location = {geopoint, geohash}` (precision 9), plus urgency, tags and animal type
 - [ ] **Photo race (regression fix):** attach a photo, tap Submit, then immediately tap **× → Discard** while the upload is in flight. The signal must be created **with its photo** — previously the upload was skipped and it still reported full success.
@@ -603,7 +618,7 @@
 **Screen behaviour during the call**
 - [ ] While the removal is in flight, the still-live listener reports the document missing the moment the write lands — the screen must show the **success** message and leave, **not** the other user's "this signal is no longer available" (R6-002; the exit is claimed before the call)
 - [ ] If the call **throws**, the claim is released: the screen stays put and shows the error, and a second attempt still works
-- [ ] Removing a signal whose **map info window is open** does not leave a stale window behind (the guard from the earlier round still holds)
+- [ ] Removing a signal whose **map bubble is open** does not leave a stale bubble behind (the guard from the earlier round still holds)
 
 **Old builds (129) — what the released client still does**
 - [ ] On **129**, Delete still runs the old client-side cascade and still works. The three subcollection delete rules are deliberately left permissive until the release ships (deploy gates, step 5) — if Delete on 129 fails with `failedToRemoveSignal` on a signal with history, someone has flipped step 5 early.
@@ -749,7 +764,7 @@
 - [ ] "Clear All" hides all signals
 - [ ] Re-selecting a single tag after Clear All shows only signals carrying that tag
 - [ ] Filter changes update markers on map in real time
-- [ ] An open info window is reconciled correctly when a filter change hides its signal (§2.2)
+- [ ] An open bubble is reconciled correctly when a filter change hides its signal (§2.2)
 - [ ] The active-filter dot appears whenever **any** of the five axes is off its default
 
 ---
@@ -817,7 +832,7 @@
 - [ ] **Background**: Device processes push notification
 - [ ] **Terminated**: `getInitialMessage()` checks for notification on app launch
 - [ ] Tapping any notification deep-links to signal details (`/signal_details/:signalId`) via the shared `SignalNavigator` seam
-- [ ] After dismissing details, map focuses on that signal with info window shown
+- [ ] After dismissing details, map focuses on that signal with its bubble shown
 - [ ] **Regression — tap handling was previously clobbered.** The local-notification plugin is a singleton and every `initialize()` re-registers the tap callback; a second caller passing no callback silently disabled tap handling app-wide. Verify taps work on **both** an FCM notification **and** a catch-up (local) notification, in foreground, background and terminated states.
 - [ ] Launching the app **from a local (catch-up) notification** while terminated opens that signal
 - [ ] The background FCM handler runs even when the app is terminated (it records the signal for dedupe — §7.3)
@@ -1215,7 +1230,7 @@
 - [ ] Signal **edits** (title/description/type/phone) on Device A propagate to Device B's details view and map marker
 - [ ] Signal **removal** on Device A removes the marker and closes the details view on Device B (§3.7) — and **restoring** it from Device A brings the marker back on B, live
 - [ ] A moderator **hiding** a signal on Device A removes it from Device B's map the same way (§16.6)
-- [ ] Signal **removal** on Device A while its **info window/overlay is open on the map** on Device B: the marker disappears and the open info window + invisible tap target are dismissed cleanly — no crash (`PlatformException: Invalid markerId`) and tapping where the window was does **not** navigate to the removed signal
+- [ ] Signal **removal** on Device A while its **bubble is open on the map** on Device B: the marker disappears and the bubble is dismissed cleanly — no crash, and tapping where the bubble was does **not** navigate to the removed signal
 - [ ] **Signal ownership changes propagate live**: a claim on Device A updates the responsible-for block on Device B without a reload
 - [ ] Status changes propagate across all devices viewing the same signal
 - [ ] Comments appear in real time on all devices viewing the signal
@@ -1597,7 +1612,7 @@
 - [ ] **Foreground** (app open on the map) — tapping a link navigates to the signal
 - [ ] Tapping the **same** link while already on that signal does nothing (no duplicate page stacked)
 - [ ] Tapping a link for a **different** signal while viewing one shows the **new** signal's data (the route is keyed by id, so state is not reused)
-- [ ] Backing out of a link-opened signal returns to the map, which **focuses that pin** and shows its info window
+- [ ] Backing out of a link-opened signal returns to the map, which **focuses that pin** and shows its bubble
 - [ ] Android: opening a link from another app does **not** create a second task/instance — check the recents screen shows one Help a Paw entry
 - [ ] iOS: a Universal Link tapped in Messages/Mail/Safari opens the app (not Safari)
 - [ ] The `helpapaw:///signal/<id>` custom scheme also opens the app (note the **triple slash** — `helpapaw://signal/<id>` would parse `signal` as the host and not match)

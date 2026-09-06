@@ -193,9 +193,7 @@ class _ActiveSignalsTabState extends State<_ActiveSignalsTab> {
                   ),
                 ),
                 title: Text(
-                  signal.title.isNotEmpty
-                      ? signal.title
-                      : signal.primaryTag.neededLabel(l10n),
+                  signal.displayTitle(l10n),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -375,9 +373,7 @@ class _RemovedSignalsTabState extends State<_RemovedSignalsTab> {
                       child: Icon(signal.primaryTag.icon, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                     title: Text(
-                      signal.title.isNotEmpty
-                          ? signal.title
-                          : signal.primaryTag.neededLabel(l10n),
+                      signal.displayTitle(l10n),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),

@@ -13,6 +13,14 @@ class MapMarkerBuilder {
   final Map<int, BitmapDescriptor> _urgencyPins = {};
   BitmapDescriptor? hospitalPin;
 
+  /// Height the pin bitmaps are rendered at. Load-bearing beyond the icon
+  /// itself: the map screen offsets the signal bubble by it so the bubble sits
+  /// above the pin rather than over it.
+  static const double pinHeight = 29;
+
+  /// Size the pin bitmaps are rendered at.
+  static const Size pinSize = Size(24, pinHeight);
+
   bool _pinsLoaded = false;
   bool _hospitalPinLoaded = false;
 
@@ -24,7 +32,7 @@ class MapMarkerBuilder {
   Future<void> loadSignalPins() async {
     for (final urgency in SignalUrgency.values) {
       _urgencyPins[urgency.code] = await BitmapDescriptor.asset(
-        const ImageConfiguration(size: Size(24, 29)),
+        const ImageConfiguration(size: pinSize),
         urgency.pinAsset,
       );
     }
@@ -52,10 +60,18 @@ class MapMarkerBuilder {
 
   /// Build a set of markers from a list of signals.
   ///
-  /// Native [InfoWindow.onTap] is broken when markers use [ClusterManager]
-  /// (flutter/flutter#159636). As a workaround, the native InfoWindow is kept
-  /// for display (it tracks the map perfectly), and [onMarkerTap] is called
-  /// via [Marker.onTap] so the caller can overlay an invisible tap target.
+  /// Markers carry **no [InfoWindow]**. The bubble is `SignalInfoCard`, a
+  /// Flutter widget the map screen positions over the pin — the native window
+  /// could only render two lines of text, and its `onTap` never fired for
+  /// clustered markers (flutter/flutter#159636). [Marker.onTap] does fire, and
+  /// is what opens the bubble.
+  ///
+  /// Dropping the native window also removed a bug rather than moving it. A
+  /// marker tap still recentres the camera — that is the SDK's default, not the
+  /// window's doing — so a distant pin still crosses the map's 30km re-query
+  /// threshold and rebuilds the marker set. But Android's asynchronous
+  /// reclustering used to tear the open native window down with it, and a
+  /// Flutter bubble is not the ClusterManager's to remove.
   Set<Marker> buildSignalMarkers({
     required List<SignalWithId> signals,
     required bool Function(SignalWithId signal) filterPredicate,
@@ -70,10 +86,6 @@ class MapMarkerBuilder {
       return Marker(
         markerId: MarkerId(signal.id),
         position: LatLng(location.latitude, location.longitude),
-        infoWindow: InfoWindow(
-          title: signal.signal.title,
-          snippet: signal.signal.description,
-        ),
         icon: getSignalPin(signal.urgency),
         clusterManagerId: clusterOf(signal.urgency, clusterManagerId),
         onTap: () => onMarkerTap(signal),
