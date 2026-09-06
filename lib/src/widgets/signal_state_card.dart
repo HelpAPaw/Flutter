@@ -6,6 +6,7 @@ import '../models/help_tag.dart';
 import '../models/signal.dart';
 import '../models/signal_status.dart';
 import '../models/signal_urgency.dart';
+import 'help_tag_pill.dart';
 import 'level_chip.dart';
 
 /// The coordination state of a signal, in one bounded surface.
@@ -139,7 +140,7 @@ class SignalStateCard extends StatelessWidget {
                           label: l10n.animalType,
                           child: Align(
                             alignment: Alignment.centerLeft,
-                            child: _Tag(
+                            child: HelpTagPill(
                                 icon: species.icon, label: species.label(l10n)),
                           ),
                         ),
@@ -153,7 +154,7 @@ class SignalStateCard extends StatelessWidget {
                             runSpacing: 4,
                             children: [
                               for (final tag in tags)
-                                _Tag(icon: tag.icon, label: tag.label(l10n)),
+                                HelpTagPill(icon: tag.icon, label: tag.label(l10n)),
                             ],
                           ),
                         ),
@@ -311,41 +312,3 @@ class _StatusTrack extends StatelessWidget {
   }
 }
 
-/// A help-needed or species tag.
-///
-/// Lighter than a Material [Chip]: these are labels on a card that already has
-/// a border, and chip-on-card was two nested containers of nearly the same
-/// tone.
-class _Tag extends StatelessWidget {
-  const _Tag({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        borderRadius: BorderRadius.circular(7),
-        border: Border.all(color: scheme.outlineVariant),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: scheme.onSurfaceVariant),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: scheme.onSurfaceVariant),
-          ),
-        ],
-      ),
-    );
-  }
-}

@@ -3,7 +3,6 @@ import 'dart:io' show Platform;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -17,12 +16,15 @@ import '../services/auth_service.dart';
 import '../services/location_service.dart';
 import '../services/signal_navigator.dart';
 import '../state/map_state.dart';
+import '../utils/bubble_layout.dart';
 import '../utils/map_marker_builder.dart';
+import '../utils/map_projection.dart';
 import '../viewmodels/map_view_model.dart';
 import 'home_route_drawer.dart';
 import 'map/filter_bottom_sheet.dart';
 import 'map/map_legend_sheet.dart';
 import 'map/new_signal_location_bar.dart';
+import 'map/signal_info_card.dart';
 import 'notification_onboarding_button.dart';
 import 'helper_tags_gate.dart';
 import 'notification_onboarding_sheet.dart';
@@ -39,10 +41,17 @@ class MapScreen extends ConsumerStatefulWidget {
 
 class _MapScreenState extends ConsumerState<MapScreen>
     with WidgetsBindingObserver {
-  // Approximate native InfoWindow dimensions for invisible tap target
-  static const _kInfoWindowWidth = 220.0;
-  static const _kInfoWindowHeight = 80.0;
-  static const _kPinHeight = 29.0;
+  /// Height of the pin bitmap, so the bubble sits above the pin rather than
+  /// over it.
+  static const _kPinHeight = MapMarkerBuilder.pinHeight;
+
+  /// Inset the bubble keeps from the left and right edges of the map.
+  static const _kBubbleEdgeInset = 8.0;
+
+  /// Gap between the bubble's tail and the pin it points at. Without it the
+  /// tail lands exactly on the pin's rounded top and reads as a notch cut out
+  /// of the pin rather than as a pointer.
+  static const _kBubbleGap = 6.0;
 
   /// Zoom the map opens at before the user has moved it.
   static const _kInitialZoom = 11.0;
@@ -77,17 +86,29 @@ class _MapScreenState extends ConsumerState<MapScreen>
   bool _showOnboardingButton = false;
   bool _onboardingSheetShown = false;
 
-  // Invisible tap-target state for the native InfoWindow workaround.
-  // Native InfoWindow.onTap is broken with ClusterManager
-  // (flutter/flutter#159636), so we show the native InfoWindow for display
-  // and overlay an invisible GestureDetector for tap handling.
+  // The open bubble, if any, and where its pin currently is on screen.
+  //
+  // Deliberately two different mechanisms. Which signal is selected changes
+  // only on a tap, so it is ordinary state. Its screen position changes on
+  // every frame of a pan, and setState for that would rebuild _buildScaffold —
+  // which rebuilds the entire marker set — sixty times a second. The notifier
+  // keeps the per-frame update inside the bubble's own subtree.
   SignalWithId? _selectedSignal;
-  double? _overlayX;
-  double? _overlayY;
+  final ValueNotifier<Offset?> _bubbleAnchor = ValueNotifier<Offset?>(null);
 
-  // Listener that waits for a specific signal to appear in the stream
-  // before showing its info window (used after signal creation / notification).
-  ProviderSubscription<AsyncValue<List<SignalWithId>>>? _pendingInfoWindowSub;
+  /// Key on the map's Stack, so the bubble's own arithmetic can read the size
+  /// of the box it is positioned in. See [_mapSize].
+  final GlobalKey _mapStackKey = GlobalKey();
+
+  /// Size of the map's box, or null before its first layout.
+  Size? get _mapSize {
+    final box = _mapStackKey.currentContext?.findRenderObject() as RenderBox?;
+    return (box != null && box.hasSize) ? box.size : null;
+  }
+
+  // Listener that waits for a specific signal to appear in the stream before
+  // opening its bubble (used after signal creation / notification).
+  ProviderSubscription<AsyncValue<List<SignalWithId>>>? _pendingBubbleSub;
 
   // A signal we were asked to focus before the map's platform view was ready.
   // Replayed from [onMapCreated]; see [_focusSignalOnMap].
@@ -136,15 +157,12 @@ class _MapScreenState extends ConsumerState<MapScreen>
     final locale = Localizations.localeOf(context).languageCode;
     if (_mapLocale != null && _mapLocale != locale) {
       // The locale-keyed GoogleMap below is about to discard the platform
-      // view, and the native InfoWindow goes with it. Drop the matching
-      // overlay state now: otherwise the invisible tap target keeps hovering
-      // over a window that no longer exists, and the reconcile pass in build()
-      // re-asserts the window through the disposed controller — which throws
-      // MissingPluginException, and that is not a PlatformException, so
-      // _showMarkerInfoWindow's catch does not cover it.
+      // view and create a new one. Close the bubble rather than let it hang
+      // over a map that is about to be replaced: its anchor was computed
+      // against the outgoing view, and _updateBubbleAnchor would go looking
+      // for the pin through a disposed controller.
       _selectedSignal = null;
-      _overlayX = null;
-      _overlayY = null;
+      _bubbleAnchor.value = null;
     }
     _mapLocale = locale;
   }
@@ -152,7 +170,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _pendingInfoWindowSub?.close();
+    _pendingBubbleSub?.close();
+    _bubbleAnchor.dispose();
     super.dispose();
   }
 
@@ -400,7 +419,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
     final idAfter = ref.read(mapViewModelProvider).newlyCreatedSignalId;
     if (idAfter != null && idAfter != idBefore) {
-      _showSignalInfoWindow(idAfter);
+      _openBubbleWhenSignalArrives(idAfter);
     }
   }
 
@@ -456,6 +475,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
         zoomLevel: zoom,
         hospitalPin: _markerBuilder.hospitalPin,
         onClinicTap: (clinicId) => context.push(Routes.clinicDetails(clinicId)),
+        onClinicMarkerTap: _dismissBubble,
       );
 
       if (mounted) {
@@ -507,123 +527,100 @@ class _MapScreenState extends ConsumerState<MapScreen>
     return (coord.x.toDouble() / dpr, coord.y.toDouble() / dpr);
   }
 
-  /// Best-effort native InfoWindow show. Throws [PlatformException]
-  /// ("Invalid markerId") if the marker was removed from the map between the
-  /// overlay opening and this call — e.g. the signal was deleted, filtered
-  /// out, or moved outside the geo-query radius while its window was open.
-  /// The window is gone anyway, so swallow it rather than crashing.
-  Future<void> _showMarkerInfoWindow(String signalId) async {
-    final map = _mapController;
-    if (map == null) return;
-    try {
-      await map.showMarkerInfoWindow(MarkerId(signalId));
-    } on PlatformException {
-      // Marker no longer on the map — nothing to show.
-    }
+  /// Open the bubble for [signal], anchored to its pin.
+  Future<void> _showSignalBubble(SignalWithId signal) async {
+    setState(() => _selectedSignal = signal);
+    // Place it from the last known camera before asking the platform, so a
+    // bubble opened while another one is closing never paints a frame at the
+    // previous pin's position. Null until the camera has moved once, in which
+    // case the bubble simply waits for the authoritative answer below.
+    final camera = _lastCamera;
+    _bubbleAnchor.value = null;
+    if (camera != null) _projectBubbleAnchor(camera);
+    await _updateBubbleAnchor();
   }
 
-  /// Best-effort native InfoWindow hide. See [_showMarkerInfoWindow].
-  Future<void> _hideMarkerInfoWindow(String signalId) async {
-    final map = _mapController;
-    if (map == null) return;
-    try {
-      await map.hideMarkerInfoWindow(MarkerId(signalId));
-    } on PlatformException {
-      // Marker no longer on the map — nothing to hide.
-    }
-  }
-
-  /// Re-show the native InfoWindow for [signalId] after a marker-set rebuild
-  /// closed it. Android's ClusterManager reclusters asynchronously, so an
-  /// immediate re-show can be undone once the background clustering finishes;
-  /// a short follow-up re-show outlasts it. Both calls are no-ops when the
-  /// window is already open (programmatic show never auto-pans, so there is no
-  /// re-query loop).
-  void _reassertSelectedInfoWindow(String signalId) {
-    _showMarkerInfoWindow(signalId);
-    Future.delayed(const Duration(milliseconds: 350), () {
-      if (mounted && _selectedSignal?.id == signalId) {
-        _showMarkerInfoWindow(signalId);
-      }
-    });
-  }
-
-  Future<void> _showSignalOverlay(SignalWithId signal) async {
-    // Show the native InfoWindow (moves perfectly with the map).
-    // Fire-and-forget — independent of screen coordinate calculation.
-    _showMarkerInfoWindow(signal.id);
-
-    // Precondition: the map exists — this comes from tapping one of its markers.
-    final screenCoord = await _mapController!.getScreenCoordinate(
-      LatLng(signal.location.latitude, signal.location.longitude),
-    );
-    if (!mounted) return;
-    final (x, y) = _screenCoordToLogical(screenCoord);
-    setState(() {
-      _selectedSignal = signal;
-      _overlayX = x;
-      _overlayY = y;
-    });
-  }
-
-  void _dismissOverlay() {
-    if (_selectedSignal != null) {
-      _hideMarkerInfoWindow(_selectedSignal!.id);
-      setState(() {
-        _selectedSignal = null;
-        _overlayX = null;
-        _overlayY = null;
-      });
-    }
-  }
-
-  Future<void> _updateOverlayPosition() async {
+  void _dismissBubble() {
     if (_selectedSignal == null) return;
-    final signal = _selectedSignal!;
+    setState(() => _selectedSignal = null);
+    _bubbleAnchor.value = null;
+  }
+
+  /// Re-anchor the bubble by asking the platform where the pin actually is.
+  ///
+  /// This is the authoritative answer and a method-channel round trip, so it
+  /// runs when the camera settles. [_projectBubbleAnchor] carries the bubble
+  /// through the gesture itself, and any drift it accumulated is corrected
+  /// here the moment the gesture ends.
+  Future<void> _updateBubbleAnchor() async {
+    final signal = _selectedSignal;
+    if (signal == null) return;
     // Precondition: a selected signal implies its marker was tapped on a map.
     final screenCoord = await _mapController!.getScreenCoordinate(
       LatLng(signal.location.latitude, signal.location.longitude),
     );
     if (!mounted || _selectedSignal?.id != signal.id) return;
     final (x, y) = _screenCoordToLogical(screenCoord);
-    setState(() {
-      _overlayX = x;
-      _overlayY = y;
-    });
+    _bubbleAnchor.value = Offset(x, y);
   }
 
-  /// Show overlay after a short delay for the native map to render the marker.
-  void _showOverlayAfterRender(SignalWithId signal) {
+  /// Keep the bubble glued to its pin while the camera moves.
+  ///
+  /// Runs per frame, so it projects the pin in Dart rather than asking the
+  /// platform — see [screenOffsetFromCamera] for why, and for the tilt
+  /// precondition that [GoogleMap.tiltGesturesEnabled] `false` maintains.
+  void _projectBubbleAnchor(CameraPosition camera) {
+    final signal = _selectedSignal;
+    if (signal == null) return;
+    final size = _mapSize;
+    if (size == null) return;
+    final offset = screenOffsetFromCamera(
+      point: LatLng(signal.location.latitude, signal.location.longitude),
+      camera: camera,
+      viewport: size,
+    );
+    // Null only for a tilted camera, which nothing produces; leave the bubble
+    // where it is and let the on-idle reconcile place it.
+    if (offset != null) _bubbleAnchor.value = offset;
+  }
+
+  /// Open the bubble after a short delay, to let the native map render the
+  /// marker it anchors to.
+  void _showBubbleAfterRender(SignalWithId signal) {
     Future.delayed(const Duration(milliseconds: 300), () {
-      if (mounted) _showSignalOverlay(signal);
+      if (mounted) _showSignalBubble(signal);
     });
   }
 
-  void _showSignalInfoWindow(String signalId) {
+  void _openBubbleWhenSignalArrives(String signalId) {
     // Listen for the signal to appear in the stream. fireImmediately replays
     // the current value, so if the signal is already present it's found
     // without waiting for the next emission (also avoids a race between a
     // separate ref.read and the listener setup).
-    _pendingInfoWindowSub?.close();
-    _pendingInfoWindowSub = ref.listenManual(signalsStreamProvider, (_, next) {
+    _pendingBubbleSub?.close();
+    final sub = _pendingBubbleSub =
+        ref.listenManual(signalsStreamProvider, (_, next) {
       final signal = next.value
           ?.where((s) => s.id == signalId)
           .firstOrNull;
       if (signal != null) {
-        _pendingInfoWindowSub?.close();
-        _pendingInfoWindowSub = null;
-        _showOverlayAfterRender(signal);
+        _pendingBubbleSub?.close();
+        _pendingBubbleSub = null;
+        _showBubbleAfterRender(signal);
       }
     }, fireImmediately: true);
 
-    // Safety timeout: stop listening if the signal never arrives
+    // Safety timeout: stop listening if the signal never arrives. Closes the
+    // subscription it was armed for, not whichever one is current — a second
+    // request arriving inside the ten seconds replaces the field, and an
+    // unconditional close here would cancel that newer wait instead.
     Future.delayed(const Duration(seconds: 10), () {
-      _pendingInfoWindowSub?.close();
-      _pendingInfoWindowSub = null;
+      sub.close();
+      if (identical(_pendingBubbleSub, sub)) _pendingBubbleSub = null;
     });
   }
 
-  /// Moves the camera to [signalId] and opens its info window.
+  /// Moves the camera to [signalId] and opens its bubble.
   ///
   /// Returns whether the camera ended up on the signal, so the [onMapCreated]
   /// replay can fall back to the user's own location when it did not.
@@ -675,7 +672,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
       ),
     );
 
-    if (mounted) _showSignalInfoWindow(signalId);
+    if (mounted) _openBubbleWhenSignalArrives(signalId);
     return true;
   }
 
@@ -706,41 +703,41 @@ class _MapScreenState extends ConsumerState<MapScreen>
   ) {
     // Build signal markers from stream
     Set<Marker> signalMarkers = {};
+
+    // The open bubble's signal as of this build — see the reconcile pass below.
+    SignalWithId? selectedFresh;
     signalsAsync.whenData((signals) {
       signalMarkers = _markerBuilder.buildSignalMarkers(
         signals: signals,
         filterPredicate: mapState.filterState.passes,
-        onMarkerTap: _showSignalOverlay,
+        onMarkerTap: _showSignalBubble,
         clusterManagerId: _signalClusterManagerId,
       );
 
-      // Reconcile the open info window against the rebuilt marker set.
-      // Guarded by whenData so a transient reload (empty markers during a
-      // re-query) doesn't act on stale data.
+      // Reconcile the open bubble against the rebuilt signal list. Guarded by
+      // whenData so a transient reload (empty markers during a re-query)
+      // doesn't act on stale data.
+      //
+      // The bubble renders from `selectedFresh`, looked up here, rather than
+      // from the `_selectedSignal` snapshot taken at tap time — otherwise the
+      // pin would recolour on an urgency change while the bubble above it kept
+      // the old tint, title and tags. Deriving it costs nothing; re-adopting it
+      // into state would cost a second full rebuild per stream emission, since
+      // the repository allocates fresh SignalWithId objects every time and they
+      // have no value equality. `_selectedSignal` stays as the record of what
+      // is open and where its pin is.
       final selected = _selectedSignal;
       if (selected != null) {
-        final stillRendered =
-            signalMarkers.any((m) => m.markerId.value == selected.id);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted || _selectedSignal?.id != selected.id) return;
-          if (stillRendered) {
-            // The marker set was rebuilt while its window was open. Rebuilding
-            // makes the native ClusterManager recluster (remove + re-add the
-            // markers), which tears down the open native InfoWindow. This is
-            // what makes the window vanish after tapping a *distant* pin: the
-            // SDK auto-pans to center it, and that pan re-centers the geo-query
-            // past updateMapCenter's re-query threshold. Re-assert the window
-            // so it survives the rebuild. (Near pins pan too little to trigger
-            // a re-query, so they never hit this.)
-            _reassertSelectedInfoWindow(selected.id);
-          } else {
-            // Signal is no longer rendered — deleted, filtered out, or moved
-            // outside the geo-query radius — so its native InfoWindow has
-            // vanished for good. Dismiss the orphaned invisible tap target so
-            // it can't navigate to a signal that's gone.
-            _dismissOverlay();
-          }
-        });
+        selectedFresh = signals.where((s) => s.id == selected.id).firstOrNull;
+        // No longer rendered — deleted, filtered out, or moved outside the
+        // geo-query radius. Don't leave a bubble on screen that navigates to a
+        // signal the map has stopped showing.
+        if (!signalMarkers.any((m) => m.markerId.value == selected.id)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || _selectedSignal?.id != selected.id) return;
+            _dismissBubble();
+          });
+        }
       }
     });
 
@@ -759,6 +756,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
       child: Scaffold(
         resizeToAvoidBottomInset: false,
         body: Stack(
+            key: _mapStackKey,
             children: [
               MapStyleBuilder(
                 builder: (context, mapStyle) => GoogleMap(
@@ -802,48 +800,91 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
                   _flyToUserLocation();
                 },
-                onTap: (_) => _dismissOverlay(),
-                onCameraMove: (position) => _lastCamera = position,
+                onTap: (_) => _dismissBubble(),
+                onCameraMove: (position) {
+                  _lastCamera = position;
+                  _projectBubbleAnchor(position);
+                },
                 onCameraIdle: () {
                   _onCameraIdle();
-                  _updateOverlayPosition();
+                  _updateBubbleAnchor();
                 },
                 zoomControlsEnabled: true,
+                // The bubble is projected in Dart from the camera, which is
+                // exact only for a flat map — see map_projection.dart. Nothing
+                // in the app tilts the camera, so this costs no behaviour.
+                tiltGesturesEnabled: false,
                 myLocationEnabled: mapState.hasLocationPermission,
                 markers: allMarkers,
                 clusterManagers: _clusterManagers,
               ),
               ),
-              // Invisible tap target over the native InfoWindow.
-              // The native InfoWindow renders & tracks the marker perfectly,
-              // but its onTap is broken with ClusterManager
-              // (flutter/flutter#159636). This transparent overlay catches taps.
-              if (_selectedSignal != null &&
-                  _overlayX != null &&
-                  _overlayY != null)
-                Positioned(
-                  left: (_overlayX! - _kInfoWindowWidth / 2).clamp(
-                      0.0, MediaQuery.of(context).size.width - _kInfoWindowWidth),
-                  top: (_overlayY! - _kInfoWindowHeight - _kPinHeight)
-                      .clamp(0.0, double.infinity),
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onTap: () {
-                      final signal = _selectedSignal!;
-                      context.push(Routes.signalDetails(signal.id)).then((_) {
-                        // Re-show the native InfoWindow when returning;
-                        // the platform hides it during route transitions.
-                        if (mounted && _selectedSignal?.id == signal.id) {
-                          _showMarkerInfoWindow(signal.id);
-                          _updateOverlayPosition();
-                        }
-                      });
-                    },
-                    child: const SizedBox(
-                      width: _kInfoWindowWidth,
-                      height: _kInfoWindowHeight,
-                    ),
-                  ),
+              // The signal bubble, anchored to its pin.
+              //
+              // Listens to the anchor rather than reading it from state, so a
+              // pan repaints this subtree alone and leaves the marker set that
+              // _buildScaffold assembles untouched.
+              if (selectedFresh != null)
+                ValueListenableBuilder<Offset?>(
+                  valueListenable: _bubbleAnchor,
+                  builder: (context, anchor, _) {
+                    final signal = selectedFresh;
+                    final mapSize = _mapSize;
+                    if (anchor == null || signal == null || mapSize == null) {
+                      return const SizedBox.shrink();
+                    }
+
+                    final layout = bubbleLayoutFor(
+                      anchor: anchor,
+                      viewport: mapSize,
+                      bubbleWidth: SignalInfoCard.width,
+                      maxBubbleHeight: SignalInfoCard.maxHeightFor(context),
+                      pinHeight: _kPinHeight,
+                      gap: _kBubbleGap,
+                      edgeInset: _kBubbleEdgeInset,
+                    );
+                    // Pin panned off the map: see bubbleLayoutFor. The
+                    // selection is kept, so panning it back brings the bubble
+                    // straight back.
+                    if (layout == null) return const SizedBox.shrink();
+
+                    return Positioned(
+                      // Deliberately constant, with the whole offset in the
+                      // Transform: changing `left` on a Positioned marks the
+                      // Stack for relayout, and this moves every frame of a
+                      // pan. A Transform is a paint-time translation.
+                      left: 0,
+                      top: 0,
+                      child: Transform.translate(
+                        offset: Offset(layout.left, layout.anchorY),
+                        child: FractionalTranslation(
+                          // Pulls the bubble up by its own height, which is
+                          // content-dependent and unknown here — Bulgarian tag
+                          // labels wrap to a second row where English does not.
+                          translation:
+                              layout.above ? const Offset(0, -1) : Offset.zero,
+                          child: SignalInfoCard(
+                            signal: signal,
+                            tailDown: layout.above,
+                            tailAlignment: layout.tailAlignment,
+                            onTap: () {
+                              context
+                                  .push(Routes.signalDetails(signal.id))
+                                  .then((_) {
+                                // The route transition can leave the camera
+                                // somewhere else; re-anchor on return rather
+                                // than trust the position we left with.
+                                if (mounted &&
+                                    _selectedSignal?.id == signal.id) {
+                                  _updateBubbleAnchor();
+                                }
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
               if (mapState.isAddingNewSignal) const _PlacementPin(),
               // Step 1 of the new-signal wizard. The remaining steps live on

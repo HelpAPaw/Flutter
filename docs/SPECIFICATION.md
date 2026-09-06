@@ -1363,17 +1363,51 @@ anonymous session is re-established there and then, not at the next launch.
   half-screen sheet clipped the last row by 43px in Bulgarian at 411dp — and therefore
   `useSafeArea: true`, because that mode lets the sheet reach the top of the screen and
   `ModalBottomSheetRoute` strips the top padding the sheet's own `SafeArea` would need.
-- **Info window workaround.** Native `InfoWindow.onTap` is broken with `ClusterManager`
-  (flutter/flutter#159636). The native window is used for *display* (it tracks the map
-  perfectly) and an **invisible `GestureDetector`** (220×80 logical px, positioned from
-  `getScreenCoordinate`) catches the tap. Android returns physical pixels from
-  `ScreenCoordinate`, iOS logical — hence `_screenCoordToLogical`.
-- **Far-pin vanish (recurring bug, fixed):** tapping a distant pin makes the SDK
-  auto-pan to centre it; that pan crosses the 30 km threshold, re-queries, rebuilds the
-  marker set, and the ClusterManager's recluster tears down the open native InfoWindow.
-  The fix is `_reassertSelectedInfoWindow` — re-show immediately **and** again after
-  350 ms to outlast the asynchronous recluster. **Do not "fix" this by lowering the
-  re-query threshold.**
+- **Signal bubble** (`map/signal_info_card.dart`). Tapping a pin opens a Flutter-drawn
+  card — 64×64 photo, title, and one pill per `helpNeededTags` entry — positioned over
+  the map by `MapScreen`. Markers carry **no native `InfoWindow`**. Signals reported
+  without a photo (most of them) get an `UrgencyTagAvatar` instead — the primary tag's icon
+  on an urgency tint, shared with the My Signals row so the same signal looks like itself
+  in both places. An untitled signal is named by `Signal.displayTitle`, the one place that
+  rule lives. Tag pills are `HelpTagPill`, shared with `SignalStateCard` so the bubble and
+  the details screen cannot drift.
+
+  Width is **fixed** at 260dp: the bubble has to be centred over a pin and clamped inside
+  the viewport before it has laid out, and only a known width makes that arithmetic
+  possible. Height is left to the content, because Bulgarian tag labels wrap to a second
+  row where English does not — hence `FractionalTranslation(0, -1)` rather than a
+  hardcoded offset. It sits above the pin unless the pin is within `maxHeight` of the top
+  edge, in which case it flips below and its tail points up.
+
+  *Why not the native window:* it could render two lines of platform-styled text and
+  nothing else, and its `onTap` never fires for clustered markers
+  (flutter/flutter#159636) — so it already needed an invisible `GestureDetector` laid on
+  top of it just to be tappable.
+- **Bubble tracking.** The bubble is repositioned on `onCameraMove` by
+  `screenOffsetFromCamera` (`utils/map_projection.dart`), which reproduces the SDK's Web
+  Mercator placement in pure Dart, and reconciled on `onCameraIdle` against
+  `getScreenCoordinate` — the authoritative answer, and a method-channel round trip, so
+  it cannot run per frame without the bubble visibly trailing the map. The projection is
+  exact only for a flat map, which is why **`tiltGesturesEnabled` is `false`**; nothing
+  in the app tilts the camera, so that costs no behaviour. Anchors live in a
+  `ValueNotifier`, not in `setState`: `_buildScaffold` rebuilds the whole marker set, and
+  doing that sixty times a second during a pan is not affordable. Android returns
+  physical pixels from `ScreenCoordinate`, iOS logical — hence `_screenCoordToLogical`.
+- **Far-pin vanish (recurring bug, removed).** Tapping a distant pin still makes the SDK
+  recentre the camera on it — that is `GoogleMap`'s default marker-click behaviour, not
+  something the info window brought — and that pan still crosses the 30 km threshold,
+  re-queries, and rebuilds the marker set. What has gone is the last step: the recluster
+  used to tear the open native window down with it. A Flutter bubble is not the
+  ClusterManager's to remove, so it simply rides the pan (projected per frame, reconciled
+  on idle) and is still there when the markers come back. `_reassertSelectedInfoWindow`
+  and its 350 ms follow-up re-show are gone with the window. The only reconciliation left
+  is dismissing the bubble when its signal is missing from the rebuilt marker set.
+  **Should this ever regress, do not "fix" it by lowering the re-query threshold.**
+  Device-verified 2026-09-06 on **Android** (Galaxy Tab A8, light + dark, bg) and **iOS**
+  (iPad 6th gen, dark, en, profile build driven over WDA): a pin roughly 30 km off-centre
+  panned, re-queried and kept its bubble correctly anchored; pan-tracking, edge clamping
+  with the tail sliding to stay on the pin, flip-below at the top edge, tap-through to
+  details, restore on return and dismiss-on-map-tap all behave identically on both.
 - **Filters** (`map/filter_bottom_sheet.dart` + `MapFilterState`): signal types (7),
   urgencies (3), statuses (3), and a time range (24h / 7d / 30d / all time, default
   **30 days**). Type/urgency/status filter client-side; the time range is pushed into
@@ -1393,7 +1427,7 @@ anonymous session is re-established there and then, not at the next launch.
   two lines rather than one `Row` — in Bulgarian "Изчисти всички" ended up past the right
   edge, so the one control that undoes a filter could not be reached at all.
 - **Pending focus:** `SignalNavigator.pendingFocusSignalId` is consumed in
-  `MapPage.build`; the map animates to the pin at zoom 14 and opens its info window,
+  `MapPage.build`; the map animates to the pin at zoom 14 and opens its bubble,
   fetching the signal directly and force-recentering if it isn't in the current stream.
   On a cold launch the consuming post-frame callback runs **before** `onMapCreated`, so
   `_focusSignalOnMap` parks the id in `_deferredFocusSignalId` and `onMapCreated` replays
@@ -1499,8 +1533,8 @@ rather than failing with an opaque `PERMISSION_DENIED`.
    upload block ran — the photo was skipped, `addPhotoUrl` never ran, and the submit
    still reported full success. `×` is also disabled while submitting, the way Back and
    Next already were; either alone closes the race.
-5. On success the map opens the new signal's info window once it appears in the stream
-   (`_showSignalInfoWindow`, `fireImmediately` listener with a 10s safety timeout).
+5. On success the map opens the new signal's bubble once it appears in the stream
+   (`_openBubbleWhenSignalArrives`, `fireImmediately` listener with a 10s safety timeout).
 
 ### 7.5 Signal details (`signal_details_screen.dart`)
 

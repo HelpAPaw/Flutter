@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../l10n/app_localizations.dart';
 import 'help_tag.dart';
 import 'moderation_label.dart';
 import 'signal_event.dart';
@@ -290,4 +291,12 @@ class Signal {
   /// instead of collapsing to `rescue`. See [HelpTag.primaryOfSignal].
   HelpTag get primaryTag =>
       HelpTag.primaryOfSignal(helpNeededTags, legacySignalType);
+
+  /// What to call this signal in a list, a row or the map bubble.
+  ///
+  /// [title] is optional, and a blank line is not a name — an untitled signal
+  /// is named by what it needs. The rule lives here so the surfaces that show a
+  /// signal cannot each answer it differently.
+  String displayTitle(AppLocalizations l10n) =>
+      title.isNotEmpty ? title : primaryTag.neededLabel(l10n);
 }

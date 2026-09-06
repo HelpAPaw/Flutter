@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter/foundation.dart' show VoidCallback;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -492,6 +493,7 @@ class MapViewModel extends Notifier<MapScreenState> {
     required double zoomLevel,
     required BitmapDescriptor? hospitalPin,
     required void Function(String clinicId) onClinicTap,
+    required VoidCallback onClinicMarkerTap,
   }) async {
     state = state.copyWith(
       vetClinicState: state.vetClinicState.copyWith(isLoading: true),
@@ -507,6 +509,7 @@ class MapViewModel extends Notifier<MapScreenState> {
         clinics: clinics,
         hospitalPin: hospitalPin,
         onClinicTap: onClinicTap,
+        onClinicMarkerTap: onClinicMarkerTap,
       );
 
       state = state.copyWith(
@@ -582,6 +585,7 @@ class MapViewModel extends Notifier<MapScreenState> {
     required List<VetClinic> clinics,
     required BitmapDescriptor? hospitalPin,
     required void Function(String clinicId) onClinicTap,
+    required VoidCallback onClinicMarkerTap,
   }) {
     return clinics.map((clinic) {
       return Marker(
@@ -594,6 +598,12 @@ class MapViewModel extends Notifier<MapScreenState> {
           snippet: clinic.address,
           onTap: () => onClinicTap(clinic.id),
         ),
+        // Clinics keep their native InfoWindow, and the SDK consumes a tap on
+        // them rather than passing it to GoogleMap.onTap — so without this a
+        // clinic window would open on top of an already-open signal bubble.
+        // When both windows were native the SDK's one-at-a-time rule closed
+        // the signal's for us; now the map screen has to be told.
+        onTap: onClinicMarkerTap,
       );
     }).toSet();
   }

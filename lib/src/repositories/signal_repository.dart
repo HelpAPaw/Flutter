@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../models/help_tag.dart';
 import '../models/signal.dart';
 
 /// Result of creating a new signal
@@ -61,6 +62,16 @@ class SignalWithId {
   /// What this signal needs — [HelpTag.code] values. Empty for signals written
   /// before the field existed.
   List<String> get helpNeededTags => signal.helpNeededTags;
+
+  /// Headline of the report. May be empty — callers fall back to the primary
+  /// tag's "X needed" phrasing.
+  String get title => signal.title;
+
+  /// Uploaded photos, most-recent-first as stored. Empty is common.
+  List<String> get photoUrls => signal.photoUrls;
+
+  /// This signal's headline need. See [Signal.primaryTag].
+  HelpTag get primaryTag => signal.primaryTag;
 
   /// Which animal this is about, or null on pre-field signals.
   String? get animalType => signal.animalType;
