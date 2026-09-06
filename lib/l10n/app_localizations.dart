@@ -3392,6 +3392,12 @@ abstract class AppLocalizations {
   /// **'Restore'**
   String get moderationRestore;
 
+  /// Title of the sheet listing the signals inside a cluster bubble that max zoom cannot split
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 signal here} other{{count} signals here}}'**
+  String clusterSignalsHere(int count);
+
   /// No description provided for @mapLegend.
   ///
   /// In en, this message translates to:

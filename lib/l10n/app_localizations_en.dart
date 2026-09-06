@@ -1847,6 +1847,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get moderationRestore => 'Restore';
 
   @override
+  String clusterSignalsHere(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count signals here',
+      one: '1 signal here',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get mapLegend => 'What the pins mean';
 
   @override

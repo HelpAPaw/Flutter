@@ -1875,6 +1875,17 @@ class AppLocalizationsBg extends AppLocalizations {
   String get moderationRestore => 'Възстановяване';
 
   @override
+  String clusterSignalsHere(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count сигнала тук',
+      one: '1 сигнал тук',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get mapLegend => 'Какво означават маркерите';
 
   @override

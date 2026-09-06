@@ -4,6 +4,7 @@ import 'dart:io' show Platform;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:go_router/go_router.dart';
@@ -21,6 +22,7 @@ import '../utils/map_marker_builder.dart';
 import '../utils/map_projection.dart';
 import '../viewmodels/map_view_model.dart';
 import 'home_route_drawer.dart';
+import 'map/cluster_items_sheet.dart';
 import 'map/filter_bottom_sheet.dart';
 import 'map/map_legend_sheet.dart';
 import 'map/new_signal_location_bar.dart';
@@ -129,10 +131,68 @@ class _MapScreenState extends ConsumerState<MapScreen>
   );
   late final Set<ClusterManager> _clusterManagers = {_signalClusterManager};
 
+  /// Ground span below which zooming in cannot separate a cluster's members.
+  ///
+  /// The SDK merges markers within 100px of each other, which at max zoom (21)
+  /// is about 5.5 m at Sofia's latitude. Anything tighter than this stays one
+  /// bubble at every zoom, and identical coordinates — two reporters at the
+  /// same spot — never separate at all.
+  static const _kUnsplittableSpanMetres = 10.0;
+
+  /// Zoom past which a cluster tap has nowhere further to go. Google's maximum
+  /// is 21 in most places (lower where imagery is thin), so a camera already
+  /// at 20 is treated as arrived rather than asked to try again.
+  static const _kZoomedInToTheLimit = 20.0;
+
   void _onClusterTap(Cluster cluster) {
     // Dispatched by the GoogleMap widget, so the map exists by construction.
+    final signals = ref.read(signalsStreamProvider).value ?? const [];
+    final ids = cluster.markerIds.map((m) => m.value).toSet();
+    final members = signals.where((s) => ids.contains(s.id)).toList();
+    final zoom = _lastCamera?.zoom ?? _kInitialZoom;
+
+    // Zooming is the right response to a cluster that spreads out when you get
+    // closer. It is no response at all to one that does not: the camera lands
+    // at max zoom, the bubble is still a bubble, and every further tap is a
+    // no-op — the signals inside were unreachable from the map. So when the
+    // bounds are tighter than max zoom can resolve, or the camera is already
+    // there, list the members instead.
+    if (members.isNotEmpty &&
+        (_groundSpanMetres(cluster.bounds) < _kUnsplittableSpanMetres ||
+            zoom >= _kZoomedInToTheLimit)) {
+      _showClusterSignals(members);
+      return;
+    }
     _mapController!.animateCamera(
       CameraUpdate.newLatLngBounds(cluster.bounds, 50),
+    );
+  }
+
+  /// Diagonal of [bounds] on the ground, in metres.
+  static double _groundSpanMetres(LatLngBounds bounds) =>
+      Geolocator.distanceBetween(
+        bounds.southwest.latitude,
+        bounds.southwest.longitude,
+        bounds.northeast.latitude,
+        bounds.northeast.longitude,
+      );
+
+  void _showClusterSignals(List<SignalWithId> members) {
+    final l10n = AppLocalizations.of(context);
+    showClusterItemsSheet(
+      context: context,
+      title: l10n.clusterSignalsHere(members.length),
+      itemCount: members.length,
+      itemBuilder: (sheetContext, index) {
+        final signal = members[index];
+        return SignalClusterRow(
+          signal: signal,
+          onTap: () {
+            Navigator.of(sheetContext).pop();
+            context.push(Routes.signalDetails(signal.id));
+          },
+        );
+      },
     );
   }
 

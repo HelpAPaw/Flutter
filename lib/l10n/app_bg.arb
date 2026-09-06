@@ -666,6 +666,15 @@
   "moderationRestoreTitle": "Възстановяване на сигнала?",
   "moderationRestoreBody": "Сигналът се връща на картата за всички. Коментарите и историята му са запазени.",
   "moderationRestore": "Възстановяване",
+  "clusterSignalsHere": "{count, plural, =1{1 сигнал тук} other{{count} сигнала тук}}",
+  "@clusterSignalsHere": {
+    "description": "Title of the sheet listing the signals inside a cluster bubble that max zoom cannot split",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "mapLegend": "Какво означават маркерите",
   "mapLegendUrgencyNote": "Цветът на маркера показва спешността — колко сериозно става, ако никой не реагира. Критичните сигнали никога не се групират, така че остават видими при всяко приближение.",
   "mapLegendVetClinic": "Ветеринарна клиника",

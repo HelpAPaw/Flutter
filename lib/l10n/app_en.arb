@@ -860,6 +860,15 @@
   "moderationRestoreTitle": "Restore this signal?",
   "moderationRestoreBody": "It goes back on the map for everyone. Its comments and history are still there.",
   "moderationRestore": "Restore",
+  "clusterSignalsHere": "{count, plural, =1{1 signal here} other{{count} signals here}}",
+  "@clusterSignalsHere": {
+    "description": "Title of the sheet listing the signals inside a cluster bubble that max zoom cannot split",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "mapLegend": "What the pins mean",
   "mapLegendUrgencyNote": "Pin colour shows urgency — how serious it gets if nobody acts. Critical signals are never grouped into a cluster, so they stay visible at every zoom.",
   "mapLegendVetClinic": "Vet clinic",
