@@ -1404,7 +1404,7 @@ anonymous session is re-established there and then, not at the next launch.
   is dismissing the bubble when its signal is missing from the rebuilt marker set.
   **Should this ever regress, do not "fix" it by lowering the re-query threshold.**
   Device-verified 2026-09-06 on **Android** (Galaxy Tab A8, light + dark, bg) and **iOS**
-  (iPad 6th gen, dark, en, profile build driven over WDA): a pin roughly 30 km off-centre
+  (iPad 6th gen, light + dark, en, profile build driven over WDA): a pin roughly 30 km off-centre
   panned, re-queried and kept its bubble correctly anchored; pan-tracking, edge clamping
   with the tail sliding to stay on the pin, flip-below at the top edge, tap-through to
   details, restore on return and dismiss-on-map-tap all behave identically on both.

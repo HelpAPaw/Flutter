@@ -285,13 +285,14 @@
 - [ ] A signal with an **unrecognised** urgency code clusters (it falls back to amber, deliberately)
 **Signal bubble** (`SignalInfoCard` — replaced the native InfoWindow)
 > Automation note: the bubble is a Flutter widget with the semantic identifier **`signalInfoCard`**. Target it by element, not by hunting the old native window's cream RGB(255,243,219) — that surface no longer exists.
-> Verified 2026-09-06 on Android (Galaxy Tab A8, light + dark, bg) and iOS (iPad 6th gen, dark, en). Light mode on iOS and phone-width iOS are the gaps.
+> Verified 2026-09-06 on Android (Galaxy Tab A8, light + dark, bg) and iOS (iPad 6th gen, light + dark, en), including the clinic-tap dismiss below. Phone-width iOS is the remaining gap.
 - [ ] Tapping a marker opens a bubble showing the signal's **photo, title and needs pills**
 - [ ] A signal with **no photo** shows the primary-need icon on an urgency tint instead (not a blank or broken-image box)
 - [ ] A signal with **no title** shows its need instead ("Rescue needed"), not an empty line
 - [ ] A signal with **no tags** (pre-tags document) shows photo + title with no pills, and does not invent "Rescue"
 - [ ] Tapping anywhere on the bubble — including on a pill — navigates to Signal Details
 - [ ] Tapping the map dismisses the bubble
+- [ ] With the **vet clinic layer on**, tapping a clinic pin while a signal bubble is open opens the clinic's window **and dismisses the bubble** — the SDK consumes the tap, so `GoogleMap.onTap` never fires and the clinic marker's own `onTap` is what closes it
 - [ ] Returning from Signal Details leaves the bubble open and correctly positioned over its pin
 
 **Bubble tracking**
