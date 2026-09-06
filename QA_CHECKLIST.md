@@ -1830,7 +1830,7 @@
   - `test/theme_literal_guard_test.dart` — fails the build if a colour literal returns to `lib/`. Deliberate exceptions are marked `// theme-independent` with a reason.
   - `test/error_text_test.dart` — fails if an ARB string regains an `{error}` placeholder (a slot for an exception is an invitation to pass one), and covers the fall-through for a Firebase `unknown` wrapping a `SocketException`
   - `test/widgets/bulgarian_layout_test.dart` — pumps at **411dp in `bg`** and fails on an overflow, a chip wider than the screen, an off-screen "Clear all", or an app-bar title that truncates rather than scales
-- [ ] `test/map_clusterer_test.dart` and `test/map_marker_builder_test.dart` pass — the grid (identical points are one cluster, exclusion, stable ids) and **a bubble with a red member is red** (§2.2)
+- [ ] `test/map_clusterer_test.dart` and `test/map_marker_builder_test.dart` pass — the clusterer (identical points are one cluster, closeness is by distance not cell, exclusion, stable ids) and **a bubble with a red member is red** (§2.2)
 - [ ] `test/profile_validators_test.dart` passes — the name/phone rules the editor and the completion screen now share (§1.6)
 - [ ] `cd firestore-tests && npm ci && npm test` — Firestore **and** Storage rules suites pass, **including the new `events` cases**. Required before **every** rules deploy; device testing cannot validate undeployed rules because `help-a-paw-dev` is production.
 - [ ] `cd functions && npm ci && npm test` — covers `recipientSelection` tier ranking and the floor, the legacy headline shims (`displayTagsOf` / `signalHeadline`), the `events` encoder parity, and now `moderation`, `signalOwnership` and `removeSignal`. Every failure mode here is silent in production.

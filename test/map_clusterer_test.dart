@@ -45,13 +45,44 @@ void main() {
   });
 
   test('points far apart on screen stay singles', () {
-    // 2 km apart is ~24px at zoom 11 — well inside one 80px cell — but
+    // 2 km apart is ~24px at zoom 11 — inside the 60px merge distance — but
     // 3000px at zoom 18.
     final far = east(nedelya, 2000);
     expect(cluster([nedelya, far], zoom: 11).clusters, hasLength(1));
     final r = cluster([nedelya, far], zoom: 18);
     expect(r.clusters, isEmpty);
     expect(r.singles, unorderedEquals([nedelya, far]));
+  });
+
+  test('closeness is by distance, not by grid cell', () {
+    // At zoom 21 a 60px cell is ~3.3 m at this latitude. Walk a pair of points
+    // 1 m apart across a kilometre so they straddle many cell edges: every
+    // pair must still merge. A grid-only clusterer fails this at the edges.
+    for (var m = 0; m < 1000; m += 7) {
+      final a = east(nedelya, m.toDouble());
+      final b = east(nedelya, m + 1.0);
+      final r = cluster([a, b], zoom: 21);
+      expect(r.clusters, hasLength(1), reason: 'pair at ${m}m');
+    }
+  });
+
+  test('a point is grouped once, with the first seed that reaches it', () {
+    // Three in a row, each 40px from the next at zoom 21 (~2.2 m): the middle
+    // one is within range of both ends, but the ends are 80px apart. The
+    // first seed takes the middle; the far end is left a single, never
+    // double-counted.
+    const zoom = 21.0;
+    const metresPerPx = 4.4 / 80; // 80px ≈ 4.4 m at zoom 21, 42.7°N
+    final a = nedelya;
+    final b = east(nedelya, 40 * metresPerPx);
+    final c = east(nedelya, 80 * metresPerPx);
+    final r = cluster([a, b, c], zoom: zoom);
+    expect(r.clusters, hasLength(1));
+    expect(r.clusters.single.members, unorderedEquals([a, b]));
+    expect(r.singles, [c]);
+    final total = r.singles.length +
+        r.clusters.fold<int>(0, (n, cl) => n + cl.count);
+    expect(total, 3);
   });
 
   test('the bubble sits at the centroid with bounds around the members', () {
@@ -96,7 +127,7 @@ void main() {
     final k2 = cluster([nedelya, nedelya], zoom: 11.4).clusters.single.key;
     final k3 = cluster([nedelya, nedelya], zoom: 12.0).clusters.single.key;
     expect(k1, k2, reason: 'both round to zoom 11');
-    expect(k1, isNot(k3), reason: 'a different zoom is a different grid');
+    expect(k1, isNot(k3), reason: 'a different zoom is a different index');
     expect(k1, startsWith('11:'));
   });
 }
