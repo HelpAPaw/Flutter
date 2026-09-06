@@ -1331,15 +1331,33 @@ anonymous session is re-established there and then, not at the next launch.
   re-subscribes.
 - **Re-query threshold:** `updateMapCenter` ignores movement under **30 km** unless
   `force: true`. This keeps small pans from re-reading Firestore.
-- **Clustering:** a single `ClusterManager`; tapping a cluster animates to its bounds.
-  **A red signal is never clustered** (`MapMarkerBuilder.clusterOf`, unit-tested in
-  `test/map_clustering_test.dart`). A cluster bubble is drawn natively by the Maps SDK in
-  its own navy, and `ClusterManager` exposes no way to restyle it — the Dart `Cluster`
-  type carries an id and a tap callback and nothing else — so at the zoom the app opens
-  at, where nearly every signal sits inside a bubble, the map could not say that anything
-  on it was critical. Opting red out is the only lever Dart has. Amber and green still
-  cluster, which is what keeps a city readable. An **unknown** urgency code clusters,
-  because `fromCode` falls back to amber (§4.6).
+- **Clustering** is the app's own, not the SDK's (`utils/map_clusterer.dart`,
+  `utils/cluster_bubble_icons.dart`; the `ClusterManager` is gone). `clusterPoints` grids
+  the visible signals into 80px cells at the camera's rounded zoom — the same integer-zoom
+  scheme the SDK's `NonHierarchicalDistanceBasedAlgorithm` uses — and every cell holding
+  two or more becomes one bubble at their centroid. Bubbles are ordinary `Marker`s with a
+  `BitmapDescriptor.bytes` icon painted on a canvas and cached per (fill, label), label
+  saturating at "99+". **A bubble takes the colour of its most urgent member** — by
+  `SignalUrgency` declaration order, never by code — so a cluster holding one critical
+  signal is red at every zoom, exactly as its pin would be. Every urgency clusters, red
+  included; an **unknown** code follows its amber fallback (§4.6), so it can tint a bubble
+  "needs help" but never "fine". `MapMarkerBuilder.highestUrgency` and the clusterer are
+  unit-tested (`test/map_clusterer_test.dart`, `test/map_marker_builder_test.dart`).
+  Why it moved into Dart: the SDK's bubble was Google's navy and `ClusterManager` exposes
+  nothing to restyle it — the Dart type is an id and a tap callback, and neither platform
+  plugin overrides the bubble renderer — so at the opening zoom, where nearly every signal
+  sits in a bubble, the map could not say anything on it was critical (issue #76).
+  `_recluster` runs on every input change — stream emission, filter change, camera idle,
+  a bubble opening or closing, pins finishing loading — renders any missing bubble
+  bitmaps first, then publishes the marker set; the **selected signal is held out of
+  clustering** while its bubble is open, so the bubble's tail never points at a bubble.
+  Clusters form and split at camera *idle* only; mid-gesture the markers ride the map.
+- **Cluster tap:** zooms to the cluster's bounds — unless the bounds are tighter than
+  ~10 m on the ground or the camera is already at zoom 20, in which case it opens a
+  bottom sheet listing the members (`map/cluster_items_sheet.dart`), each row opening its
+  signal. Max zoom resolves about 5 m at Sofia's latitude, and identical coordinates never
+  separate at any zoom; before the sheet, a cluster of co-located signals (two reporters at
+  the same spot) zoomed to 21 and stayed a bubble, with no way to open anything inside it.
 - **Dark map style** (`map/map_style_builder.dart`, `assets/map_style_dark.json`): the map
   is the one surface `ThemeData` cannot reach — Google renders its own tiles, so a dark
   app kept a daylight city inside it. `MapStyleBuilder` reads the style JSON off the
@@ -2948,7 +2966,7 @@ advisories across 559 package versions, 804/804 registry signatures verified.
 
 | Suite | Location | Covers |
 |---|---|---|
-| Unit/widget | `test/` | `MapViewModel`, `NotificationPreferences`, deep-link parsing, repository mocks, the wizard, the urgency picker, the update-note dialog, the helper-tag gate, `MapFilterState`, `mergeSignalHistory`, the signal-owner derivation, `ModerationTarget` decoding, the signal-details state machine, the `syncTestMode` write-avoidance cache, the profile validators, and red's opt-out from clustering (`map_clustering_test.dart`) |
+| Unit/widget | `test/` | `MapViewModel`, `NotificationPreferences`, deep-link parsing, repository mocks, the wizard, the urgency picker, the update-note dialog, the helper-tag gate, `MapFilterState`, `mergeSignalHistory`, the signal-owner derivation, `ModerationTarget` decoding, the signal-details state machine, the `syncTestMode` write-avoidance cache, the profile validators, the grid clusterer and the urgency a cluster bubble takes (`map_clusterer_test.dart`, `map_marker_builder_test.dart`) |
 | Presentation guards | `test/theme_*`, `test/error_text_test.dart`, `test/widgets/bulgarian_layout_test.dart` | The three regressions nobody testing in English, in light mode, on a happy path would see (§12.14–16): `theme_contrast_test` checks every surface/ink relationship in **both** brightnesses and pins the one measured exception; `theme_literal_guard_test` fails the build if a colour literal returns to `lib/`; `error_text_test` fails it if an ARB string regains an `{error}` placeholder, and covers the fall-through for a Firebase `unknown` wrapping a `SocketException`; `bulgarian_layout_test` pumps at 411dp in `bg` |
 | Vocabulary guards | `test/*_guard_test.dart` | The ×2 copies that fail silently (§12): help tags + the retired-type table (parses `tags.ts`), signal-event types + the note cap and the deliberate absence of `ownership_transfer` (parses `firestore.rules`), moderation labels and report statuses (parse `moderation.ts`), the takeover cooldown and staleness clocks (parse the rules and `signalOwnership.ts`), the removal retention window (parses `removeSignal.ts`), urgency derivation, and the ban on assigning Firestore `Settings` |
 | Functions unit | `functions/src/__tests__/` (jest) | `recipientSelection` ranking and the floor, `displayTagsOf`/`signalHeadline` legacy headlines, the `events` encoder parity, `moderation` (including the source-reading self-moderation guard coverage), `signalOwnership` (the owner derivation and each transactional action) and `removeSignal`. Every failure mode here is silent (too few recipients looks like a quiet day, too many looks like spam) |
@@ -3078,7 +3096,8 @@ silently breaks Auth/Firestore/FCM in release builds only.
 | Moderator actions are not notified to the affected user | Open — master spec §18.7 says users are told when a behaviour flag is added. Nothing writes an inbox entry for a hide/lock/label yet |
 | White on brand orange is 2.16:1 | **Accepted, and asserted at its measured value** rather than skipped (§7.17.1). It is every app bar title and every filled button, it predates this work, and it is a brand decision. The dark theme puts black on the same orange for 9.74:1 and is held to the real 4.5. Fixing it means changing the app bar, not the test |
 | Tablets get a capped column, not a tablet layout | By design for now (§7.17.3) — `PageWidth` stops a phone layout being stretched across 800dp; a real list/detail split would use the space instead |
-| Only red opts out of clustering | Accepted limitation of `ClusterManager`, which gives Dart no way to restyle the native bubble (§7.3). An amber signal inside a cluster still shows as navy |
+| Cluster bubbles re-form only at camera idle, without animation | Accepted (§7.3). The SDK animated its merge/split; Dart clustering snaps when the gesture ends. The trade was for bubbles that can carry urgency at all |
+| Two signals on either side of a grid-cell edge do not merge | Accepted (§7.3) — a near-miss draws two pins a few pixels apart instead of a bubble. The SDK's integer-zoom algorithm had the equivalent edge |
 | Dark mode has never had a full device QA pass | Open — it was wired up and the map style was device-verified on the Android 14 tablet, but the first release carrying `themeMode` reaches users who have had their OS in dark mode all along. Every screen is first contact |
 
 ---

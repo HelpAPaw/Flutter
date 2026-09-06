@@ -3407,8 +3407,14 @@ abstract class AppLocalizations {
   /// No description provided for @mapLegendUrgencyNote.
   ///
   /// In en, this message translates to:
-  /// **'Pin colour shows urgency — how serious it gets if nobody acts. Critical signals are never grouped into a cluster, so they stay visible at every zoom.'**
+  /// **'Pin colour shows urgency — how serious it gets if nobody acts. Signals close together are grouped into a bubble, which takes the colour of the most urgent one inside it. Tap a bubble to zoom in, or to list what is in it when they are too close to separate.'**
   String get mapLegendUrgencyNote;
+
+  /// No description provided for @mapLegendCluster.
+  ///
+  /// In en, this message translates to:
+  /// **'Several signals; the number is how many'**
+  String get mapLegendCluster;
 
   /// No description provided for @mapLegendVetClinic.
   ///

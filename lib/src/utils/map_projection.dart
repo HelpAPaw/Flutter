@@ -6,7 +6,12 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 const double _kTileSize = 256.0;
 
 /// Mercator world coordinates at zoom 0, in the SDK's 256px tile space.
-Offset _worldPoint(LatLng position) {
+///
+/// Scale by `2^zoom` for pixels at a zoom level — the 256 is already applied.
+/// Shared with the clusterer, which grids signals in exactly the pixel space
+/// the SDK draws them in, so a cluster cell is a fixed number of screen pixels
+/// at every zoom.
+Offset worldPoint(LatLng position) {
   final x = (position.longitude + 180.0) / 360.0 * _kTileSize;
   // Clamped short of the poles: the log below diverges at ±90°, and Mercator
   // has no pixel to offer there anyway.
@@ -55,7 +60,7 @@ Offset? screenOffsetFromCamera({
   if (camera.tilt != 0) return null;
 
   final scale = math.pow(2.0, camera.zoom).toDouble();
-  final world = _worldPoint(point) - _worldPoint(camera.target);
+  final world = worldPoint(point) - worldPoint(camera.target);
   var dx = world.dx * scale;
   final dy = world.dy * scale;
 

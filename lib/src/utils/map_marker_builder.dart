@@ -4,6 +4,8 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../models/signal_urgency.dart';
 import '../repositories/signal_repository.dart';
+import 'cluster_bubble_icons.dart';
+import 'map_clusterer.dart';
 
 /// Utility for loading map pins and building signal markers
 class MapMarkerBuilder {
@@ -58,7 +60,8 @@ class MapMarkerBuilder {
       _urgencyPins[SignalUrgency.fromCode(urgency).code] ??
       BitmapDescriptor.defaultMarker;
 
-  /// Build a set of markers from a list of signals.
+  /// Build the signal layer's markers: one pin per single, one bubble per
+  /// cluster.
   ///
   /// Markers carry **no [InfoWindow]**. The bubble is `SignalInfoCard`, a
   /// Flutter widget the map screen positions over the pin — the native window
@@ -66,47 +69,75 @@ class MapMarkerBuilder {
   /// clustered markers (flutter/flutter#159636). [Marker.onTap] does fire, and
   /// is what opens the bubble.
   ///
-  /// Dropping the native window also removed a bug rather than moving it. A
-  /// marker tap still recentres the camera — that is the SDK's default, not the
-  /// window's doing — so a distant pin still crosses the map's 30km re-query
-  /// threshold and rebuilds the marker set. But Android's asynchronous
-  /// reclustering used to tear the open native window down with it, and a
-  /// Flutter bubble is not the ClusterManager's to remove.
+  /// Clustering is the app's own ([clusterPoints]) rather than the SDK's,
+  /// because the SDK's bubble could not be restyled and so could not say
+  /// anything about urgency. Here a bubble takes the colour of its **most
+  /// urgent member**: a cluster holding one critical signal is red at every
+  /// zoom, exactly as its pin would be. Its bitmap must already be in
+  /// [bubbleIcons] — the screen calls `ensure` before building — and a cluster
+  /// whose bitmap is somehow missing is left off the map for this frame
+  /// rather than drawn as a default pin pretending to be one signal.
   Set<Marker> buildSignalMarkers({
-    required List<SignalWithId> signals,
-    required bool Function(SignalWithId signal) filterPredicate,
+    required ClusterResult<SignalWithId> clustered,
+    required ClusterBubbleIcons bubbleIcons,
     required void Function(SignalWithId signal) onMarkerTap,
-    ClusterManagerId? clusterManagerId,
+    required void Function(MapCluster<SignalWithId> cluster) onClusterTap,
   }) {
-    return signals.where((signal) {
-      return filterPredicate(signal);
-    }).map((signal) {
+    final markers = <Marker>{};
+    for (final signal in clustered.singles) {
       final GeoPoint location = signal.location;
-
-      return Marker(
+      markers.add(Marker(
         markerId: MarkerId(signal.id),
         position: LatLng(location.latitude, location.longitude),
         icon: getSignalPin(signal.urgency),
-        clusterManagerId: clusterOf(signal.urgency, clusterManagerId),
         onTap: () => onMarkerTap(signal),
-      );
-    }).toSet();
+      ));
+    }
+    for (final cluster in clustered.clusters) {
+      final icon = bubbleIcons.get(bubbleKeyFor(cluster));
+      if (icon == null) continue;
+      markers.add(Marker(
+        markerId: MarkerId('$clusterMarkerIdPrefix${cluster.key}'),
+        position: cluster.position,
+        icon: icon,
+        // A bubble is centred on its centroid; a pin's tip is its point.
+        anchor: const Offset(0.5, 0.5),
+        // The SDK recentres the camera on any marker it handles the tap for.
+        // The cluster handler animates the camera itself (or opens a sheet),
+        // so let it have the tap outright rather than fight a second animation.
+        consumeTapEvents: true,
+        // Above the pins: a bubble is a summary of what is under it.
+        zIndexInt: 1,
+        onTap: () => onClusterTap(cluster),
+      ));
+    }
+    return markers;
   }
 
-  /// Which cluster a signal's marker joins — or `null`, meaning "stay a pin".
+  /// Marker ids of cluster bubbles start with this, so the screen can tell a
+  /// bubble from a signal pin in the marker set without parsing signal ids.
+  static const clusterMarkerIdPrefix = 'signal-cluster:';
+
+  /// The bubble a signal cluster is drawn with: the colour of its most urgent
+  /// member, and its count.
   ///
-  /// Clustering hides urgency. A cluster bubble is drawn natively by the Maps
-  /// SDK in its own colour, and `ClusterManager` exposes no way to restyle it
-  /// (the Dart type carries an id and a tap callback, nothing else), so at the
-  /// zoom the app opens at — where nearly every signal is inside a bubble —
-  /// the map cannot say that anything on it is critical.
-  ///
-  /// [SignalUrgency.red] therefore opts out. A signal where an animal may die
-  /// if nobody moves now is always its own red pin, at every zoom, and the
-  /// count on the neighbouring bubble is one lower. That is the whole point of
-  /// the colour: a screen of red pins has to mean "these animals may die".
-  ///
-  /// Green and amber still cluster, which is what keeps a busy city readable.
-  static ClusterManagerId? clusterOf(int urgency, ClusterManagerId? id) =>
-      SignalUrgency.fromCode(urgency) == SignalUrgency.red ? null : id;
+  /// "Most urgent" is by [SignalUrgency] declaration order — least to most —
+  /// never by code, which is an opaque identifier (see [SignalUrgency.code]).
+  static ClusterBubbleKey bubbleKeyFor(MapCluster<SignalWithId> cluster) =>
+      ClusterBubbleKey.count(
+        fill: highestUrgency(cluster.members.map((s) => s.urgency)).color,
+        count: cluster.count,
+      );
+
+  /// The most urgent of [urgencyCodes], by declaration order. Unknown codes
+  /// take their [SignalUrgency.fromCode] fallback (amber), so a signal from a
+  /// newer build tints its bubble as "needs help", never as "fine".
+  static SignalUrgency highestUrgency(Iterable<int> urgencyCodes) {
+    var highest = SignalUrgency.values.first;
+    for (final code in urgencyCodes) {
+      final urgency = SignalUrgency.fromCode(code);
+      if (urgency.index > highest.index) highest = urgency;
+    }
+    return highest;
+  }
 }
