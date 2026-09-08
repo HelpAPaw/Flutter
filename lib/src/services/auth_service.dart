@@ -112,6 +112,43 @@ class AuthService {
     }
   }
 
+  /// Mirror the signed-in user's avatar to their world-readable profile.
+  ///
+  /// **Separate from [adoptProviderDisplayName], and not folded into it**, for
+  /// a reason that is easy to get backwards: name adoption returns early when
+  /// the Auth record already has a name, and a fresh Google sign-in *always*
+  /// does — Firebase copies the provider's name onto the record at credential
+  /// sign-in. Mirroring the photo from inside that method would therefore run
+  /// for almost nobody, and new Google accounts — the population this is for —
+  /// would never get a public avatar at all.
+  ///
+  /// Firebase Auth's `photoURL` is readable only by its owner, so until this
+  /// runs an avatar exists but nobody else can see it.
+  ///
+  /// Called on every launch and every sign-in, so it is gated on a local
+  /// write-avoidance cache: the steady state costs nothing, and a changed
+  /// provider photo costs one write. Best-effort — never fails a sign-in.
+  static Future<void> mirrorProviderPhoto(User? user) async {
+    if (user == null || user.isAnonymous) return;
+    final url = user.photoURL;
+    if (url == null || url.isEmpty) return;
+
+    final prefs = AppPreferencesService();
+    if (prefs.isPhotoMirroredFor(user.uid, url)) return;
+
+    try {
+      // Time-boxed for the same reason the name is: callers await this on the
+      // interactive sign-in path, and an avatar is not worth holding a tap for.
+      await PublicProfileService.setPhotoUrl(user.uid, url)
+          .timeout(const Duration(seconds: 10));
+      await prefs.setPhotoMirrored(user.uid, url);
+      debugPrint('Mirrored provider photo to publicProfiles');
+    } catch (e) {
+      // Not recorded as mirrored, so the next launch tries again.
+      debugPrint('Could not mirror provider photo: $e');
+    }
+  }
+
   /// How long to wait for the anonymous session the app runs on. The default
   /// suits callers holding up a tap the user just made; `main()` passes a
   /// longer one, since at launch there is nothing else to be getting on with.

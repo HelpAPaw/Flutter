@@ -335,11 +335,49 @@ service cloud.firestore {
     // non-control characters containing at least one that isn't a space", so it
     // also rejects "" and whitespace-only names, which would render as a blank
     // author and read as a deleted/unknown user.
+    //
+    // **Absent passes.** The document carries two independently written client
+    // fields now, and `PublicProfileService.setPhotoUrl` merge-writes only the
+    // avatar — on an account whose profile does not exist yet, that is a
+    // *create* holding no name at all. Requiring one here would make the order
+    // of two unrelated mirror-writes decide whether either succeeds. The write
+    // still has to carry something: see `hasAny` at the create/update rules.
     function isValidProfileName() {
-      return request.resource.data.name is string
-             && request.resource.data.name.size() <= 100
-             && request.resource.data.name
-                  .matches('[^\\x00-\\x1f]*[^\\x00-\\x20][^\\x00-\\x1f]*');
+      return !('name' in request.resource.data)
+             || (request.resource.data.name is string
+                 && request.resource.data.name.size() <= 100
+                 && request.resource.data.name
+                      .matches('[^\\x00-\\x1f]*[^\\x00-\\x20][^\\x00-\\x1f]*'));
+    }
+
+    // Validates the avatar URL on a publicProfiles write.
+    //
+    // **Host-restricted, not "any https URL", and that is the whole point of
+    // the function.** This value is handed to an image loader on every other
+    // user's device wherever the profile is shown, so an unrestricted field
+    // would let one user aim every viewer's phone at a URL of their choosing —
+    // an IP/user-agent log at minimum, an arbitrarily large download at worst.
+    //
+    // The two branches are the only two places an avatar can actually come
+    // from: the app's own Storage bucket (`profile_page.dart` uploads to
+    // `profile_photos/{uid}.jpg` and mirrors the download URL) and a Google
+    // account photo adopted at sign-in. The Storage branch is pinned to the
+    // caller's OWN uid, so it cannot be used to point at someone else's avatar
+    // and pass it off as theirs. The Google branch cannot be pinned to anything
+    // — the path carries an opaque account id — and does not need to be: every
+    // URL on that host is a Google-hosted image, which is the property being
+    // bought here.
+    //
+    // Absent passes, for the same reason as the name: a name-only write must
+    // not have to restate the avatar.
+    function isValidProfilePhotoUrl(userId) {
+      return !('photoUrl' in request.resource.data)
+             || (request.resource.data.photoUrl is string
+                 && request.resource.data.photoUrl.size() <= 500
+                 && request.resource.data.photoUrl.matches(
+                      'https://firebasestorage\\.googleapis\\.com/v0/b/[a-zA-Z0-9._-]+/o/profile_photos%2F'
+                      + userId + '\\.jpg\\?.*'
+                      + '|https://lh3\\.googleusercontent\\.com/[^ ]*'));
     }
 
     // The SIGNAL OWNER's coordination powers (master spec 4.5, 4.2, 5.2): the
@@ -588,10 +626,11 @@ service cloud.firestore {
                    && request.resource.data.unread >= 0;
     }
 
-    // Public profiles - just the display name, readable by any signed-in user
-    // (incl. anonymous) so reporter/comment-author names resolve for everyone.
-    // Writable only by the owner. On account deletion this is overwritten with
-    // "Deleted user" so erasure propagates to all signals/comments dynamically.
+    // Public profiles - the display name and avatar, readable by any signed-in
+    // user (incl. anonymous) so reporter/comment-author names and pictures
+    // resolve for everyone. Writable only by the owner. On account deletion
+    // this is overwritten with "Deleted user" so erasure propagates to all
+    // signals/comments dynamically.
     match /publicProfiles/{userId} {
       // Single-document reads only (L-2). The app resolves names one uid at a
       // time (PublicProfileService.getName), so denying `list` costs it nothing
@@ -599,21 +638,32 @@ service cloud.firestore {
       // widen this back to `read` — that grants `list` again.
       allow get: if request.auth != null;
       allow list: if false;
-      // The only field the app ever writes here is `name`. `deleted`/`deletedAt`
-      // are tombstone fields written by deleteAccount through the Admin SDK,
-      // which bypasses rules — so restricting the caller to `name` costs
-      // nothing and stops a user clearing their own "Deleted user" tombstone.
+      // The only fields the app ever writes here are `name` and `photoUrl`.
+      // `deleted`/`deletedAt` are tombstone fields, and `signalsPosted` a
+      // server-owned counter, both written through the Admin SDK, which
+      // bypasses rules — so restricting the caller to these two costs nothing,
+      // stops a user clearing their own "Deleted user" tombstone, and is the
+      // entire security of `signalsPosted`: a stat its subject cannot set.
+      // **Do not add a field to this allow-list without checking whether some
+      // server-written value beside it was relying on being excluded.**
+      //
+      // `hasAny` because each field is optional and validated only when present
+      // (the two mirror-writes are independent), which would otherwise let an
+      // empty document be created.
       allow create: if request.auth != null
                     && request.auth.uid == userId
-                    && request.resource.data.keys().hasOnly(['name'])
-                    && isValidProfileName();
+                    && request.resource.data.keys().hasOnly(['name', 'photoUrl'])
+                    && request.resource.data.keys().hasAny(['name', 'photoUrl'])
+                    && isValidProfileName()
+                    && isValidProfilePhotoUrl(userId);
       // Diff-based (not `keys()`) so a name edit on a doc that already carries
       // the tombstone fields isn't rejected for merely containing them.
       allow update: if request.auth != null
                     && request.auth.uid == userId
                     && request.resource.data.diff(resource.data)
-                         .affectedKeys().hasOnly(['name'])
-                    && isValidProfileName();
+                         .affectedKeys().hasOnly(['name', 'photoUrl'])
+                    && isValidProfileName()
+                    && isValidProfilePhotoUrl(userId);
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 

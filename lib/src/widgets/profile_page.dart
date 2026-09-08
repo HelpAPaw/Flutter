@@ -5,9 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
-import 'package:help_a_paw/src/services/app_preferences_service.dart';
 import 'package:help_a_paw/src/services/auth_service.dart';
 import 'package:help_a_paw/src/services/public_profile_service.dart';
+import 'package:help_a_paw/src/services/user_stats_service.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
@@ -18,6 +18,7 @@ import 'app_bar_title.dart';
 import 'escape_leading.dart';
 import '../utils/error_text.dart';
 import 'page_width.dart';
+import 'stat_card.dart';
 import '../utils/profile_validators.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -39,8 +40,7 @@ class _ProfilePageState extends State<ProfilePage> {
   String _savedPhone = '';
 
   bool _isLoading = false;
-  int _signalsCount = 0;
-  int _commentsCount = 0;
+  UserStats? _stats;
 
   @override
   void initState() {
@@ -124,30 +124,21 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  /// Load the same three numbers the public profile shows, through the same
+  /// service.
+  ///
+  /// Shared rather than reimplemented here: two copies of "signals reported" is
+  /// how your own profile and everyone else's view of it end up disagreeing
+  /// about what the figure counts. What each number means, and where each one
+  /// is under- or over-counted, is documented on [UserStatsService].
   Future<void> _loadStatistics() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final userRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
-
     try {
-      // Two independent reads, so they overlap rather than queue. They used to
-      // be sequential awaits, which made the stats block wait out two round
-      // trips to show one row of numbers.
-      final results = await Future.wait([
-        _loadSignalsPosted(user.uid, userRef),
-        FirebaseFirestore.instance
-            .collectionGroup('comments')
-            .where('author', isEqualTo: userRef)
-            .count()
-            .get()
-            .then((snapshot) => snapshot.count ?? 0),
-      ]);
-
-      setState(() {
-        _signalsCount = results[0];
-        _commentsCount = results[1];
-      });
+      final stats = await UserStatsService.forUser(user.uid);
+      if (!mounted) return;
+      setState(() => _stats = stats);
     } catch (e, stack) {
       if (mounted) {
         final l10n = AppLocalizations.of(context);
@@ -159,47 +150,6 @@ class _ProfilePageState extends State<ProfilePage> {
         );
       }
     }
-  }
-
-  /// How many signals this account has reported (master spec §3.5.1).
-  ///
-  /// **A stored counter, not a query.** This used to be a live `count()` over
-  /// `signals` filtered by reporter, which quietly measured something else:
-  /// signals still *visible*. Every way a signal can leave that collection took
-  /// the credit with it — the reporter removing it (#68), a moderator hiding
-  /// it, and the ~6-month archive of §4.10 when it lands. §3.5.1 requires the
-  /// opposite: "these stats remain even when old cases are deleted or
-  /// archived". `handleSignalCreated` increments the counter once, at the
-  /// moment of reporting, and nothing decrements it.
-  ///
-  /// It lives on `publicProfiles/{uid}` because the rules there already limit
-  /// the client to the `name` field alone, so a server-written counter beside
-  /// it cannot be forged. `userCounters` was the obvious alternative and is
-  /// exactly wrong: that document *is* client-writable by design.
-  ///
-  /// **The fallback is the migration.** An account with no `signalsPosted`
-  /// predates the counter, so it falls back to the old live count rather than
-  /// showing a proud zero to someone who has reported for years. Drop the
-  /// fallback once the backfill has run everywhere — and note it under-reports
-  /// for exactly the accounts this change is meant to help, since a signal they
-  /// already removed is no longer there to count.
-  Future<int> _loadSignalsPosted(
-    String uid,
-    DocumentReference<Map<String, dynamic>> userRef,
-  ) async {
-    final profile = await FirebaseFirestore.instance
-        .collection('publicProfiles')
-        .doc(uid)
-        .get();
-    final stored = profile.data()?['signalsPosted'];
-    if (stored is int) return stored;
-
-    final legacy = await FirebaseFirestore.instance
-        .collection(AppPreferencesService().signalsCollectionName)
-        .where('reporter', isEqualTo: userRef)
-        .count()
-        .get();
-    return legacy.count ?? 0;
   }
 
   Future<void> _updateProfile() async {
@@ -290,6 +240,12 @@ class _ProfilePageState extends State<ProfilePage> {
       final photoUrl = await ref.getDownloadURL();
 
       await user.updatePhotoURL(photoUrl);
+
+      // Mirror it to the world-readable public profile. Auth's `photoURL` is
+      // readable only by its owner, so without this the new avatar would be
+      // visible to nobody but the person who just chose it.
+      await PublicProfileService.setPhotoUrl(user.uid, photoUrl);
+
       await user.reload();
 
       if (mounted) {
@@ -496,21 +452,30 @@ class _ProfilePageState extends State<ProfilePage> {
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                     const SizedBox(height: 32),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _StatCard(
-                          icon: Icons.pin_drop,
-                          value: _signalsCount.toString(),
-                          label: l10n.signals,
-                        ),
-                        _StatCard(
-                          icon: Icons.comment,
-                          value: _commentsCount.toString(),
-                          label: l10n.comments,
-                        ),
-                      ],
-                    ),
+                    // Absent until the aggregations land, rather than three
+                    // zeros that then jump: a zero is a real answer here, so
+                    // showing one we do not have yet is a lie about this
+                    // person's contribution.
+                    if (_stats case final stats?)
+                      StatCardRow(
+                        cards: [
+                          StatCard(
+                            icon: Icons.pin_drop,
+                            value: stats.signalsPosted.toString(),
+                            label: l10n.signals,
+                          ),
+                          StatCard(
+                            icon: Icons.volunteer_activism,
+                            value: stats.signalsOwned.toString(),
+                            label: l10n.helpingNow,
+                          ),
+                          StatCard(
+                            icon: Icons.comment,
+                            value: stats.commentsPosted.toString(),
+                            label: l10n.comments,
+                          ),
+                        ],
+                      ),
                     const SizedBox(height: 32),
                     const Divider(),
                     ListTile(
@@ -570,41 +535,6 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
               ),
             )),
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final IconData icon;
-  final String value;
-  final String label;
-
-  const _StatCard({
-    required this.icon,
-    required this.value,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-        child: Column(
-          children: [
-            Icon(icon, size: 32, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

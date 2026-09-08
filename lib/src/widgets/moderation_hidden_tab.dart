@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:intl/intl.dart';
 
@@ -8,6 +9,8 @@ import '../services/app_preferences_service.dart';
 import '../services/callable_client.dart';
 import '../services/moderation_service.dart';
 import '../services/public_profile_service.dart';
+import '../config/routes.dart';
+import 'user_name_link.dart';
 
 /// The signals a moderator has hidden, and the way to put one back
 /// (master spec §18.3 — hiding is "temporarily", which requires reversibility).
@@ -61,6 +64,17 @@ class _ModerationHiddenTabState extends State<ModerationHiddenTab> {
   /// moderators, so this is a couple of reads per refresh, not one per row.
   Map<String, String> _hiddenByNames = const {};
 
+  /// The same names, one already-completed future per uid, for [UserNameLink].
+  ///
+  /// Memoized rather than a fresh `Future.value` per build: a `FutureBuilder`
+  /// handed a new future renders nothing on the frame it is given it, so
+  /// rebuilding this row — which every refresh and every restore does — would
+  /// blink the whole line out and back.
+  ///
+  /// Cleared with [_hiddenByNames] in [_refresh], so a re-resolved name is
+  /// never masked by the previous load's answer.
+  final Map<String, Future<String?>> _hiddenByNameFutures = {};
+
   /// The collection this moderator is looking at, fixed for the tab's life so a
   /// refresh cannot silently switch which quarantine is listed.
   final String _collection = AppPreferencesService().signalsCollectionName;
@@ -87,6 +101,7 @@ class _ModerationHiddenTabState extends State<ModerationHiddenTab> {
       setState(() {
         _hidden = items;
         _hiddenByNames = names;
+        _hiddenByNameFutures.clear();
         _loading = false;
         _failed = false;
       });
@@ -123,6 +138,41 @@ class _ModerationHiddenTabState extends State<ModerationHiddenTab> {
       for (final entry in entries)
         if (entry.value != null) entry.key: entry.value!,
     };
+  }
+
+  /// `<when> · Hidden by <moderator>`, with the moderator's name opening their
+  /// profile.
+  ///
+  /// One line rather than a date widget beside a name widget: they are a single
+  /// sentence, and splitting them would put the separator on the screen before
+  /// the half it separates whenever the name lookup had not landed.
+  Widget _hiddenByLine(
+    BuildContext context,
+    QuarantinedSignal signal,
+    DateTime? hiddenAt,
+    AppLocalizations l10n,
+  ) {
+    final style = Theme.of(context).textTheme.bodySmall;
+    final when = hiddenAt == null
+        ? null
+        : DateFormat.yMd(Localizations.localeOf(context).languageCode)
+            .add_jm()
+            .format(hiddenAt);
+
+    if (signal.hiddenBy.isEmpty) return Text(when ?? '', style: style);
+
+    return UserNameLink(
+      uid: signal.hiddenBy,
+      name: _hiddenByNameFutures[signal.hiddenBy] ??=
+          Future.value(_hiddenByNames[signal.hiddenBy]),
+      sentence: (name) => [
+        if (when != null) when,
+        l10n.moderationHiddenBy(name),
+      ].join(' · '),
+      fallback: l10n.unknown,
+      onTap: (uid) => context.push(Routes.userProfile(uid)),
+      style: style,
+    );
   }
 
   Future<void> _confirmRestore(QuarantinedSignal signal) async {
@@ -259,19 +309,7 @@ class _ModerationHiddenTabState extends State<ModerationHiddenTab> {
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            [
-              if (hiddenAt != null)
-                DateFormat.yMd(Localizations.localeOf(context).languageCode)
-                    .add_jm()
-                    .format(hiddenAt),
-              if (signal.hiddenBy.isNotEmpty)
-                l10n.moderationHiddenBy(
-                  _hiddenByNames[signal.hiddenBy] ?? l10n.unknown,
-                ),
-            ].join(' · '),
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
+          _hiddenByLine(context, signal, hiddenAt, l10n),
           if (signal.note.isNotEmpty)
             Text(signal.note, maxLines: 2, overflow: TextOverflow.ellipsis),
         ],

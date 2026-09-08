@@ -29,6 +29,14 @@ class Routes {
   /// and reads its draft out of `mapViewModelProvider`.
   static const newSignal = '/new_signal';
 
+  /// Somebody else's public profile (master spec §3.5.1) — name, avatar and
+  /// contribution stats.
+  ///
+  /// **Your own uid never reaches the screen**: the route redirects to
+  /// [profile], the editable version. Done there rather than at each tap site
+  /// so a link to yourself behaves the same wherever it came from.
+  static const userProfilePath = '/user/:uid';
+
   static const signalDetailsPath = '/signal_details/:signalId';
   static const editSignalPath = '/edit_signal/:signalId';
   static const clinicDetailsPath = '/clinic_details/:clinicId';
@@ -50,6 +58,8 @@ class Routes {
   /// Prefix of [signalDetailsPath], for testing whether a location is already
   /// on a signal.
   static const signalDetailsPrefix = '/signal_details/';
+
+  static String userProfile(String uid) => '/user/$uid';
 
   static String signalDetails(String signalId) => '$signalDetailsPrefix$signalId';
   static String editSignal(String signalId) => '/edit_signal/$signalId';

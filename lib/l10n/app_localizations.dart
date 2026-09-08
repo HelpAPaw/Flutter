@@ -1691,8 +1691,26 @@ abstract class AppLocalizations {
   /// No description provided for @errorLoadingStatistics.
   ///
   /// In en, this message translates to:
-  /// **'Could not load your statistics.'**
+  /// **'Could not load the statistics.'**
   String get errorLoadingStatistics;
+
+  /// No description provided for @helpingNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Helping now'**
+  String get helpingNow;
+
+  /// No description provided for @errorLoadingProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load this profile.'**
+  String get errorLoadingProfile;
+
+  /// No description provided for @viewProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'View profile'**
+  String get viewProfile;
 
   /// No description provided for @saveChanges.
   ///

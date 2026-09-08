@@ -901,7 +901,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'Could not upload your photo. Please try again.';
 
   @override
-  String get errorLoadingStatistics => 'Could not load your statistics.';
+  String get errorLoadingStatistics => 'Could not load the statistics.';
+
+  @override
+  String get helpingNow => 'Helping now';
+
+  @override
+  String get errorLoadingProfile => 'Could not load this profile.';
+
+  @override
+  String get viewProfile => 'View profile';
 
   @override
   String get saveChanges => 'Save Changes';

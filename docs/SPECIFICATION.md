@@ -348,14 +348,31 @@ the `onUserTokensWritten` trigger. Written from Dart *and* from native Android/i
 Deleted when the user turns tracking off, on account deletion, and by the anonymous
 cleanup job.
 
-#### `publicProfiles/{uid}` — world-readable display name and contribution stats
+#### `publicProfiles/{uid}` — world-readable display name, avatar and contribution stats
 
-`{ name: string (1–100, no control chars), signalsPosted?: int, deleted?: bool,
-deletedAt?: Timestamp }`
+`{ name?: string (1–100, no control chars), photoUrl?: string (≤500, allow-listed host),
+signalsPosted?: int, deleted?: bool, deletedAt?: Timestamp }`
 
-The only user data any viewer can read. Resolves reporter and comment-author names.
+The only user data any viewer can read. Resolves reporter and comment-author names and
+avatars, and backs the public profile screen (§7.x, `user_profile_page.dart`).
 Overwritten with `"Deleted user"` on account deletion so erasure propagates everywhere
 dynamically. `list` is denied so the user base can't be enumerated.
+
+**`photoUrl` is host-restricted, and that restriction is the point of the field.** It is
+handed to an image loader on every other viewer's device, so an unrestricted URL would
+let one user aim every viewer's phone at a resource of their choosing. `firestore.rules`
+accepts exactly two shapes: a Firebase Storage download URL under
+`profile_photos%2F{the caller's own uid}.jpg`, and any `lh3.googleusercontent.com` URL
+(a Google account photo, whose path carries an opaque account id and cannot be pinned).
+Firebase Auth's `photoURL` is readable only by its owner, which is why a copy has to
+live here at all; `AuthService.mirrorProviderPhoto` writes it on sign-in and launch
+(gated by a local write-avoidance cache, the same shape as `syncTestMode`'s), the profile
+screen writes it on upload, and `functions/scripts/backfill_public_photo_urls.js` fills
+it in for the existing installed base.
+
+**Both client fields are optional and validated only when present**, because the name and
+the avatar are written by two independent merge-writes; a create must carry at least one
+of them (`hasAny`).
 
 **`signalsPosted` is server-owned, and this document is why it lives here.** The rules
 already restrict the client to `name` alone — `keys().hasOnly(['name'])` on create,
@@ -1321,8 +1338,45 @@ linked provider's name, else the email local part) so the user never renders as
 `Routes.authRoutes` entry off the stack, falling back to `/home`.
 
 **Profile** (`profile_page.dart`): edit display name (mirrored to `publicProfiles`) and
-phone, upload an avatar to `profile_photos/{uid}.jpg`, view signal/comment counts
-(`count()` aggregations), resend verification, and **delete account**.
+phone, upload an avatar to `profile_photos/{uid}.jpg` (also mirrored), view the three
+contribution stats, resend verification, and **delete account**.
+
+**Public profile** (`user_profile_page.dart`, route `/user/:uid`): the read-only view of
+somebody else. Avatar, display name and the same three stats. It shows only what is
+already world-readable — email, phone and "member since" live on the owner-only
+`users/{uid}` document and the Auth record, and are deliberately absent, so this screen
+never becomes a reason to widen either. **Your own uid never reaches it**: the route
+redirects to `/profile`, done in the router rather than at each tap site so a link to
+yourself behaves the same however it was reached.
+
+**Reaching it.** `UserNameLink` (`user_name_link.dart`) renders a resolved display name
+inside a sentence and makes the line tappable. Every other-user name on the signal screen
+goes through `_actorText`, which is now this widget — the reporter line, every timeline
+row's actor, the ownership hand-over sentence, and (through the `nameOf` adapter) the
+owner row and pending offers in `SignalOwnerBlock` — plus the "hidden by" line in the
+moderation tab. The *name* is coloured and underlined (`colorScheme.secondary`, the same
+treatment `LinkifiedText` gives a URL); the *whole line* is the tap target, because the
+name alone is a sub-48dp target on a dense meta line. The name's position inside the
+sentence comes from building it around a NUL sentinel, not from searching for the name in
+the result — a name can be a substring of the words around it, and the localized
+templates place it wherever the translation wants.
+
+**Stats** (`user_stats_service.dart`, shared by both screens so the numbers cannot
+disagree). Three, and each one is a different kind of number:
+
+| Stat | Source | Caveat |
+|---|---|---|
+| Signals reported | `publicProfiles.signalsPosted`, live `count()` fallback | see above |
+| Helping now | `count()` on `signalOwner == user && status in openCodes` | under-counts signals created before ownership existed, whose `signalOwner` is *absent* and means the reporter — Firestore cannot query for an absent field, and the gap only shrinks |
+| Comments posted | `collectionGroup('comments').where('author')` `count()` | over-counts accounts old enough to have written `status_change` system comments before events were split out of `comments` (§4.6) |
+
+"Helping now" is a **live query, deliberately**, unlike the other two: they are past
+contributions and must survive the signal disappearing, while this one is a present
+commitment that has to fall to zero when the signals resolve. A stored counter would need
+four decrement paths (resolve, removal, moderator hide, the §4.10 archive) against one
+increment, and drifting upward would claim somebody was sitting on nine open cases when
+they had none. It needs a `signalOwner ASC, status ASC` composite index on both signal
+collections.
 
 **Account deletion:** `AuthService.deleteAccount()` calls the `deleteAccount` callable
 over plain HTTPS (see §7.14 for why), then signs out. Server-side (§9) it strips phone

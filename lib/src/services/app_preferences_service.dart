@@ -14,6 +14,8 @@ class AppPreferencesService {
   static const String _deferredLinkCheckedKey = 'deferred_link_checked';
   static const String _testModeSyncedUidKey = 'test_mode_synced_uid';
   static const String _testModeSyncedValueKey = 'test_mode_synced_value';
+  static const String _photoMirroredUidKey = 'public_photo_mirrored_uid';
+  static const String _photoMirroredUrlKey = 'public_photo_mirrored_url';
 
   /// Initialize SharedPreferences - must be called before using any other
   /// methods.
@@ -114,6 +116,26 @@ class AppPreferencesService {
   Future<void> setTestModeSynced(String uid, bool testMode) async {
     await _prefs?.setString(_testModeSyncedUidKey, uid);
     await _prefs?.setBool(_testModeSyncedValueKey, testMode);
+  }
+
+  /// Whether [url] has already been mirrored to [uid]'s public profile.
+  ///
+  /// The same write-avoidance shape as [isTestModeSyncedFor], for the same
+  /// reason: `AuthService.mirrorProviderPhoto` runs on every launch and every
+  /// sign-in, and without this every launch would cost a Firestore write per
+  /// user to re-state an avatar that had not changed.
+  ///
+  /// Safe to lose (a reinstall re-mirrors once) and safe to keep (a different
+  /// account, or a provider photo that has changed, stops matching).
+  bool isPhotoMirroredFor(String uid, String url) {
+    return _prefs?.getString(_photoMirroredUidKey) == uid &&
+        _prefs?.getString(_photoMirroredUrlKey) == url;
+  }
+
+  /// Record that [uid]'s public profile now carries [url].
+  Future<void> setPhotoMirrored(String uid, String url) async {
+    await _prefs?.setString(_photoMirroredUidKey, uid);
+    await _prefs?.setString(_photoMirroredUrlKey, url);
   }
 
   /// Returns the Firestore collection name based on test mode state

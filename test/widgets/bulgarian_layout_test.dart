@@ -6,6 +6,7 @@ import 'package:help_a_paw/src/models/signal_urgency.dart';
 import 'package:help_a_paw/src/widgets/app_bar_title.dart';
 import 'package:help_a_paw/src/widgets/level_chip.dart';
 import 'package:help_a_paw/src/widgets/mention_suggestions.dart';
+import 'package:help_a_paw/src/widgets/stat_card.dart';
 import 'package:help_a_paw/src/widgets/urgency_picker.dart';
 
 /// Bulgarian is the app's primary language and its strings are 40–70% longer
@@ -196,6 +197,46 @@ void main() {
 
       expectNoOverflow(tester);
       expect(tester.getSize(find.byType(MentionSuggestions)), Size.zero);
+    });
+  });
+
+  group('StatCardRow', () {
+    testWidgets('three profile stats fit a 411dp phone in Bulgarian',
+        (tester) async {
+      // The profile went from two stat cards to three when it started showing
+      // "Помага сега" beside "Сигнали" and "Коментари". Content-sized cards
+      // (the old `spaceEvenly` row) overflow at that width in Bulgarian and
+      // fit in English, which is exactly the failure this file exists for.
+      await pumpAt411dp(
+        tester,
+        Builder(
+          builder: (context) {
+            final l10n = AppLocalizations.of(context);
+            return Scaffold(
+              body: Padding(
+                padding: const EdgeInsets.all(24),
+                child: StatCardRow(
+                  cards: [
+                    StatCard(
+                        icon: Icons.pin_drop, value: '128', label: l10n.signals),
+                    StatCard(
+                        icon: Icons.volunteer_activism,
+                        value: '12',
+                        label: l10n.helpingNow),
+                    StatCard(
+                        icon: Icons.comment,
+                        value: '1024',
+                        label: l10n.comments),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      );
+
+      expectNoOverflow(tester);
+      expect(find.byType(StatCard), findsNWidgets(3));
     });
   });
 
