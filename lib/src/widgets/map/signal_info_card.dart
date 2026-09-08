@@ -7,21 +7,12 @@ import '../../models/signal_urgency.dart';
 import '../../repositories/signal_repository.dart';
 import '../help_tag_pill.dart';
 import '../urgency_tag_avatar.dart';
+import 'map_bubble.dart';
 
-/// The bubble that opens above a signal's pin on the map.
+/// The bubble that opens on a signal's pin: photo, title, and what it needs.
 ///
-/// Replaces the native Maps `InfoWindow`, which could render two lines of
-/// platform-styled text and nothing else — no photo, no needs, no brand. It is
-/// a plain Flutter widget positioned over the map, which also means it takes
-/// its own taps: native `InfoWindow.onTap` never fired for clustered markers
-/// (flutter/flutter#159636), so the old window needed an invisible
-/// [GestureDetector] laid on top of it just to be tappable.
-///
-/// The width is **fixed**, not content-sized. The caller has to clamp the
-/// bubble inside the viewport and centre it over a pin before it has laid out,
-/// and a known width is what makes that arithmetic possible; only the height
-/// is left to the content, because Bulgarian needs-labels wrap to a second row
-/// and English usually does not.
+/// The shell — surface, pointer, fixed width, tap target — is [MapBubble],
+/// shared with the vet-clinic bubble.
 class SignalInfoCard extends StatelessWidget {
   const SignalInfoCard({
     super.key,
@@ -30,12 +21,6 @@ class SignalInfoCard extends StatelessWidget {
     this.tailDown = true,
     this.tailAlignment = 0.0,
   });
-
-  /// Fixed bubble width, in logical pixels. See the class doc.
-  static const double width = 260.0;
-
-  /// Height of the pointer triangle below (or above) the bubble.
-  static const double tailHeight = 8.0;
 
   /// The part of the bubble's height that does not grow with the text: the
   /// 64px thumbnail, the padding around it and the tail.
@@ -61,21 +46,12 @@ class SignalInfoCard extends StatelessWidget {
 
   final SignalWithId signal;
   final VoidCallback onTap;
-
-  /// Whether the pointer sits under the bubble (bubble above the pin) or over
-  /// it (bubble below the pin, for pins near the top edge).
   final bool tailDown;
-
-  /// Where along the bubble's width the pointer sits, as an [Alignment] x from
-  /// -1 (left edge) to 1 (right). Normally 0, because the bubble is centred on
-  /// its pin — but a bubble clamped against the side of the screen is not, and
-  /// a pointer left in the middle of it would be pointing at nothing.
   final double tailAlignment;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final scheme = Theme.of(context).colorScheme;
     final urgency = SignalUrgency.fromCode(signal.urgency);
     // Unknown codes are dropped: one means the signal came from a newer build,
     // and there is no label for it here. Same rule as SignalStateCard, so the
@@ -83,76 +59,51 @@ class SignalInfoCard extends StatelessWidget {
     final tags = HelpTag.fromCodes(signal.helpNeededTags);
     final title = signal.signal.displayTitle(l10n);
 
-    final tail = Align(
-      alignment: Alignment(tailAlignment, 0),
-      child: CustomPaint(
-        size: const Size(16, tailHeight),
-        painter: _TailPainter(tailDown: tailDown, color: scheme.surface),
-      ),
-    );
-
-    return SizedBox(
-      width: width,
-      child: Semantics(
-        identifier: 'signalInfoCard',
-        label: title,
-        button: true,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (!tailDown) tail,
-            Material(
-              color: scheme.surface,
-              elevation: 6,
-              borderRadius: BorderRadius.circular(16),
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                onTap: onTap,
-                child: Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _Thumbnail(signal: signal, urgency: urgency),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              title,
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.titleSmall,
-                            ),
-                          ),
-                        ],
-                      ),
-                      // Across the full card rather than beside the photo: a
-                      // Bulgarian need is a two-word phrase, and in the column
-                      // left over next to a 64px thumbnail all three stack one
-                      // per row, leaving the card tall and half empty.
-                      if (tags.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 4,
-                          children: [
-                            for (final tag in tags)
-                              HelpTagPill(
-                                  icon: tag.icon, label: tag.label(l10n)),
-                          ],
-                        ),
-                      ],
-                    ],
-                  ),
+    return MapBubble(
+      semanticIdentifier: 'signalInfoCard',
+      semanticLabel: title,
+      onTap: onTap,
+      tailDown: tailDown,
+      tailAlignment: tailAlignment,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _Thumbnail(signal: signal, urgency: urgency),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall,
                 ),
               ),
+            ],
+          ),
+          // Across the full card rather than beside the photo: a Bulgarian need
+          // is a two-word phrase, and in the column left over next to a 64px
+          // thumbnail all three stack one per row, leaving the card tall and
+          // half empty.
+          if (tags.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                for (final tag in tags)
+                  HelpTagPill(
+                    icon: tag.icon,
+                    label: tag.label(l10n),
+                    emphasis: true,
+                  ),
+              ],
             ),
-            if (tailDown) tail,
           ],
-        ),
+        ],
       ),
     );
   }
@@ -202,30 +153,4 @@ class _Thumbnail extends StatelessWidget {
         tag: signal.primaryTag,
         size: _size,
       );
-}
-
-/// The pointer that ties the bubble to its pin.
-class _TailPainter extends CustomPainter {
-  const _TailPainter({required this.tailDown, required this.color});
-
-  final bool tailDown;
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    // The tail is a triangle from one edge of the box to a point on the other:
-    // which edge is the base is the only thing the flip changes.
-    final base = tailDown ? 0.0 : size.height;
-    final tip = size.height - base;
-    final path = Path()
-      ..moveTo(0, base)
-      ..lineTo(size.width, base)
-      ..lineTo(size.width / 2, tip)
-      ..close();
-    canvas.drawPath(path, Paint()..color = color);
-  }
-
-  @override
-  bool shouldRepaint(_TailPainter oldDelegate) =>
-      oldDelegate.tailDown != tailDown || oldDelegate.color != color;
 }

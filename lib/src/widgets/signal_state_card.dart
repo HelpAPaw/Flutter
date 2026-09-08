@@ -154,7 +154,11 @@ class SignalStateCard extends StatelessWidget {
                             runSpacing: 4,
                             children: [
                               for (final tag in tags)
-                                HelpTagPill(icon: tag.icon, label: tag.label(l10n)),
+                                HelpTagPill(
+                                  icon: tag.icon,
+                                  label: tag.label(l10n),
+                                  emphasis: true,
+                                ),
                             ],
                           ),
                         ),

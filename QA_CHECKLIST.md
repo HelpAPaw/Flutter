@@ -292,7 +292,17 @@
 - [ ] A signal with **no tags** (pre-tags document) shows photo + title with no pills, and does not invent "Rescue"
 - [ ] Tapping anywhere on the bubble — including on a pill — navigates to Signal Details
 - [ ] Tapping the map dismisses the bubble
-- [ ] With the **vet clinic layer on**, tapping a clinic pin while a signal bubble is open opens the clinic's window **and dismisses the bubble** — the SDK consumes the tap, so `GoogleMap.onTap` never fires and the clinic marker's own `onTap` is what closes it
+- [ ] Needs pills are **filled with the brand tonal colour** and legible in *both* themes (not a solid orange, which fails contrast in light mode)
+- [ ] On the details screen the **species** tag stays neutral while the needs pills are filled — the ask is emphasised, the description is not
+
+**Vet clinic bubbles**
+> Clinics open the same bubble as signals; neither carries a native InfoWindow any more.
+- [ ] With the **vet clinic layer on**, tapping a clinic pin opens a clinic bubble in the same style as a signal's — clinic pin icon, name, address
+- [ ] The clinic bubble's icon is the **blue clinic pin**, matching the marker it hangs off
+- [ ] Opening a clinic bubble closes an open signal bubble, and vice versa — never two at once
+- [ ] The clinic bubble sits **on** its pin, not floating above it (clinic pins are shorter than signal pins)
+- [ ] Tapping the clinic bubble opens that clinic's details; returning leaves the bubble in place
+- [ ] The **"Loading clinics…"** indicator is a themed surface in dark mode, not a white card
 - [ ] Returning from Signal Details leaves the bubble open and correctly positioned over its pin
 
 **Bubble tracking**

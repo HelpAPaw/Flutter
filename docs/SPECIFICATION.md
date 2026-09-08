@@ -1363,14 +1363,37 @@ anonymous session is re-established there and then, not at the next launch.
   half-screen sheet clipped the last row by 43px in Bulgarian at 411dp — and therefore
   `useSafeArea: true`, because that mode lets the sheet reach the top of the screen and
   `ModalBottomSheetRoute` strips the top padding the sheet's own `SafeArea` would need.
-- **Signal bubble** (`map/signal_info_card.dart`). Tapping a pin opens a Flutter-drawn
-  card — 64×64 photo, title, and one pill per `helpNeededTags` entry — positioned over
-  the map by `MapScreen`. Markers carry **no native `InfoWindow`**. Signals reported
+- **Map bubbles** (`map/map_bubble.dart`). **No marker on this map carries a native
+  `InfoWindow`** — signals and vet clinics both open a Flutter-drawn card positioned by
+  `MapScreen`. `MapBubble` is the shared shell (surface, pointer, fixed width, tap
+  target); `SignalInfoCard` and `ClinicInfoCard` supply the content. Two window styles on
+  one map read as two different apps, which is what it looked like while clinics still had
+  the platform's.
+
+  A clinic bubble shows the **clinic pin asset itself**, not a themed icon: the map
+  teaches blue = clinic, and a brand-orange badge on a bubble hanging off a blue pin said
+  the two were unrelated. Drawn from the same asset the marker uses, the way
+  `map_legend_sheet.dart` builds its rows, so bubble and pin cannot drift. Clinic pins are
+  24px against a signal pin's 29px, so the bubble's vertical offset is **per marker
+  type** — offsetting both by the taller one leaves the clinic bubble floating clear of
+  its pin. Exactly one bubble is open at a time; opening either closes the other.
+
+- **Signal bubble** (`map/signal_info_card.dart`). A 64×64 photo, the title, and one pill
+  per `helpNeededTags` entry. Signals reported
   without a photo (most of them) get an `UrgencyTagAvatar` instead — the primary tag's icon
   on an urgency tint, shared with the My Signals row so the same signal looks like itself
   in both places. An untitled signal is named by `Signal.displayTitle`, the one place that
-  rule lives. Tag pills are `HelpTagPill`, shared with `SignalStateCard` so the bubble and
-  the details screen cannot drift.
+  rule lives.
+
+  Tag pills are `HelpTagPill`, shared with `SignalStateCard` so the bubble and the details
+  screen cannot drift. Needs are drawn with `emphasis: true` — the brand's **tonal**
+  container, not `primary` itself. A solid `#FF9800` pill cannot work in both themes: the
+  best ink on it manages 2.16:1 on a light ground (see `app_colors.dart`), so it is legible
+  in dark mode and not in light. The container pair is 10.38:1 and 8.66:1, so it is both
+  the louder and the more legible option. It also has to stay clear of the map's own colour
+  language, where saturated orange means amber urgency — the container tone is far enough
+  from the pin hue not to be read as a severity. Species tags stay neutral: they describe
+  the animal, they are not the ask.
 
   Width is **fixed** at 260dp: the bubble has to be centred over a pin and clamped inside
   the viewport before it has laid out, and only a known width makes that arithmetic
@@ -2005,7 +2028,7 @@ Toolbar hospital icon toggles clinic markers. `VetClinicService` calls the
 `searchVetClinics` callable with the map centre and a zoom-derived radius
 (`20000 / 2^zoom`, clamped 1–100 km). Results accumulate in a session map keyed by Place
 ID so overlapping searches don't duplicate. Panning >2 km or zooming >2 levels (1s
-debounce) surfaces a "Search this area" button. Tapping a clinic's info window opens
+debounce) surfaces a "Search this area" button. Tapping a clinic's bubble opens
 `/clinic_details/:id`, which lazily fetches enterprise-tier fields (phone, rating,
 opening hours, Maps URI) through `getVetClinicDetails`, and offers navigate / call /
 open-in-Google-Maps.
