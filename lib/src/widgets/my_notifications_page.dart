@@ -62,6 +62,9 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
         return Icons.pin_drop;
       case 'new_comment':
         return Icons.comment;
+      // A mention is a comment that named you: the same conversation, addressed.
+      case 'mention':
+        return Icons.alternate_email;
       case 'status_change':
         return Icons.info;
       case 'urgency_change':
@@ -118,8 +121,8 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
       case 'urgency_change':
         return SignalUrgency.fromCode(data['urgency'] as int? ?? -1).color;
 
-      // Comments, status changes and everything about signal ownership are
-      // progress, not severity.
+      // Comments (mentions included), status changes and everything about signal
+      // ownership are progress, not severity.
       default:
         return neutral;
     }
@@ -146,6 +149,14 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
             : l10n.notificationUrgencyChangeTitle;
       case 'new_comment':
         return l10n.notificationNewCommentTitle(signalTitle);
+      // The author's name is resolved server-side, once, for the same reason as
+      // `newOwnerName` below. It is absent for an author with no public profile,
+      // and "Someone mentioned you" is still the sentence worth reading.
+      case 'mention':
+        return l10n.notificationMentionTitle(
+          data['mentionedByName'] as String? ?? l10n.someone,
+          signalTitle,
+        );
       case 'nearby_signal':
         return l10n.signalNearbyNotificationTitle;
       // A transfer and a release are one server type, told apart by whether
@@ -208,6 +219,7 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
           SignalUrgency.fromCode(urgency).label(l10n),
         );
       case 'new_comment':
+      case 'mention':
         return data['commentExcerpt'] as String? ?? fallback;
       // `newOwnerName` is resolved server-side, once, rather than re-read per
       // reader: a name is not a translatable string, and the alternative is a

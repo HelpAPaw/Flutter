@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:help_a_paw/src/models/comment_mention.dart';
 import 'package:help_a_paw/src/utils/link_parser.dart';
 
 /// The parser is the security boundary for tappable text: whatever it returns a
@@ -234,6 +235,74 @@ void main() {
       sw.stop();
       expect(sw.elapsedMilliseconds, lessThan(500),
           reason: 'six 2000-char adversarial inputs took ${sw.elapsed}');
+    });
+  });
+
+  /// @-mentions (§7.5). The array is written by another device, so the rules
+  /// here are all about what happens when it is *wrong* — the comment must still
+  /// render, exactly as typed.
+  group('mentions', () {
+    test('slices the named runs out and leaves the rest to the link sweep', () {
+      final tokens = parseLinks(
+        'Thanks @Ivan Petrov, see example.com',
+        mentions: const [CommentMention(uid: 'ivan-uid', start: 7, end: 19)],
+      );
+
+      expect(tokens.whereType<MentionToken>().map((t) => t.text), ['@Ivan Petrov']);
+      expect(tokens.whereType<MentionToken>().single.uid, 'ivan-uid');
+      expect(
+        tokens.whereType<LinkToken>().map((t) => t.uri.toString()),
+        ['https://example.com'],
+      );
+    });
+
+    // The reason mentions are sliced FIRST: a display name can end in something
+    // the bare-domain branch is happy to call a host, and half of somebody's
+    // name must never become a live link.
+    test('a name the link regex would have matched stays a mention', () {
+      final tokens = parseLinks(
+        'ask @Vet.co about it',
+        mentions: const [CommentMention(uid: 'vet-uid', start: 4, end: 11)],
+      );
+
+      expect(tokens.whereType<LinkToken>(), isEmpty);
+      expect(tokens.whereType<MentionToken>().single.text, '@Vet.co');
+    });
+
+    test('the tokens still reproduce the input exactly', () {
+      const text = '@Ana and @Boris met at www.example.com';
+      final tokens = parseLinks(
+        text,
+        mentions: const [
+          CommentMention(uid: 'ana', start: 0, end: 4),
+          CommentMention(uid: 'boris', start: 9, end: 15),
+        ],
+      );
+      expect(tokens.map((t) => t.text).join(), text);
+    });
+
+    test('an out-of-bounds or out-of-order range is skipped, not thrown on', () {
+      const text = 'hello @Ana';
+      expect(
+        parseLinks(text, mentions: const [
+          CommentMention(uid: 'x', start: 6, end: 99),
+        ]).map((t) => t.text).join(),
+        text,
+      );
+      expect(
+        parseLinks(text, mentions: const [
+          CommentMention(uid: 'b', start: 6, end: 10),
+          CommentMention(uid: 'a', start: 0, end: 5),
+        ]).whereType<MentionToken>().map((t) => t.uid),
+        ['b'],
+      );
+    });
+
+    test('no mentions leaves the existing behaviour untouched', () {
+      expect(
+        parseLinks('see example.com').whereType<MentionToken>(),
+        isEmpty,
+      );
     });
   });
 }

@@ -1419,6 +1419,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String notificationMentionTitle(String name, String signalTitle) {
+    return '$name mentioned you on: $signalTitle';
+  }
+
+  @override
   String get completeYourProfile => 'Complete Your Profile';
 
   @override

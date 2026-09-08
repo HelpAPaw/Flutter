@@ -322,6 +322,46 @@ for (const coll of ['signals', 'signals_test']) {
       );
     });
 
+    it('accepts a comment with a bounded mentions array, and one with none', async () => {
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+      await assertSucceeds(
+        addDoc(collection(db, commentsPath), commentDoc(db, OTHER)),
+      );
+      await assertSucceeds(
+        addDoc(
+          collection(db, commentsPath),
+          commentDoc(db, OTHER, {
+            text: 'Thanks @Ivan Petrov',
+            mentions: [{ uid: REPORTER, start: 7, end: 19 }],
+          }),
+        ),
+      );
+    });
+
+    // The count is the only thing the rules can say about this field — they
+    // cannot iterate a list — so it is the only thing worth pinning here. Entry
+    // shape is the server's problem, and a forged entry reaches nobody.
+    it('rejects more than ten mentions, and a mentions field that is not a list', async () => {
+      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const eleven = Array.from({ length: 11 }, (_, i) => ({
+        uid: REPORTER,
+        start: i,
+        end: i + 1,
+      }));
+      await assertFails(
+        addDoc(collection(db, commentsPath), commentDoc(db, OTHER, { mentions: eleven })),
+      );
+      await assertSucceeds(
+        addDoc(
+          collection(db, commentsPath),
+          commentDoc(db, OTHER, { mentions: eleven.slice(0, 10) }),
+        ),
+      );
+      await assertFails(
+        addDoc(collection(db, commentsPath), commentDoc(db, OTHER, { mentions: 'nope' })),
+      );
+    });
+
     // The regression that matters most: status_change comments carry no `text`,
     // so an unconditional text check would break every status update.
     it('accepts a text-less status_change system comment', async () => {

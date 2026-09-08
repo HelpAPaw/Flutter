@@ -23,10 +23,14 @@ import '../services/navigation_service.dart';
 import '../utils/nav_extensions.dart';
 import 'escape_leading.dart';
 import 'linkified_text.dart';
+import 'mention_suggestions.dart';
+import 'mention_text_controller.dart';
 import 'level_badge.dart';
 
+import '../models/comment_mention.dart';
 import '../models/signal_event.dart';
 import '../models/signal.dart';
+import '../models/signal_participants.dart';
 import '../models/signal_doc_state.dart';
 import '../models/signal_status.dart';
 import '../models/help_tag.dart';
@@ -127,7 +131,20 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   final Map<String, Future<String?>> _nameFutures = {};
   // uids whose lookup has already been given a second chance — see _nameFor.
   final Set<String> _nameRetried = {};
-  final TextEditingController _newCommentController = TextEditingController();
+  // Resolved names, kept beside the futures because the mention list needs an
+  // answer *synchronously* while building. A FutureBuilder per row can await;
+  // a roster being filtered on every keystroke cannot.
+  final Map<String, String> _names = {};
+  // uids the mention roster has already asked for. Without it every rebuild
+  // would attach another completion callback to the same memoized future.
+  final Set<String> _namePrimed = {};
+  final MentionTextEditingController _newCommentController =
+      MentionTextEditingController();
+  /// Focus for the composer, held only so the mention list can hide with the
+  /// keyboard. Without it a half-typed `@iv` keeps its suggestions on screen
+  /// over the thread after the field is dismissed — the caret is still in the
+  /// text, so the query is still open.
+  final FocusNode _composerFocus = FocusNode();
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _imagePicker = ImagePicker();
   bool _isUploadingPhoto = false;
@@ -933,6 +950,38 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                     ),
                   ),
                 ),
+                // The mention list, in the same column and for the same
+                // reason as the composer below it: an overlay would have to
+                // place itself against a field that moves with the keyboard.
+                //
+                // A ValueListenableBuilder rather than a listener that calls
+                // setState — this rebuilds on every keystroke, and the rest of
+                // this screen (a photo gallery and a whole history list) must
+                // not.
+                if (!signal.commentsLocked)
+                  ListenableBuilder(
+                    listenable: Listenable.merge(
+                        [_newCommentController, _composerFocus]),
+                    builder: (context, _) {
+                      final active = _newCommentController.activeQuery;
+                      if (active == null || !_composerFocus.hasFocus) {
+                        return const SizedBox.shrink();
+                      }
+                      return PageWidth(
+                        child: MentionSuggestions(
+                          candidates: _matchingCandidates(
+                            _mentionCandidates(signal),
+                            active.query,
+                          ),
+                          onSelected: (candidate) =>
+                              _newCommentController.insertMention(
+                            uid: candidate.uid,
+                            name: candidate.name,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 // A sibling of the scroll view, not a `Positioned` over it: as
                 // an overlay, with no bottom padding underneath, it permanently
                 // hid the last ~90px of the page — and more at larger text
@@ -982,6 +1031,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                 Expanded(
                                   child: TextField(
                                     controller: _newCommentController,
+                                    focusNode: _composerFocus,
                                     textCapitalization: TextCapitalization.sentences,
                                     // Matches the rules' 2000-char cap, so
                                     // over-long input is stopped at the keyboard
@@ -1510,7 +1560,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       icon: Icons.chat_bubble_outline,
       iconBackground: Theme.of(context).colorScheme.surfaceContainerHigh,
       iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
-      sentence: LinkifiedText(entry.text ?? ''),
+      sentence: LinkifiedText(entry.text ?? '', mentions: entry.mentions),
       actorId: entry.actorId,
       date: _formatDate(entry, dateFormat),
       isLast: isLast,
@@ -1663,6 +1713,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     _photoPageController.dispose();
     _scrollController.dispose();
     _newCommentController.dispose();
+    _composerFocus.dispose();
     super.dispose();
   }
 
@@ -1672,14 +1723,34 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     // The rules reject an empty `text`, so a whitespace-only comment would come
     // back as an opaque PERMISSION_DENIED. Drop it here instead — sending blank
     // comments was never meaningful anyway.
-    final text = _newCommentController.text.trim();
+    final raw = _newCommentController.text;
+    final text = raw.trim();
     if (text.isEmpty) return;
+
+    // The offsets are recorded against the untrimmed text, so leading
+    // whitespace has to be taken off them too — otherwise every mention in a
+    // comment that began with a space is one character out, and the highlight
+    // lands on the character before the `@`.
+    final shift = raw.length - raw.trimLeft().length;
+    final mentions = [
+      for (final mention in _newCommentController.mentions)
+        if (mention.start >= shift && mention.end - shift <= text.length)
+          CommentMention(
+            uid: mention.uid,
+            start: mention.start - shift,
+            end: mention.end - shift,
+          ),
+    ];
 
     try {
       await _signalRef.collection('comments').add({
         'text': text,
         'createdAt': DateTime.now(),
         'author': FirebaseFirestore.instance.collection('users').doc(userId),
+        // Omitted entirely when there are none, so an ordinary comment keeps
+        // exactly the shape every released build writes today.
+        if (mentions.isNotEmpty)
+          'mentions': [for (final mention in mentions) mention.toJson()],
       });
 
       await _subscribeToSignal(userId);
@@ -1713,6 +1784,68 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     }
   }
 
+  /// Everyone this comment box may mention, named and sorted.
+  ///
+  /// Built from data already on screen — the signal document plus the two
+  /// history streams — so the roster costs no query, no index and no read (see
+  /// `signalParticipantUids`). Recomputed per build rather than cached: it is a
+  /// set union over a list this screen is already holding, and a cache would
+  /// have to be invalidated from three places that can each change it.
+  ///
+  /// Anyone whose `publicProfiles` name has not resolved is left out. That is
+  /// the deliberate half: `@Unknown` is not a mention, and an account with no
+  /// public name is a known and non-trivial population (SPECIFICATION §14).
+  List<MentionCandidate> _mentionCandidates(Signal signal) {
+    final uids = signalParticipantUids(
+      signal: signal,
+      history: [
+        ...?_comments.entries,
+        ...?_events.entries,
+      ],
+      excluding: FirebaseAuth.instance.currentUser?.uid,
+    );
+    _primeMentionNames(uids);
+
+    final candidates = <MentionCandidate>[
+      for (final uid in uids)
+        if (_names[uid] case final name?) (uid: uid, name: name),
+    ]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return candidates;
+  }
+
+  /// Starts the lookups the roster needs, once per uid.
+  ///
+  /// Called from a build path, which is why it cannot `setState` directly — the
+  /// rebuild is scheduled by the future's completion instead, and [_namePrimed]
+  /// is what stops a new callback being attached on every frame. Most uids here
+  /// are already resolved by the timeline rows; the ones that are not are the
+  /// people the roster exists for, such as a past owner who never commented.
+  void _primeMentionNames(Iterable<String> uids) {
+    for (final uid in uids) {
+      if (_names.containsKey(uid) || !_namePrimed.add(uid)) continue;
+      _nameFor(uid).then((_) {
+        if (mounted) setState(() {});
+      });
+    }
+  }
+
+  /// The roster narrowed to what the author has typed after the `@`.
+  ///
+  /// `contains`, not `startsWith`: people are as likely to reach for a surname,
+  /// and the roster is a handful of names rather than a directory, so there is
+  /// nothing to be gained by being strict about where the match falls.
+  List<MentionCandidate> _matchingCandidates(
+    List<MentionCandidate> candidates,
+    String query,
+  ) {
+    if (query.isEmpty) return candidates;
+    final needle = query.toLowerCase();
+    return [
+      for (final candidate in candidates)
+        if (candidate.name.toLowerCase().contains(needle)) candidate,
+    ];
+  }
+
   /// Resolves (and memoizes) a public display name. The future is created once
   /// per uid so rebuilds — and the several comment rows a single author can
   /// own — reuse the in-flight/completed result instead of re-fetching.
@@ -1724,7 +1857,13 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// name did not fail — that answer is final and stays memoized, which is what
   /// keeps the known "Unknown" population from being re-read every rebuild.
   Future<String?> _nameFor(String uid) {
-    return _nameFutures[uid] ??= _resolveName(uid).onError((_, __) {
+    return _nameFutures[uid] ??= _resolveName(uid).then((name) {
+      // Kept for the mention roster, which cannot await. Only a real name is
+      // cached: "this account has no name" must not become a mentionable
+      // "@null", and the roster leaves those people out entirely.
+      if (name != null) _names[uid] = name;
+      return name;
+    }).onError((_, __) {
       // Only the first failure earns a retry; a read that is denied for good
       // would otherwise start a fresh attempt chain on every rebuild.
       if (_nameRetried.add(uid)) _nameFutures.remove(uid);

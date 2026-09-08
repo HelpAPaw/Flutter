@@ -5,6 +5,7 @@ import 'package:help_a_paw/src/models/signal_status.dart';
 import 'package:help_a_paw/src/models/signal_urgency.dart';
 import 'package:help_a_paw/src/widgets/app_bar_title.dart';
 import 'package:help_a_paw/src/widgets/level_chip.dart';
+import 'package:help_a_paw/src/widgets/mention_suggestions.dart';
 import 'package:help_a_paw/src/widgets/urgency_picker.dart';
 
 /// Bulgarian is the app's primary language and its strings are 40–70% longer
@@ -99,6 +100,60 @@ void main() {
       );
 
       expectNoOverflow(tester);
+    });
+  });
+
+  group('MentionSuggestions', () {
+    // The list sits between the thread and the composer, above the keyboard, so
+    // it has two ways to go wrong at 411dp: a long Bulgarian name overflowing
+    // its row, and a long roster pushing the field being typed into off screen.
+    testWidgets('long names and a long roster both stay inside the box',
+        (tester) async {
+      const candidates = <MentionCandidate>[
+        (uid: 'a', name: 'Александра Константинова-Димитрова'),
+        (uid: 'b', name: 'Христо Драгомиров Петканов'),
+        (uid: 'c', name: 'Мария Стоянова'),
+        (uid: 'd', name: 'Георги Иванов'),
+        (uid: 'e', name: 'Ана Петрова'),
+        (uid: 'f', name: 'Николай Тодоров'),
+      ];
+
+      await pumpAt411dp(
+        tester,
+        Scaffold(
+          body: Column(
+            children: [
+              const Expanded(child: SizedBox.expand()),
+              MentionSuggestions(candidates: candidates, onSelected: (_) {}),
+              const SizedBox(height: 56),
+            ],
+          ),
+        ),
+      );
+
+      expectNoOverflow(tester);
+
+      final box = tester.getRect(find.byType(MentionSuggestions));
+      expect(box.width, lessThanOrEqualTo(411));
+      // Three rows and no more, however many people are on the signal.
+      expect(box.height, lessThanOrEqualTo(168));
+    });
+
+    testWidgets('an empty roster takes no room at all', (tester) async {
+      await pumpAt411dp(
+        tester,
+        Scaffold(
+          body: Column(
+            children: [
+              const Expanded(child: SizedBox.expand()),
+              MentionSuggestions(candidates: const [], onSelected: (_) {}),
+            ],
+          ),
+        ),
+      );
+
+      expectNoOverflow(tester);
+      expect(tester.getSize(find.byType(MentionSuggestions)), Size.zero);
     });
   });
 

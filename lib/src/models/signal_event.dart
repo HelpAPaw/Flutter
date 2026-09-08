@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'comment_mention.dart';
+
 /// Something that *happened* to a signal, as opposed to something someone
 /// *said* about it (master spec §4.6, "Case Timeline" — this app calls them
 /// signals, not cases).
@@ -262,6 +264,7 @@ class SignalHistoryEntry {
     this.ownerId,
     this.note,
     this.text,
+    this.mentions = const [],
   });
 
   /// Document id, or `_created` for the synthetic first row. Used as the
@@ -297,6 +300,11 @@ class SignalHistoryEntry {
 
   /// Comment body. Null on every other kind.
   final String? text;
+
+  /// The `@name` runs inside [text]. Always empty on every other kind — an
+  /// event's note is not a place anyone can mention from (§7.5), so there is no
+  /// nullable third state to interpret here.
+  final List<CommentMention> mentions;
 
   bool get isEvent => kind != SignalHistoryKind.comment;
 
@@ -346,6 +354,11 @@ class SignalHistoryEntry {
         actorId: actor.id,
         createdAt: createdAt,
         text: text,
+        // Validated against the text it annotates, here rather than at the
+        // render site: a comment written by a newer build must degrade to plain
+        // text, never blank the row.
+        mentions:
+            CommentMention.decode(data['mentions'], textLength: text.length),
       );
     }
 

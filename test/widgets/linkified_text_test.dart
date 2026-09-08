@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
+import 'package:help_a_paw/src/models/comment_mention.dart';
 import 'package:help_a_paw/src/theme/app_theme.dart';
 import 'package:help_a_paw/src/widgets/linkified_text.dart';
 
@@ -62,6 +63,56 @@ void main() {
     expect(links, hasLength(1));
     expect(links.single.text, 'example.com');
     expect(links.single.recognizer, isA<TapGestureRecognizer>());
+  });
+
+  group('mentions', () {
+    const mentions = [CommentMention(uid: 'ivan-uid', start: 7, end: 19)];
+
+    testWidgets('styles the named run and leaves the rest alone', (tester) async {
+      await pump(
+        tester,
+        const LinkifiedText('thanks @Ivan Petrov', mentions: mentions),
+      );
+
+      final styled = spansOf(tester).where((s) => s.style != null).toList();
+      expect(styled.map((s) => s.text), ['@Ivan Petrov']);
+      expect(styled.single.style!.fontWeight, FontWeight.w600);
+      expect(
+        find.textContaining('thanks @Ivan Petrov', findRichText: true),
+        findsOneWidget,
+      );
+    });
+
+    // Underline is this screen's "you can open this" affordance, and a mention
+    // opens nothing. Borrowing it would advertise a tap that never happens.
+    testWidgets('a mention is not underlined and carries no recognizer',
+        (tester) async {
+      await pump(
+        tester,
+        const LinkifiedText('thanks @Ivan Petrov', mentions: mentions),
+      );
+
+      final styled = spansOf(tester).firstWhere((s) => s.text == '@Ivan Petrov');
+      expect(styled.style!.decoration, isNot(TextDecoration.underline));
+      expect(linkSpans(tester), isEmpty);
+    });
+
+    // The comment row is rebuilt from a stream, and the snapshot that finally
+    // carries the array is otherwise identical to the one before it.
+    testWidgets('picks up mentions arriving on an unchanged string',
+        (tester) async {
+      await pump(tester, const LinkifiedText('thanks @Ivan Petrov'));
+      expect(spansOf(tester).where((s) => s.style != null), isEmpty);
+
+      await pump(
+        tester,
+        const LinkifiedText('thanks @Ivan Petrov', mentions: mentions),
+      );
+      expect(
+        spansOf(tester).where((s) => s.style != null).map((s) => s.text),
+        ['@Ivan Petrov'],
+      );
+    });
   });
 
   testWidgets('text with no links needs no recognizers', (tester) async {

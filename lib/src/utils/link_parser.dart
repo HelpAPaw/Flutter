@@ -19,6 +19,8 @@
 /// tap; under-matching one costs a volunteer retyping it by hand.
 library;
 
+import '../models/comment_mention.dart';
+
 /// A run of text, either plain or something that can be opened.
 sealed class TextToken {
   const TextToken();
@@ -56,6 +58,27 @@ final class LinkToken extends TextToken {
 
   @override
   String toString() => 'LinkToken($text -> $uri)';
+}
+
+/// A run that names a person who has already interacted with this signal.
+///
+/// Its [text] is the literal `@Ivan Petrov` the author typed — the display name
+/// is not stored anywhere else, so this token needs no lookup to render. It
+/// carries no [Uri] because a mention opens nothing: it is styled so it reads as
+/// pointing at somebody, and that is all.
+final class MentionToken extends TextToken {
+  const MentionToken(this.text, this.uid);
+
+  @override
+  final String text;
+
+  /// Who was mentioned. Unused by the renderer today; it is here because a token
+  /// that dropped it would make the array's only purpose invisible to anyone
+  /// reading this file, and because the tap target is the obvious next ask.
+  final String uid;
+
+  @override
+  String toString() => 'MentionToken($text -> $uid)';
 }
 
 /// The one pass over the text. Order of the branches is load-bearing.
@@ -189,11 +212,17 @@ Uri? _uriFor(RegExpMatch match, String text) {
   return null;
 }
 
-/// Splits [input] into plain and openable runs, in order.
+/// Splits [input] into plain, openable and mentioned runs, in order.
 ///
 /// Concatenating every token's text reproduces [input] exactly — nothing is
 /// dropped, so the rendered text always reads the same as what was typed even
-/// when the parser declines to linkify something.
+/// when the parser declines to linkify something. That invariant is what lets a
+/// caller pass [mentions] it does not fully trust: an entry this function cannot
+/// place is skipped, and the characters it pointed at come out as plain text
+/// rather than going missing.
+///
+/// [mentions] must be sorted, in bounds and non-overlapping — which is what
+/// `CommentMention.decode` returns.
 ///
 /// Deliberately **not** memoised. This looks like it wants a cache — it is a
 /// regex sweep over a string that can run to the composer's 2000-character cap
@@ -201,8 +230,33 @@ Uri? _uriFor(RegExpMatch match, String text) {
 /// again only when the text actually changes. The widget's `State` already is
 /// the memo, and a second one underneath it would be process-global mutable
 /// state in a `utils/` file, bought with nothing.
-List<TextToken> parseLinks(String input) {
+List<TextToken> parseLinks(String input, {List<CommentMention> mentions = const []}) {
   if (input.isEmpty) return const [];
+  if (mentions.isEmpty) return List.unmodifiable(_parseRuns(input));
+
+  // The mention ranges are sliced out FIRST, and only what is left between them
+  // is swept for links. Doing it the other way round would let the regex read
+  // into a display name — `@Dr. Petrov` ends in something the bare-domain branch
+  // is happy to call a host — and turn part of somebody's name into a link.
+  final out = <TextToken>[];
+  var index = 0;
+  for (final mention in mentions) {
+    // Defensive, even though `CommentMention.decode` already guarantees it: this
+    // is the one function that must never throw on a document written by a build
+    // that does not exist yet.
+    if (mention.start < index || mention.end > input.length) continue;
+    if (mention.start > index) {
+      out.addAll(_parseRuns(input.substring(index, mention.start)));
+    }
+    out.add(MentionToken(input.substring(mention.start, mention.end), mention.uid));
+    index = mention.end;
+  }
+  if (index < input.length) out.addAll(_parseRuns(input.substring(index)));
+  return List.unmodifiable(out);
+}
+
+/// The link sweep itself, over a stretch of text known to hold no mentions.
+List<TextToken> _parseRuns(String input) {
   final out = <TextToken>[];
   var index = 0;
 
@@ -221,5 +275,5 @@ List<TextToken> parseLinks(String input) {
   }
 
   if (index < input.length) out.add(PlainToken(input.substring(index)));
-  return List.unmodifiable(out);
+  return out;
 }

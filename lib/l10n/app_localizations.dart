@@ -2594,6 +2594,12 @@ abstract class AppLocalizations {
   /// **'New comment on: {signalTitle}'**
   String notificationNewCommentTitle(String signalTitle);
 
+  /// No description provided for @notificationMentionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} mentioned you on: {signalTitle}'**
+  String notificationMentionTitle(String name, String signalTitle);
+
   /// No description provided for @completeYourProfile.
   ///
   /// In en, this message translates to:

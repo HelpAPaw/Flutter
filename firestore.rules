@@ -241,7 +241,29 @@ service cloud.firestore {
                    && request.resource.data.text.size() > 0
                    && request.resource.data.text.size() <= 2000)
              )
+             && isValidMentions()
              && !isCommentsLocked(coll, signalId);
+    }
+
+    // Bounds the @-mention array on a comment (spec 7.5).
+    //
+    // The COUNT is all this can say. Rules have no way to iterate a list, so
+    // there is no expressing "every entry is a {uid, start, end}" here, and
+    // pretending otherwise with a `size()` check on entry 0 would be worse than
+    // saying nothing. The array is therefore untrusted input on the server too,
+    // and `functions/src/mentions.ts` decodes it defensively — which costs
+    // nothing, because a forged mention cannot reach anybody: it only re-words a
+    // notification a subscriber was already being sent.
+    //
+    // The cap is duplicated from `maxMentionsPerComment`
+    // (lib/src/models/comment_mention.dart) and guarded by
+    // test/comment_mention_test.dart. Drifting BELOW the client's cap is the
+    // silent direction: a shipped build's write starts failing and the author is
+    // told only that the comment could not be added.
+    function isValidMentions() {
+      return !('mentions' in request.resource.data)
+             || (request.resource.data.mentions is list
+                 && request.resource.data.mentions.size() <= 10);
     }
 
     // Validates a signal-timeline event create (master spec 4.6).

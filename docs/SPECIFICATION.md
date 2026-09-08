@@ -201,11 +201,28 @@ allow-listed in the console or anonymous sign-in fails.
 
 Subcollection **`comments/{commentId}`** — what people *said*:
 
-- *User comment*: `{ text: string (1–2000), createdAt, author: Ref→users/{uid} }`
+- *User comment*: `{ text: string (1–2000), createdAt, author: Ref→users/{uid},
+  mentions?: [{ uid, start, end }] }`
 - *Legacy status change*: `{ type: 'status_change', oldStatus: int, newStatus: int,
   createdAt, author: Ref }` — **no `text` field**; server handlers must guard on `type`.
 - *Legacy urgency change*: `{ type: 'urgency_change', oldUrgency: int, newUrgency: int,
   createdAt, author: Ref }` — likewise **no `text` field**.
+
+**`mentions` is optional and annotates the text rather than living inside it** (§7.5).
+Each entry is the uid plus the half-open UTF-16 range of the `@Ivan Petrov` run in `text`,
+which stays exactly what the author typed. Inline markup (`@[uid]`) was the alternative
+and is the one encoding this app cannot use: every already released build hands `text`
+straight to `LinkifiedText`, so the markup would render verbatim on every phone that has
+not updated, forever — nothing here is ever backfilled. A parallel array those builds
+ignore renders as `@Ivan Petrov`, which is right. The offsets are stable because a comment
+is **never editable** — there is no `update` rule on this collection at all — and UTF-16
+code units are what a Dart `String` and a JS `string` both index in, so Cyrillic and emoji
+need no conversion between the app and the function. The name is deliberately **not**
+duplicated into the entry: the text already carries it, and a stored copy would be a
+second answer to "what is this person called" that could disagree with `publicProfiles`.
+`firestore.rules` bounds only the array's **length** (10) — rules cannot iterate a list —
+so both the app and the function decode it defensively; see §7.5 for why that is
+sufficient rather than merely pragmatic.
 
 The two `type`d shapes are **legacy**: since the signal timeline they are written to
 `events` instead. Nothing was backfilled and every already released build keeps writing
@@ -281,13 +298,14 @@ Subcollection **`notifications/{id}`** — the in-app inbox, see §7.13.
 
 | field | type | notes |
 |---|---|---|
-| `type` | string | `new_signal` \| `status_change` \| `urgency_change` \| `new_comment` \| `nearby_signal` \| `ownership_change` \| `takeover_request` \| `takeover_approved` \| `takeover_declined` — the same vocabulary as the FCM `data.type` |
+| `type` | string | `new_signal` \| `status_change` \| `urgency_change` \| `new_comment` \| `mention` \| `nearby_signal` \| `ownership_change` \| `takeover_request` \| `takeover_approved` \| `takeover_declined` — the same vocabulary as the FCM `data.type` |
 | `signalId` | string | deep-link target |
 | `signalTitle` | string | rendered client-side |
 | `helpNeededTags` | string[]? | `new_signal` / `nearby_signal` — element 0 is the headline the row is rendered from |
 | `statusCode` | int? | `status_change` |
 | `urgency` | int? | `urgency_change` (also set on `new_signal`) |
-| `commentExcerpt` | string? | `new_comment` |
+| `commentExcerpt` | string? | `new_comment` and `mention` — the same excerpt; the two differ in who they name, not in what was said |
+| `mentionedByName` | string? | `mention`. The comment author's display name, resolved server-side once for the same reason as `newOwnerName`. Absent when they have no public profile, and the app falls back to "someone" |
 | `newOwnerId` | string? | the ownership types. **Explicitly null on a release** — a real answer, which is what lets one server type render as both "someone took this on" and "nobody holds this now" |
 | `newOwnerName` | string? | resolved server-side once, rather than a `publicProfiles` read per row per rebuild. A name is not a translatable string |
 | `title`, `body` | string | the English push text — **fallback only**, see §7.13 |
@@ -297,7 +315,9 @@ Subcollection **`notifications/{id}`** — the in-app inbox, see §7.13.
 | `expiresAt` | Timestamp | `createdAt + 90d`; drives the TTL policy |
 
 Ids are deterministic — `sig_{signalId}`, `st_{signalId}_{status}`,
-`urg_{signalId}_{urgency}`, `cmt_{commentId}`, `nb_{signalId}`,
+`urg_{signalId}_{urgency}`, `cmt_{commentId}` (**a `mention` keeps the same id as the
+`new_comment` it replaces** — the id is per recipient, and one comment must never become
+two rows or two badge increments for one person), `nb_{signalId}`,
 `own_{signalId}_{newOwnerUid|none}`, `req_{signalId}_{requesterUid}`,
 `reqres_{signalId}_{requesterUid}_{status}` — because
 Firestore triggers are at-least-once and a retry must overwrite rather than
@@ -1750,6 +1770,43 @@ full-width child sat left — so the page stopped centring half way down.
 - **Comments:** text field capped at 2000 chars, whitespace-only input dropped
   client-side; posting also subscribes the author to the signal. Author names resolve
   through `publicProfiles`.
+- **@-mentions** (`mention_text_controller.dart`, `mention_suggestions.dart`,
+  `models/signal_participants.dart`): typing `@` at the start of a word opens a list of
+  the people who have **already interacted with this signal** — the reporter, the current
+  owner, every past owner, and everyone who has commented. Picking one inserts `@Name `
+  and records the uid; the posted comment carries a `mentions` array beside its text
+  (§4.1). Rendered mentions are **styling only** — the brand ink and a heavier weight, no
+  underline and no recognizer, because underline is this screen's affordance for "this
+  opens something" and a mention opens nothing.
+
+  **The roster is derived, never stored.** By the time the composer is on screen this
+  screen already holds a live snapshot of the signal plus live streams of `comments` and
+  `events`, which between them name every one of those people — so
+  `signalParticipantUids` is a pure set union over data already in memory: no query, no
+  index, no read, and nothing to backfill. Past owners need no ownership history of their
+  own either: an `ownership_transfer`'s `ownerId` is the owner the signal moved *to*, and
+  every owner it moved *from* was either the reporter or the new owner of an earlier
+  transfer. Anyone whose `publicProfiles` name has not resolved is left out — `@Unknown`
+  is not a mention, and that population is known to be non-trivial (§14).
+
+  **It is also what makes the feature possible at all.** `publicProfiles` denies `list` on
+  purpose (§5.1), so no client can search the user base by name; the one roster that needs
+  no server-side search is the one already on the screen.
+
+  **A mention re-words a notification, it never sends one.** `handleCommentCreated`
+  intersects the mentioned uids with the signal's *subscribers* and splits them out of the
+  `new_comment` fan-out, so a mention reaches nobody who was not already being told about
+  this comment (§9). That is what lets the array stay client-written with only a length
+  bound in the rules: a forged entry buys nothing, so no read is spent proving
+  participation. It is also the accepted limit — a participant who unsubscribed is not
+  reachable by naming them.
+
+  **Offsets are recomputed, not maintained.** The controller records only `(uid, "@Name")`
+  per pick and finds the labels in the text when asked, so there is no diff to get wrong on
+  a paste, an IME composition or a multi-character delete. The rule that falls out of it is
+  the whole edit story: *a mention that no longer reads exactly as it was inserted stops
+  being a mention*. Two participants sharing a display name are told apart only by position,
+  which can mis-attribute one mention and costs exactly one mis-worded push.
 - **Remove signal** (#68): two dialogs, then one call to `signalRemoval`.
 
   **The first dialog exists because of what people were actually using Delete for.** A
@@ -2150,6 +2207,16 @@ build the display text from the structured fields (`helpNeededTags`, `statusCode
 `commentExcerpt`) through `AppLocalizations`, reusing `HelpTag.neededLabel` and
 `SignalStatus.label`. The Cloud Function has no i18n and the app is bilingual, so
 persisting English would have meant a permanently English inbox.
+
+**A `mention` row is a `new_comment` row addressed to somebody** (§7.5). Same excerpt,
+same deterministic `cmt_{commentId}` id, same deep link — only the title differs, and it
+names the author from the server-resolved `mentionedByName` (falling back to "someone").
+It is not a second row: the fan-out splits its recipients, so one comment produces exactly
+one entry and one badge increment per person either way. The tap still deep-links on
+`signalId` alone — the entry carries no `commentId`, so a mention opens the signal rather
+than the comment. And, like `ownership_change`, a deleted `mention` row **cannot be
+restored by Undo**: the swipe re-creates the document through the rules, whose `create`
+clause pins `type == 'nearby_signal'`.
 
 **Two writers, one shape.** The fan-out writes `new_signal` / `status_change` /
 `new_comment` server-side. The arrival catch-up writes `nearby_signal` from the device —
@@ -2617,7 +2684,7 @@ invitation to pass one, and what gets passed is `e.toString()` (§7.17.4). Guard
 |---|---|---|
 | `onSignalCreated` / `onTestSignalCreated` | create `signals/{id}` / `signals_test/{id}` | **Nearby fan-out** (below) |
 | `onSignalUpdated` / `onTestSignalUpdated` | update | Push `status_change`, an urgency escalation, **or an `ownership_change`** to subscribers, skipping `lastUpdatedBy`. **Exactly one per invocation**: each candidate is built by its own producer in `announcements.ts`, ranked, and the winner *merges in* the loser's fields when a claim moved both — so the status sentence has one author instead of being re-inlined into the ownership branch (§4.8) |
-| `onCommentCreated` / `onTestCommentCreated` | create comment | Push `new_comment` (body truncated to 50 chars) to subscribers, skipping the author. **Returns early on `type === 'status_change'`** — those have no `text` |
+| `onCommentCreated` / `onTestCommentCreated` | create comment | Push `new_comment` (body truncated to 50 chars) to subscribers, skipping the author. **Returns early on `type === 'status_change'`** — those have no `text`, and on any comment whose `text` is not a string, since the rules permit one. Recipients are then split by the comment's `mentions` (§7.5): the named ones get a `mention` instead, everyone else the unchanged `new_comment`. The split is an **intersection with the subscriber list**, so it can only re-word — never widen — and both halves keep the same `cmt_{commentId}` inbox id. Decoding lives in `functions/src/mentions.ts` as a pure, tested module |
 | `onUserTokensWritten` | write `users/{uid}` | Token dedupe: removes this device's token from every other user doc. Only runs when `tokenLastSaved` changed, so location/subscription writes don't trigger it |
 | `onFeedbackCreated` | create `feedback/{id}` | Rate-limited SMTP email via nodemailer; HTML-escaped |
 | `searchVetClinics` | callable (App Check) | Places `searchNearby`, key server-side, 30-day cache keyed by precision-5 geohash + km-rounded radius. Radius 0–50 000 m |
@@ -2895,6 +2962,26 @@ Things that live in more than one place and fail **silently** when they drift.
    misleading dialog, and unbounded makes it the indefinite retention the purge exists to
    prevent. See §4.1, §7.5, §7.11.
 
+5g. **The mention cap (×2).** `maxMentionsPerComment`
+   (`lib/src/models/comment_mention.dart`) and the `size()` bound in `isValidMentions()`
+   in `firestore.rules`, which is the enforcement — rules cannot iterate a list, so the
+   count is the only thing they can say about the array at all. Drifting the rules
+   *below* the client is the silent direction: a shipped build's comment write starts
+   being denied and its author is told only that the comment could not be added.
+   Guarded by `test/models/comment_mention_test.dart`, which parses the rules.
+
+5h. **The inbox `type` vocabulary (×2).** `NotificationType`
+   (`functions/src/announcements.ts`) is what the server writes, into both the FCM
+   `data.type` and the stored document; the `type` switches in
+   `my_notifications_page.dart` are what render it. Only the server→client direction can
+   fail, and it fails **silently**: the row does not break, it quietly falls back to the
+   stored *English* `title`/`body` in an app whose primary language is Bulgarian. The
+   reverse costs nothing, and `nearby_signal` is deliberately client-only (the arrival
+   catch-up writes it; no function does). Guarded by
+   `test/notification_type_vocabulary_guard_test.dart`, which parses the TypeScript. The
+   colour switch is excluded on purpose — its `default` is a real answer (§7.13: colour
+   means urgency, and a comment is progress, not severity).
+
 6. **Fan-out radius caps ≥ UI caps.** `MAX_LOCATION_RADIUS_KM` (50) ≥ the slider max;
    `MAX_REGION_RADIUS_KM` (100) ≥ the region slider max.
 7. **`Routes.linkHost` ↔ `LINK_HOST`** (functions) ↔ the Android intent filter host ↔
@@ -3111,6 +3198,7 @@ silently breaks Auth/Firestore/FCM in release builds only.
 
 | Date | Change |
 |---|---|
+| 2026-09-08 | **@-mentions in comments** (§4.1, §7.5, §7.13, §9, §12.5g, §12.5h). The details screen is where strangers coordinate about an animal and the thread was flat: no way to address one person in it, so a reporter answering a volunteer had to hope they were reading. Typing `@` now offers the people who have **already interacted with this signal** — reporter, current owner, every past owner, every commenter — and the comment carries a `mentions` array beside its text. Three decisions carry the design. **The roster is derived, not stored**: those uids are already in the screen's own snapshot and its two history streams, so there is no `participants` field, no trigger to maintain it, no backfill and no read — and past owners fall out of the transfers' `ownerId` without an ownership-history field. It is also the only roster that can exist, because `publicProfiles` denies `list` on purpose and nothing may search the user base by name. **The offsets live beside the text, not inside it**: inline markup would render verbatim on every already released build, forever, since nothing here is backfilled; a parallel array those builds ignore renders as `@Ivan Petrov`, which is what the author typed. **A mention re-words a notification rather than sending one** — the fan-out intersects the named uids with the signal's subscribers, so it reaches nobody new, which is precisely what lets a client-written array stay safe under rules that can bound its length and nothing else. The accepted limit is the mirror of that: a participant who unsubscribed cannot be reached by naming them. Rendered mentions are styling only — no underline, no recognizer, because underline is this screen's "this opens something" and a mention opens nothing. The composer recomputes offsets from `(uid, "@Name")` instead of maintaining them, so the whole edit story is one rule (*a mention that no longer reads as it was inserted stops being one*) rather than a diff to get wrong. Two new guards: the mention cap against the rules, and the inbox `type` vocabulary against the TypeScript union — the second closes a documented silent failure that had been waiting for a fourth type to arrive. |
 | 2026-09-03 | **Made the signal's text selectable, and its links tappable** (§4.5, §7.16). Every piece of user-written text on the details screen — title, description, comments, status and ownership notes, a takeover request's note — was a plain `Text`. None of it could be selected or copied, and a URL or phone number somebody pasted was dead characters a volunteer had to retype by hand, on the one screen whose entire job is passing information between strangers coordinating a rescue. Fixing it collided with the comment rows' **long-press**, because Flutter's selection claims that gesture and the inner recognizer wins the arena, so making comments selectable would have silently killed reporting them. That collision was worth having: long-press was the *only* route to reporting a comment (the app-bar flag reports the signal), it advertised itself nowhere, and it was nine days old — so the safety valve on the one screen where strangers write to each other was reachable only by guessing. **Comment actions moved to a visible `⋮`**, and the freed gesture pays for selection. Each user-written string owns its own `SelectionArea` inside `LinkifiedText` rather than one wrap around the page: the single wrap made every label, heading and chip selectable too, so "Select all" buried the two or three lines of content in furniture. That costs the cross-widget drag and buys a selection that can only contain what somebody typed. The original objection to a per-row button (an overflow icon on every row reads as an admin tool) is answered by placement, not by hiding it: the `⋮` rides on the existing name-and-date line, so it adds no gutter and appears only on rows that have something to offer — never on a status or ownership row, never on your own comment. Detection is a hand-rolled `link_parser.dart` rather than a `linkify` package, because the matching is one regex and the part worth owning is the **scheme allowlist**: only `http`/`https` are launched, and a scheme'd URL is matched for *any* scheme so `intent://evil.example/x` is swallowed whole and emitted as plain text instead of having its host mined out by the bare-domain branch. Phone numbers are matched too, with false positives accepted by decision — over-matching costs a wasted tap, under-matching costs retyping — bounded by a 6-digit floor (so years, house numbers and prices are not phones) and an E.164 ceiling. Results are memoised in a 64-entry LRU because this runs from `build()`. Link ink is `colorScheme.secondary`, **not** `primary`: primary is `#FF9800` in both schemes and 2.16:1 on white, the exact bug `theme_contrast_test` exists to catch — plus an underline, since colour alone is invisible to a colour-blind reader. `LinkifiedText` is stateful because a `TextSpan`'s `TapGestureRecognizer` has to be disposed; building them in `build()` allocates a set per frame and frees none. 323 Dart tests (30 new: 20 on the parser, including adversarial 2000-char inputs guarding against catastrophic backtracking, and 10 on the widget — recognizer ownership, the link ink in both themes, the selection staying scoped to the content, and the rail still stretching with a `SelectableRegion` inside its `IntrinsicHeight`). **Device-verified on SM-X205 2026-09-03** (and first on an emulator), in test mode against a seeded `signals_test` signal since deleted. `www.helpapaw.org`, `maps.app.goo.gl/x7Qp`, `0888 123 456` and an address all rendered as links and dispatched to Chrome, the `tel:` chooser (separators stripped) and Gmail; `intent://evil.example/x` and `javascript://evil.example/y` stayed plain text, as did `mill.She`, `version 1.2.3` and `2026`. "Select all" on the description highlighted the description and nothing around it — not the title, the chips, the card labels or the comment. The `⋮` appeared on the comment row and **not** on the `Reported this signal` event row, and opened the report dialog — on the tablet this ran against a **real signed-in session**, so the `canReport` gate was exercised as written rather than forced. Links render inside comment rows and wrap across lines with the connector rail intact, and in **dark mode** they are the plain brand orange on black (9.74:1), underlined. Client-only — no rules, functions or deploy. |
 | 2026-08-30 | **Gave the app a design system, and turned dark mode on** (§7.17, and §4.5/§4.6/§7.3/§7.5 for what it changed on screen). `ThemeData(primarySwatch: …, useMaterial3: true)` does not do what it reads like — **M3 ignores `primarySwatch`** — so every unstyled widget had been rendering M3 purple on a lavender scaffold, and the ~294 colour literals scattered through `lib/` existed to paint around that. Replaced with a real `ColorScheme` in `lib/src/theme/`, the literals deleted, and `darkTheme`/`themeMode` wired up: the brand `#FF9800` survives unchanged because it is simultaneously the worst foreground on white (2.16:1) and one of the best on black (9.74:1), with the ink on it flipped. Type moved off ~59 loose `fontSize` numbers onto a named scale (deliberately at the sizes already in use — M3's own scale would be a redesign), and four corner radii became one. **Colour now means urgency and nothing else**: status traded its traffic light for a glyph and a neutral chip, both scales were relabelled (Low/Medium/Critical, Waiting for help/Someone is helping) because the old wording was three shared words away from urgency's in Bulgarian, **red opts out of clustering** because `ClusterManager` gives Dart no way to restyle the native bubble, and the map gained a **legend** and a **dark tile style** whose road greys are picked against the pins rather than by eye. Signal details was restructured from eight peer blocks into one `SignalStateCard` plus a `ManageSignalSheet`, so the majority of visitors — who can change nothing — no longer scroll past a radio group and a dropdown to reach the conversation. Six screens took `PageWidth` (600dp) so a tablet stops stretching a phone layout; all 15 app bars took `AppBarTitle`, which shrinks rather than truncating. **Fourteen `catch` blocks stopped putting the raw exception on screen and started recording it** — `reportAndDescribe` does both in one call, the ARB strings lost their `{error}` placeholders, and `StatusView` gave every empty and failed screen one shape with a retry that actually re-subscribes. Four controls that looked live were made live (filter Cancel/Done, the feedback contact button, a drawer `FutureBuilder` never mounted, the comment composer overlapping its own scroll view). **Four new guard tests carry the durable half**, because all four regressions are invisible to anyone testing in English, in light mode, on a happy path: `theme_contrast_test` (which would have caught the light-salmon-on-black warning card an unset `errorContainer` produced), `theme_literal_guard_test`, `error_text_test` and `bulgarian_layout_test`. `adaptive_components` removed — it was a pass-through. §0.1, §4.5, §4.6, §7.3, §7.5, §7.17, §8, §12.14–16, §13.2, §14. |
 | 2026-08-29 | **Renamed the master spec's "case" vocabulary to the app's own (§4.8a).** The ownership feature had carried the spec's words into the wire format; user-facing copy in both locales, every identifier, and the stored names now say **signal** and **signal owner**. Renamed on the wire: `caseHolder`→`signalOwner`, `holderActiveAt`→`ownerActiveAt`, the `ownership_transfer` payload's `oldHolder`/`newHolder`→`oldOwner`/`newOwner`, `reports.reason` `"duplicateCase"`→`"duplicateSignal"`, and the `caseOwnership` callable→`signalOwnership`. **Taken straight, with no compatibility shim and no backfill** — a decision made by counting rather than assuming: ownership shipped 2026-08-20 and never reached a released build, `6.0.2+129` has no ownership feature at all, and production `signals` was measured to hold six documents carrying zero pre-rename names. The only legacy values were in `signals_test` on the QA devices plus one report reason, all disposable. A first pass did build the full bridge — dual writes, three read fallbacks, a two-phase backfill and a callable alias — and it was removed once the data said none of it had anything to protect. Deployed to help-a-paw-dev the same day, export list diffed both ways and live rules re-read byte-identical. Spec quotations stay in the spec's own words. 270 Dart tests, 112 functions tests, 258 rules tests. |

@@ -1438,6 +1438,11 @@ class AppLocalizationsBg extends AppLocalizations {
   }
 
   @override
+  String notificationMentionTitle(String name, String signalTitle) {
+    return '$name ви спомена по: $signalTitle';
+  }
+
+  @override
   String get completeYourProfile => 'Попълнете профила си';
 
   @override

@@ -1,9 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:help_a_paw/l10n/app_localizations.dart';
 
+import '../models/comment_mention.dart';
 import '../utils/error_text.dart';
 import '../utils/link_parser.dart';
 
@@ -46,10 +48,18 @@ class LinkifiedText extends StatefulWidget {
     this.text, {
     super.key,
     this.style,
+    this.mentions = const [],
   });
 
   final String text;
   final TextStyle? style;
+
+  /// The `@name` runs inside [text], if this is a comment that carries any.
+  ///
+  /// Empty for every other caller — a title, a description, an update note — so
+  /// the parser keeps its existing fast path and nothing but comments pays for
+  /// this.
+  final List<CommentMention> mentions;
 
   @override
   State<LinkifiedText> createState() => _LinkifiedTextState();
@@ -72,7 +82,13 @@ class _LinkifiedTextState extends State<LinkifiedText> {
     super.didUpdateWidget(oldWidget);
     // An edited signal or a re-used row can hand the same State a different
     // string. The old recognizers belong to spans that no longer exist.
-    if (oldWidget.text != widget.text) {
+    //
+    // The mentions are compared too: the text alone is not enough to decide the
+    // spans are still right, and a comment row rebuilt from a snapshot that
+    // finally carried its `mentions` array would otherwise keep rendering the
+    // version without them.
+    if (oldWidget.text != widget.text ||
+        !listEquals(oldWidget.mentions, widget.mentions)) {
       _disposeRecognizers();
       _build();
     }
@@ -85,7 +101,7 @@ class _LinkifiedTextState extends State<LinkifiedText> {
   }
 
   void _build() {
-    _parts = parseLinks(widget.text)
+    _parts = parseLinks(widget.text, mentions: widget.mentions)
         .map((token) => (
               token,
               token is LinkToken
@@ -132,7 +148,7 @@ class _LinkifiedTextState extends State<LinkifiedText> {
     );
   }
 
-  /// Whether the text turned out to hold no links at all.
+  /// Whether the text turned out to hold no links and no mentions at all.
   ///
   /// The common case by a distance — most comments are prose — and worth
   /// telling apart, because the rich path below allocates a `TextStyle` and a
@@ -157,6 +173,14 @@ class _LinkifiedTextState extends State<LinkifiedText> {
     // Resolved once: `Theme.of` registers an inherited-widget dependency on
     // every call.
     final linkInk = Theme.of(context).colorScheme.secondary;
+    // A mention is NOT underlined and carries no recognizer. Underline is this
+    // screen's affordance for "this opens something", and a mention opens
+    // nothing — borrowing it would advertise a tap that never happens. Weight
+    // plus the same ink is enough to read as a name rather than as prose.
+    final mentionStyle = (widget.style ?? const TextStyle()).copyWith(
+      color: linkInk,
+      fontWeight: FontWeight.w600,
+    );
     final linkStyle = (widget.style ?? const TextStyle()).copyWith(
       color: linkInk,
       // Colour alone is not an affordance: it is invisible to a red-green
@@ -176,6 +200,10 @@ class _LinkifiedTextState extends State<LinkifiedText> {
                   text: text,
                   style: linkStyle,
                   recognizer: recognizer,
+                ),
+              MentionToken(:final text) => TextSpan(
+                  text: text,
+                  style: mentionStyle,
                 ),
             },
         ],

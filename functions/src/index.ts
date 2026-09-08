@@ -22,6 +22,7 @@ import {
   urgencyChangeOf,
 } from "./announcements";
 import { isRestoredSignal } from "./events";
+import { mentionedUids, splitCommentRecipients } from "./mentions";
 import { signalOwnerOf } from "./signalRefs";
 import {
   displayTagsOf,
@@ -350,6 +351,15 @@ interface InboxEntry {
   newOwnerId?: string | null;
   /** Their display name, resolved once here rather than per reader. */
   newOwnerName?: string;
+  /**
+   * Who wrote the comment that mentioned you, on a `mention`.
+   *
+   * Resolved server-side for the same reason as `newOwnerName`: a name is not a
+   * translatable string, and doing it here costs one read per comment instead of
+   * a `publicProfiles` read per row per rebuild in the inbox. Absent when the
+   * author has no public profile — the app falls back to "someone".
+   */
+  mentionedByName?: string;
 }
 
 /**
@@ -1286,7 +1296,17 @@ async function handleCommentCreated(
   const authorRef = commentData.author as
     | admin.firestore.DocumentReference
     | undefined;
-  const commentText = commentData.text as string;
+
+  // The guard above is an allow-list of the two system shapes we know about,
+  // not a check that there is anything to announce. `isCommentCreate()` in
+  // firestore.rules explicitly permits a comment with no `text`, so a third
+  // textless shape — from a newer build, or a bug — would reach the
+  // `.length` below and throw. Nothing to say means nothing to send.
+  const commentText = commentData.text;
+  if (typeof commentText !== "string" || commentText.length === 0) {
+    console.log("Comment carries no text, skipping new_comment notification");
+    return;
+  }
 
   // Get the signal to get its title — use the correct collection
   const signalsCollection = isTestMode ? "signals_test" : "signals";
@@ -1351,28 +1371,91 @@ async function handleCommentCreated(
     commentText.length > 50 ? commentText.substring(0, 47) + "..." : commentText;
   const title = `New comment on: ${signalTitle}`;
 
-  const badgeByUid = await writeInboxEntries(
+  // @-mentions (SPECIFICATION 7.5). The split is an INTERSECTION with the
+  // subscribers above, so a mention can only ever change the wording of a
+  // notification that was already going out — it reaches nobody new, which is
+  // what lets the array stay client-written and unvalidated by the rules.
+  const { mentioned, others } = splitCommentRecipients(
     inboxRecipients,
-    {
-      docId: `cmt_${event.params.commentId}`,
-      type: "new_comment",
-      title,
-      body: truncatedComment,
-      signalId,
-      signalTitle,
-      commentExcerpt: truncatedComment,
-    },
-    isTestMode
+    mentionedUids(commentData)
+  );
+
+  // Both halves keep the SAME `cmt_{commentId}` document id. It is per-user
+  // (the inbox is a subcollection of the recipient) and deterministic because
+  // triggers are at-least-once, so one comment can never become two rows or two
+  // badge increments for one person — however the recipients are split.
+  const docId = `cmt_${event.params.commentId}`;
+  const badgeByUid = new Map<string, number>();
+  const tokensFor = (uids: string[]): Map<string, string[]> =>
+    new Map(
+      uids
+        .filter((uid) => userTokens.has(uid))
+        .map((uid) => [uid, userTokens.get(uid)!])
+    );
+
+  if (others.length > 0) {
+    const badges = await writeInboxEntries(
+      others,
+      {
+        docId,
+        type: "new_comment",
+        title,
+        body: truncatedComment,
+        signalId,
+        signalTitle,
+        commentExcerpt: truncatedComment,
+      },
+      isTestMode
+    );
+    for (const [uid, badge] of badges) badgeByUid.set(uid, badge);
+  }
+
+  let mentionTitle = title;
+  if (mentioned.length > 0) {
+    // One read per commented-on-with-mentions comment, not one per recipient.
+    const authorName = authorRef ? await readPublicName(authorRef.id) : undefined;
+    mentionTitle = `${authorName ?? "Someone"} mentioned you on: ${signalTitle}`;
+    const badges = await writeInboxEntries(
+      mentioned,
+      {
+        docId,
+        type: "mention",
+        title: mentionTitle,
+        body: truncatedComment,
+        signalId,
+        signalTitle,
+        commentExcerpt: truncatedComment,
+        mentionedByName: authorName,
+      },
+      isTestMode
+    );
+    for (const [uid, badge] of badges) badgeByUid.set(uid, badge);
+  }
+
+  console.log(
+    `Comment on ${signalId}: ${others.length} subscriber(s), ` +
+      `${mentioned.length} mentioned`
   );
 
   // `commentExcerpt` is deliberately not repeated in the FCM data map — it is
   // already the notification body, and the 4KB limit covers both together.
   await sendNotificationsToUsers(
-    userTokens,
+    tokensFor(others),
     { title, body: truncatedComment },
     {
       signalId,
       type: "new_comment",
+      signalTitle: truncateForPayload(signalTitle),
+    },
+    badgeByUid
+  );
+
+  await sendNotificationsToUsers(
+    tokensFor(mentioned),
+    { title: mentionTitle, body: truncatedComment },
+    {
+      signalId,
+      type: "mention",
       signalTitle: truncateForPayload(signalTitle),
     },
     badgeByUid

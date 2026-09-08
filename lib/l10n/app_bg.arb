@@ -519,6 +519,7 @@
   "notificationRedAlertTitle": "Повишен до червен сигнал",
   "notificationUrgencyChangeBody": "{signalTitle}: {urgency}",
   "notificationNewCommentTitle": "Нов коментар по: {signalTitle}",
+  "notificationMentionTitle": "{name} ви спомена по: {signalTitle}",
   "completeYourProfile": "Попълнете профила си",
   "helpUsPersonalize": "Помогнете ни да персонализираме изживяването ви",
   "fullNameRequired": "Пълно име *",

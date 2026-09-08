@@ -34,6 +34,10 @@ export type NotificationType =
   | "status_change"
   | "urgency_change"
   | "new_comment"
+  // A comment that named you (SPECIFICATION 7.5). Never a recipient of its own:
+  // it replaces the `new_comment` a subscriber was already being sent, which is
+  // why there is no preference for it and no way to reach anybody new with it.
+  | "mention"
   // Signal ownership, master spec 4.5. `ownership_change` goes to a signal's
   // subscribers; the two `takeover_*` types go to one person each.
   | "ownership_change"

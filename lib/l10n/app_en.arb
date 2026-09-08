@@ -686,6 +686,17 @@
       }
     }
   },
+  "notificationMentionTitle": "{name} mentioned you on: {signalTitle}",
+  "@notificationMentionTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "signalTitle": {
+        "type": "String"
+      }
+    }
+  },
   "completeYourProfile": "Complete Your Profile",
   "helpUsPersonalize": "Help us personalize your experience",
   "fullNameRequired": "Full Name *",
