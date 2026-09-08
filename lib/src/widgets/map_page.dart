@@ -16,6 +16,7 @@ import '../services/auth_service.dart';
 import '../services/location_service.dart';
 import '../services/signal_navigator.dart';
 import '../state/map_state.dart';
+import '../models/vet_clinic.dart';
 import '../utils/bubble_layout.dart';
 import '../utils/map_marker_builder.dart';
 import '../utils/map_projection.dart';
@@ -23,6 +24,8 @@ import '../viewmodels/map_view_model.dart';
 import 'home_route_drawer.dart';
 import 'map/filter_bottom_sheet.dart';
 import 'map/map_legend_sheet.dart';
+import 'map/clinic_info_card.dart';
+import 'map/map_bubble.dart';
 import 'map/new_signal_location_bar.dart';
 import 'map/signal_info_card.dart';
 import 'notification_onboarding_button.dart';
@@ -41,10 +44,6 @@ class MapScreen extends ConsumerStatefulWidget {
 
 class _MapScreenState extends ConsumerState<MapScreen>
     with WidgetsBindingObserver {
-  /// Height of the pin bitmap, so the bubble sits above the pin rather than
-  /// over it.
-  static const _kPinHeight = MapMarkerBuilder.pinHeight;
-
   /// Inset the bubble keeps from the left and right edges of the map.
   static const _kBubbleEdgeInset = 8.0;
 
@@ -93,8 +92,30 @@ class _MapScreenState extends ConsumerState<MapScreen>
   // every frame of a pan, and setState for that would rebuild _buildScaffold —
   // which rebuilds the entire marker set — sixty times a second. The notifier
   // keeps the per-frame update inside the bubble's own subtree.
+  //
+  // Exactly one of these is set at a time: opening either bubble closes the
+  // other, because they share the single anchor below.
   SignalWithId? _selectedSignal;
+  VetClinic? _selectedClinic;
   final ValueNotifier<Offset?> _bubbleAnchor = ValueNotifier<Offset?>(null);
+
+  /// The point the open bubble is anchored to, or null when none is open.
+  LatLng? get _bubblePoint {
+    final signal = _selectedSignal;
+    if (signal != null) {
+      return LatLng(signal.location.latitude, signal.location.longitude);
+    }
+    final clinic = _selectedClinic;
+    if (clinic != null) return LatLng(clinic.latitude, clinic.longitude);
+    return null;
+  }
+
+  /// How far above the anchor the bubble sits. A clinic pin is shorter than a
+  /// signal pin, and offsetting both by the taller one leaves the clinic bubble
+  /// floating clear of its marker.
+  double get _bubblePinHeight => _selectedClinic != null
+      ? MapMarkerBuilder.clinicPinHeight
+      : MapMarkerBuilder.pinHeight;
 
   /// Key on the map's Stack, so the bubble's own arithmetic can read the size
   /// of the box it is positioned in. See [_mapSize].
@@ -162,6 +183,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
       // against the outgoing view, and _updateBubbleAnchor would go looking
       // for the pin through a disposed controller.
       _selectedSignal = null;
+      _selectedClinic = null;
       _bubbleAnchor.value = null;
     }
     _mapLocale = locale;
@@ -474,8 +496,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
         center: LatLng(centerLat, centerLng),
         zoomLevel: zoom,
         hospitalPin: _markerBuilder.hospitalPin,
-        onClinicTap: (clinicId) => context.push(Routes.clinicDetails(clinicId)),
-        onClinicMarkerTap: _dismissBubble,
+        onClinicMarkerTap: _showClinicBubble,
       );
 
       if (mounted) {
@@ -527,22 +548,58 @@ class _MapScreenState extends ConsumerState<MapScreen>
     return (coord.x.toDouble() / dpr, coord.y.toDouble() / dpr);
   }
 
+  /// Open the bubble for [clinic], anchored to its pin.
+  Future<void> _showClinicBubble(VetClinic clinic) async {
+    setState(() {
+      _selectedSignal = null;
+      _selectedClinic = clinic;
+    });
+    await _anchorBubble();
+  }
+
   /// Open the bubble for [signal], anchored to its pin.
   Future<void> _showSignalBubble(SignalWithId signal) async {
-    setState(() => _selectedSignal = signal);
+    setState(() {
+      _selectedClinic = null;
+      _selectedSignal = signal;
+    });
     // Place it from the last known camera before asking the platform, so a
     // bubble opened while another one is closing never paints a frame at the
     // previous pin's position. Null until the camera has moved once, in which
     // case the bubble simply waits for the authoritative answer below.
+    await _anchorBubble();
+  }
+
+  /// Place a freshly-opened bubble.
+  ///
+  /// Projects from the last known camera first so a bubble opened while another
+  /// is closing never paints a frame at the previous pin's position, then asks
+  /// the platform for the authoritative answer.
+  Future<void> _anchorBubble() async {
     final camera = _lastCamera;
     _bubbleAnchor.value = null;
     if (camera != null) _projectBubbleAnchor(camera);
     await _updateBubbleAnchor();
   }
 
+  /// Open what the bubble points at, and re-anchor it on the way back.
+  ///
+  /// The route transition can leave the camera somewhere else, so the position
+  /// we left with is not to be trusted. Guarded on the bubble still being the
+  /// same one, in case it was dismissed or replaced while the route was up.
+  void _openBubbleTarget(String location) {
+    final point = _bubblePoint;
+    context.push(location).then((_) {
+      if (mounted && _bubblePoint == point) _updateBubbleAnchor();
+    });
+  }
+
   void _dismissBubble() {
-    if (_selectedSignal == null) return;
-    setState(() => _selectedSignal = null);
+    if (_selectedSignal == null && _selectedClinic == null) return;
+    setState(() {
+      _selectedSignal = null;
+      _selectedClinic = null;
+    });
     _bubbleAnchor.value = null;
   }
 
@@ -553,13 +610,11 @@ class _MapScreenState extends ConsumerState<MapScreen>
   /// through the gesture itself, and any drift it accumulated is corrected
   /// here the moment the gesture ends.
   Future<void> _updateBubbleAnchor() async {
-    final signal = _selectedSignal;
-    if (signal == null) return;
-    // Precondition: a selected signal implies its marker was tapped on a map.
-    final screenCoord = await _mapController!.getScreenCoordinate(
-      LatLng(signal.location.latitude, signal.location.longitude),
-    );
-    if (!mounted || _selectedSignal?.id != signal.id) return;
+    final point = _bubblePoint;
+    if (point == null) return;
+    // Precondition: an open bubble implies its marker was tapped on a map.
+    final screenCoord = await _mapController!.getScreenCoordinate(point);
+    if (!mounted || _bubblePoint != point) return;
     final (x, y) = _screenCoordToLogical(screenCoord);
     _bubbleAnchor.value = Offset(x, y);
   }
@@ -570,12 +625,12 @@ class _MapScreenState extends ConsumerState<MapScreen>
   /// platform — see [screenOffsetFromCamera] for why, and for the tilt
   /// precondition that [GoogleMap.tiltGesturesEnabled] `false` maintains.
   void _projectBubbleAnchor(CameraPosition camera) {
-    final signal = _selectedSignal;
-    if (signal == null) return;
+    final point = _bubblePoint;
+    if (point == null) return;
     final size = _mapSize;
     if (size == null) return;
     final offset = screenOffsetFromCamera(
-      point: LatLng(signal.location.latitude, signal.location.longitude),
+      point: point,
       camera: camera,
       viewport: size,
     );
@@ -819,27 +874,33 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 clusterManagers: _clusterManagers,
               ),
               ),
-              // The signal bubble, anchored to its pin.
+              // The open bubble — a signal's or a clinic's — anchored to its
+              // pin.
               //
               // Listens to the anchor rather than reading it from state, so a
               // pan repaints this subtree alone and leaves the marker set that
               // _buildScaffold assembles untouched.
-              if (selectedFresh != null)
+              if (selectedFresh != null || _selectedClinic != null)
                 ValueListenableBuilder<Offset?>(
                   valueListenable: _bubbleAnchor,
                   builder: (context, anchor, _) {
                     final signal = selectedFresh;
+                    final clinic = _selectedClinic;
                     final mapSize = _mapSize;
-                    if (anchor == null || signal == null || mapSize == null) {
+                    if (anchor == null ||
+                        mapSize == null ||
+                        (signal == null && clinic == null)) {
                       return const SizedBox.shrink();
                     }
 
                     final layout = bubbleLayoutFor(
                       anchor: anchor,
                       viewport: mapSize,
-                      bubbleWidth: SignalInfoCard.width,
-                      maxBubbleHeight: SignalInfoCard.maxHeightFor(context),
-                      pinHeight: _kPinHeight,
+                      bubbleWidth: MapBubble.width,
+                      maxBubbleHeight: clinic != null
+                          ? ClinicInfoCard.maxHeightFor(context)
+                          : SignalInfoCard.maxHeightFor(context),
+                      pinHeight: _bubblePinHeight,
                       gap: _kBubbleGap,
                       edgeInset: _kBubbleEdgeInset,
                     );
@@ -859,28 +920,27 @@ class _MapScreenState extends ConsumerState<MapScreen>
                         offset: Offset(layout.left, layout.anchorY),
                         child: FractionalTranslation(
                           // Pulls the bubble up by its own height, which is
-                          // content-dependent and unknown here — Bulgarian tag
+                          // content-dependent and unknown here — Bulgarian
                           // labels wrap to a second row where English does not.
                           translation:
                               layout.above ? const Offset(0, -1) : Offset.zero,
-                          child: SignalInfoCard(
-                            signal: signal,
-                            tailDown: layout.above,
-                            tailAlignment: layout.tailAlignment,
-                            onTap: () {
-                              context
-                                  .push(Routes.signalDetails(signal.id))
-                                  .then((_) {
-                                // The route transition can leave the camera
-                                // somewhere else; re-anchor on return rather
-                                // than trust the position we left with.
-                                if (mounted &&
-                                    _selectedSignal?.id == signal.id) {
-                                  _updateBubbleAnchor();
-                                }
-                              });
-                            },
-                          ),
+                          child: clinic != null
+                              ? ClinicInfoCard(
+                                  clinic: clinic,
+                                  tailDown: layout.above,
+                                  tailAlignment: layout.tailAlignment,
+                                  onTap: () => _openBubbleTarget(
+                                    Routes.clinicDetails(clinic.id),
+                                  ),
+                                )
+                              : SignalInfoCard(
+                                  signal: signal!,
+                                  tailDown: layout.above,
+                                  tailAlignment: layout.tailAlignment,
+                                  onTap: () => _openBubbleTarget(
+                                    Routes.signalDetails(signal.id),
+                                  ),
+                                ),
                         ),
                       ),
                     );
@@ -930,30 +990,29 @@ class _MapScreenState extends ConsumerState<MapScreen>
                   left: 0,
                   right: 0,
                   child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,  // theme-independent: over the map
-                        borderRadius: BorderRadius.circular(8),  // theme-independent: over the map
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.2),  // theme-independent: over the map
-                            blurRadius: 8,  // theme-independent: over the map
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                          const SizedBox(width: 12),
-                          Text(l10n.loadingClinics),
-                        ],
+                    // A themed surface, not a white card. Floating over the map
+                    // is not a reason to opt out of the theme — the signal
+                    // bubble does the same and reads in both — and a white card
+                    // with default-coloured text on a dark map was the one
+                    // place the dark theme visibly broke.
+                    child: Material(
+                      color: Theme.of(context).colorScheme.surface,
+                      elevation: 6,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(l10n.loadingClinics),
+                          ],
+                        ),
                       ),
                     ),
                   ),

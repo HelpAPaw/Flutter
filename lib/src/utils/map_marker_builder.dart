@@ -21,6 +21,13 @@ class MapMarkerBuilder {
   /// Size the pin bitmaps are rendered at.
   static const Size pinSize = Size(24, pinHeight);
 
+  /// Height of the clinic pin. Shorter than a signal pin, so the clinic bubble
+  /// has to be offset by less or it floats clear of the marker.
+  static const double clinicPinHeight = 24;
+
+  /// Size the clinic pin bitmap is rendered at.
+  static const Size clinicPinSize = Size(24, clinicPinHeight);
+
   bool _pinsLoaded = false;
   bool _hospitalPinLoaded = false;
 
@@ -42,7 +49,7 @@ class MapMarkerBuilder {
   /// Load hospital/clinic pin
   Future<void> loadHospitalPin() async {
     hospitalPin = await BitmapDescriptor.asset(
-      const ImageConfiguration(size: Size(24, 24)),
+      const ImageConfiguration(size: clinicPinSize),
       'assets/icons/local_hospital_blue.png',
     );
     _hospitalPinLoaded = true;
