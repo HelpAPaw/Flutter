@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:help_a_paw/src/models/signal_urgency.dart';
 import 'package:help_a_paw/src/utils/cluster_bubble_icons.dart';
+import 'package:help_a_paw/src/utils/map_clusterer.dart';
 import 'package:help_a_paw/src/utils/map_marker_builder.dart';
 
 /// A cluster bubble is the colour of its most urgent member. This is the
@@ -10,25 +12,24 @@ import 'package:help_a_paw/src/utils/map_marker_builder.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('ensure renders each key once and get returns it', () async {
+  test('ensure returns a bitmap for every key, rendering each once', () async {
     final icons = ClusterBubbleIcons();
-    final red3 = ClusterBubbleKey.count(fill: Colors.red, count: 3);
-    final amber120 = ClusterBubbleKey.count(fill: Colors.orange, count: 120);
-    expect(icons.get(red3), isNull);
+    final red3 = clusterBubbleKey(fill: Colors.red, count: 3);
+    final amber120 = clusterBubbleKey(fill: Colors.orange, count: 120);
 
-    await icons.ensure([red3, amber120, red3], devicePixelRatio: 3.0);
-    final first = icons.get(red3);
-    expect(first, isNotNull);
-    expect(icons.get(amber120), isNotNull);
+    final first =
+        await icons.ensure([red3, amber120, red3], devicePixelRatio: 3.0);
+    expect(first.keys, unorderedEquals([red3, amber120]));
+    expect(first[red3], isNotNull);
 
     // A second ensure is a no-op for cached keys — same instance back.
-    await icons.ensure([red3], devicePixelRatio: 3.0);
-    expect(identical(icons.get(red3), first), isTrue);
+    final second = await icons.ensure([red3], devicePixelRatio: 3.0);
+    expect(identical(second[red3], first[red3]), isTrue);
   });
 
   test('a bubble with one red member is red', () {
     expect(
-      MapMarkerBuilder.highestUrgency([
+      SignalUrgency.highest([
         SignalUrgency.green.code,
         SignalUrgency.amber.code,
         SignalUrgency.red.code,
@@ -40,7 +41,7 @@ void main() {
 
   test('amber and green together read amber', () {
     expect(
-      MapMarkerBuilder.highestUrgency(
+      SignalUrgency.highest(
           [SignalUrgency.green.code, SignalUrgency.amber.code]),
       SignalUrgency.amber,
     );
@@ -48,7 +49,7 @@ void main() {
 
   test('all green reads green', () {
     expect(
-      MapMarkerBuilder.highestUrgency(
+      SignalUrgency.highest(
           [SignalUrgency.green.code, SignalUrgency.green.code]),
       SignalUrgency.green,
     );
@@ -58,7 +59,7 @@ void main() {
     // `fromCode` falls back to amber — a signal from a newer build might be
     // real, so its bubble says "needs help" rather than "fine".
     expect(
-      MapMarkerBuilder.highestUrgency([SignalUrgency.green.code, 99]),
+      SignalUrgency.highest([SignalUrgency.green.code, 99]),
       SignalUrgency.amber,
     );
   });
@@ -68,7 +69,7 @@ void main() {
     // scale, so the comparison goes through the enum index.
     final byIndex = SignalUrgency.values.last;
     expect(
-      MapMarkerBuilder.highestUrgency(
+      SignalUrgency.highest(
           SignalUrgency.values.map((u) => u.code).toList().reversed),
       byIndex,
     );
@@ -83,16 +84,38 @@ void main() {
 
   test('bubble keys compare by fill and label', () {
     expect(
-      const ClusterBubbleKey(fill: Colors.red, label: '3'),
-      const ClusterBubbleKey(fill: Colors.red, label: '3'),
+      clusterBubbleKey(fill: Colors.red, count: 3),
+      (Colors.red, '3'),
     );
     expect(
-      ClusterBubbleKey.count(fill: Colors.red, count: 150),
-      const ClusterBubbleKey(fill: Colors.red, label: '99+'),
+      clusterBubbleKey(fill: Colors.red, count: 150),
+      (Colors.red, '99+'),
     );
     expect(
-      const ClusterBubbleKey(fill: Colors.red, label: '3'),
-      isNot(const ClusterBubbleKey(fill: Colors.green, label: '3')),
+      clusterBubbleKey(fill: Colors.red, count: 3),
+      isNot(clusterBubbleKey(fill: Colors.green, count: 3)),
     );
+  });
+
+  test('a cluster is identified by its lowest member, not by where it is', () {
+    // The marker id has to survive a zoom step that leaves the grouping alone,
+    // or every bubble is removed and its bitmap re-uploaded for each notch of
+    // the zoom control.
+    MapCluster<String> clusterOf(List<String> members) => MapCluster(
+          members: members,
+          position: const LatLng(42.69, 23.32),
+          bounds: LatLngBounds(
+            southwest: const LatLng(42.69, 23.32),
+            northeast: const LatLng(42.69, 23.32),
+          ),
+        );
+    String idOf(MapCluster<String> c) =>
+        MapMarkerBuilder.clusterMarkerId(c, (m) => m);
+
+    expect(idOf(clusterOf(['c', 'a', 'b'])), 'a');
+    expect(idOf(clusterOf(['b', 'c', 'a'])), 'a',
+        reason: 'order within the cluster must not change the id');
+    expect(idOf(clusterOf(['c', 'b'])), 'b',
+        reason: 'a different membership is a different bubble');
   });
 }

@@ -9,7 +9,7 @@ import 'package:help_a_paw/src/widgets/map/cluster_items_sheet.dart';
 
 /// The sheet that opens for a cluster the camera cannot split. Its whole job is
 /// to make every member reachable, so the tests are about the rows: one per
-/// signal, titled like the signal, and a tap that reports which one.
+/// member, named like the member, and a tap that reports which one.
 void main() {
   SignalWithId signalWith(String id, {String title = 'Injured dog'}) {
     final signal = Signal(
@@ -34,11 +34,23 @@ void main() {
     );
   }
 
-  Future<void> open(
+  VetClinic clinicWith(String id, {required String name, String address = ''}) =>
+      VetClinic(
+        id: id,
+        name: name,
+        address: address,
+        latitude: 42.69,
+        longitude: 23.32,
+      );
+
+  /// Opens the sheet the way the map does, for whatever member type the test
+  /// is about.
+  Future<void> open<T>(
     WidgetTester tester,
-    List<SignalWithId> members, {
+    List<T> members, {
+    required String Function(AppLocalizations l10n, int count) title,
+    required Widget Function(T item) row,
     Locale locale = const Locale('en'),
-    void Function(SignalWithId)? onRowTap,
   }) async {
     tester.view.physicalSize = const Size(1233, 2154); // 411dp phone
     tester.view.devicePixelRatio = 3.0;
@@ -52,15 +64,11 @@ void main() {
           body: Builder(
             builder: (context) => Center(
               child: ElevatedButton(
-                onPressed: () => showClusterItemsSheet(
+                onPressed: () => showClusterItemsSheet<T>(
                   context: context,
-                  title: AppLocalizations.of(context)
-                      .clusterSignalsHere(members.length),
-                  itemCount: members.length,
-                  itemBuilder: (_, index) => SignalClusterRow(
-                    signal: members[index],
-                    onTap: () => onRowTap?.call(members[index]),
-                  ),
+                  title: title(AppLocalizations.of(context), members.length),
+                  items: members,
+                  row: (_, item) => row(item),
                 ),
                 child: const Text('open'),
               ),
@@ -73,13 +81,18 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('one row per member, titled like the signal', (tester) async {
-    await open(tester, [
-      signalWith('a', title: 'Cat on the roof'),
-      signalWith('b', title: 'Dog by the tram stop'),
-      signalWith('c', title: 'Pigeon with a broken wing'),
-      signalWith('d', title: 'Kitten in a drain'),
-    ]);
+  testWidgets('one row per signal, titled like the signal', (tester) async {
+    await open<SignalWithId>(
+      tester,
+      [
+        signalWith('a', title: 'Cat on the roof'),
+        signalWith('b', title: 'Dog by the tram stop'),
+        signalWith('c', title: 'Pigeon with a broken wing'),
+        signalWith('d', title: 'Kitten in a drain'),
+      ],
+      title: (l10n, count) => l10n.clusterSignalsHere(count),
+      row: (signal) => SignalClusterRow(signal: signal, onTap: () {}),
+    );
 
     expect(find.text('4 signals here'), findsOneWidget);
     expect(find.bySemanticsIdentifier('clusterSignalRow'), findsNWidgets(4));
@@ -87,84 +100,68 @@ void main() {
     expect(find.text('Kitten in a drain'), findsOneWidget);
   });
 
-  testWidgets('a row tap reports its signal', (tester) async {
-    SignalWithId? tapped;
-    await open(
+  testWidgets('a signal row tap reports its signal', (tester) async {
+    String? tapped;
+    await open<SignalWithId>(
       tester,
       [signalWith('a', title: 'First'), signalWith('b', title: 'Second')],
-      onRowTap: (s) => tapped = s,
+      title: (l10n, count) => l10n.clusterSignalsHere(count),
+      row: (signal) =>
+          SignalClusterRow(signal: signal, onTap: () => tapped = signal.id),
     );
 
     await tester.tap(find.text('Second'));
     await tester.pump();
 
-    expect(tapped?.id, 'b');
+    expect(tapped, 'b');
+  });
+
+  testWidgets('an untitled signal falls back to what it needs', (tester) async {
+    await open<SignalWithId>(
+      tester,
+      [signalWith('a', title: '')],
+      title: (l10n, count) => l10n.clusterSignalsHere(count),
+      row: (signal) => SignalClusterRow(signal: signal, onTap: () {}),
+    );
+
+    expect(find.text('1 signal here'), findsOneWidget);
+    expect(find.bySemanticsIdentifier('clusterSignalRow'), findsOneWidget);
+    expect(find.text(''), findsNothing);
   });
 
   testWidgets('clinic rows show name and address and report a tap',
       (tester) async {
     String? tapped;
-    final clinics = [
-      VetClinic(
-        id: 'c1',
-        name: 'Central Vet',
-        address: '1 Vitosha Blvd',
-        latitude: 42.69,
-        longitude: 23.32,
-      ),
-      VetClinic(
-        id: 'c2',
-        name: 'Paws & Claws',
-        address: '',
-        latitude: 42.69,
-        longitude: 23.32,
-      ),
-    ];
-    tester.view.physicalSize = const Size(1233, 2154);
-    tester.view.devicePixelRatio = 3.0;
-    addTearDown(tester.view.reset);
-    await tester.pumpWidget(
-      MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(
-          body: Builder(
-            builder: (context) => Center(
-              child: ElevatedButton(
-                onPressed: () => showClusterItemsSheet(
-                  context: context,
-                  title: AppLocalizations.of(context)
-                      .clusterClinicsHere(clinics.length),
-                  itemCount: clinics.length,
-                  itemBuilder: (_, i) => ClinicClusterRow(
-                    clinic: clinics[i],
-                    onTap: () => tapped = clinics[i].id,
-                  ),
-                ),
-                child: const Text('open'),
-              ),
-            ),
-          ),
-        ),
-      ),
+    await open<VetClinic>(
+      tester,
+      [
+        clinicWith('c1', name: 'Central Vet', address: '1 Vitosha Blvd'),
+        clinicWith('c2', name: 'Paws & Claws'),
+      ],
+      title: (l10n, count) => l10n.clusterClinicsHere(count),
+      row: (clinic) =>
+          ClinicClusterRow(clinic: clinic, onTap: () => tapped = clinic.id),
     );
-    await tester.tap(find.text('open'));
-    await tester.pumpAndSettle();
 
     expect(find.text('2 vet clinics here'), findsOneWidget);
     expect(find.bySemanticsIdentifier('clusterClinicRow'), findsNWidgets(2));
     expect(find.text('1 Vitosha Blvd'), findsOneWidget);
+
     await tester.tap(find.text('Paws & Claws'));
     await tester.pump();
+
     expect(tapped, 'c2');
   });
 
   testWidgets('the title pluralises in Bulgarian', (tester) async {
-    await open(
+    await open<SignalWithId>(
       tester,
       [signalWith('a'), signalWith('b')],
+      title: (l10n, count) => l10n.clusterSignalsHere(count),
+      row: (signal) => SignalClusterRow(signal: signal, onTap: () {}),
       locale: const Locale('bg'),
     );
+
     expect(find.text('2 сигнала тук'), findsOneWidget);
   });
 }

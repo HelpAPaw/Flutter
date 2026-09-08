@@ -66,10 +66,11 @@ class _MapLegendSheet extends StatelessWidget {
                 label: urgency.label(l10n),
                 description: urgency.description(l10n),
               ),
-            // The bubble is drawn here in Flutter rather than shown as the
-            // marker bitmap, but with the same geometry (disc, halo, white
-            // count) so it is recognisably the thing on the map. Amber, as the
-            // urgency an unknown signal defaults to and the middle of the scale.
+            // Drawn here in Flutter rather than shown as the marker bitmap,
+            // at the legend's own 28px scale but from the bubble's own colours
+            // and weight, so a restyle cannot leave the two disagreeing. Amber,
+            // as the urgency an unknown signal defaults to and the middle of
+            // the scale.
             _LegendRow(
               icon: _LegendBubble(count: 3, color: SignalUrgency.amber.color),
               label: l10n.mapLegendCluster,
@@ -148,9 +149,9 @@ class _LegendRow extends StatelessWidget {
   }
 }
 
-/// A cluster bubble as the legend shows it: the marker bitmap's geometry
-/// ([ClusterBubbleIcons.discDiameter] and halo), scaled to the legend's 28px
-/// icon column, drawn with widgets so it follows text scaling like its row.
+/// A cluster bubble as the legend shows it: the marker bitmap's shape redrawn
+/// at the legend's 28px icon column, with the bitmap's own halo alpha and label
+/// weight, and with widgets so it follows text scaling like its row.
 class _LegendBubble extends StatelessWidget {
   const _LegendBubble({required this.count, required this.color});
 
@@ -165,7 +166,7 @@ class _LegendBubble extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: color.withAlpha(90),
+          color: color.withAlpha(ClusterBubbleIcons.haloAlpha),
         ),
         child: Padding(
           padding: const EdgeInsets.all(3),
@@ -186,7 +187,7 @@ class _LegendBubble extends StatelessWidget {
                   // modes.
                   color: Colors.white, // theme-independent
                   fontSize: 11,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: ClusterBubbleIcons.labelWeight,
                 ),
               ),
             ),

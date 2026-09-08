@@ -1344,21 +1344,28 @@ anonymous session is re-established there and then, not at the next launch.
   `SignalUrgency` declaration order, never by code — so a cluster holding one critical
   signal is red at every zoom, exactly as its pin would be. Every urgency clusters, red
   included; an **unknown** code follows its amber fallback (§4.6), so it can tint a bubble
-  "needs help" but never "fine". `MapMarkerBuilder.highestUrgency` and the clusterer are
+  "needs help" but never "fine". `SignalUrgency.highest` and the clusterer are
   unit-tested (`test/map_clusterer_test.dart`, `test/map_marker_builder_test.dart`).
   Why it moved into Dart: the SDK's bubble was Google's navy and `ClusterManager` exposes
   nothing to restyle it — the Dart type is an id and a tap callback, and neither platform
   plugin overrides the bubble renderer — so at the opening zoom, where nearly every signal
   sits in a bubble, the map could not say anything on it was critical (issue #76).
   `_recluster` runs on every input change — stream emission, filter change, camera idle,
-  a bubble opening or closing, pins finishing loading — renders any missing bubble
-  bitmaps first, then publishes the marker set; the **selected signal is held out of
-  clustering** while its bubble is open, so the bubble's tail never points at a bubble.
+  a bubble opening or closing, a locale change, pins finishing loading — renders any
+  missing bubble bitmaps first, then publishes the marker set; the **selected signal is
+  held out of clustering** (`keepSeparate`) while its bubble is open, so the bubble's tail
+  never points at a bubble. It compares its inputs first and returns when they are
+  unchanged, which is most camera idles: clustering buckets at whole zoom levels, so every
+  pan and most pinches would otherwise recompute a byte-identical marker set. A bubble's
+  marker id is its **lowest member id**, not its position, so a bubble that survives a
+  zoom step keeps its marker instead of being removed and re-uploaded.
   Clusters form and split at camera *idle* only; mid-gesture the markers ride the map.
 - **Cluster tap:** zooms to the cluster's bounds — unless the bounds are tighter than
   ~10 m on the ground or the camera is already at zoom 20, in which case it opens a
   bottom sheet listing the members (`map/cluster_items_sheet.dart`), each row opening its
-  signal. Max zoom resolves about 5 m at Sofia's latitude, and identical coordinates never
+  signal. Which of the two it is, is `splitsByZoomingIn`'s answer — the merge rule read
+  backwards, in the same pixel space, so the threshold cannot drift from the merge
+  distance the way a hand-converted one in ground metres did. Max zoom resolves about 5 m at Sofia's latitude, and identical coordinates never
   separate at any zoom; before the sheet, a cluster of co-located signals (two reporters at
   the same spot) zoomed to 21 and stayed a bubble, with no way to open anything inside it.
 - **Dark map style** (`map/map_style_builder.dart`, `assets/map_style_dark.json`): the map

@@ -803,7 +803,6 @@ void main() {
       viewModel.toggleVetClinics(); // off
 
       expect(viewModel.state.vetClinicState.clinics, isEmpty);
-      expect(viewModel.state.vetClinicState.clinics, isEmpty);
       expect(viewModel.state.vetClinicState.lastSearchCenter, isNull);
     });
 

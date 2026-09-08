@@ -5,6 +5,20 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import 'map_projection.dart';
 
+/// How close two points have to be on screen — in logical pixels, at the
+/// camera's rounded zoom — to be drawn as one bubble.
+///
+/// The Maps SDK's own algorithm uses 100px. This is tighter, so a bubble covers
+/// less of the map than the SDK's did at the same zoom.
+const double kClusterMergeDistancePx = 60.0;
+
+/// The deepest zoom worth asking the camera for.
+///
+/// Google's maximum is 21 where imagery allows and lower where it does not, so
+/// a cluster tap treats a camera already at 20 as arrived rather than asking it
+/// to try again and land nowhere.
+const double kMaxUsefulZoom = 20.0;
+
 /// Groups map points that would overlap on screen, in Dart.
 ///
 /// The Maps SDK has its own clustering, and the app used it until it turned
@@ -31,8 +45,8 @@ import 'map_projection.dart';
 /// One property the caller still has to live with, shared with the native
 /// algorithm: **identical coordinates never separate**, at any zoom. Two
 /// reporters at the same spot are one bubble all the way to zoom 21, so a
-/// cluster tap needs an answer other than "zoom in" — see the cluster items
-/// sheet.
+/// cluster tap needs an answer other than "zoom in" — see [splitsByZoomingIn]
+/// and the cluster items sheet.
 ///
 /// Generic over the point type: the signal layer and the vet clinic layer both
 /// use it, separately, so a signal never shares a bubble with a clinic.
@@ -40,39 +54,36 @@ ClusterResult<T> clusterPoints<T>(
   Iterable<T> items, {
   required LatLng Function(T item) position,
   required double zoom,
-  double mergeDistancePx = 60.0,
-  bool Function(T item)? exclude,
+  double mergeDistancePx = kClusterMergeDistancePx,
+  bool Function(T item)? keepSeparate,
 }) {
-  final discreteZoom = zoom.round();
-  final scale = math.pow(2.0, discreteZoom).toDouble();
+  final scale = math.pow(2.0, zoom.round()).toDouble();
 
   final singles = <T>[];
-  final points = <_Point<T>>[];
-  final cells = <_CellKey, List<int>>{};
+  final points = <({T item, LatLng at, Offset px})>[];
+  final cells = <(int, int), List<int>>{};
   for (final item in items) {
-    if (exclude != null && exclude(item)) {
+    if (keepSeparate != null && keepSeparate(item)) {
       singles.add(item);
       continue;
     }
     final at = position(item);
     final px = worldPoint(at) * scale;
-    final index = points.length;
-    points.add(_Point(item, at, px));
-    (cells[_cellOf(px, mergeDistancePx, discreteZoom)] ??= <int>[]).add(index);
+    (cells[_cellOf(px, mergeDistancePx)] ??= <int>[]).add(points.length);
+    points.add((item: item, at: at, px: px));
   }
 
   final grouped = List<bool>.filled(points.length, false);
   final clusters = <MapCluster<T>>[];
-  final usedKeys = <String, int>{};
   for (var seed = 0; seed < points.length; seed++) {
     if (grouped[seed]) continue;
     final seedPx = points[seed].px;
-    final cell = _cellOf(seedPx, mergeDistancePx, discreteZoom);
+    final (cellX, cellY) = _cellOf(seedPx, mergeDistancePx);
 
     final members = <int>[];
     for (var dx = -1; dx <= 1; dx++) {
       for (var dy = -1; dy <= 1; dy++) {
-        final neighbours = cells[_CellKey(cell.zoom, cell.x + dx, cell.y + dy)];
+        final neighbours = cells[(cellX + dx, cellY + dy)];
         if (neighbours == null) continue;
         for (final i in neighbours) {
           if (grouped[i]) continue;
@@ -101,15 +112,8 @@ ClusterResult<T> clusterPoints<T>(
       west = math.min(west, p.longitude);
       east = math.max(east, p.longitude);
     }
-    // Keyed by the seed's cell. Two seeds can share a cell without being within
-    // range of each other (a cell's diagonal is longer than its side), so a
-    // repeat gets an ordinal rather than a duplicate marker id.
-    var key = '${cell.zoom}:${cell.x}:${cell.y}';
-    final repeat = usedKeys.update(key, (n) => n + 1, ifAbsent: () => 1);
-    if (repeat > 1) key = '$key#$repeat';
 
     clusters.add(MapCluster<T>(
-      key: key,
       members: List.unmodifiable(members.map((i) => points[i].item)),
       position: LatLng(latSum / members.length, lngSum / members.length),
       bounds: LatLngBounds(
@@ -125,14 +129,29 @@ ClusterResult<T> clusterPoints<T>(
   );
 }
 
-_CellKey _cellOf(Offset px, double size, int zoom) =>
-    _CellKey(zoom, (px.dx / size).floor(), (px.dy / size).floor());
-
-class _Point<T> {
-  const _Point(this.item, this.at, this.px);
-  final T item;
-  final LatLng at;
-  final Offset px;
+/// Whether zooming in can break [bounds] apart into separate markers.
+///
+/// Lives here because it is the same rule as the merge, read backwards: members
+/// separate only once they are more than [mergeDistancePx] apart on screen, and
+/// the deepest the camera can usefully go is [kMaxUsefulZoom]. Asking it in
+/// pixels keeps the one rule in one place — the alternative, a threshold in
+/// ground metres, has to be re-derived by hand whenever the merge distance
+/// changes and is only right at the latitude it was worked out for.
+///
+/// Deliberately conservative — twice the merge distance, and measured at
+/// [kMaxUsefulZoom] rather than at Google's occasional 21. Answering "no" when
+/// zooming would in fact have worked costs a sheet the user could have avoided;
+/// answering "yes" when it would not costs a tap that does nothing at all, and
+/// leaves whatever is inside unreachable.
+bool splitsByZoomingIn(
+  LatLngBounds bounds, {
+  required double currentZoom,
+  double mergeDistancePx = kClusterMergeDistancePx,
+}) {
+  if (currentZoom >= kMaxUsefulZoom) return false;
+  final span = (worldPoint(bounds.northeast) - worldPoint(bounds.southwest)) *
+      math.pow(2.0, kMaxUsefulZoom).toDouble();
+  return span.distance >= 2 * mergeDistancePx;
 }
 
 /// What [clusterPoints] produced: the points to draw as themselves, and the
@@ -144,19 +163,13 @@ class ClusterResult<T> {
   final List<MapCluster<T>> clusters;
 }
 
-/// Two or more points within merge distance of a common seed.
+/// Two or more points close enough together to be drawn as one bubble.
 class MapCluster<T> {
   const MapCluster({
-    required this.key,
     required this.members,
     required this.position,
     required this.bounds,
   });
-
-  /// `zoom:cellX:cellY` of the point the cluster grew from — stable while the
-  /// grouping is, so a re-cluster after a pan that did not change it re-sends
-  /// nothing for this bubble.
-  final String key;
 
   final List<T> members;
 
@@ -170,16 +183,5 @@ class MapCluster<T> {
   int get count => members.length;
 }
 
-class _CellKey {
-  const _CellKey(this.zoom, this.x, this.y);
-  final int zoom;
-  final int x;
-  final int y;
-
-  @override
-  bool operator ==(Object other) =>
-      other is _CellKey && other.zoom == zoom && other.x == x && other.y == y;
-
-  @override
-  int get hashCode => Object.hash(zoom, x, y);
-}
+(int, int) _cellOf(Offset px, double size) =>
+    ((px.dx / size).floor(), (px.dy / size).floor());

@@ -17,13 +17,13 @@ void main() {
   ClusterResult<LatLng> cluster(
     List<LatLng> points, {
     double zoom = 11,
-    bool Function(LatLng)? exclude,
+    bool Function(LatLng)? keepSeparate,
   }) =>
       clusterPoints<LatLng>(
         points,
         position: (p) => p,
         zoom: zoom,
-        exclude: exclude,
+        keepSeparate: keepSeparate,
       );
 
   test('a lone point is a single', () {
@@ -104,7 +104,7 @@ void main() {
       [a, b, c],
       position: (p) => p.at,
       zoom: 11,
-      exclude: (p) => p.id == 'a',
+      keepSeparate: (p) => p.id == 'a',
     );
     expect(r.singles, [a]);
     expect(r.clusters.single.members, unorderedEquals([b, c]));
@@ -116,19 +116,52 @@ void main() {
       [a, b],
       position: (p) => p.at,
       zoom: 11,
-      exclude: (p) => p.id == 'a',
+      keepSeparate: (p) => p.id == 'a',
     );
     expect(r.clusters, isEmpty);
     expect(r.singles, unorderedEquals([a, b]));
   });
 
-  test('the cluster key is stable across calls at the same zoom', () {
-    final k1 = cluster([nedelya, nedelya], zoom: 11.2).clusters.single.key;
-    final k2 = cluster([nedelya, nedelya], zoom: 11.4).clusters.single.key;
-    final k3 = cluster([nedelya, nedelya], zoom: 12.0).clusters.single.key;
-    expect(k1, k2, reason: 'both round to zoom 11');
-    expect(k1, isNot(k3), reason: 'a different zoom is a different index');
-    expect(k1, startsWith('11:'));
+  group('splitsByZoomingIn', () {
+    LatLngBounds boundsSpanning(double metres) => LatLngBounds(
+          southwest: nedelya,
+          northeast: east(nedelya, metres),
+        );
+
+    test('co-located members can never be split', () {
+      expect(
+        splitsByZoomingIn(
+          LatLngBounds(southwest: nedelya, northeast: nedelya),
+          currentZoom: 11,
+        ),
+        isFalse,
+      );
+    });
+
+    test('members a metre apart cannot be split', () {
+      // The pair that used to be drawn on top of each other at max zoom.
+      expect(splitsByZoomingIn(boundsSpanning(1), currentZoom: 11), isFalse);
+    });
+
+    test('members a block apart can', () {
+      expect(splitsByZoomingIn(boundsSpanning(100), currentZoom: 11), isTrue);
+    });
+
+    test('nothing can be split once the camera is already as deep as it goes',
+        () {
+      final wide = boundsSpanning(100);
+      expect(splitsByZoomingIn(wide, currentZoom: 11), isTrue);
+      expect(splitsByZoomingIn(wide, currentZoom: kMaxUsefulZoom), isFalse);
+    });
+
+    test('the threshold sits above the merge distance, not on it', () {
+      // Exactly one merge distance apart at max zoom: zooming would land them
+      // touching, so the sheet is the honest answer.
+      const metresPerPx = 4.4 / 80; // 80px ≈ 4.4 m at zoom 21, 42.7°N
+      final justMerged =
+          boundsSpanning(kClusterMergeDistancePx * metresPerPx * 2);
+      expect(splitsByZoomingIn(justMerged, currentZoom: 11), isFalse);
+    });
   });
 }
 
