@@ -86,7 +86,11 @@ class ClusterBubbleIcons {
       centre - Offset(text.width / 2, text.height / 2),
     );
 
-    final image = await recorder.endRecording().toImage(px, px);
+    // Both handles are native resources, and neither is freed by going out of
+    // scope — they wait on GC finalization.
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(px, px);
+    picture.dispose();
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
     image.dispose();
     return BitmapDescriptor.bytes(

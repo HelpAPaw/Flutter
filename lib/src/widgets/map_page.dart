@@ -149,10 +149,13 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
   /// Ground span below which zooming in cannot separate a cluster's members.
   ///
-  /// The SDK merges markers within 100px of each other, which at max zoom (21)
-  /// is about 5.5 m at Sofia's latitude. Anything tighter than this stays one
-  /// bubble at every zoom, and identical coordinates — two reporters at the
-  /// same spot — never separate at all.
+  /// [clusterPoints] merges points within 60px of each other, which at max
+  /// zoom (21) is about 3.3 m at Sofia's latitude. Anything tighter than that
+  /// stays one bubble at every zoom, and identical coordinates — two reporters
+  /// at the same spot — never separate at all. The threshold is deliberately
+  /// above the merge distance rather than equal to it: erring high only means
+  /// listing a cluster that zooming could have split, while erring low means
+  /// the tap that does nothing.
   static const _kUnsplittableSpanMetres = 10.0;
 
   /// Zoom past which a cluster tap has nowhere further to go. Google's maximum
@@ -161,11 +164,17 @@ class _MapScreenState extends ConsumerState<MapScreen>
   static const _kZoomedInToTheLimit = 20.0;
 
   void _onSignalClusterTap(MapCluster<SignalWithId> cluster) {
+    // A bubble is `consumeTapEvents`, so `GoogleMap.onTap` never fires for it
+    // and an open signal bubble would otherwise survive the tap — riding the
+    // camera to wherever the zoom lands, or sitting under the sheet. Same
+    // reason the clinic markers were given `onClinicMarkerTap`.
+    _dismissBubble();
     if (_zoomIntoCluster(cluster.bounds)) return;
     _showClusterSignals(cluster.members);
   }
 
   void _onClinicClusterTap(MapCluster<VetClinic> cluster) {
+    _dismissBubble();
     if (_zoomIntoCluster(cluster.bounds)) return;
     _showClusterClinics(cluster.members);
   }
@@ -285,8 +294,15 @@ class _MapScreenState extends ConsumerState<MapScreen>
       // over a map that is about to be replaced: its anchor was computed
       // against the outgoing view, and _updateBubbleAnchor would go looking
       // for the pin through a disposed controller.
+      // Through the field rather than _dismissBubble: this runs inside
+      // didChangeDependencies, where the build that setState would schedule is
+      // already coming. The recluster still has to happen by hand, or the
+      // signal that was held out of clustering stays a lone pin beside the
+      // cluster it belongs in — a locale change rebuilds the platform view
+      // without moving the camera, so no onCameraIdle arrives to correct it.
       _selectedSignal = null;
       _bubbleAnchor.value = null;
+      unawaited(_recluster());
     }
     _mapLocale = locale;
   }
@@ -696,19 +712,33 @@ class _MapScreenState extends ConsumerState<MapScreen>
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final token = ++_reclusterToken;
 
-    // A transient reload (the stream re-subscribing after a re-query or a
-    // test-mode flip) has no signals yet. Keep what is drawn rather than flash
-    // an empty map — but still regroup the clinics, which are unaffected.
-    final signals = ref.read(signalsStreamProvider).value;
-    final visible = signals?.where(mapState.filterState.passes).toList();
-    final clusteredSignals = visible == null
+    // A reload draws no signals at all, deliberately.
+    //
+    // `AsyncValue.value` does not go null while a provider recomputes:
+    // Riverpod carries the previous list through the `AsyncLoading`
+    // transition (`copyWithPrevious`), and keeps it through an `AsyncError`
+    // too. Most reloads are the same query re-running — a >30km recentre, a
+    // time-range change — where drawing the carried-over list would be
+    // harmless. **A test-mode flip is not**: it re-points the query at a
+    // different collection, so the carried-over list is the *other* mode's
+    // signals, and drawing them would put live prod pins on a test-mode map,
+    // each one tappable through to its details. A failed new query would
+    // leave them there indefinitely.
+    //
+    // There is nothing in the value to say which query produced it, so a
+    // reload is treated as "no signals" whatever caused it. The map blanks for
+    // as long as the query takes and the open bubble hides with it — which is
+    // what the screen did before clustering moved into Dart.
+    final signalsAsync = ref.read(signalsStreamProvider);
+    final visible = signalsAsync.isLoading
         ? null
-        : clusterPoints<SignalWithId>(
-            visible,
-            position: (s) => LatLng(s.location.latitude, s.location.longitude),
-            zoom: zoom,
-            exclude: (s) => s.id == selectedId,
-          );
+        : signalsAsync.value?.where(mapState.filterState.passes).toList();
+    final clusteredSignals = clusterPoints<SignalWithId>(
+      visible ?? const [],
+      position: (s) => LatLng(s.location.latitude, s.location.longitude),
+      zoom: zoom,
+      exclude: (s) => s.id == selectedId,
+    );
     final clusteredClinics = clusterPoints<VetClinic>(
       mapState.vetClinicState.clinics,
       position: (c) => LatLng(c.latitude, c.longitude),
@@ -717,7 +747,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
     await _bubbleIcons.ensure(
       [
-        ...?clusteredSignals?.clusters.map(MapMarkerBuilder.bubbleKeyFor),
+        ...clusteredSignals.clusters.map(MapMarkerBuilder.bubbleKeyFor),
         ...clusteredClinics.clusters.map(MapMarkerBuilder.clinicBubbleKeyFor),
       ],
       devicePixelRatio: dpr,
@@ -725,14 +755,12 @@ class _MapScreenState extends ConsumerState<MapScreen>
     if (!mounted || token != _reclusterToken) return;
 
     setState(() {
-      if (clusteredSignals != null) {
-        _signalMarkers = _markerBuilder.buildSignalMarkers(
-          clustered: clusteredSignals,
-          bubbleIcons: _bubbleIcons,
-          onMarkerTap: _showSignalBubble,
-          onClusterTap: _onSignalClusterTap,
-        );
-      }
+      _signalMarkers = _markerBuilder.buildSignalMarkers(
+        clustered: clusteredSignals,
+        bubbleIcons: _bubbleIcons,
+        onMarkerTap: _showSignalBubble,
+        onClusterTap: _onSignalClusterTap,
+      );
       _clinicMarkers = _markerBuilder.buildClinicMarkers(
         clustered: clusteredClinics,
         bubbleIcons: _bubbleIcons,
@@ -741,6 +769,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
         onClusterTap: _onClinicClusterTap,
       );
     });
+    // Only once a query has actually answered: a reload empties the map
+    // without meaning the signal is gone.
     if (visible == null) return;
 
     // A selected signal that is no longer rendered — deleted, filtered out,
@@ -915,9 +945,10 @@ class _MapScreenState extends ConsumerState<MapScreen>
     // state would cost a second full rebuild per stream emission, since the
     // repository allocates fresh SignalWithId objects every time and they have
     // no value equality. `_selectedSignal` stays as the record of what is open
-    // and where its pin is. Guarded by whenData so a transient reload does not
-    // blank the bubble; a signal that has really gone is dismissed by
-    // [_recluster].
+    // and where its pin is. `whenData` does not fire while the provider is
+    // reloading, so the bubble hides for the duration — in step with the pins,
+    // which [_recluster] also drops for a reload — and comes back when the
+    // query answers. A signal that has really gone is dismissed there.
     SignalWithId? selectedFresh;
     signalsAsync.whenData((signals) {
       final selected = _selectedSignal;
