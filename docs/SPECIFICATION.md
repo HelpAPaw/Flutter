@@ -1391,14 +1391,37 @@ anonymous session is re-established there and then, not at the next launch.
   half-screen sheet clipped the last row by 43px in Bulgarian at 411dp — and therefore
   `useSafeArea: true`, because that mode lets the sheet reach the top of the screen and
   `ModalBottomSheetRoute` strips the top padding the sheet's own `SafeArea` would need.
-- **Signal bubble** (`map/signal_info_card.dart`). Tapping a pin opens a Flutter-drawn
-  card — 64×64 photo, title, and one pill per `helpNeededTags` entry — positioned over
-  the map by `MapScreen`. Markers carry **no native `InfoWindow`**. Signals reported
+- **Map bubbles** (`map/map_bubble.dart`). **No marker on this map carries a native
+  `InfoWindow`** — signals and vet clinics both open a Flutter-drawn card positioned by
+  `MapScreen`. `MapBubble` is the shared shell (surface, pointer, fixed width, tap
+  target); `SignalInfoCard` and `ClinicInfoCard` supply the content. Two window styles on
+  one map read as two different apps, which is what it looked like while clinics still had
+  the platform's.
+
+  A clinic bubble shows the **clinic pin asset itself**, not a themed icon: the map
+  teaches blue = clinic, and a brand-orange badge on a bubble hanging off a blue pin said
+  the two were unrelated. Drawn from the same asset the marker uses, the way
+  `map_legend_sheet.dart` builds its rows, so bubble and pin cannot drift. Clinic pins are
+  24px against a signal pin's 29px, so the bubble's vertical offset is **per marker
+  type** — offsetting both by the taller one leaves the clinic bubble floating clear of
+  its pin. Exactly one bubble is open at a time; opening either closes the other.
+
+- **Signal bubble** (`map/signal_info_card.dart`). A 64×64 photo, the title, and one pill
+  per `helpNeededTags` entry. Signals reported
   without a photo (most of them) get an `UrgencyTagAvatar` instead — the primary tag's icon
   on an urgency tint, shared with the My Signals row so the same signal looks like itself
   in both places. An untitled signal is named by `Signal.displayTitle`, the one place that
-  rule lives. Tag pills are `HelpTagPill`, shared with `SignalStateCard` so the bubble and
-  the details screen cannot drift.
+  rule lives.
+
+  Tag pills are `HelpTagPill`, shared with `SignalStateCard` so the bubble and the details
+  screen cannot drift. Needs are drawn with `emphasis: true` — the brand's **tonal**
+  container, not `primary` itself. A solid `#FF9800` pill cannot work in both themes: the
+  best ink on it manages 2.16:1 on a light ground (see `app_colors.dart`), so it is legible
+  in dark mode and not in light. The container pair is 10.38:1 and 8.66:1, so it is both
+  the louder and the more legible option. It also has to stay clear of the map's own colour
+  language, where saturated orange means amber urgency — the container tone is far enough
+  from the pin hue not to be read as a severity. Species tags stay neutral: they describe
+  the animal, they are not the ask.
 
   Width is **fixed** at 260dp: the bubble has to be centred over a pin and clamped inside
   the viewport before it has laid out, and only a known width makes that arithmetic
@@ -1418,16 +1441,16 @@ anonymous session is re-established there and then, not at the next launch.
   it cannot run per frame without the bubble visibly trailing the map. The projection is
   exact only for a flat map, which is why **`tiltGesturesEnabled` is `false`**; nothing
   in the app tilts the camera, so that costs no behaviour. Anchors live in a
-  `ValueNotifier`, not in `setState`: `_buildScaffold` rebuilds the whole marker set, and
-  doing that sixty times a second during a pan is not affordable. Android returns
+  `ValueNotifier`, not in `setState`: a rebuild sixty times a second during a pan is not
+  affordable. Android returns
   physical pixels from `ScreenCoordinate`, iOS logical — hence `_screenCoordToLogical`.
 - **Far-pin vanish (recurring bug, removed).** Tapping a distant pin still makes the SDK
   recentre the camera on it — that is `GoogleMap`'s default marker-click behaviour, not
   something the info window brought — and that pan still crosses the 30 km threshold,
   re-queries, and rebuilds the marker set. What has gone is the last step: the recluster
-  used to tear the open native window down with it. A Flutter bubble is not the
-  ClusterManager's to remove, so it simply rides the pan (projected per frame, reconciled
-  on idle) and is still there when the markers come back. `_reassertSelectedInfoWindow`
+  used to tear the open native window down with it. Nothing removes a Flutter bubble but
+  the screen itself, so it simply rides the pan (projected per frame, reconciled on idle)
+  and is still there when the markers come back. `_reassertSelectedInfoWindow`
   and its 350 ms follow-up re-show are gone with the window. The only reconciliation left
   is dismissing the bubble when its signal is missing from the rebuilt marker set.
   **Should this ever regress, do not "fix" it by lowering the re-query threshold.**
@@ -2036,10 +2059,10 @@ ID so overlapping searches don't duplicate. Panning >2 km or zooming >2 levels (
 debounce) surfaces a "Search this area" button. The view model stores only the clinics;
 the map screen builds their markers in the same `_recluster` pass as the signals, through
 the same distance clusterer (§7.3) but as a **separate layer**, so a clinic never shares a
-bubble with a signal. A clinic bubble is the clinic pin's blue
+bubble with a signal. A clinic cluster bubble is the clinic pin's blue
 (`MapMarkerBuilder.clinicBlue`), never an urgency colour; its tap zooms to the bounds or,
 when zoom cannot split them, lists the clinics in the cluster sheet (name and address, row
-opens details). Tapping a clinic's info window opens
+opens details). Tapping a clinic's bubble opens
 `/clinic_details/:id`, which lazily fetches enterprise-tier fields (phone, rating,
 opening hours, Maps URI) through `getVetClinicDetails`, and offers navigate / call /
 open-in-Google-Maps.

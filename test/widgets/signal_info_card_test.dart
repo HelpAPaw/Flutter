@@ -7,6 +7,7 @@ import 'package:help_a_paw/src/models/signal.dart';
 import 'package:help_a_paw/src/models/signal_urgency.dart';
 import 'package:help_a_paw/src/repositories/signal_repository.dart';
 import 'package:help_a_paw/src/widgets/help_tag_pill.dart';
+import 'package:help_a_paw/src/widgets/map/map_bubble.dart';
 import 'package:help_a_paw/src/widgets/map/signal_info_card.dart';
 
 /// The bubble that replaced the native Maps InfoWindow. It renders whatever a
@@ -123,7 +124,7 @@ void main() {
       (tester) async {
     final tail = find.byWidgetPredicate((w) =>
         w is CustomPaint &&
-        w.size == const Size(16, SignalInfoCard.tailHeight));
+        w.size == const Size(16, MapBubble.tailHeight));
 
     await pump(tester, signalWith(), tailDown: true);
     expect(tester.getRect(tail).bottom,
@@ -166,7 +167,7 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(tester.getSize(find.byType(SignalInfoCard)).width,
-        SignalInfoCard.width);
+        MapBubble.width);
   });
 }
 

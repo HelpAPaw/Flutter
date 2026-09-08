@@ -9,7 +9,6 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:go_router/go_router.dart';
 
 import '../config/routes.dart';
-import '../models/vet_clinic.dart';
 import '../repositories/repository_provider.dart';
 import '../repositories/signal_repository.dart';
 import '../services/app_preferences_service.dart';
@@ -17,6 +16,7 @@ import '../services/auth_service.dart';
 import '../services/location_service.dart';
 import '../services/signal_navigator.dart';
 import '../state/map_state.dart';
+import '../models/vet_clinic.dart';
 import '../utils/bubble_layout.dart';
 import '../utils/cluster_bubble_icons.dart';
 import '../utils/map_clusterer.dart';
@@ -24,9 +24,11 @@ import '../utils/map_marker_builder.dart';
 import '../utils/map_projection.dart';
 import '../viewmodels/map_view_model.dart';
 import 'home_route_drawer.dart';
-import 'map/cluster_items_sheet.dart';
 import 'map/filter_bottom_sheet.dart';
 import 'map/map_legend_sheet.dart';
+import 'map/clinic_info_card.dart';
+import 'map/cluster_items_sheet.dart';
+import 'map/map_bubble.dart';
 import 'map/new_signal_location_bar.dart';
 import 'map/signal_info_card.dart';
 import 'notification_onboarding_button.dart';
@@ -45,10 +47,6 @@ class MapScreen extends ConsumerStatefulWidget {
 
 class _MapScreenState extends ConsumerState<MapScreen>
     with WidgetsBindingObserver {
-  /// Height of the pin bitmap, so the bubble sits above the pin rather than
-  /// over it.
-  static const _kPinHeight = MapMarkerBuilder.pinHeight;
-
   /// Inset the bubble keeps from the left and right edges of the map.
   static const _kBubbleEdgeInset = 8.0;
 
@@ -97,8 +95,30 @@ class _MapScreenState extends ConsumerState<MapScreen>
   // every frame of a pan, and setState for that would rebuild _buildScaffold —
   // which rebuilds the entire marker set — sixty times a second. The notifier
   // keeps the per-frame update inside the bubble's own subtree.
+  //
+  // Exactly one of these is set at a time: opening either bubble closes the
+  // other, because they share the single anchor below.
   SignalWithId? _selectedSignal;
+  VetClinic? _selectedClinic;
   final ValueNotifier<Offset?> _bubbleAnchor = ValueNotifier<Offset?>(null);
+
+  /// The point the open bubble is anchored to, or null when none is open.
+  LatLng? get _bubblePoint {
+    final signal = _selectedSignal;
+    if (signal != null) {
+      return LatLng(signal.location.latitude, signal.location.longitude);
+    }
+    final clinic = _selectedClinic;
+    if (clinic != null) return LatLng(clinic.latitude, clinic.longitude);
+    return null;
+  }
+
+  /// How far above the anchor the bubble sits. A clinic pin is shorter than a
+  /// signal pin, and offsetting both by the taller one leaves the clinic bubble
+  /// floating clear of its marker.
+  double get _bubblePinHeight => _selectedClinic != null
+      ? MapMarkerBuilder.clinicPinHeight
+      : MapMarkerBuilder.pinHeight;
 
   /// Key on the map's Stack, so the bubble's own arithmetic can read the size
   /// of the box it is positioned in. See [_mapSize].
@@ -161,9 +181,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
     required Widget Function(BuildContext sheetContext, T item) row,
   }) {
     // A bubble is `consumeTapEvents`, so `GoogleMap.onTap` never fires for it
-    // and an open signal bubble would otherwise survive the tap — riding the
-    // camera to wherever the zoom lands, or sitting under the sheet. Same
-    // reason the clinic markers were given `onClinicMarkerTap`.
+    // and an open bubble would otherwise survive the tap — riding the camera to
+    // wherever the zoom lands, or sitting under the sheet.
     _dismissBubble();
     if (splitsByZoomingIn(cluster.bounds, currentZoom: _currentZoom)) {
       // Dispatched by the GoogleMap widget, so the map exists by construction.
@@ -184,6 +203,134 @@ class _MapScreenState extends ConsumerState<MapScreen>
   void _openFromSheet(BuildContext sheetContext, String route) {
     Navigator.of(sheetContext).pop();
     context.push(route);
+  }
+
+  /// Regroup both marker layers for the current camera, filter and selection,
+  /// and publish the resulting marker set.
+  ///
+  /// Everything that feeds the grouping calls this: a stream emission, a filter
+  /// change, a clinic search, a camera idle, a bubble opening or closing, a
+  /// locale change, and the pins finishing loading. The bubble bitmaps are
+  /// rendered before the markers are built so a cluster never shows up as a
+  /// default pin; that render is the one await, and a call overtaken during it
+  /// drops its result.
+  Future<void> _recluster() async {
+    final mapState = ref.read(mapViewModelProvider);
+    final signalsAsync = ref.read(signalsStreamProvider);
+    final selectedSignalId = _selectedSignal?.id;
+    final selectedClinicId = _selectedClinic?.id;
+
+    // Everything the marker set is a function of. Clustering buckets at whole
+    // zoom levels, so most camera idles — every pan, and every pinch that lands
+    // in the same bucket — produce a byte-identical result; and a single tap
+    // reclusters twice, once for the selection and once for the recentre the
+    // SDK does in response. Comparing the inputs turns those into nothing at
+    // all, instead of a pass over every visible signal plus a marker diff
+    // across the platform channel.
+    final inputs = (
+      signalsAsync,
+      mapState.filterState,
+      mapState.vetClinicState.clinics,
+      _currentZoom.round(),
+      selectedSignalId,
+      selectedClinicId,
+      _markerBuilder.arePinsLoaded,
+      _devicePixelRatio,
+    );
+    if (inputs == _reclusteredFrom) return;
+
+    final token = ++_reclusterToken;
+
+    // A reload draws no signals at all, deliberately.
+    //
+    // `AsyncValue.value` does not go null while a provider recomputes:
+    // Riverpod carries the previous list through the `AsyncLoading` transition
+    // (`copyWithPrevious`), and keeps it through an `AsyncError` too. Most
+    // reloads are the same query re-running — a >30km recentre, a time-range
+    // change — where drawing the carried-over list would be harmless. **A
+    // test-mode flip is not**: it re-points the query at a different
+    // collection, so the carried-over list is the *other* mode's signals, and
+    // drawing them would put live prod pins on a test-mode map, each one
+    // tappable through to its details. A failed new query would leave them
+    // there indefinitely.
+    //
+    // There is nothing in the value to say which query produced it, so a reload
+    // is treated as "no signals" whatever caused it. The map blanks for as long
+    // as the query takes and the open bubble hides with it — which is what the
+    // screen did before clustering moved into Dart.
+    final visible = signalsAsync.isLoading
+        ? null
+        : signalsAsync.value?.where(mapState.filterState.passes).toList();
+    final clusteredSignals = clusterPoints<SignalWithId>(
+      visible ?? const [],
+      position: (s) {
+        final at = s.location;
+        return LatLng(at.latitude, at.longitude);
+      },
+      zoom: _currentZoom,
+      // Whatever the bubble is open on stays its own pin, whatever the zoom —
+      // a bubble whose tail points at a cluster bubble points at nothing.
+      keepSeparate: (s) => s.id == selectedSignalId,
+    );
+    final clusteredClinics = clusterPoints<VetClinic>(
+      mapState.vetClinicState.clinics,
+      position: (c) => LatLng(c.latitude, c.longitude),
+      zoom: _currentZoom,
+      keepSeparate: (c) => c.id == selectedClinicId,
+    );
+
+    final icons = await _bubbleIcons.ensure(
+      [
+        ...clusteredSignals.clusters.map(MapMarkerBuilder.signalBubbleKey),
+        ...clusteredClinics.clusters.map(MapMarkerBuilder.clinicBubbleKey),
+      ],
+      devicePixelRatio: _devicePixelRatio,
+    );
+    if (!mounted || token != _reclusterToken) return;
+
+    final l10n = AppLocalizations.of(context);
+    setState(() {
+      _reclusteredFrom = inputs;
+      _markers = {
+        ..._markerBuilder.buildSignalMarkers(
+          clustered: clusteredSignals,
+          bubbleIcons: icons,
+          onMarkerTap: _showSignalBubble,
+          onClusterTap: (cluster) => _onClusterTap<SignalWithId>(
+            cluster,
+            title: l10n.clusterSignalsHere,
+            row: (sheetContext, signal) => SignalClusterRow(
+              signal: signal,
+              onTap: () =>
+                  _openFromSheet(sheetContext, Routes.signalDetails(signal.id)),
+            ),
+          ),
+        ),
+        ..._markerBuilder.buildClinicMarkers(
+          clustered: clusteredClinics,
+          bubbleIcons: icons,
+          onMarkerTap: _showClinicBubble,
+          onClusterTap: (cluster) => _onClusterTap<VetClinic>(
+            cluster,
+            title: l10n.clusterClinicsHere,
+            row: (sheetContext, clinic) => ClinicClusterRow(
+              clinic: clinic,
+              onTap: () =>
+                  _openFromSheet(sheetContext, Routes.clinicDetails(clinic.id)),
+            ),
+          ),
+        ),
+      };
+    });
+
+    // Only once a query has actually answered: a reload empties the map without
+    // meaning the signal is gone.
+    if (visible == null || selectedSignalId == null) return;
+
+    // A selected signal that is no longer rendered — deleted, filtered out, or
+    // moved outside the geo-query radius — must not leave a bubble on screen
+    // that navigates to a signal the map has stopped showing.
+    if (!visible.any((s) => s.id == selectedSignalId)) _dismissBubble();
   }
 
   @override
@@ -233,13 +380,14 @@ class _MapScreenState extends ConsumerState<MapScreen>
       // over a map that is about to be replaced: its anchor was computed
       // against the outgoing view, and _updateBubbleAnchor would go looking
       // for the pin through a disposed controller.
-      // Through the field rather than _dismissBubble: this runs inside
+      // Through the fields rather than _dismissBubble: this runs inside
       // didChangeDependencies, where the build that setState would schedule is
-      // already coming. The recluster still has to happen by hand, or the
-      // signal that was held out of clustering stays a lone pin beside the
-      // cluster it belongs in — a locale change rebuilds the platform view
-      // without moving the camera, so no onCameraIdle arrives to correct it.
+      // already coming. The recluster still has to happen by hand, or whatever
+      // was held out of clustering stays a lone pin beside the cluster it
+      // belongs in — a locale change rebuilds the platform view without moving
+      // the camera, so no onCameraIdle arrives to correct it.
       _selectedSignal = null;
+      _selectedClinic = null;
       _bubbleAnchor.value = null;
       unawaited(_recluster());
     }
@@ -606,157 +754,65 @@ class _MapScreenState extends ConsumerState<MapScreen>
     return (coord.x.toDouble() / dpr, coord.y.toDouble() / dpr);
   }
 
-  /// Open the bubble for [signal], anchored to its pin.
-  Future<void> _showSignalBubble(SignalWithId signal) async {
-    setState(() => _selectedSignal = signal);
+  /// Open the bubble for [clinic], anchored to its pin.
+  Future<void> _showClinicBubble(VetClinic clinic) async {
+    setState(() {
+      _selectedSignal = null;
+      _selectedClinic = clinic;
+    });
     // The grouping depends on the selection — see `keepSeparate` in
     // [_recluster] — so it changes with it.
+    unawaited(_recluster());
+    await _anchorBubble();
+  }
+
+  /// Open the bubble for [signal], anchored to its pin.
+  Future<void> _showSignalBubble(SignalWithId signal) async {
+    setState(() {
+      _selectedClinic = null;
+      _selectedSignal = signal;
+    });
     unawaited(_recluster());
     // Place it from the last known camera before asking the platform, so a
     // bubble opened while another one is closing never paints a frame at the
     // previous pin's position. Null until the camera has moved once, in which
     // case the bubble simply waits for the authoritative answer below.
+    await _anchorBubble();
+  }
+
+  /// Place a freshly-opened bubble.
+  ///
+  /// Projects from the last known camera first so a bubble opened while another
+  /// is closing never paints a frame at the previous pin's position, then asks
+  /// the platform for the authoritative answer.
+  Future<void> _anchorBubble() async {
     final camera = _lastCamera;
     _bubbleAnchor.value = null;
     if (camera != null) _projectBubbleAnchor(camera);
     await _updateBubbleAnchor();
   }
 
+  /// Open what the bubble points at, and re-anchor it on the way back.
+  ///
+  /// The route transition can leave the camera somewhere else, so the position
+  /// we left with is not to be trusted. Guarded on the bubble still being the
+  /// same one, in case it was dismissed or replaced while the route was up.
+  void _openBubbleTarget(String location) {
+    final point = _bubblePoint;
+    context.push(location).then((_) {
+      if (mounted && _bubblePoint == point) _updateBubbleAnchor();
+    });
+  }
+
   void _dismissBubble() {
-    if (_selectedSignal == null) return;
-    setState(() => _selectedSignal = null);
+    if (_selectedSignal == null && _selectedClinic == null) return;
+    setState(() {
+      _selectedSignal = null;
+      _selectedClinic = null;
+    });
     _bubbleAnchor.value = null;
     // Lets the pin rejoin whatever cluster it was held out of.
     unawaited(_recluster());
-  }
-
-  /// Regroup both marker layers for the current camera, filter and selection,
-  /// and publish the resulting marker set.
-  ///
-  /// Everything that feeds the grouping calls this: a stream emission, a
-  /// filter change, a clinic search, a camera idle, a bubble opening or
-  /// closing, a locale change, and the pins finishing loading. The bubble
-  /// bitmaps are rendered before the markers are built so a cluster never shows
-  /// up as a default pin; that render is the one await, and a call overtaken
-  /// during it drops its result.
-  Future<void> _recluster() async {
-    final mapState = ref.read(mapViewModelProvider);
-    final signalsAsync = ref.read(signalsStreamProvider);
-    final selectedId = _selectedSignal?.id;
-
-    // Everything the marker set is a function of. Clustering buckets at whole
-    // zoom levels, so most camera idles — every pan, and every pinch that lands
-    // in the same bucket — produce a byte-identical result; and a single tap
-    // reclusters twice, once for the selection and once for the recentre the
-    // SDK does in response. Comparing the inputs turns those into nothing at
-    // all, instead of a pass over every visible signal plus a marker diff
-    // across the platform channel.
-    final inputs = (
-      signalsAsync,
-      mapState.filterState,
-      mapState.vetClinicState.clinics,
-      _currentZoom.round(),
-      selectedId,
-      _markerBuilder.arePinsLoaded,
-      _devicePixelRatio,
-    );
-    if (inputs == _reclusteredFrom) return;
-
-    final token = ++_reclusterToken;
-
-    // A reload draws no signals at all, deliberately.
-    //
-    // `AsyncValue.value` does not go null while a provider recomputes:
-    // Riverpod carries the previous list through the `AsyncLoading`
-    // transition (`copyWithPrevious`), and keeps it through an `AsyncError`
-    // too. Most reloads are the same query re-running — a >30km recentre, a
-    // time-range change — where drawing the carried-over list would be
-    // harmless. **A test-mode flip is not**: it re-points the query at a
-    // different collection, so the carried-over list is the *other* mode's
-    // signals, and drawing them would put live prod pins on a test-mode map,
-    // each one tappable through to its details. A failed new query would
-    // leave them there indefinitely.
-    //
-    // There is nothing in the value to say which query produced it, so a
-    // reload is treated as "no signals" whatever caused it. The map blanks for
-    // as long as the query takes and the open bubble hides with it — which is
-    // what the screen did before clustering moved into Dart.
-    final visible = signalsAsync.isLoading
-        ? null
-        : signalsAsync.value?.where(mapState.filterState.passes).toList();
-    final clusteredSignals = clusterPoints<SignalWithId>(
-      visible ?? const [],
-      position: (s) {
-        final at = s.location;
-        return LatLng(at.latitude, at.longitude);
-      },
-      zoom: _currentZoom,
-      // The selected signal stays its own pin while its bubble is open,
-      // whatever the zoom — a bubble whose tail points at a cluster bubble
-      // points at nothing.
-      keepSeparate: (s) => s.id == selectedId,
-    );
-    final clusteredClinics = clusterPoints<VetClinic>(
-      mapState.vetClinicState.clinics,
-      position: (c) => LatLng(c.latitude, c.longitude),
-      zoom: _currentZoom,
-    );
-
-    final icons = await _bubbleIcons.ensure(
-      [
-        ...clusteredSignals.clusters.map(MapMarkerBuilder.signalBubbleKey),
-        ...clusteredClinics.clusters.map(MapMarkerBuilder.clinicBubbleKey),
-      ],
-      devicePixelRatio: _devicePixelRatio,
-    );
-    if (!mounted || token != _reclusterToken) return;
-
-    final l10n = AppLocalizations.of(context);
-    setState(() {
-      _reclusteredFrom = inputs;
-      _markers = {
-        ..._markerBuilder.buildSignalMarkers(
-          clustered: clusteredSignals,
-          bubbleIcons: icons,
-          onMarkerTap: _showSignalBubble,
-          onClusterTap: (cluster) => _onClusterTap<SignalWithId>(
-            cluster,
-            title: l10n.clusterSignalsHere,
-            row: (sheetContext, signal) => SignalClusterRow(
-              signal: signal,
-              onTap: () =>
-                  _openFromSheet(sheetContext, Routes.signalDetails(signal.id)),
-            ),
-          ),
-        ),
-        ..._markerBuilder.buildClinicMarkers(
-          clustered: clusteredClinics,
-          bubbleIcons: icons,
-          onClinicTap: (clinicId) =>
-              context.push(Routes.clinicDetails(clinicId)),
-          onClinicMarkerTap: _dismissBubble,
-          onClusterTap: (cluster) => _onClusterTap<VetClinic>(
-            cluster,
-            title: l10n.clusterClinicsHere,
-            row: (sheetContext, clinic) => ClinicClusterRow(
-              clinic: clinic,
-              onTap: () =>
-                  _openFromSheet(sheetContext, Routes.clinicDetails(clinic.id)),
-            ),
-          ),
-        ),
-      };
-    });
-    // Only once a query has actually answered: a reload empties the map
-    // without meaning the signal is gone.
-    if (visible == null) return;
-
-    // A selected signal that is no longer rendered — deleted, filtered out,
-    // or moved outside the geo-query radius — must not leave a bubble on
-    // screen that navigates to a signal the map has stopped showing.
-    if (selectedId != null && !visible.any((s) => s.id == selectedId)) {
-      _dismissBubble();
-    }
   }
 
   /// Re-anchor the bubble by asking the platform where the pin actually is.
@@ -766,13 +822,11 @@ class _MapScreenState extends ConsumerState<MapScreen>
   /// through the gesture itself, and any drift it accumulated is corrected
   /// here the moment the gesture ends.
   Future<void> _updateBubbleAnchor() async {
-    final signal = _selectedSignal;
-    if (signal == null) return;
-    // Precondition: a selected signal implies its marker was tapped on a map.
-    final screenCoord = await _mapController!.getScreenCoordinate(
-      LatLng(signal.location.latitude, signal.location.longitude),
-    );
-    if (!mounted || _selectedSignal?.id != signal.id) return;
+    final point = _bubblePoint;
+    if (point == null) return;
+    // Precondition: an open bubble implies its marker was tapped on a map.
+    final screenCoord = await _mapController!.getScreenCoordinate(point);
+    if (!mounted || _bubblePoint != point) return;
     final (x, y) = _screenCoordToLogical(screenCoord);
     _bubbleAnchor.value = Offset(x, y);
   }
@@ -783,12 +837,12 @@ class _MapScreenState extends ConsumerState<MapScreen>
   /// platform — see [screenOffsetFromCamera] for why, and for the tilt
   /// precondition that [GoogleMap.tiltGesturesEnabled] `false` maintains.
   void _projectBubbleAnchor(CameraPosition camera) {
-    final signal = _selectedSignal;
-    if (signal == null) return;
+    final point = _bubblePoint;
+    if (point == null) return;
     final size = _mapSize;
     if (size == null) return;
     final offset = screenOffsetFromCamera(
-      point: LatLng(signal.location.latitude, signal.location.longitude),
+      point: point,
       camera: camera,
       viewport: size,
     );
@@ -923,10 +977,11 @@ class _MapScreenState extends ConsumerState<MapScreen>
     // state would cost a second full rebuild per stream emission, since the
     // repository allocates fresh SignalWithId objects every time and they have
     // no value equality. `_selectedSignal` stays as the record of what is open
-    // and where its pin is. `whenData` does not fire while the provider is
-    // reloading, so the bubble hides for the duration — in step with the pins,
-    // which [_recluster] also drops for a reload — and comes back when the
-    // query answers. A signal that has really gone is dismissed there.
+    // and where its pin is. Guarded by whenData, which does not fire while the
+    // provider is reloading, so the bubble hides for the duration — in step
+    // with the pins, which [_recluster] also drops for a reload — and comes
+    // back when the query answers. A signal that has really gone is dismissed
+    // there.
     SignalWithId? selectedFresh;
     signalsAsync.whenData((signals) {
       final selected = _selectedSignal;
@@ -934,7 +989,6 @@ class _MapScreenState extends ConsumerState<MapScreen>
         selectedFresh = signals.where((s) => s.id == selected.id).firstOrNull;
       }
     });
-
 
     return PopScope(
       canPop: !mapState.isAddingNewSignal,
@@ -1008,27 +1062,33 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 markers: _markers,
               ),
               ),
-              // The signal bubble, anchored to its pin.
+              // The open bubble — a signal's or a clinic's — anchored to its
+              // pin.
               //
               // Listens to the anchor rather than reading it from state, so a
               // pan repaints this subtree alone and leaves the marker set that
               // _buildScaffold assembles untouched.
-              if (selectedFresh != null)
+              if (selectedFresh != null || _selectedClinic != null)
                 ValueListenableBuilder<Offset?>(
                   valueListenable: _bubbleAnchor,
                   builder: (context, anchor, _) {
                     final signal = selectedFresh;
+                    final clinic = _selectedClinic;
                     final mapSize = _mapSize;
-                    if (anchor == null || signal == null || mapSize == null) {
+                    if (anchor == null ||
+                        mapSize == null ||
+                        (signal == null && clinic == null)) {
                       return const SizedBox.shrink();
                     }
 
                     final layout = bubbleLayoutFor(
                       anchor: anchor,
                       viewport: mapSize,
-                      bubbleWidth: SignalInfoCard.width,
-                      maxBubbleHeight: SignalInfoCard.maxHeightFor(context),
-                      pinHeight: _kPinHeight,
+                      bubbleWidth: MapBubble.width,
+                      maxBubbleHeight: clinic != null
+                          ? ClinicInfoCard.maxHeightFor(context)
+                          : SignalInfoCard.maxHeightFor(context),
+                      pinHeight: _bubblePinHeight,
                       gap: _kBubbleGap,
                       edgeInset: _kBubbleEdgeInset,
                     );
@@ -1048,28 +1108,27 @@ class _MapScreenState extends ConsumerState<MapScreen>
                         offset: Offset(layout.left, layout.anchorY),
                         child: FractionalTranslation(
                           // Pulls the bubble up by its own height, which is
-                          // content-dependent and unknown here — Bulgarian tag
+                          // content-dependent and unknown here — Bulgarian
                           // labels wrap to a second row where English does not.
                           translation:
                               layout.above ? const Offset(0, -1) : Offset.zero,
-                          child: SignalInfoCard(
-                            signal: signal,
-                            tailDown: layout.above,
-                            tailAlignment: layout.tailAlignment,
-                            onTap: () {
-                              context
-                                  .push(Routes.signalDetails(signal.id))
-                                  .then((_) {
-                                // The route transition can leave the camera
-                                // somewhere else; re-anchor on return rather
-                                // than trust the position we left with.
-                                if (mounted &&
-                                    _selectedSignal?.id == signal.id) {
-                                  _updateBubbleAnchor();
-                                }
-                              });
-                            },
-                          ),
+                          child: clinic != null
+                              ? ClinicInfoCard(
+                                  clinic: clinic,
+                                  tailDown: layout.above,
+                                  tailAlignment: layout.tailAlignment,
+                                  onTap: () => _openBubbleTarget(
+                                    Routes.clinicDetails(clinic.id),
+                                  ),
+                                )
+                              : SignalInfoCard(
+                                  signal: signal!,
+                                  tailDown: layout.above,
+                                  tailAlignment: layout.tailAlignment,
+                                  onTap: () => _openBubbleTarget(
+                                    Routes.signalDetails(signal.id),
+                                  ),
+                                ),
                         ),
                       ),
                     );
@@ -1119,30 +1178,29 @@ class _MapScreenState extends ConsumerState<MapScreen>
                   left: 0,
                   right: 0,
                   child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,  // theme-independent: over the map
-                        borderRadius: BorderRadius.circular(8),  // theme-independent: over the map
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.2),  // theme-independent: over the map
-                            blurRadius: 8,  // theme-independent: over the map
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                          const SizedBox(width: 12),
-                          Text(l10n.loadingClinics),
-                        ],
+                    // A themed surface, not a white card. Floating over the map
+                    // is not a reason to opt out of the theme — the signal
+                    // bubble does the same and reads in both — and a white card
+                    // with default-coloured text on a dark map was the one
+                    // place the dark theme visibly broke.
+                    child: Material(
+                      color: Theme.of(context).colorScheme.surface,
+                      elevation: 6,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(l10n.loadingClinics),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -1276,7 +1334,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
 /// metres at this zoom.
 ///
 /// White over a dark halo because it has to read on every tile: satellite,
-/// park green, motorway, and the coloured cluster bubble it lands on at the zoom
+/// park green, motorway, and the navy cluster bubble it lands on at the zoom
 /// this mode opens at.
 class _PlacementPin extends StatelessWidget {
   const _PlacementPin();

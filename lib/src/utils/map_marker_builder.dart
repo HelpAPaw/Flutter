@@ -24,6 +24,13 @@ class MapMarkerBuilder {
   /// Size the pin bitmaps are rendered at.
   static const Size pinSize = Size(24, pinHeight);
 
+  /// Height the clinic pin is rendered at — shorter than a signal pin, so the
+  /// bubble over it is offset by less.
+  static const double clinicPinHeight = 24;
+
+  /// Size the clinic pin bitmap is rendered at.
+  static const Size clinicPinSize = Size(24, clinicPinHeight);
+
   bool _pinsLoaded = false;
 
   /// Whether the pin bitmaps have arrived. Read by the map screen, which has to
@@ -46,7 +53,7 @@ class MapMarkerBuilder {
   /// Load hospital/clinic pin
   Future<void> loadHospitalPin() async {
     _hospitalPin = await BitmapDescriptor.asset(
-      const ImageConfiguration(size: Size(24, 24)),
+      const ImageConfiguration(size: clinicPinSize),
       'assets/icons/local_hospital_blue.png',
     );
   }
@@ -104,16 +111,14 @@ class MapMarkerBuilder {
   /// and a blue bubble per cluster. Clinics are clustered separately from
   /// signals, so a signal never shares a bubble with a clinic.
   ///
-  /// Clinics keep their native [InfoWindow] (name and address, tap for
-  /// details). The SDK consumes a tap on a marker that has one rather than
-  /// passing it to `GoogleMap.onTap`, so [onClinicMarkerTap] exists to let the
-  /// screen close an open signal bubble — when both windows were native, the
-  /// SDK's one-at-a-time rule did that for us.
+  /// A clinic pin carries **no native [InfoWindow]**: it opens a
+  /// `ClinicInfoCard`, the same bubble a signal opens. Two window styles on one
+  /// map read as two different apps, and the native one could only ever render
+  /// two lines of platform-styled text.
   Set<Marker> buildClinicMarkers({
     required ClusterResult<VetClinic> clustered,
     required Map<ClusterBubbleKey, BitmapDescriptor> bubbleIcons,
-    required void Function(String clinicId) onClinicTap,
-    required VoidCallback onClinicMarkerTap,
+    required void Function(VetClinic clinic) onMarkerTap,
     required void Function(MapCluster<VetClinic> cluster) onClusterTap,
   }) {
     return {
@@ -123,12 +128,7 @@ class MapMarkerBuilder {
           position: LatLng(clinic.latitude, clinic.longitude),
           icon: _hospitalPin ??
               BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-          infoWindow: InfoWindow(
-            title: clinic.name,
-            snippet: clinic.address,
-            onTap: () => onClinicTap(clinic.id),
-          ),
-          onTap: onClinicMarkerTap,
+          onTap: () => onMarkerTap(clinic),
         ),
       ..._bubbleMarkers(
         clustered.clusters,
