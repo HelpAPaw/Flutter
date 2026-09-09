@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
+
 /// One mentionable person: the uid the comment will carry, and the name the
 /// author sees and types.
 typedef MentionCandidate = ({String uid, String name});
@@ -64,42 +66,98 @@ class MentionSuggestions extends StatelessWidget {
 
     final scheme = Theme.of(context).colorScheme;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHigh,
-        border: Border(top: BorderSide(color: scheme.outlineVariant)),
+    // The cap is on the OUTSIDE, so it bounds the padding too and "never taller
+    // than this" stays literally true of the whole widget — which is what the
+    // Column above it needs.
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: math.min(
+          threeRows,
+          MediaQuery.sizeOf(context).height * _shortScreenShare,
+        ),
       ),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: math.min(
-            threeRows,
-            MediaQuery.sizeOf(context).height * _shortScreenShare,
+      child: Padding(
+        // Left edge lines up with the composer's text field; the gap underneath
+        // is what makes this read as sitting above the composer rather than
+        // being welded to it.
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        child: Material(
+          color: scheme.surfaceContainerHigh,
+          // Flat, like every other surface in this app — `cardTheme` is
+          // elevation 0 and surface tint is off throughout, so a drop shadow
+          // here would be the only one on the screen. The outline does the
+          // separating instead.
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+            side: BorderSide(color: scheme.outlineVariant),
+          ),
+          // Without this the row's ink splash paints over the rounded corners.
+          clipBehavior: Clip.antiAlias,
+          child: ListView.builder(
+            shrinkWrap: true,
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            itemCount: candidates.length,
+            itemBuilder: (context, index) {
+              final candidate = candidates[index];
+              // No Semantics wrapper: an onTap ListTile already publishes one
+              // button node labelled by its title, and wrapping it produces two
+              // — an outer one with the label and no action, an inner one with
+              // the action and no label. See _rowMenuButton in
+              // signal_details_screen.
+              return ListTile(
+                dense: true,
+                visualDensity: VisualDensity.compact,
+                leading: _Initial(name: candidate.name),
+                title: Text(
+                  candidate.name,
+                  maxLines: 1,
+                  // Bulgarian names run long, and this row cannot wrap without
+                  // the list growing past its cap.
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+                onTap: () => onSelected(candidate),
+              );
+            },
           ),
         ),
-        child: ListView.builder(
-          shrinkWrap: true,
-          padding: EdgeInsets.zero,
-          itemCount: candidates.length,
-          itemBuilder: (context, index) {
-            final candidate = candidates[index];
-            // No Semantics wrapper: an onTap ListTile already publishes one
-            // button node labelled by its title, and wrapping it produces two —
-            // an outer one with the label and no action, an inner one with the
-            // action and no label. See _rowMenuButton in signal_details_screen.
-            return ListTile(
-              dense: true,
-              leading: Icon(Icons.alternate_email,
-                  size: 20, color: scheme.onSurfaceVariant),
-              title: Text(
-                candidate.name,
-                maxLines: 1,
-                // Bulgarian names plus a title run long, and this row cannot
-                // wrap without the list growing past its cap.
-                overflow: TextOverflow.ellipsis,
-              ),
-              onTap: () => onSelected(candidate),
-            );
-          },
+      ),
+    );
+  }
+}
+
+/// The round initial standing in for a face.
+///
+/// There are no avatars to show — `publicProfiles` stores a name and nothing
+/// else (§4.1) — and a row of identical `@` glyphs said nothing about *which*
+/// person each row was. An initial is the one thing the data can give that
+/// differs per row, and it reads as a person rather than as a syntax hint.
+class _Initial extends StatelessWidget {
+  const _Initial({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    // `characters`, not `substring(0, 1)`: a name starting with an emoji or any
+    // non-BMP letter would otherwise be cut through the middle of a surrogate
+    // pair and render as a replacement glyph. The roster never contains an
+    // empty name — a participant with no resolved name is left out entirely —
+    // but this must not throw if that ever changes.
+    final trimmed = name.trim();
+    final initial =
+        trimmed.isEmpty ? '?' : trimmed.characters.first.toUpperCase();
+
+    return CircleAvatar(
+      radius: 15,
+      backgroundColor: scheme.secondaryContainer,
+      child: Text(
+        initial,
+        style: TextStyle(
+          color: scheme.onSecondaryContainer,
+          fontWeight: FontWeight.w600,
+          fontSize: 14,
         ),
       ),
     );

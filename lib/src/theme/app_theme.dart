@@ -35,9 +35,14 @@ abstract final class AppTheme {
   const AppTheme._();
 
   /// Corner radius for the things that float above a screen — dialogs, modal
-  /// sheets. The app had 8, 10, 12 and 20 in use plus M3's un-set default of
-  /// 28, which is four different answers to one question.
-  static const _radiusLarge = 20.0;
+  /// sheets, the mention suggestion list. The app had 8, 10, 12 and 20 in use
+  /// plus M3's un-set default of 28, which is four different answers to one
+  /// question.
+  ///
+  /// Public because not everything that floats is a themed component: a widget
+  /// drawing its own surface has to be able to reach the same answer rather
+  /// than picking a fifth number.
+  static const radiusLarge = 20.0;
 
   /// Light theme — visually identical to what shipped in 7.0.0+131, minus the
   /// purple defaults and the lavender ground.
@@ -304,7 +309,7 @@ abstract final class AppTheme {
         backgroundColor: scheme.surfaceContainerHigh,
         surfaceTintColor: Colors.transparent,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(_radiusLarge)),
+          borderRadius: BorderRadius.all(Radius.circular(radiusLarge)),
         ),
       ),
       bottomSheetTheme: BottomSheetThemeData(
@@ -314,7 +319,7 @@ abstract final class AppTheme {
         dragHandleColor: scheme.outline,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(
-            top: Radius.circular(_radiusLarge),
+            top: Radius.circular(radiusLarge),
           ),
         ),
       ),
