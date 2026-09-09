@@ -3517,6 +3517,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Change profile photo'**
   String get changeProfilePhoto;
+
+  /// Shown when location permission has been refused permanently, so the system dialog can no longer be shown and only the app settings page can grant it
+  ///
+  /// In en, this message translates to:
+  /// **'Location permission is blocked for this app. Allow it in Settings to use this feature.'**
+  String get locationPermissionDeniedForever;
+
+  /// Shown when device-wide location services are switched off, which is a different problem from the app's own permission
+  ///
+  /// In en, this message translates to:
+  /// **'Location is turned off on this device. Turn it on to use this feature.'**
+  String get locationServicesDisabled;
+
+  /// Shown when the user turns the notifications switch on but the OS permission was refused, so the switch cannot stay on
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications are turned off for this app. Allow them in Settings to hear about nearby signals.'**
+  String get notificationPermissionRequired;
 }
 
 class _AppLocalizationsDelegate
