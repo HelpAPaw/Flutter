@@ -887,5 +887,17 @@
   "keepEditing": "Keep editing",
   "close": "Close",
   "editProfile": "Edit profile",
-  "changeProfilePhoto": "Change profile photo"
+  "changeProfilePhoto": "Change profile photo",
+  "locationPermissionDeniedForever": "Location permission is blocked for this app. Allow it in Settings to use this feature.",
+  "@locationPermissionDeniedForever": {
+    "description": "Shown when location permission has been refused permanently, so the system dialog can no longer be shown and only the app settings page can grant it"
+  },
+  "locationServicesDisabled": "Location is turned off on this device. Turn it on to use this feature.",
+  "@locationServicesDisabled": {
+    "description": "Shown when device-wide location services are switched off, which is a different problem from the app's own permission"
+  },
+  "notificationPermissionRequired": "Notifications are turned off for this app. Allow them in Settings to hear about nearby signals.",
+  "@notificationPermissionRequired": {
+    "description": "Shown when the user turns the notifications switch on but the OS permission was refused, so the switch cannot stay on"
+  }
 }

@@ -13,6 +13,7 @@ import '../models/help_tag.dart';
 import '../models/notification_preferences.dart';
 import '../services/location_service.dart';
 import '../services/notification_service.dart';
+import '../utils/system_settings.dart';
 import 'help_tag_selector.dart';
 import 'app_bar_title.dart';
 import 'section_header.dart';
@@ -211,6 +212,26 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage>
     }
   }
 
+  /// The one shape every permission outcome on this screen is told in.
+  ///
+  /// Six seconds rather than the default four because each of these asks the
+  /// user to read a sentence and decide, and the ones with [onOpenSettings]
+  /// ask them to find a button as well.
+  void _showSnack(String message, {Future<bool> Function()? onOpenSettings}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 6),
+        action: onOpenSettings == null
+            ? null
+            : SnackBarAction(
+                label: AppLocalizations.of(context).openSettings,
+                onPressed: onOpenSettings,
+              ),
+      ),
+    );
+  }
+
   Future<void> _toggleNotifications(bool value) async {
     // Checked before the OS prompt and before any setState, because switching
     // notifications ON is what makes the "at least one of each" rule apply. A
@@ -228,10 +249,26 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage>
       }
 
       // Request notification permissions from the OS
+      final l10n = AppLocalizations.of(context);
       try {
-        final granted = await NotificationService().requestNotificationPermission();
-        if (!granted) return;
+        final granted =
+            await NotificationService().requestNotificationPermission();
+        if (!mounted) return;
+        if (!granted) {
+          // One message for both refusals, because FCM cannot tell them apart:
+          // iOS never shows the dialog twice and Android stops after the second
+          // refusal, so the app's settings page is the way back from either —
+          // and it is also where someone who denied a moment ago can change
+          // their mind.
+          _showSnack(
+            l10n.notificationPermissionRequired,
+            onOpenSettings: SystemSettings.openAppPage,
+          );
+          return;
+        }
       } catch (_) {
+        if (!mounted) return;
+        _showSnack(l10n.somethingWentWrong);
         return;
       }
     }
@@ -242,19 +279,54 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage>
 
   Future<void> _toggleLocationTracking(bool value) async {
     if (value) {
-      // Prompt for the "Always" upgrade here rather than inside
-      // startLocationTracking, which also runs on launch — a permission dialog
-      // must stay attached to a user action.
-      await LocationService().requestAlwaysPermission();
+      final LocationTrackingResult result;
+      try {
+        // Prompt for the "Always" upgrade here rather than inside
+        // startLocationTracking, which also runs on launch — a permission
+        // dialog must stay attached to a user action.
+        await LocationService().requestAlwaysPermission();
 
-      final result = await LocationService().startLocationTracking();
+        result = await LocationService().startLocationTracking();
+      } catch (_) {
+        // Both calls reach the platform — geolocator throws when a request is
+        // already in flight or the manifest entries are missing, and the
+        // background monitor is a method channel away. Unhandled, that left the
+        // switch flicking back with nothing said.
+        if (!mounted) return;
+        _showSnack(AppLocalizations.of(context).somethingWentWrong);
+        return;
+      }
+
       if (!mounted) return;
       final l10n = AppLocalizations.of(context);
 
       switch (result) {
+        // Refused just now, and the OS will ask again — so the way back is to
+        // tap the switch once more, not a trip to Settings.
         case LocationTrackingResult.denied:
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l10n.locationPermissionRequired)),
+          _showSnack(l10n.locationPermissionRequired);
+          return;
+
+        // Refused permanently: the OS will not show the dialog again, so
+        // repeating "permission is required" is advice the user cannot act on.
+        // Name the one route that is left and open it for them.
+        case LocationTrackingResult.deniedForever:
+          _showSnack(
+            l10n.locationPermissionDeniedForever,
+            onOpenSettings: SystemSettings.openAppPage,
+          );
+          return;
+
+        // Location switched off device-wide. The app's permission may be
+        // perfectly fine, so the app settings page would show nothing wrong —
+        // offer the device location settings, and only where that page can
+        // actually be reached.
+        case LocationTrackingResult.serviceDisabled:
+          _showSnack(
+            l10n.locationServicesDisabled,
+            onOpenSettings: SystemSettings.canOpenLocationServices
+                ? SystemSettings.openLocationServices
+                : null,
           );
           return;
 
@@ -267,12 +339,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage>
         // can't disagree with reality the way reading the permission enum
         // could.
         case LocationTrackingResult.foregroundOnly:
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(l10n.locationAlwaysPermissionRequired),
-              duration: const Duration(seconds: 6),
-            ),
-          );
+          _showSnack(l10n.locationAlwaysPermissionRequired);
           // The snackbar is gone in six seconds and the toggle then reads on
           // forever, which is the whole reason the persistent warning exists.
           _backgroundTrackingActive = false;
@@ -590,7 +657,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage>
               // the OS settings page is the only route left. Coming back from it
               // is picked up by [didChangeAppLifecycleState].
               child: TextButton(
-                onPressed: () => LocationService().openSystemAppSettings(),
+                onPressed: SystemSettings.openAppPage,
                 child: Text(l10n.openSettings),
               ),
             ),
