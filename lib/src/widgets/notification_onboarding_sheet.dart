@@ -1,6 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
@@ -43,11 +42,9 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
     final steps = <_OnboardingStep>[];
 
     // Check notification permission
-    final notifSettings = await FirebaseMessaging.instance.getNotificationSettings();
-    final notifGranted =
-        notifSettings.authorizationStatus == AuthorizationStatus.authorized ||
-        notifSettings.authorizationStatus == AuthorizationStatus.provisional;
-    if (!notifGranted) steps.add(_OnboardingStep.notifications);
+    if (!await NotificationService().hasNotificationPermission()) {
+      steps.add(_OnboardingStep.notifications);
+    }
 
     // Check location permission
     final locationPermission = await Geolocator.checkPermission();
@@ -135,16 +132,23 @@ class _NotificationOnboardingSheetState extends State<NotificationOnboardingShee
     setState(() => _isProcessing = true);
 
     try {
-      final locationGranted = await LocationService().requestAlwaysPermission();
+      final permission = await LocationService().requestAlwaysPermission();
 
       if (!mounted) return;
 
-      final granted = locationGranted != LocationPermission.denied &&
-          locationGranted != LocationPermission.deniedForever;
+      // What actually started, not what the permission enum implies. Asking
+      // the enum counted "location is off device-wide" and a background
+      // monitor that refused to arm as success, so this stored
+      // `locationTrackingEnabled: true` for someone whose position would never
+      // be written — and the fan-out then drops that account for having no
+      // usable location, with the preference still reading on.
+      final result = await LocationService()
+          .startLocationTracking(knownPermission: permission);
 
-      if (granted) {
-        await LocationService().startLocationTracking();
+      if (!mounted) return;
 
+      if (result == LocationTrackingResult.full ||
+          result == LocationTrackingResult.foregroundOnly) {
         final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
           try {

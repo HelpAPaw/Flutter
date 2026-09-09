@@ -1972,4 +1972,16 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get changeProfilePhoto => 'Смяна на профилната снимка';
+
+  @override
+  String get locationPermissionDeniedForever =>
+      'Разрешението за местоположение е блокирано за това приложение. Разрешете го в Настройки, за да използвате тази функционалност.';
+
+  @override
+  String get locationServicesDisabled =>
+      'Местоположението на това устройство е изключено. Включете го, за да използвате тази функционалност.';
+
+  @override
+  String get notificationPermissionRequired =>
+      'Известията за това приложение са изключени. Разрешете ги в Настройки, за да научавате за сигнали наблизо.';
 }

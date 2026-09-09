@@ -1941,4 +1941,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get changeProfilePhoto => 'Change profile photo';
+
+  @override
+  String get locationPermissionDeniedForever =>
+      'Location permission is blocked for this app. Allow it in Settings to use this feature.';
+
+  @override
+  String get locationServicesDisabled =>
+      'Location is turned off on this device. Turn it on to use this feature.';
+
+  @override
+  String get notificationPermissionRequired =>
+      'Notifications are turned off for this app. Allow them in Settings to hear about nearby signals.';
 }
