@@ -403,6 +403,18 @@ class NotificationService {
 
   /// Request notification permission and return whether it was granted
   /// Use this for controlled permission requests (e.g., onboarding flow)
+  /// Whether the OS currently allows notifications, asked **without**
+  /// prompting — so it is safe on a resume, or any other path with no user
+  /// action behind it.
+  Future<bool> hasNotificationPermission() async {
+    final settings = await _messaging.getNotificationSettings();
+    return _isGranted(settings.authorizationStatus);
+  }
+
+  static bool _isGranted(AuthorizationStatus status) =>
+      status == AuthorizationStatus.authorized ||
+      status == AuthorizationStatus.provisional;
+
   Future<bool> requestNotificationPermission() async {
     final settings = await _messaging.requestPermission(
       alert: true,
@@ -414,8 +426,7 @@ class NotificationService {
       sound: true,
     );
 
-    final granted = settings.authorizationStatus == AuthorizationStatus.authorized ||
-        settings.authorizationStatus == AuthorizationStatus.provisional;
+    final granted = _isGranted(settings.authorizationStatus);
     FirebaseCrashlytics.instance.log('Notification: Permission ${granted ? "granted" : "denied"} (${settings.authorizationStatus})');
 
     if (granted) {

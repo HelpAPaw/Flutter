@@ -26,6 +26,10 @@ class NotificationSettingsPage extends StatefulWidget {
   State<NotificationSettingsPage> createState() => _NotificationSettingsPageState();
 }
 
+/// A toggle whose OS permission was refused, remembered so that returning from
+/// system Settings can finish it.
+enum _PendingGrant { notifications, locationTracking }
+
 class _NotificationSettingsPageState extends State<NotificationSettingsPage>
     with WidgetsBindingObserver {
   bool _notificationsEnabled = false;
@@ -46,6 +50,13 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage>
   /// instead of an editor: refusing at the write would accept every tap and then
   /// reject it, which reads as the app being broken rather than offline.
   bool _loaded = false;
+
+  /// The toggle whose permission the user was sent to system Settings to fix.
+  ///
+  /// Remembered so that coming back finishes what they started. Without it they
+  /// return to the switch they already tapped, still reading off with nothing
+  /// stored, and have to work out for themselves that it needs tapping again.
+  _PendingGrant? _pendingGrant;
 
   /// Whether the native background monitor is actually armed.
   ///
@@ -76,8 +87,63 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      unawaited(_refreshBackgroundTracking());
+      unawaited(_onResumed());
     }
+  }
+
+  Future<void> _onResumed() async {
+    await _completePendingGrant();
+    if (!mounted) return;
+    await _refreshBackgroundTracking();
+  }
+
+  /// Turn on the toggle the user left the app to make possible, if the OS now
+  /// agrees.
+  ///
+  /// Everything here **checks** the permission and never requests it: this runs
+  /// on a resume, with no tap behind it. A refusal that is still a refusal
+  /// leaves [_pendingGrant] set, so the next return from Settings tries again.
+  Future<void> _completePendingGrant() async {
+    final pending = _pendingGrant;
+    if (pending == null) return;
+
+    try {
+      switch (pending) {
+        case _PendingGrant.notifications:
+          if (!await NotificationService().hasNotificationPermission()) return;
+          if (!mounted) return;
+          // Granted, this shows no dialog — it is here for the FCM token
+          // registration the refused attempt never reached.
+          if (!await NotificationService().requestNotificationPermission()) {
+            return;
+          }
+          if (!mounted) return;
+          _pendingGrant = null;
+          setState(() => _notificationsEnabled = true);
+
+        case _PendingGrant.locationTracking:
+          final result = await LocationService().startLocationTracking();
+          if (!mounted) return;
+          if (result != LocationTrackingResult.full &&
+              result != LocationTrackingResult.foregroundOnly) {
+            return;
+          }
+          _pendingGrant = null;
+          setState(() {
+            _locationTrackingEnabled = true;
+            _backgroundTrackingActive =
+                result == LocationTrackingResult.full;
+          });
+      }
+    } catch (_) {
+      // Nothing to say: no user action is behind this, and the toggle simply
+      // stays off. [_pendingGrant] is kept so the next resume retries.
+      return;
+    }
+
+    // Says "Settings saved", which is the confirmation a user coming back from
+    // Settings needs — otherwise the switch moves on its own with no word.
+    await _savePreferences();
   }
 
   /// Re-arms if the OS now allows it, then records what is really running.
@@ -233,6 +299,8 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage>
   }
 
   Future<void> _toggleNotifications(bool value) async {
+    _pendingGrant = null;
+
     // Checked before the OS prompt and before any setState, because switching
     // notifications ON is what makes the "at least one of each" rule apply. A
     // user with an empty stored selection — anyone who reached the map through
@@ -260,6 +328,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage>
           // refusal, so the app's settings page is the way back from either —
           // and it is also where someone who denied a moment ago can change
           // their mind.
+          _pendingGrant = _PendingGrant.notifications;
           _showSnack(
             l10n.notificationPermissionRequired,
             onOpenSettings: SystemSettings.openAppPage,
@@ -278,15 +347,20 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage>
   }
 
   Future<void> _toggleLocationTracking(bool value) async {
+    _pendingGrant = null;
+
     if (value) {
       final LocationTrackingResult result;
       try {
         // Prompt for the "Always" upgrade here rather than inside
         // startLocationTracking, which also runs on launch — a permission
         // dialog must stay attached to a user action.
-        await LocationService().requestAlwaysPermission();
+        // The request's own answer is passed on because it is the only one
+        // that can say "permanently" — see [startLocationTracking].
+        final permission = await LocationService().requestAlwaysPermission();
 
-        result = await LocationService().startLocationTracking();
+        result = await LocationService()
+            .startLocationTracking(knownPermission: permission);
       } catch (_) {
         // Both calls reach the platform — geolocator throws when a request is
         // already in flight or the manifest entries are missing, and the
@@ -311,6 +385,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage>
         // repeating "permission is required" is advice the user cannot act on.
         // Name the one route that is left and open it for them.
         case LocationTrackingResult.deniedForever:
+          _pendingGrant = _PendingGrant.locationTracking;
           _showSnack(
             l10n.locationPermissionDeniedForever,
             onOpenSettings: SystemSettings.openAppPage,
@@ -322,6 +397,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage>
         // offer the device location settings, and only where that page can
         // actually be reached.
         case LocationTrackingResult.serviceDisabled:
+          _pendingGrant = _PendingGrant.locationTracking;
           _showSnack(
             l10n.locationServicesDisabled,
             onOpenSettings: SystemSettings.canOpenLocationServices

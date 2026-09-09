@@ -201,13 +201,23 @@ class LocationService with WidgetsBindingObserver {
   /// no user action behind it, and — since every prompting caller has just
   /// asked — show a second dialog for one tap. On Android that second refusal
   /// is the one that blocks the permission for good.
-  Future<LocationTrackingResult> startLocationTracking() async {
+  ///
+  /// A caller that has just asked must pass what it got as [knownPermission]:
+  /// Android's `checkPermission` can never answer `deniedForever`, because
+  /// "permanently" is `shouldShowRequestPermissionRationale` being false, which
+  /// only the *request* reports. Without it a permanent refusal arrives here
+  /// looking like an ordinary one, and the user is told to try again on a
+  /// dialog the OS will never show. (Device-verified on Android 14: a
+  /// permission with USER_FIXED set still checks as plain `denied`.)
+  Future<LocationTrackingResult> startLocationTracking({
+    LocationPermission? knownPermission,
+  }) async {
     if (!await Geolocator.isLocationServiceEnabled()) {
       debugPrint('Location services are disabled');
       return LocationTrackingResult.serviceDisabled;
     }
 
-    final permission = await Geolocator.checkPermission();
+    final permission = knownPermission ?? await Geolocator.checkPermission();
 
     if (permission == LocationPermission.deniedForever) {
       debugPrint('Location permission denied permanently');
