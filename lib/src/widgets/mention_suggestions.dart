@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 /// One mentionable person: the uid the comment will carry, and the name the
@@ -32,9 +34,29 @@ class MentionSuggestions extends StatelessWidget {
   final List<MentionCandidate> candidates;
   final void Function(MentionCandidate candidate) onSelected;
 
-  /// Three rows at the default text scale. A `maxHeight` rather than a fixed
+  /// Three rows at the default text scale. A ceiling rather than a fixed
   /// height, so a single match draws a single row.
-  static const double _maxHeight = 168;
+  static const double threeRows = 168;
+
+  /// The share of the window this may occupy, on a screen too short for
+  /// [threeRows].
+  ///
+  /// Being a *sibling* of the composer rather than an overlay means a list
+  /// taller than the space left over does not overlap anything — it overflows
+  /// the Column, striped in debug and clipped in release, right where the author
+  /// is typing. A phone in landscape with the keyboard up leaves the body well
+  /// under 200dp, and three rows plus the composer do not fit in it.
+  ///
+  /// **The window height is the measurement, not the body height, deliberately.**
+  /// A `Scaffold` strips `viewInsets` from its body's `MediaQuery`, so the body
+  /// cannot see the keyboard at all, and the only thing that can — a
+  /// `LayoutBuilder` around the whole body — re-runs on every frame of the
+  /// keyboard animation and would rebuild the photo carousel and the entire
+  /// history list with it. A quarter of the window is a *ceiling*, where being
+  /// approximately right is the whole requirement: it resolves to [threeRows] on
+  /// every portrait phone and every tablet, and shrinks only where the screen is
+  /// genuinely too short.
+  static const double _shortScreenShare = 1 / 4;
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +70,12 @@ class MentionSuggestions extends StatelessWidget {
         border: Border(top: BorderSide(color: scheme.outlineVariant)),
       ),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: _maxHeight),
+        constraints: BoxConstraints(
+          maxHeight: math.min(
+            threeRows,
+            MediaQuery.sizeOf(context).height * _shortScreenShare,
+          ),
+        ),
         child: ListView.builder(
           shrinkWrap: true,
           padding: EdgeInsets.zero,

@@ -231,7 +231,8 @@ Uri? _uriFor(RegExpMatch match, String text) {
 /// the memo, and a second one underneath it would be process-global mutable
 /// state in a `utils/` file, bought with nothing.
 List<TextToken> parseLinks(String input, {List<CommentMention> mentions = const []}) {
-  if (input.isEmpty) return const [];
+  // The fast path is the common one by a distance: every caller but a comment
+  // row passes no mentions at all, and most comments carry none.
   if (mentions.isEmpty) return List.unmodifiable(_parseRuns(input));
 
   // The mention ranges are sliced out FIRST, and only what is left between them
@@ -241,10 +242,16 @@ List<TextToken> parseLinks(String input, {List<CommentMention> mentions = const 
   final out = <TextToken>[];
   var index = 0;
   for (final mention in mentions) {
-    // Defensive, even though `CommentMention.decode` already guarantees it: this
-    // is the one function that must never throw on a document written by a build
-    // that does not exist yet.
-    if (mention.start < index || mention.end > input.length) continue;
+    // Defensive, even though `CommentMention.normalize` already guarantees it:
+    // this is the one function that must never throw on a document written by a
+    // build that does not exist yet. `start >= end` is part of that and is easy
+    // to leave out — a reversed range reaches `substring` and throws, which is
+    // exactly the case this line exists for.
+    if (mention.start < index ||
+        mention.end > input.length ||
+        mention.start >= mention.end) {
+      continue;
+    }
     if (mention.start > index) {
       out.addAll(_parseRuns(input.substring(index, mention.start)));
     }

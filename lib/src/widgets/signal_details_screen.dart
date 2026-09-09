@@ -27,7 +27,6 @@ import 'mention_suggestions.dart';
 import 'mention_text_controller.dart';
 import 'level_badge.dart';
 
-import '../models/comment_mention.dart';
 import '../models/signal_event.dart';
 import '../models/signal.dart';
 import '../models/signal_participants.dart';
@@ -135,9 +134,6 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   // answer *synchronously* while building. A FutureBuilder per row can await;
   // a roster being filtered on every keystroke cannot.
   final Map<String, String> _names = {};
-  // uids the mention roster has already asked for. Without it every rebuild
-  // would attach another completion callback to the same memoized future.
-  final Set<String> _namePrimed = {};
   final MentionTextEditingController _newCommentController =
       MentionTextEditingController();
   /// Focus for the composer, held only so the mention list can hide with the
@@ -145,6 +141,12 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// over the thread after the field is dismissed — the caret is still in the
   /// text, so the query is still open.
   final FocusNode _composerFocus = FocusNode();
+  /// Rebuilds the mention list on a keystroke *or* a focus change. Held rather
+  /// than merged inline: `Listenable.merge` returns a new object each call, so
+  /// building it in `build()` makes the builder detach and re-attach its
+  /// listener on every screen rebuild.
+  late final Listenable _composerSignals =
+      Listenable.merge([_newCommentController, _composerFocus]);
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _imagePicker = ImagePicker();
   bool _isUploadingPhoto = false;
@@ -959,9 +961,18 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                 // this screen (a photo gallery and a whole history list) must
                 // not.
                 if (!signal.commentsLocked)
-                  ListenableBuilder(
-                    listenable: Listenable.merge(
-                        [_newCommentController, _composerFocus]),
+                  // The roster is resolved once per screen build and captured,
+                  // not rebuilt inside the builder below — that runs on every
+                  // keystroke while an `@` query is open, and the union it does
+                  // is over the whole comment and event history. Nothing caches
+                  // it: every input (the signal snapshot, both history lists,
+                  // the resolved names) already arrives through a rebuild, so
+                  // the build *is* the memo — the same argument `parseLinks`
+                  // makes for not memoising itself.
+                  Builder(builder: (context) {
+                    final roster = _mentionCandidates(signal);
+                    return ListenableBuilder(
+                    listenable: _composerSignals,
                     builder: (context, _) {
                       final active = _newCommentController.activeQuery;
                       if (active == null || !_composerFocus.hasFocus) {
@@ -969,10 +980,8 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                       }
                       return PageWidth(
                         child: MentionSuggestions(
-                          candidates: _matchingCandidates(
-                            _mentionCandidates(signal),
-                            active.query,
-                          ),
+                          candidates:
+                              _matchingCandidates(roster, active.query),
                           onSelected: (candidate) =>
                               _newCommentController.insertMention(
                             uid: candidate.uid,
@@ -981,7 +990,8 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                         ),
                       );
                     },
-                  ),
+                  );
+                  }),
                 // A sibling of the scroll view, not a `Positioned` over it: as
                 // an overlay, with no bottom padding underneath, it permanently
                 // hid the last ~90px of the page — and more at larger text
@@ -1723,24 +1733,8 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     // The rules reject an empty `text`, so a whitespace-only comment would come
     // back as an opaque PERMISSION_DENIED. Drop it here instead — sending blank
     // comments was never meaningful anyway.
-    final raw = _newCommentController.text;
-    final text = raw.trim();
+    final (:text, :mentions) = _newCommentController.postable;
     if (text.isEmpty) return;
-
-    // The offsets are recorded against the untrimmed text, so leading
-    // whitespace has to be taken off them too — otherwise every mention in a
-    // comment that began with a space is one character out, and the highlight
-    // lands on the character before the `@`.
-    final shift = raw.length - raw.trimLeft().length;
-    final mentions = [
-      for (final mention in _newCommentController.mentions)
-        if (mention.start >= shift && mention.end - shift <= text.length)
-          CommentMention(
-            uid: mention.uid,
-            start: mention.start - shift,
-            end: mention.end - shift,
-          ),
-    ];
 
     try {
       await _signalRef.collection('comments').add({
@@ -1802,8 +1796,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         ...?_comments.entries,
         ...?_events.entries,
       ],
-      excluding: FirebaseAuth.instance.currentUser?.uid,
-    );
+    )..remove(FirebaseAuth.instance.currentUser?.uid);
     _primeMentionNames(uids);
 
     final candidates = <MentionCandidate>[
@@ -1813,16 +1806,25 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     return candidates;
   }
 
-  /// Starts the lookups the roster needs, once per uid.
+  /// Starts the lookups the roster needs, once per in-flight future.
   ///
   /// Called from a build path, which is why it cannot `setState` directly — the
-  /// rebuild is scheduled by the future's completion instead, and [_namePrimed]
-  /// is what stops a new callback being attached on every frame. Most uids here
-  /// are already resolved by the timeline rows; the ones that are not are the
-  /// people the roster exists for, such as a past owner who never commented.
+  /// rebuild is scheduled by the future's completion instead. Most uids here are
+  /// already resolved by the timeline rows; the ones that are not are the people
+  /// the roster exists for, such as a past owner who never commented.
+  ///
+  /// **The guard is [_nameFutures] itself, deliberately, and not a set of uids
+  /// already asked for.** A private "already primed" set looks equivalent and
+  /// silently cancels the one retry this screen has: [_nameFor] answers a
+  /// *thrown* lookup by dropping the future so the next rebuild tries again —
+  /// the cold-launch auth window on the auth-gated `publicProfiles` read is the
+  /// documented cause — and a uid recorded as primed would never be asked a
+  /// second time. The people that strands are exactly the ones the roster exists
+  /// for: a past owner with no row on screen to resolve them by another route
+  /// would go missing from the mention list for the life of the screen.
   void _primeMentionNames(Iterable<String> uids) {
     for (final uid in uids) {
-      if (_names.containsKey(uid) || !_namePrimed.add(uid)) continue;
+      if (_nameFutures.containsKey(uid)) continue;
       _nameFor(uid).then((_) {
         if (mounted) setState(() {});
       });

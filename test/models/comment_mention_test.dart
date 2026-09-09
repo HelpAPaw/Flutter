@@ -85,7 +85,30 @@ void main() {
     });
   });
 
-  /// The cap lives in two places, and `firestore.rules` is the enforcement —
+  group('CommentMention.normalize', () {
+    // The one owner of sort/overlap/cap, called by `decode` on the way in from
+    // Firestore and by the composer's controller on the way out. They had each
+    // implemented it, and disagreed about which of two overlapping names wins.
+    test('sorts, drops overlaps leftmost-first and caps', () {
+      expect(
+        CommentMention.normalize(const [
+          CommentMention(uid: 'b', start: 6, end: 12),
+          CommentMention(uid: 'a', start: 0, end: 8),
+        ]),
+        [const CommentMention(uid: 'a', start: 0, end: 8)],
+      );
+    });
+
+    test('is what the composer and the decoder both go through', () {
+      final many = [
+        for (var i = 0; i < maxMentionsPerComment + 3; i++)
+          CommentMention(uid: 'u$i', start: i * 2, end: i * 2 + 1),
+      ];
+      expect(CommentMention.normalize(many), hasLength(maxMentionsPerComment));
+    });
+  });
+
+  /// The cap lives in three places, and `firestore.rules` is the enforcement —
   /// rules cannot iterate a list, so the count is the only thing they can check.
   /// Drifting BELOW the client's cap is the silent direction: a shipped build's
   /// write starts being denied and the author is told only that the comment
@@ -98,6 +121,19 @@ void main() {
 
     test('firestore.rules is where the guard expects it', () {
       expect(rules.existsSync(), isTrue);
+    });
+
+    // The third copy. A TypeScript cap below the Dart one is silent in the way
+    // that matters: mentions past it fall back to the plain `new_comment`
+    // wording for those recipients, and nothing logs it.
+    test('functions/src/mentions.ts agrees with maxMentionsPerComment', () {
+      final source = File('functions/src/mentions.ts');
+      expect(source.existsSync(), isTrue);
+      final match = RegExp(r'MAX_MENTIONS\s*=\s*(\d+)')
+          .firstMatch(source.readAsStringSync());
+      expect(match, isNotNull,
+          reason: 'MAX_MENTIONS is gone from functions/src/mentions.ts');
+      expect(int.parse(match!.group(1)!), maxMentionsPerComment);
     });
 
     test('isValidMentions() bounds the array at maxMentionsPerComment', () {

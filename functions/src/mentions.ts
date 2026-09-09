@@ -29,23 +29,23 @@ export const MAX_MENTIONS = 10;
  * Every kind of malformed input answers with fewer uids rather than a throw:
  * this runs inside a Firestore trigger, and a bad array must cost its own
  * wording, never the notification the comment was going to produce anyway.
- * Duplicates collapse — mentioning the same person twice in one comment is one
- * mention — and the cap is applied here as well as in the rules, because the
- * rules that were deployed when a document was written are not necessarily the
- * ones deployed now.
+ * A Set because that is the only thing the caller wants — duplicates collapse
+ * (mentioning the same person twice in one comment is one mention) and order is
+ * never used. The cap is applied here as well as in the rules, because the rules
+ * deployed when a document was written are not necessarily the ones deployed
+ * now.
  */
-export function mentionedUids(commentData: unknown): string[] {
+export function mentionedUids(commentData: unknown): Set<string> {
+  const uids = new Set<string>();
   const raw = (commentData as { mentions?: unknown } | undefined)?.mentions;
-  if (!Array.isArray(raw)) return [];
+  if (!Array.isArray(raw)) return uids;
 
-  const uids: string[] = [];
   for (const entry of raw) {
     if (typeof entry !== "object" || entry === null) continue;
     const uid = (entry as { uid?: unknown }).uid;
     if (typeof uid !== "string" || uid.length === 0) continue;
-    if (uids.includes(uid)) continue;
-    uids.push(uid);
-    if (uids.length === MAX_MENTIONS) break;
+    uids.add(uid);
+    if (uids.size === MAX_MENTIONS) break;
   }
   return uids;
 }
@@ -60,13 +60,12 @@ export function mentionedUids(commentData: unknown): string[] {
  */
 export function splitCommentRecipients(
   recipients: string[],
-  mentioned: string[]
+  mentioned: ReadonlySet<string>
 ): { mentioned: string[]; others: string[] } {
-  const named = new Set(mentioned);
   const inMentions: string[] = [];
   const others: string[] = [];
   for (const uid of recipients) {
-    if (named.has(uid)) {
+    if (mentioned.has(uid)) {
       inMentions.push(uid);
     } else {
       others.push(uid);

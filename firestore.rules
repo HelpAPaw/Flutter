@@ -257,7 +257,7 @@ service cloud.firestore {
     //
     // The cap is duplicated from `maxMentionsPerComment`
     // (lib/src/models/comment_mention.dart) and guarded by
-    // test/comment_mention_test.dart. Drifting BELOW the client's cap is the
+    // test/models/comment_mention_test.dart. Drifting BELOW the client's cap is the
     // silent direction: a shipped build's write starts failing and the author is
     // told only that the comment could not be added.
     function isValidMentions() {

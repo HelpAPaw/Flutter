@@ -31,10 +31,13 @@ import 'signal_event.dart';
 /// Takeover *requesters* are deliberately out: offering to take a signal on is
 /// not the same as having worked on it, and an unanswered offer should not put
 /// someone in a stranger's mention list.
+///
+/// The viewer is **not** excluded here. Removing them is one `remove` at the
+/// call site, and a parameter for it would put half of "who can I mention" in
+/// this function and half in the caller.
 Set<String> signalParticipantUids({
   required Signal signal,
   required List<SignalHistoryEntry> history,
-  String? excluding,
 }) {
   final uids = <String>{
     signal.reporter.id,
@@ -52,6 +55,5 @@ Set<String> signalParticipantUids({
     if (ownerId != null) uids.add(ownerId);
   }
 
-  if (excluding != null) uids.remove(excluding);
   return uids;
 }

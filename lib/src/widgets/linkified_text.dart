@@ -43,6 +43,23 @@ import '../utils/link_parser.dart';
 /// The *spans* are still built in `build()`, because their colour comes from
 /// the theme and has to follow a light/dark switch. Only the recognizers are
 /// state.
+/// How a mention is drawn, wherever it is drawn.
+///
+/// Two surfaces render the same `@Name`: the composer, so the author can see
+/// which pick registered, and the posted comment. They are meant to look
+/// identical — that is the whole point of highlighting the draft — so the
+/// decision lives in one place rather than as two `copyWith` literals that can
+/// drift apart.
+///
+/// `secondary` for the same reason as the link ink below, and **no underline**:
+/// underline is this screen's affordance for "this opens something", and a
+/// mention opens nothing.
+TextStyle mentionTextStyle(BuildContext context, TextStyle? base) =>
+    (base ?? const TextStyle()).copyWith(
+      color: Theme.of(context).colorScheme.secondary,
+      fontWeight: FontWeight.w600,
+    );
+
 class LinkifiedText extends StatefulWidget {
   const LinkifiedText(
     this.text, {
@@ -173,14 +190,7 @@ class _LinkifiedTextState extends State<LinkifiedText> {
     // Resolved once: `Theme.of` registers an inherited-widget dependency on
     // every call.
     final linkInk = Theme.of(context).colorScheme.secondary;
-    // A mention is NOT underlined and carries no recognizer. Underline is this
-    // screen's affordance for "this opens something", and a mention opens
-    // nothing — borrowing it would advertise a tap that never happens. Weight
-    // plus the same ink is enough to read as a name rather than as prose.
-    final mentionStyle = (widget.style ?? const TextStyle()).copyWith(
-      color: linkInk,
-      fontWeight: FontWeight.w600,
-    );
+    final mentionStyle = mentionTextStyle(context, widget.style);
     final linkStyle = (widget.style ?? const TextStyle()).copyWith(
       color: linkInk,
       // Colour alone is not an affordance: it is invisible to a red-green

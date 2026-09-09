@@ -105,13 +105,11 @@ void main() {
     expect(roster, {'reporter-uid', 'first-uid'});
   });
 
-  test('the viewer is left out — you cannot mention yourself', () {
+  // The viewer is removed by the caller, not by this function — see its doc.
+  test('returns a set the caller can take itself out of', () {
     expect(
-      signalParticipantUids(
-        signal: signalWith(),
-        history: [comment('ana-uid')],
-        excluding: 'ana-uid',
-      ),
+      signalParticipantUids(signal: signalWith(), history: [comment('ana-uid')])
+        ..remove('ana-uid'),
       {'reporter-uid'},
     );
   });

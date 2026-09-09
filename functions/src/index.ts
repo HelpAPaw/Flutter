@@ -1380,12 +1380,21 @@ async function handleCommentCreated(
     mentionedUids(commentData)
   );
 
-  // Both halves keep the SAME `cmt_{commentId}` document id. It is per-user
+  // One read per comment that mentions anybody, not one per recipient — the
+  // same reasoning as `newOwnerName`.
+  const authorName =
+    mentioned.length > 0 && authorRef
+      ? await readPublicName(authorRef.id)
+      : undefined;
+
+  // Both audiences keep the SAME `cmt_{commentId}` document id. It is per-user
   // (the inbox is a subcollection of the recipient) and deterministic because
   // triggers are at-least-once, so one comment can never become two rows or two
   // badge increments for one person — however the recipients are split.
   const docId = `cmt_${event.params.commentId}`;
-  const badgeByUid = new Map<string, number>();
+
+  // A recipient without a token gets the inbox row but no push, so this is a
+  // narrowing of `userTokens`, not a partition of it.
   const tokensFor = (uids: string[]): Map<string, string[]> =>
     new Map(
       uids
@@ -1393,72 +1402,59 @@ async function handleCommentCreated(
         .map((uid) => [uid, userTokens.get(uid)!])
     );
 
-  if (others.length > 0) {
-    const badges = await writeInboxEntries(
-      others,
-      {
-        docId,
-        type: "new_comment",
-        title,
-        body: truncatedComment,
-        signalId,
-        signalTitle,
-        commentExcerpt: truncatedComment,
-      },
-      isTestMode
-    );
-    for (const [uid, badge] of badges) badgeByUid.set(uid, badge);
-  }
-
-  let mentionTitle = title;
-  if (mentioned.length > 0) {
-    // One read per commented-on-with-mentions comment, not one per recipient.
-    const authorName = authorRef ? await readPublicName(authorRef.id) : undefined;
-    mentionTitle = `${authorName ?? "Someone"} mentioned you on: ${signalTitle}`;
-    const badges = await writeInboxEntries(
-      mentioned,
-      {
-        docId,
-        type: "mention",
-        title: mentionTitle,
-        body: truncatedComment,
-        signalId,
-        signalTitle,
-        commentExcerpt: truncatedComment,
-        mentionedByName: authorName,
-      },
-      isTestMode
-    );
-    for (const [uid, badge] of badges) badgeByUid.set(uid, badge);
-  }
+  // One description of an announcement per audience, rather than two copies of
+  // the write-then-send pair: everything except the recipients, the type and the
+  // title is identical, and a new inbox field added to one copy but not the
+  // other is invisible until somebody notices a row rendering its English
+  // fallback.
+  const announcements = [
+    { uids: others, type: "new_comment" as const, title, name: undefined },
+    {
+      uids: mentioned,
+      type: "mention" as const,
+      title: `${authorName ?? "Someone"} mentioned you on: ${signalTitle}`,
+      name: authorName,
+    },
+  ];
 
   console.log(
     `Comment on ${signalId}: ${others.length} subscriber(s), ` +
       `${mentioned.length} mentioned`
   );
 
-  // `commentExcerpt` is deliberately not repeated in the FCM data map — it is
-  // already the notification body, and the 4KB limit covers both together.
-  await sendNotificationsToUsers(
-    tokensFor(others),
-    { title, body: truncatedComment },
-    {
-      signalId,
-      type: "new_comment",
-      signalTitle: truncateForPayload(signalTitle),
-    },
-    badgeByUid
-  );
+  // The two audiences are disjoint, so neither their inbox writes nor their
+  // sends contend, and each half carries its own badge map. Sequentially this
+  // was three extra round trips on every mentioning comment.
+  await Promise.all(
+    announcements.map(async (announcement) => {
+      const badgeByUid = await writeInboxEntries(
+        announcement.uids,
+        {
+          docId,
+          type: announcement.type,
+          title: announcement.title,
+          body: truncatedComment,
+          signalId,
+          signalTitle,
+          commentExcerpt: truncatedComment,
+          mentionedByName: announcement.name,
+        },
+        isTestMode
+      );
 
-  await sendNotificationsToUsers(
-    tokensFor(mentioned),
-    { title: mentionTitle, body: truncatedComment },
-    {
-      signalId,
-      type: "mention",
-      signalTitle: truncateForPayload(signalTitle),
-    },
-    badgeByUid
+      // `commentExcerpt` is deliberately not repeated in the FCM data map — it
+      // is already the notification body, and the 4KB limit covers both.
+      await sendNotificationsToUsers(
+        tokensFor(announcement.uids),
+        { title: announcement.title, body: truncatedComment },
+        {
+          signalId,
+          type: announcement.type,
+          signalTitle: truncateForPayload(signalTitle),
+        },
+        badgeByUid
+      );
+    })
   );
 }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/comment_mention.dart';
+import 'linkified_text.dart';
 
 /// The `@…` run the caret is currently sitting in, if there is one.
 typedef MentionQuery = ({int start, String query});
@@ -40,6 +41,14 @@ class MentionTextEditingController extends TextEditingController {
   /// same way in Bulgarian as in English.
   static final _wordChar = RegExp(r'[\p{L}\p{N}]', unicode: true);
 
+  /// Whether position [at] in [source] begins a word.
+  ///
+  /// One definition for both halves of the feature — what opens the picker and
+  /// what stays a mention afterwards. Written twice, they can disagree, and a
+  /// name that could be typed would then stop being recognised.
+  static bool _startsWord(String source, int at) =>
+      at == 0 || source[at - 1].trim().isEmpty;
+
   /// The `@` run the caret is in, or null when the suggestion list should be
   /// hidden.
   ///
@@ -55,7 +64,7 @@ class MentionTextEditingController extends TextEditingController {
     for (var i = caret - 1; i >= 0; i--) {
       final char = text[i];
       if (char == '@') {
-        if (i > 0 && text[i - 1].trim().isNotEmpty) return null;
+        if (!_startsWord(text, i)) return null;
         return (start: i, query: text.substring(i + 1, caret));
       }
       // A query never spans a line break, and it never spans more than one word:
@@ -87,31 +96,53 @@ class MentionTextEditingController extends TextEditingController {
   }
 
   /// Where the picked names currently sit in the text, sorted and
-  /// non-overlapping — the array written to the comment document.
+  /// non-overlapping.
+  ///
+  /// The sort, the overlap rule and the cap are [CommentMention.normalize]'s,
+  /// not this class's — they were written here as well, and the two copies had
+  /// already drifted on which of two overlapping names wins.
   List<CommentMention> get mentions {
     final source = text;
     final found = <CommentMention>[];
 
     for (final pick in _picked) {
-      var from = 0;
-      while (from <= source.length - pick.label.length) {
-        final start = source.indexOf(pick.label, from);
-        if (start < 0) break;
+      for (var start = source.indexOf(pick.label);
+          start >= 0;
+          start = source.indexOf(pick.label, start + 1)) {
         final end = start + pick.label.length;
-        if (_isFreeStandingAt(source, start, end) &&
-            !found.any((other) => start < other.end && other.start < end)) {
+        if (_isFreeStandingAt(source, start, end)) {
           found.add(CommentMention(uid: pick.uid, start: start, end: end));
           break;
         }
-        from = start + 1;
       }
     }
 
-    found.sort((a, b) => a.start.compareTo(b.start));
-    if (found.length > maxMentionsPerComment) {
-      found.removeRange(maxMentionsPerComment, found.length);
-    }
-    return found;
+    return CommentMention.normalize(found);
+  }
+
+  /// The comment as it should be stored: the trimmed text, and the offsets that
+  /// match *that* string.
+  ///
+  /// Here rather than at the send site because this class is what knows where
+  /// the offsets came from. Trimming happens after they are measured, so
+  /// something has to shift them back over the leading whitespace — and a caller
+  /// doing that is re-deriving offsets against a string this class never saw.
+  /// Every second caller would have to remember to do it too.
+  ({String text, List<CommentMention> mentions}) get postable {
+    final trimmed = text.trim();
+    final shift = text.length - text.trimLeft().length;
+    return (
+      text: trimmed,
+      mentions: [
+        for (final mention in mentions)
+          if (mention.start >= shift && mention.end - shift <= trimmed.length)
+            CommentMention(
+              uid: mention.uid,
+              start: mention.start - shift,
+              end: mention.end - shift,
+            ),
+      ],
+    );
   }
 
   /// Whether `[start, end)` is a whole `@name` rather than part of a longer one.
@@ -120,7 +151,7 @@ class MentionTextEditingController extends TextEditingController {
   /// address; without the trailing one it matches inside `@Anastasia`, so a
   /// shorter name would steal a longer colleague's mention.
   bool _isFreeStandingAt(String source, int start, int end) {
-    if (start > 0 && source[start - 1].trim().isNotEmpty) return false;
+    if (!_startsWord(source, start)) return false;
     if (end < source.length && _wordChar.hasMatch(source[end])) return false;
     return true;
   }
@@ -140,12 +171,12 @@ class MentionTextEditingController extends TextEditingController {
     TextStyle? style,
     required bool withComposing,
   }) {
-    final ranges = mentions;
     // Mid-composition the framework's own span carries the IME underline, and
     // reproducing that here would be a second, worse copy of it. A CJK or
     // predictive-text user loses the highlight for the few keystrokes a
-    // composition lasts, which is the right way round.
-    if (ranges.isEmpty || (withComposing && value.isComposingRangeValid)) {
+    // composition lasts, which is the right way round. Checked before [mentions]
+    // is computed, since that answer would only be thrown away.
+    if (withComposing && value.isComposingRangeValid) {
       return super.buildTextSpan(
         context: context,
         style: style,
@@ -153,10 +184,16 @@ class MentionTextEditingController extends TextEditingController {
       );
     }
 
-    final mentionStyle = (style ?? const TextStyle()).copyWith(
-      color: Theme.of(context).colorScheme.secondary,
-      fontWeight: FontWeight.w600,
-    );
+    final ranges = mentions;
+    if (ranges.isEmpty) {
+      return super.buildTextSpan(
+        context: context,
+        style: style,
+        withComposing: withComposing,
+      );
+    }
+
+    final mentionStyle = mentionTextStyle(context, style);
 
     final spans = <TextSpan>[];
     var index = 0;

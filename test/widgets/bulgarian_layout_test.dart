@@ -136,7 +136,49 @@ void main() {
       final box = tester.getRect(find.byType(MentionSuggestions));
       expect(box.width, lessThanOrEqualTo(411));
       // Three rows and no more, however many people are on the signal.
-      expect(box.height, lessThanOrEqualTo(168));
+      expect(box.height, lessThanOrEqualTo(MentionSuggestions.threeRows));
+    });
+
+    // A phone in landscape with the keyboard up leaves the body well under
+    // 200dp. The list is a fixed-height sibling of the composer and of the
+    // scroll view's Expanded, so an uncapped one plus the composer overflows the
+    // Column — striped in debug, clipped in release, directly over what is being
+    // typed. The screen passes a third of the body height for exactly this.
+    testWidgets('yields to a short viewport instead of overflowing it',
+        (tester) async {
+      const candidates = <MentionCandidate>[
+        (uid: 'a', name: 'Александра Константинова-Димитрова'),
+        (uid: 'b', name: 'Христо Драгомиров Петканов'),
+        (uid: 'c', name: 'Мария Стоянова'),
+        (uid: 'd', name: 'Георги Иванов'),
+      ];
+
+      // A landscape-shaped window: the widget caps itself against the window
+      // height, because a Scaffold hides the keyboard inset from its own body.
+      tester.view.physicalSize = const Size(2154, 1233);
+      await tester.pumpWidget(MaterialApp(
+        locale: const Locale('bg'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: SizedBox(
+            // What is left of a 411dp-tall landscape window with a keyboard up.
+            height: 180,
+            child: Column(
+              children: [
+                const Expanded(child: SizedBox.expand()),
+                MentionSuggestions(candidates: candidates, onSelected: (_) {}),
+                const SizedBox(height: 56),
+              ],
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      expectNoOverflow(tester);
+      expect(tester.getSize(find.byType(MentionSuggestions)).height,
+          lessThan(MentionSuggestions.threeRows));
     });
 
     testWidgets('an empty roster takes no room at all', (tester) async {

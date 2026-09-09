@@ -19,19 +19,19 @@ const mention = (uid: string) => ({ uid, start: 0, end: 5 });
 
 describe("mentionedUids", () => {
   it("reads the uids out of a well-formed array", () => {
-    expect(
-      mentionedUids({ text: "hi", mentions: [mention("a"), mention("b")] })
-    ).toEqual(["a", "b"]);
+    expect([
+      ...mentionedUids({ text: "hi", mentions: [mention("a"), mention("b")] }),
+    ]).toEqual(["a", "b"]);
   });
 
   it("answers empty for a comment with no mentions at all", () => {
-    expect(mentionedUids({ text: "hi" })).toEqual([]);
-    expect(mentionedUids(undefined)).toEqual([]);
+    expect(mentionedUids({ text: "hi" }).size).toBe(0);
+    expect(mentionedUids(undefined).size).toBe(0);
   });
 
   it("drops anything that is not a usable entry instead of throwing", () => {
-    expect(
-      mentionedUids({
+    expect([
+      ...mentionedUids({
         mentions: [
           mention("a"),
           null,
@@ -42,30 +42,34 @@ describe("mentionedUids", () => {
           { uid: 7 },
           mention("c"),
         ],
-      })
-    ).toEqual(["a", "c"]);
+      }),
+    ]).toEqual(["a", "c"]);
   });
 
   it("treats a non-list mentions field as no mentions", () => {
-    expect(mentionedUids({ mentions: "a" })).toEqual([]);
-    expect(mentionedUids({ mentions: { uid: "a" } })).toEqual([]);
+    expect(mentionedUids({ mentions: "a" }).size).toBe(0);
+    expect(mentionedUids({ mentions: { uid: "a" } }).size).toBe(0);
   });
 
   it("collapses duplicates — naming someone twice is one mention", () => {
-    expect(mentionedUids({ mentions: [mention("a"), mention("a")] })).toEqual(["a"]);
+    expect([...mentionedUids({ mentions: [mention("a"), mention("a")] })]).toEqual([
+      "a",
+    ]);
   });
 
   // The rules cap the array too, but the ruleset deployed when a document was
   // written is not necessarily the one deployed now.
   it("caps the list independently of the rules", () => {
     const many = Array.from({ length: MAX_MENTIONS + 5 }, (_, i) => mention(`u${i}`));
-    expect(mentionedUids({ mentions: many })).toHaveLength(MAX_MENTIONS);
+    expect(mentionedUids({ mentions: many }).size).toBe(MAX_MENTIONS);
   });
 });
 
 describe("splitCommentRecipients", () => {
   it("separates the named subscribers from the rest, preserving order", () => {
-    expect(splitCommentRecipients(["a", "b", "c", "d"], ["c", "a"])).toEqual({
+    expect(
+      splitCommentRecipients(["a", "b", "c", "d"], new Set(["c", "a"]))
+    ).toEqual({
       mentioned: ["a", "c"],
       others: ["b", "d"],
     });
@@ -73,14 +77,14 @@ describe("splitCommentRecipients", () => {
 
   // THE property. A mention is a re-wording, never a new recipient.
   it("cannot reach anybody who is not already a recipient", () => {
-    const split = splitCommentRecipients(["a"], ["stranger", "a"]);
+    const split = splitCommentRecipients(["a"], new Set(["stranger", "a"]));
     expect(split.mentioned).toEqual(["a"]);
     expect(split.others).toEqual([]);
     expect([...split.mentioned, ...split.others]).toEqual(["a"]);
   });
 
   it("leaves everyone in `others` when nobody was mentioned", () => {
-    expect(splitCommentRecipients(["a", "b"], [])).toEqual({
+    expect(splitCommentRecipients(["a", "b"], new Set())).toEqual({
       mentioned: [],
       others: ["a", "b"],
     });

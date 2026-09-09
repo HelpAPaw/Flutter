@@ -25,7 +25,7 @@ library;
 /// they can say about this field. Drift is silent in the direction that matters:
 /// a rules cap *below* this one starts denying writes a shipped client makes,
 /// and the author only sees "could not add comment". Guarded by
-/// `test/comment_mention_test.dart`, which parses the rules.
+/// `test/models/comment_mention_test.dart`, which parses the rules.
 const int maxMentionsPerComment = 10;
 
 /// A mention: the uid, and the half-open `[start, end)` range of the `@name`
@@ -66,14 +66,28 @@ final class CommentMention {
       out.add(CommentMention(uid: uid, start: start, end: end));
     }
 
-    out.sort((a, b) => a.start.compareTo(b.start));
+    return normalize(out);
+  }
+
+  /// Puts a set of ranges into the only shape anything downstream accepts:
+  /// sorted, non-overlapping and capped.
+  ///
+  /// **The one owner of that rule**, called by [decode] on the way in from
+  /// Firestore and by the composer's controller on the way out. It was written
+  /// twice, once here and once there, and the two had already drifted: this side
+  /// resolved an overlap leftmost-first, the composer resolved it in the order
+  /// the names were picked. Two participants with the same display name would
+  /// then highlight one way while typing and another way once posted, and only
+  /// this side was tested.
+  static List<CommentMention> normalize(List<CommentMention> raw) {
+    final sorted = [...raw]..sort((a, b) => a.start.compareTo(b.start));
 
     // Overlaps cannot both be rendered, and picking one arbitrarily would make
-    // the same document render differently depending on document order. First
-    // wins, which after the sort means leftmost wins.
+    // the same document render differently depending on document order.
+    // Leftmost wins, which after the sort is simply first-wins.
     final kept = <CommentMention>[];
     var cursor = 0;
-    for (final mention in out) {
+    for (final mention in sorted) {
       if (mention.start < cursor) continue;
       kept.add(mention);
       cursor = mention.end;
