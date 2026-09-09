@@ -22,7 +22,7 @@ void main() {
       );
 
   Future<void> pump(WidgetTester tester, VetClinic clinic,
-      {VoidCallback? onTap}) async {
+      {VoidCallback? onTap, double textScale = 1.0}) async {
     tester.view.physicalSize = const Size(1233, 2154); // 411dp phone
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
@@ -32,8 +32,11 @@ void main() {
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
-          body: Center(
-            child: ClinicInfoCard(clinic: clinic, onTap: onTap ?? () {}),
+          body: MediaQuery(
+            data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
+            child: Center(
+              child: ClinicInfoCard(clinic: clinic, onTap: onTap ?? () {}),
+            ),
           ),
         ),
       ),
@@ -67,5 +70,36 @@ void main() {
     await pump(tester, clinicWith(), onTap: () => taps++);
     await tester.tap(find.text('Central Vet Clinic'));
     expect(taps, 1);
+  });
+
+  /// [ClinicInfoCard.maxHeightFor] decides whether the bubble fits above its
+  /// pin or has to flip below it, so it has to be an upper bound — and a *tight*
+  /// one. It used to count the name in both of its halves and add the badge to
+  /// the text beside it, over-estimating by about half a bubble, which flipped
+  /// bubbles that would have cleared the pin comfortably.
+  group('maxHeightFor', () {
+    for (final scale in [0.85, 1.0, 1.3, 2.0]) {
+      testWidgets('bounds the worst case at text scale $scale, tightly',
+          (tester) async {
+        await pump(
+          tester,
+          clinicWith(
+            name: 'Ветеринарна клиника и хотел за кучета и котки „Добро сърце“',
+            address: 'ж.к. Младост 4, бул. „Александър Малинов“ 78, 1712 София',
+          ),
+          textScale: scale,
+        );
+
+        final rendered = tester.getSize(find.byType(ClinicInfoCard)).height;
+        final estimate = ClinicInfoCard.maxHeightFor(
+          tester.element(find.byType(ClinicInfoCard)),
+        );
+
+        expect(rendered, lessThanOrEqualTo(estimate),
+            reason: 'the estimate has to be an upper bound');
+        expect(estimate, lessThan(rendered * 1.25),
+            reason: 'and close enough to it to be worth having');
+      });
+    }
   });
 }

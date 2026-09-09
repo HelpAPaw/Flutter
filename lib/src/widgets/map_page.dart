@@ -323,6 +323,18 @@ class _MapScreenState extends ConsumerState<MapScreen>
       };
     });
 
+    // A selected clinic that is no longer on the map — the layer was switched
+    // off, or a fresh search came back without it — must not leave a bubble
+    // behind that still navigates to it. Unlike the signals below there is no
+    // loading state to wait for: the clinic list is whatever the last search
+    // returned, and toggling the layer off empties it outright.
+    if (selectedClinicId != null &&
+        !mapState.vetClinicState.clinics
+            .any((c) => c.id == selectedClinicId)) {
+      _dismissBubble();
+      return;
+    }
+
     // Only once a query has actually answered: a reload empties the map without
     // meaning the signal is gone.
     if (visible == null || selectedSignalId == null) return;
