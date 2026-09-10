@@ -278,6 +278,45 @@ void main() {
     );
   });
 
+  group('a posted mention opens a profile', () {
+    const mentions = [CommentMention(uid: 'ivan-uid', start: 3, end: 15)];
+    const text = 'cc @Ivan Petrov please';
+
+    testWidgets('tapping the @name hands back the uid', (tester) async {
+      String? tapped;
+      await pump(
+        tester,
+        LinkifiedText(text, mentions: mentions, onMentionTap: (u) => tapped = u),
+      );
+
+      final span = spansOf(tester).firstWhere((s) => s.text == '@Ivan Petrov');
+      (span.recognizer! as TapGestureRecognizer).onTap!();
+      expect(tapped, 'ivan-uid');
+    });
+
+    testWidgets('and is underlined, so it reads as opening something',
+        (tester) async {
+      await pump(
+        tester,
+        LinkifiedText(text, mentions: mentions, onMentionTap: (_) {}),
+      );
+
+      final span = spansOf(tester).firstWhere((s) => s.text == '@Ivan Petrov');
+      expect(span.style?.decoration, TextDecoration.underline);
+    });
+
+    // The composer draws the same highlight over a draft, where the mention
+    // leads nowhere. Underlining it there would make the affordance a lie.
+    testWidgets('but not without a handler — the composer draws these too',
+        (tester) async {
+      await pump(tester, const LinkifiedText(text, mentions: mentions));
+
+      final span = spansOf(tester).firstWhere((s) => s.text == '@Ivan Petrov');
+      expect(span.recognizer, isNull);
+      expect(span.style?.decoration, isNot(TextDecoration.underline));
+    });
+  });
+
   testWidgets('a tap on a link is handled, not passed through',
       (tester) async {
     // url_launcher has no platform in a widget test, so the tap must not blow

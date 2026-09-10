@@ -51,9 +51,12 @@ import '../utils/link_parser.dart';
 /// decision lives in one place rather than as two `copyWith` literals that can
 /// drift apart.
 ///
-/// `secondary` for the same reason as the link ink below, and **no underline**:
-/// underline is this screen's affordance for "this opens something", and a
-/// mention opens nothing.
+/// `secondary` for the same reason as the link ink below, and **no underline
+/// here**: underline is this screen's affordance for "this opens something",
+/// and in the composer a mention opens nothing. A *posted* mention does open
+/// the person's profile, so `LinkifiedText` adds the underline on top of this
+/// when it is given an `onMentionTap` — which is why the underline is not part
+/// of the shared style.
 TextStyle mentionTextStyle(BuildContext context, TextStyle? base) =>
     (base ?? const TextStyle()).copyWith(
       color: Theme.of(context).colorScheme.secondary,
@@ -66,6 +69,7 @@ class LinkifiedText extends StatefulWidget {
     super.key,
     this.style,
     this.mentions = const [],
+    this.onMentionTap,
   });
 
   final String text;
@@ -77,6 +81,14 @@ class LinkifiedText extends StatefulWidget {
   /// the parser keeps its existing fast path and nothing but comments pays for
   /// this.
   final List<CommentMention> mentions;
+
+  /// Called with the mentioned uid when an `@name` is tapped.
+  ///
+  /// Null wherever a mention leads nowhere — the composer, which draws the same
+  /// highlight over a draft. A mention is only underlined when this is set, so
+  /// the underline keeps meaning "this opens something" rather than becoming
+  /// decoration on a run that does nothing.
+  final void Function(String uid)? onMentionTap;
 
   @override
   State<LinkifiedText> createState() => _LinkifiedTextState();
@@ -105,7 +117,8 @@ class _LinkifiedTextState extends State<LinkifiedText> {
     // finally carried its `mentions` array would otherwise keep rendering the
     // version without them.
     if (oldWidget.text != widget.text ||
-        !listEquals(oldWidget.mentions, widget.mentions)) {
+        !listEquals(oldWidget.mentions, widget.mentions) ||
+        (oldWidget.onMentionTap == null) != (widget.onMentionTap == null)) {
       _disposeRecognizers();
       _build();
     }
@@ -119,14 +132,24 @@ class _LinkifiedTextState extends State<LinkifiedText> {
 
   void _build() {
     _parts = parseLinks(widget.text, mentions: widget.mentions)
-        .map((token) => (
-              token,
-              token is LinkToken
-                  ? (TapGestureRecognizer()..onTap = () => _open(token.uri))
-                  : null,
-            ))
+        .map((token) => (token, _recognizerFor(token)))
         .toList(growable: false);
   }
+
+  /// The recognizer for one run, or null for a run that opens nothing.
+  ///
+  /// Both handlers read `widget` at tap time rather than capturing it here:
+  /// recognizers outlive a rebuild, and a caller that passes a fresh
+  /// `onMentionTap` closure on every build — which the obvious
+  /// `(uid) => context.push(...)` does — would otherwise be calling the one
+  /// from whenever the text last changed.
+  TapGestureRecognizer? _recognizerFor(TextToken token) => switch (token) {
+        LinkToken(:final uri) =>
+          TapGestureRecognizer()..onTap = () => _open(uri),
+        MentionToken(:final uid) when widget.onMentionTap != null =>
+          TapGestureRecognizer()..onTap = () => widget.onMentionTap?.call(uid),
+        _ => null,
+      };
 
   void _disposeRecognizers() {
     for (final (_, recognizer) in _parts) {
@@ -213,7 +236,13 @@ class _LinkifiedTextState extends State<LinkifiedText> {
                 ),
               MentionToken(:final text) => TextSpan(
                   text: text,
-                  style: mentionStyle,
+                  style: recognizer == null
+                      ? mentionStyle
+                      : mentionStyle.copyWith(
+                          decoration: TextDecoration.underline,
+                          decorationColor: mentionStyle.color,
+                        ),
+                  recognizer: recognizer,
                 ),
             },
         ],

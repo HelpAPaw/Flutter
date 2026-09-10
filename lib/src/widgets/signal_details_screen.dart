@@ -1571,7 +1571,11 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       icon: Icons.chat_bubble_outline,
       iconBackground: Theme.of(context).colorScheme.surfaceContainerHigh,
       iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
-      sentence: LinkifiedText(entry.text ?? '', mentions: entry.mentions),
+      sentence: LinkifiedText(
+        entry.text ?? '',
+        mentions: entry.mentions,
+        onMentionTap: _openUserProfile,
+      ),
       actorId: entry.actorId,
       date: _formatDate(entry, dateFormat),
       isLast: isLast,
