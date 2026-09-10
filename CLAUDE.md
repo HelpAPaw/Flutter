@@ -269,7 +269,11 @@ Integration tests use `integration_test` framework. Note: There was a recent iss
   functions, auth, or storage, which are shared with prod.
 - **Test account:** use `helpapaw.qa@gmail.com` with `+` aliases (e.g.
   `helpapaw.qa+r5@gmail.com`) for creating fresh test accounts / testing the anonymous
-  account-upgrade (link) flow.
+  account-upgrade (link) flow. Verification mail for those aliases is readable through
+  the session's Gmail connector, so a test account **can** be genuinely verified — POST
+  the link's `oobCode` to `identitytoolkit.googleapis.com/v1/accounts:update?key=<apiKey>`.
+  Fetching the `firebaseapp.com/__/auth/action` URL does nothing; that page applies the
+  code from JavaScript.
 
 ### Environment Files
 - iOS debug: `ios/Runner/GoogleService-Info-Debug.plist`
