@@ -208,17 +208,27 @@ void main() {
       // "Помага сега" beside "Сигнали" and "Коментари". Content-sized cards
       // (the old `spaceEvenly` row) overflow at that width in Bulgarian and
       // fit in English, which is exactly the failure this file exists for.
+      // In a `SingleChildScrollView`, which is where both profile screens put
+      // it — and the difference that matters: a scroll view gives its child
+      // UNBOUNDED height, and a Row that asks its children to stretch into
+      // that throws `BoxConstraints forces an infinite height` and paints
+      // nothing. A bounded `Scaffold.body` hides that completely, which is how
+      // it reached a device.
       await pumpAt411dp(
         tester,
         const Scaffold(
-          body: Padding(
+          body: SingleChildScrollView(
             padding: EdgeInsets.all(24),
-            child: UserStatsRow(
-              stats: UserStats(
-                signalsPosted: 128,
-                signalsOwned: 12,
-                commentsPosted: 1024,
-              ),
+            child: Column(
+              children: [
+                UserStatsRow(
+                  stats: UserStats(
+                    signalsPosted: 128,
+                    signalsOwned: 12,
+                    commentsPosted: 1024,
+                  ),
+                ),
+              ],
             ),
           ),
         ),

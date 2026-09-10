@@ -107,14 +107,21 @@ class UserStatsRow extends StatelessWidget {
       ),
     ];
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (var i = 0; i < cards.length; i++) ...[
-          if (i > 0) const SizedBox(width: 8),
-          Expanded(child: cards[i]),
+    // `IntrinsicHeight` is what lets the cards be the same height as each
+    // other. `CrossAxisAlignment.stretch` alone asks them to fill the row's
+    // height, and inside a scroll view that height is unbounded — which throws
+    // `BoxConstraints forces an infinite height` and paints nothing at all.
+    // Cheap here: three children, measured once.
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < cards.length; i++) ...[
+            if (i > 0) const SizedBox(width: 8),
+            Expanded(child: cards[i]),
+          ],
         ],
-      ],
+      ),
     );
   }
 }
