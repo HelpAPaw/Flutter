@@ -19,9 +19,12 @@ import '../utils/nav_extensions.dart';
 import 'app_bar_title.dart';
 import 'escape_leading.dart';
 
-/// Handle merging anonymous user data after sign-in
-Future<void> _handleAnonymousDataMerge(
-    String? previousAnonymousUid, User newUser) async {
+/// Handle merging anonymous user data after sign-in.
+///
+/// [anonymousData] must have been captured while the anonymous account was
+/// still the signed-in one — see [_SignInPageState._anonymousData] (#79).
+Future<void> _handleAnonymousDataMerge(String? previousAnonymousUid,
+    Map<String, dynamic>? anonymousData, User newUser) async {
   if (previousAnonymousUid == null || previousAnonymousUid == newUser.uid) {
     // No anonymous user to merge, or same UID (shouldn't happen with FirebaseUI)
     return;
@@ -32,7 +35,8 @@ Future<void> _handleAnonymousDataMerge(
 
   final db = FirebaseFirestore.instance;
 
-  // Check if the new user already has settings (existing account)
+  // Check if the new user already has settings (existing account). This one is
+  // a read of the account we are now signed in as, so the rules allow it.
   final newUserDoc = await db.collection('users').doc(newUser.uid).get();
   final hasExistingSettings = newUserDoc.exists &&
       (newUserDoc.data()?['notificationPreferences'] != null ||
@@ -40,12 +44,12 @@ Future<void> _handleAnonymousDataMerge(
 
   if (hasExistingSettings) {
     // Existing account - just merge tokens
-    await AuthService()
-        .mergeAnonymousIntoExisting(previousAnonymousUid, newUser.uid);
+    await AuthService().mergeAnonymousIntoExisting(
+        previousAnonymousUid, newUser.uid, anonymousData);
   } else {
     // New account - transfer all settings
-    await AuthService()
-        .transferAnonymousData(previousAnonymousUid, newUser.uid);
+    await AuthService().transferAnonymousData(
+        previousAnonymousUid, newUser.uid, anonymousData);
   }
 }
 
@@ -110,6 +114,16 @@ class _SignInPageState extends State<SignInPage> {
   /// in-place link isn't possible (R3-001).
   String? _previousAnonymousUid;
 
+  /// That anonymous account's user document, read while it is still the
+  /// signed-in account.
+  ///
+  /// `firestore.rules` scopes `users/{uid}` reads to `request.auth.uid`, so
+  /// once sign-in switches identity the anonymous document can never be read
+  /// again. Reading it inside the merge is what left the user stranded on this
+  /// screen with the sign-in already done (#79). Held as a Future so opening
+  /// the page doesn't wait on it and a fast sign-in can't race it.
+  Future<Map<String, dynamic>?>? _anonymousData;
+
   /// Shows a blocking overlay while anonymous data is migrated after auth.
   bool _migrating = false;
 
@@ -138,11 +152,41 @@ class _SignInPageState extends State<SignInPage> {
     // Normally there already is one, and the page shows straight away.
     if (existing == null) setState(() => _preparingSession = true);
     final user = existing ?? await AuthService().ensureAnonymousSession();
+    // Start the capture before the first frame this page can be typed into, so
+    // it is in flight well ahead of any sign-in (#79).
+    final anonymousData = (user != null && user.isAnonymous)
+        ? AuthService().captureAnonymousData(user.uid)
+        : null;
     if (!mounted) return;
     setState(() {
       _preparingSession = false;
-      if (user != null && user.isAnonymous) _previousAnonymousUid = user.uid;
+      if (user != null && user.isAnonymous) {
+        _previousAnonymousUid = user.uid;
+        _anonymousData = anonymousData;
+      }
     });
+  }
+
+  /// Merge the anonymous session's data into [user], which is now signed in.
+  ///
+  /// Never rethrows. The sign-in has already succeeded by the time this runs,
+  /// and the navigation that gets the user off this screen comes after it — so
+  /// a failure here has to cost preferences at worst, never the sign-in (#79).
+  Future<void> _mergeAnonymousData(User user) async {
+    if (_previousAnonymousUid == null || _previousAnonymousUid == user.uid) {
+      return;
+    }
+    _setMigrating(true);
+    try {
+      await _handleAnonymousDataMerge(
+          _previousAnonymousUid, await _anonymousData, user);
+    } catch (e, stack) {
+      debugPrint('Anonymous data merge failed: $e');
+      await FirebaseCrashlytics.instance.recordError(e, stack,
+          reason: 'Anonymous data merge after sign-in', fatal: false);
+    } finally {
+      _setMigrating(false);
+    }
   }
 
   void _setMigrating(bool value) {
@@ -156,16 +200,7 @@ class _SignInPageState extends State<SignInPage> {
     FirebaseCrashlytics.instance
         .log('Auth: User signed in - isAnonymous: ${user?.isAnonymous}');
 
-    if (_previousAnonymousUid != null &&
-        user != null &&
-        _previousAnonymousUid != user.uid) {
-      _setMigrating(true);
-      try {
-        await _handleAnonymousDataMerge(_previousAnonymousUid, user);
-      } finally {
-        _setMigrating(false);
-      }
-    }
+    if (user != null) await _mergeAnonymousData(user);
 
     // Register this device for push if the account already has notifications
     // enabled (multi-device sign-in - F-010). Fire-and-forget: on iOS token
@@ -189,16 +224,7 @@ class _SignInPageState extends State<SignInPage> {
     FirebaseCrashlytics.instance.log('Auth: New account created');
     final user = FirebaseAuth.instance.currentUser;
 
-    if (_previousAnonymousUid != null &&
-        user != null &&
-        _previousAnonymousUid != user.uid) {
-      _setMigrating(true);
-      try {
-        await _handleAnonymousDataMerge(_previousAnonymousUid, user);
-      } finally {
-        _setMigrating(false);
-      }
-    }
+    if (user != null) await _mergeAnonymousData(user);
 
     if (AuthService.hasPasswordProvider(user)) {
       // Send one verification email; the router redirect shows /verify_email.

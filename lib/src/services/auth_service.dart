@@ -375,49 +375,82 @@ class AuthService {
     }
   }
 
+  /// Read an anonymous account's transferable data while it is still the
+  /// signed-in account.
+  ///
+  /// Every merge below needs the anonymous user document, and `firestore.rules`
+  /// scopes `users/{uid}` reads to `request.auth.uid` — so the moment sign-in
+  /// switches identity that document becomes unreadable, permanently. Reading
+  /// it after the switch is what stranded the user on the sign-in screen (#79):
+  /// the `permission-denied` escaped the merge and skipped the navigation that
+  /// follows it.
+  ///
+  /// Callers must therefore capture BEFORE authenticating and hand the result
+  /// to [mergeAnonymousIntoExisting] / [transferAnonymousData]. Returns null if
+  /// there is nothing to carry over; never throws, because losing the
+  /// anonymous session's preferences must not cost the user their sign-in.
+  Future<Map<String, dynamic>?> captureAnonymousData(String anonymousUid) async {
+    try {
+      final doc = await _db.collection('users').doc(anonymousUid).get();
+      return doc.exists ? doc.data() : null;
+    } catch (e) {
+      debugPrint('Could not capture anonymous data for $anonymousUid: $e');
+      return null;
+    }
+  }
+
+  /// Best-effort removal of an abandoned anonymous account's own documents.
+  ///
+  /// Runs after the sign-in has already switched accounts, so the rules deny it
+  /// and it is expected to fail — the scheduled `cleanupAnonymousUsers` reaps
+  /// the leftovers (`users`, `userLocations`, `userCounters` and the
+  /// notifications subcollection) once the Auth user goes stale. It stays here
+  /// for the case where it *can* succeed, and must never throw into the
+  /// sign-in flow.
+  Future<void> _discardAnonymousDocs(String anonymousUid) async {
+    try {
+      await _db.collection('users').doc(anonymousUid).delete();
+      await _db.collection('userLocations').doc(anonymousUid).delete();
+      debugPrint('Deleted anonymous user documents');
+    } catch (e) {
+      debugPrint('Anonymous doc delete skipped (reaped by cleanup later): $e');
+    }
+  }
+
   /// Merge anonymous user's FCM tokens into an existing account
   /// This is called when the credential is already linked to another account
   ///
-  /// The existing account keeps its settings, we just add the anonymous tokens
-  Future<void> mergeAnonymousIntoExisting(
-      String anonymousUid, String existingUid) async {
+  /// The existing account keeps its settings, we just add the anonymous tokens.
+  /// [anonymousData] is the snapshot [captureAnonymousData] took before the
+  /// sign-in switched accounts; it cannot be read here (#79).
+  Future<void> mergeAnonymousIntoExisting(String anonymousUid,
+      String existingUid, Map<String, dynamic>? anonymousData) async {
     FirebaseCrashlytics.instance
         .log('Auth: Merging anonymous into existing account');
     debugPrint('Merging anonymous $anonymousUid into existing $existingUid');
 
-    // Get anonymous user data
-    final anonymousDoc = await _db.collection('users').doc(anonymousUid).get();
-    if (!anonymousDoc.exists) {
-      debugPrint('Anonymous user document not found');
+    if (anonymousData == null) {
+      debugPrint('No anonymous user data captured');
       return;
     }
 
-    final anonymousData = anonymousDoc.data()!;
     final anonymousTokens =
         (anonymousData['fcmTokens'] as List<dynamic>?)?.cast<String>() ?? [];
 
     if (anonymousTokens.isNotEmpty) {
-      // Add anonymous tokens to the existing (now signed-in) account.
-      await _db.collection('users').doc(existingUid).update({
+      // Add anonymous tokens to the existing (now signed-in) account. set/merge
+      // rather than update: an account that has never written its user doc is
+      // exactly the case the caller routes here (no settings of its own), and
+      // update would throw not-found on it.
+      await _db.collection('users').doc(existingUid).set({
         'fcmTokens': FieldValue.arrayUnion(anonymousTokens),
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      }, SetOptions(merge: true));
       debugPrint(
           'Merged ${anonymousTokens.length} tokens into existing account');
     }
 
-    // Best-effort delete of the anonymous doc. This path runs after we've
-    // already signed into the existing account (the email sign-in flow switches
-    // accounts before our handler runs), so Firestore rules forbid deleting the
-    // anonymous user's doc and this throws. That's expected: the scheduled
-    // `cleanupAnonymousUsers` function reaps the leftover anonymous account. We
-    // must never let this abort the sign-in flow.
-    try {
-      await _db.collection('users').doc(anonymousUid).delete();
-      debugPrint('Deleted anonymous user document');
-    } catch (e) {
-      debugPrint('Anonymous doc delete skipped (reaped by cleanup later): $e');
-    }
+    await _discardAnonymousDocs(anonymousUid);
   }
 
   /// Read the anonymous user's FCM tokens and delete its own Firestore docs.
@@ -455,64 +488,71 @@ class AuthService {
     }
   }
 
-  /// Transfer all data from anonymous account to a new account
-  /// This is used when creating a brand new account from anonymous
-  Future<void> transferAnonymousData(String anonymousUid, String newUid) async {
-    FirebaseCrashlytics.instance
-        .log('Auth: Transferring anonymous data to new account');
-    debugPrint('Transferring data from anonymous $anonymousUid to new $newUid');
-
-    // Get anonymous user data
-    final anonymousDoc = await _db.collection('users').doc(anonymousUid).get();
-    if (!anonymousDoc.exists) {
-      debugPrint('Anonymous user document not found');
-      return;
-    }
-
-    final anonymousData = anonymousDoc.data()!;
-
-    // Transfer all relevant fields to the new account
+  /// The fields an anonymous session hands to the account it becomes.
+  ///
+  /// Split out from [transferAnonymousData] so the mapping is testable without
+  /// Firestore, and so it is obvious what survives the upgrade: everything the
+  /// user could have configured before signing in. Anything absent is left out
+  /// rather than written as null, so a merge never overwrites a value the
+  /// destination account already has with an empty one.
+  ///
+  /// The live location is deliberately not here: it lives in
+  /// `userLocations/{uid}`, not the user doc, and self-heals on the next GPS
+  /// update.
+  @visibleForTesting
+  static Map<String, dynamic> buildAnonymousTransfer(
+      Map<String, dynamic> anonymousData) {
     final dataToTransfer = <String, dynamic>{
       'isAnonymous': false,
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
-    // Transfer FCM tokens
-    if (anonymousData['fcmTokens'] != null) {
-      dataToTransfer['fcmTokens'] = anonymousData['fcmTokens'];
+    for (final field in const [
+      'fcmTokens',
+      'notificationPreferences',
+      'signalSubscriptions',
+    ]) {
+      if (anonymousData[field] != null) {
+        dataToTransfer[field] = anonymousData[field];
+      }
     }
 
-    // Transfer notification preferences
-    if (anonymousData['notificationPreferences'] != null) {
-      dataToTransfer['notificationPreferences'] =
-          anonymousData['notificationPreferences'];
-    }
+    return dataToTransfer;
+  }
 
-    // NOTE: current location lives in userLocations/{uid}, not the user doc, and
-    // self-heals on the next GPS update, so there is nothing to transfer here.
+  /// Transfer all data from anonymous account to a new account
+  /// This is used when creating a brand new account from anonymous
+  ///
+  /// [anonymousData] is the snapshot [captureAnonymousData] took before the
+  /// sign-in switched accounts; it cannot be read here (#79).
+  Future<void> transferAnonymousData(String anonymousUid, String newUid,
+      Map<String, dynamic>? anonymousData) async {
+    FirebaseCrashlytics.instance
+        .log('Auth: Transferring anonymous data to new account');
+    debugPrint('Transferring data from anonymous $anonymousUid to new $newUid');
 
-    // Transfer signal subscriptions
-    if (anonymousData['signalSubscriptions'] != null) {
-      dataToTransfer['signalSubscriptions'] =
-          anonymousData['signalSubscriptions'];
+    if (anonymousData == null) {
+      debugPrint('No anonymous user data captured');
+      return;
     }
 
     try {
       // Save to new account
       await _db.collection('users').doc(newUid).set(
-            dataToTransfer,
+            buildAnonymousTransfer(anonymousData),
             SetOptions(merge: true),
           );
-
-      // Delete the anonymous user document and its stored location
-      await _db.collection('users').doc(anonymousUid).delete();
-      await _db.collection('userLocations').doc(anonymousUid).delete();
-
       debugPrint('Successfully transferred anonymous data to new account');
     } catch (e) {
+      // Never rethrow: the sign-in itself has already succeeded, and the
+      // navigation that follows this call is what gets the user off the
+      // sign-in screen (#79).
       debugPrint('Error transferring anonymous data: $e');
-      rethrow;
+      FirebaseCrashlytics.instance
+          .log('Auth: anonymous data transfer failed: $e');
     }
+
+    await _discardAnonymousDocs(anonymousUid);
   }
 
   /// Handle the complete sign-in flow for an anonymous user
@@ -537,6 +577,11 @@ class AuthService {
 
     final anonymousUid = currentUser.uid;
 
+    // Capture now, while this anonymous account is still the caller: after the
+    // needsMerge branch signs into the other account its document is
+    // unreadable to us (#79).
+    final anonymousData = await captureAnonymousData(anonymousUid);
+
     // Try to link the anonymous account
     final linkResult = await linkAnonymousAccount(credential);
 
@@ -559,7 +604,8 @@ class AuthService {
 
         if (existingUser != null) {
           // Merge anonymous tokens into existing account
-          await mergeAnonymousIntoExisting(anonymousUid, existingUser.uid);
+          await mergeAnonymousIntoExisting(
+              anonymousUid, existingUser.uid, anonymousData);
 
           // Save FCM token for the merged user
           try {
