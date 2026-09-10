@@ -9,6 +9,37 @@ service cloud.firestore {
       return /databases/$(database)/documents/users/$(request.auth.uid);
     }
 
+    // A durably authenticated caller: email/password once verified, or Google,
+    // which the provider verifies for us. NOT the anonymous sessions the app
+    // opens at startup for every visitor. This is the second half of M-1
+    // (HelpAPaw/Flutter#67) — the half that had to wait for an app release.
+    //
+    // WHY `email_verified` AND NOT `sign_in_provider`
+    // The app upgrades an anonymous account IN PLACE (`linkWithCredential`,
+    // same uid). That links a provider without re-authenticating, so the
+    // session token's `sign_in_provider` stays 'anonymous' for the rest of that
+    // session — for a real, upgraded user. Gating on it would lock out exactly
+    // the people this is meant to admit. `email_verified` is derived from
+    // account state when the token is minted, so it follows the upgrade, and it
+    // mirrors the router gate that already keeps unverified users out of the
+    // create UI.
+    //
+    // WHY THIS COULD NOT SHIP WITH THE REST OF M-1
+    // `email_verified` is baked in at MINT time, and neither `User.reload()`
+    // nor an app restart within the token's ~1h life re-mints it. A user who
+    // verified (or upgraded) mid-session therefore carried a stale `false` and
+    // had their first writes denied — which is what forced the 2026-07-23
+    // rollback. The client now force-refreshes the token at both points that
+    // flip the claim (`633da3b`: email_verification_page, sign_in_page), and
+    // that shipped in 6.0.2+126.
+    //
+    // Anything server-side (the fan-out, moderation, ownership) uses the Admin
+    // SDK and bypasses rules entirely, so nothing legitimate is caught here.
+    function isVerifiedCaller() {
+      return request.auth != null
+             && request.auth.token.email_verified == true;
+    }
+
     // The signal's reporter (owner), compared by DocumentReference path.
     // Used by both the prod and test signal update/delete rules so the
     // security-critical ownership check lives in exactly one place.
@@ -124,14 +155,12 @@ service cloud.firestore {
              == userDoc();
     }
 
-    // Validates a signal create (M-1): reporter pinned to the caller (no
-    // impersonation) plus basic type/size bounds on the content fields, to curb
-    // content abuse and read/storage-cost inflation.
-    //
-    // NOTE: this deliberately does NOT block anonymous callers yet — see the
-    // comment on the signals `create` rule below (HelpAPaw/Flutter#67).
+    // Validates a signal create (M-1): a verified, non-anonymous caller, with
+    // `reporter` pinned to them (no impersonation), plus basic type/size bounds
+    // on the content fields to curb content abuse and read/storage-cost
+    // inflation.
     function isSignalCreate() {
-      return request.auth != null
+      return isVerifiedCaller()
              && request.resource.data.reporter == userDoc()
              && request.resource.data.title is string
              && request.resource.data.title.size() > 0
@@ -233,7 +262,7 @@ service cloud.firestore {
     // QUARANTINED signal for free: the parent document no longer exists, so
     // the get() fails and the write is refused.
     function isCommentCreate(coll, signalId) {
-      return request.auth != null
+      return isVerifiedCaller()
              && request.resource.data.author == userDoc()
              && (
                !('text' in request.resource.data)
@@ -427,19 +456,6 @@ service cloud.firestore {
              && request.resource.data.status <= 2;
     }
 
-    // Validates a takeover request (master spec 4.5, "case ownership can be
-    // transferred if someone else takes responsibility").
-    //
-    // The DOCUMENT ID IS THE RATE LIMIT — it is the requester's uid, create is
-    // allowed and update is not, so one person can have at most one live request
-    // per signal. Same trick as isReportCreate below.
-    //
-    // Unlike signal and comment creation, this DOES block anonymous callers.
-    // That is not an inconsistency: the M-1 gap exists only because already
-    // released builds create signals anonymously, and nothing has ever written
-    // this collection, so a new surface can be strict from its first day.
-    // `sign_in_provider` rather than `email_verified` deliberately — the latter
-    // is what HelpAPaw/Flutter#67 is blocked on.
     // Whether an ANSWERED takeover request may be filed again.
     //
     // A decline should not be permanent — a signal looks very different two weeks
@@ -483,6 +499,18 @@ service cloud.firestore {
                   .hasOnly(['status', 'resolvedAt']);
     }
 
+    // Validates a takeover request (master spec 4.5, "case ownership can be
+    // transferred if someone else takes responsibility").
+    //
+    // The DOCUMENT ID IS THE RATE LIMIT — it is the requester's uid, create is
+    // allowed and update is not, so one person can have at most one live request
+    // per signal. Same trick as isReportCreate below.
+    //
+    // Blocks anonymous callers, as signal and comment creation now also do
+    // (isVerifiedCaller). This one uses `sign_in_provider` rather than
+    // `email_verified` and can keep doing so: nothing has ever written this
+    // collection from an in-place-upgraded session, which is the case that
+    // makes `sign_in_provider` unsafe for the older surfaces.
     function isTakeoverRequestCreate(coll, signalId, requesterId) {
       return request.auth != null
              && request.auth.uid == requesterId
@@ -675,15 +703,8 @@ service cloud.firestore {
     // Signals collection - public read, authenticated write
     match /signals/{signalId} {
       allow read: if true;  // Public read - signals are public data
-      // M-1, partial: binds `reporter` to the caller and bounds the content
-      // fields. The remaining half of M-1 — blocking anonymous callers
-      // server-side — is NOT here yet: it has to gate on
-      // `request.auth.token.email_verified`, which is baked into the ID token at
-      // mint time, so a user who verifies (or upgrades an anonymous account in
-      // place) mid-session keeps a stale `false` claim and gets denied. The
-      // client fix that force-refreshes the token (633da3b) is on dev but not in
-      // any released build, so that clause stays out until it ships.
-      // Tracking: HelpAPaw/Flutter#67.
+      // M-1, complete: a verified non-anonymous caller (isVerifiedCaller),
+      // `reporter` bound to them, and the content fields bounded.
       allow create: if isSignalCreate();
       // Reporter may edit any field; the SIGNAL OWNER may change the coordination
       // fields (status, urgency, tags). Nobody else may write the signal at all
@@ -767,7 +788,7 @@ service cloud.firestore {
         // signal — but still a broken Delete button until they update. Flip this, and the
         // two rules below it, and `isParentSignalReporter`, only once the
         // release carrying `signalRemoval` is on the installed base — the same
-        // sequencing #67 and #71 are waiting on. Tracking: HelpAPaw/Flutter#68.
+        // sequencing #71 is waiting on. Tracking: HelpAPaw/Flutter#68.
         allow delete: if request.auth != null
                       && isParentSignalReporter('signals', signalId);
       }
