@@ -129,48 +129,59 @@ class AuthService {
   /// provider photo costs one write. Best-effort — never fails a sign-in.
   static Future<void> mirrorProviderPhoto(User? user) async {
     if (user == null || user.isAnonymous) return;
-
     // An empty string, not null, when the account has no photo: the cache has
     // to be able to record "this account's avatar is *gone*" as distinctly as
     // it records a URL, or removing an avatar would be retried every launch.
-    final url = user.photoURL ?? '';
+    await mirrorPhotoUrl(user.uid, user.photoURL ?? '');
+  }
 
+  /// Publish [url] as [uid]'s avatar, at most once per distinct value.
+  ///
+  /// **Takes the URL rather than reading it off a [User], because the caller
+  /// that has just produced one cannot rely on the Auth record having caught
+  /// up.** `updatePhotoURL` does not refresh the in-memory `User` synchronously
+  /// — the upload path called [mirrorProviderPhoto] straight after it, read a
+  /// still-null `photoURL`, and mirrored "this account has no avatar", then
+  /// cached that. The avatar existed and nobody but its owner could see it,
+  /// which is the exact bug the mirror exists to prevent.
+  ///
+  /// An empty [url] means the avatar is gone and clears the field.
+  static Future<void> mirrorPhotoUrl(String uid, String url) async {
     final prefs = AppPreferencesService();
-    if (prefs.isPhotoMirroredFor(user.uid, url)) return;
+    if (prefs.isPhotoMirroredFor(uid, url)) return;
 
     // Nothing to publish, and nothing recorded that would need withdrawing —
     // an account that has simply never had an avatar. Writing the removal
     // anyway would cost one billed write per email/password user on the first
     // launch after this release, and again after every reinstall, to delete a
     // field that was never there.
-    if (url.isEmpty && prefs.mirroredPhotoUrlFor(user.uid) == null) {
-      await prefs.setPhotoMirrored(user.uid, url);
+    if (url.isEmpty && prefs.mirroredPhotoUrlFor(uid) == null) {
+      await prefs.setPhotoMirrored(uid, url);
       return;
     }
 
     try {
       // Time-boxed for the same reason the name is: callers await this on the
       // interactive sign-in path, and an avatar is not worth holding a tap for.
-      await PublicProfileService.setPhotoUrl(user.uid, url)
+      await PublicProfileService.setPhotoUrl(uid, url)
           .timeout(const Duration(seconds: 10));
-      await prefs.setPhotoMirrored(user.uid, url);
-      debugPrint('Mirrored provider photo to publicProfiles');
+      await prefs.setPhotoMirrored(uid, url);
+      debugPrint('Mirrored photo to publicProfiles');
     } on FirebaseException catch (e) {
       // A refusal is a VERDICT, not a blip, so record it as handled: an avatar
       // on a host `isValidProfilePhotoUrl()` does not accept would otherwise
       // be re-submitted and re-denied on every single launch, forever, with
       // nothing but a debugPrint to show for it.
       if (e.code == 'permission-denied') {
-        await prefs.setPhotoMirrored(user.uid, url);
-        debugPrint(
-            'Provider photo refused by rules, not retrying: ${user.photoURL}');
+        await prefs.setPhotoMirrored(uid, url);
+        debugPrint('Photo refused by rules, not retrying: $url');
         return;
       }
-      debugPrint('Could not mirror provider photo: $e');
+      debugPrint('Could not mirror photo: $e');
     } catch (e) {
       // Anything else — offline, timeout — is transient. Not recorded, so the
       // next launch tries again.
-      debugPrint('Could not mirror provider photo: $e');
+      debugPrint('Could not mirror photo: $e');
     }
   }
 

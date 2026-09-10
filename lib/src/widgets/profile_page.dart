@@ -144,8 +144,10 @@ class _ProfilePageState extends State<ProfilePage> {
         final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(reportAndDescribe(l10n, e, stack: stack,
-                where: 'profile.loadStatistics', fallback: l10n.errorLoadingStatistics)),
+            content: Text(reportAndDescribe(l10n, e,
+                stack: stack,
+                where: 'profile.loadStatistics',
+                fallback: l10n.errorLoadingStatistics)),
           ),
         );
       }
@@ -169,14 +171,11 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       await user.updateDisplayName(displayName);
 
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .set({
-            'displayName': displayName,
-            'phone': _phoneController.text.trim(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'displayName': displayName,
+        'phone': _phoneController.text.trim(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
       // Mirror the new name to the world-readable public profile.
       await PublicProfileService.setName(user.uid, displayName);
@@ -197,8 +196,10 @@ class _ProfilePageState extends State<ProfilePage> {
         final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(reportAndDescribe(l10n, e, stack: stack,
-                where: 'profile.save', fallback: l10n.errorUpdatingProfile)),
+            content: Text(reportAndDescribe(l10n, e,
+                stack: stack,
+                where: 'profile.save',
+                fallback: l10n.errorUpdatingProfile)),
           ),
         );
       }
@@ -241,14 +242,12 @@ class _ProfilePageState extends State<ProfilePage> {
 
       await user.updatePhotoURL(photoUrl);
 
-      // Through the mirror, not around it. Auth's `photoURL` is readable only
-      // by its owner, so the public copy has to be written — but writing it
-      // here directly meant this screen owning half of `mirrorProviderPhoto`'s
-      // contract (its timeout, its permission-denied handling, its
-      // write-avoidance cache) and getting a different answer than every other
-      // caller. `updatePhotoURL` has already refreshed `currentUser`, so the
-      // mirror sees the new URL.
-      await AuthService.mirrorProviderPhoto(user);
+      // Through the mirror, so this screen does not own half of its contract
+      // (the timeout, the permission-denied handling, the write-avoidance
+      // cache) — but handing it the URL rather than the user, because
+      // `updatePhotoURL` has NOT refreshed the in-memory `User` yet and the
+      // mirror would read a stale null and publish "no avatar".
+      await AuthService.mirrorPhotoUrl(user.uid, photoUrl);
 
       await user.reload();
 
@@ -264,8 +263,10 @@ class _ProfilePageState extends State<ProfilePage> {
         final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(reportAndDescribe(l10n, e, stack: stack,
-                where: 'profile.uploadAvatar', fallback: l10n.errorUploadingPhoto)),
+            content: Text(reportAndDescribe(l10n, e,
+                stack: stack,
+                where: 'profile.uploadAvatar',
+                fallback: l10n.errorUploadingPhoto)),
           ),
         );
       }
@@ -324,10 +325,10 @@ class _ProfilePageState extends State<ProfilePage> {
     return Scaffold(
       appBar: AppBar(
         leading: escapeLeading(
-            context,
-            label: AppLocalizations.of(context).back,
-            onLeave: () => context.popOrHome(),
-          ),
+          context,
+          label: AppLocalizations.of(context).back,
+          onLeave: () => context.popOrHome(),
+        ),
         title: AppBarTitle(l10n.profile),
         actions: [
           if (!_isEditing)
@@ -344,175 +345,203 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
         ],
       ),
-      body: PageWidth(child: user == null
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.account_circle, size: 80, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                  const SizedBox(height: 16),
-                  Text(l10n.pleaseSignInToViewProfile),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => context.push(Routes.signIn),
-                    child: Text(l10n.signIn),
-                  ),
-                ],
-              ),
-            )
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                children: [
-                  const SizedBox(height: 20),
-                  Stack(
+      body: PageWidth(
+          child: user == null
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      UserAvatar(url: user.photoURL, radius: 60),
-                      if (_isEditing)
-                        Positioned(
-                          bottom: 0,
-                          right: 0,
-                          child: CircleAvatar(
-                            backgroundColor: Theme.of(context).colorScheme.primary,
-                            child: IconButton(
-                              tooltip: l10n.changeProfilePhoto,
-                              icon: const Icon(Icons.camera_alt, color: Colors.white),  // theme-independent: over the avatar photo
-                              onPressed: _isLoading ? null : _pickAndUploadPhoto,
-                            ),
-                          ),
-                        ),
+                      Icon(Icons.account_circle,
+                          size: 80,
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant),
+                      const SizedBox(height: 16),
+                      Text(l10n.pleaseSignInToViewProfile),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () => context.push(Routes.signIn),
+                        child: Text(l10n.signIn),
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 24),
-                  if (_isEditing) ...[
-                    TextFormField(
-                      controller: _displayNameController,
-                      autovalidateMode: AutovalidateMode.onUserInteraction,
-                      validator: (value) => validateDisplayName(l10n, value),
-                      decoration: InputDecoration(
-                        labelText: l10n.displayName,
-                        border: const OutlineInputBorder(),
-                        prefixIcon: const Icon(Icons.person),
-                      ),
-                      // Mirrors the publicProfiles rules' bounds, so an
-                      // over-long or multi-line name is capped as it's typed
-                      // instead of failing with an opaque PERMISSION_DENIED.
-                      inputFormatters: [
-                        LengthLimitingTextInputFormatter(
-                            PublicProfileService.maxNameLength),
-                        FilteringTextInputFormatter.singleLineFormatter,
+                )
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 20),
+                        Stack(
+                          children: [
+                            UserAvatar(url: user.photoURL, radius: 60),
+                            if (_isEditing)
+                              Positioned(
+                                bottom: 0,
+                                right: 0,
+                                child: CircleAvatar(
+                                  backgroundColor:
+                                      Theme.of(context).colorScheme.primary,
+                                  child: IconButton(
+                                    tooltip: l10n.changeProfilePhoto,
+                                    icon: const Icon(Icons.camera_alt,
+                                        color: Colors
+                                            .white), // theme-independent: over the avatar photo
+                                    onPressed:
+                                        _isLoading ? null : _pickAndUploadPhoto,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        if (_isEditing) ...[
+                          TextFormField(
+                            controller: _displayNameController,
+                            autovalidateMode:
+                                AutovalidateMode.onUserInteraction,
+                            validator: (value) =>
+                                validateDisplayName(l10n, value),
+                            decoration: InputDecoration(
+                              labelText: l10n.displayName,
+                              border: const OutlineInputBorder(),
+                              prefixIcon: const Icon(Icons.person),
+                            ),
+                            // Mirrors the publicProfiles rules' bounds, so an
+                            // over-long or multi-line name is capped as it's typed
+                            // instead of failing with an opaque PERMISSION_DENIED.
+                            inputFormatters: [
+                              LengthLimitingTextInputFormatter(
+                                  PublicProfileService.maxNameLength),
+                              FilteringTextInputFormatter.singleLineFormatter,
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _phoneController,
+                            autovalidateMode:
+                                AutovalidateMode.onUserInteraction,
+                            validator: (value) => validatePhone(l10n, value),
+                            decoration: InputDecoration(
+                              labelText: l10n.phoneNumber,
+                              border: const OutlineInputBorder(),
+                              prefixIcon: const Icon(Icons.phone),
+                            ),
+                            keyboardType: TextInputType.phone,
+                          ),
+                          const SizedBox(height: 24),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: _isLoading ? null : _updateProfile,
+                              style: ElevatedButton.styleFrom(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 16),
+                              ),
+                              child: _isLoading
+                                  ? const SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors
+                                            .white, // theme-independent: over the avatar photo
+                                      ),
+                                    )
+                                  : Text(l10n.saveChanges),
+                            ),
+                          ),
+                        ] else ...[
+                          Text(
+                            user.displayName ?? l10n.noNameSet,
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineSmall
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            user.email ?? '',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyLarge
+                                ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant),
+                          ),
+                          const SizedBox(height: 32),
+                          // Absent until the aggregations land, rather than three
+                          // zeros that then jump: a zero is a real answer here, so
+                          // showing one we do not have yet is a lie about this
+                          // person's contribution.
+                          if (_stats case final stats?)
+                            UserStatsRow(stats: stats),
+                          const SizedBox(height: 32),
+                          const Divider(),
+                          ListTile(
+                            leading: const Icon(Icons.email),
+                            title: Text(l10n.email),
+                            subtitle: Text(user.email ?? l10n.notSet),
+                          ),
+                          ListTile(
+                            leading: const Icon(Icons.phone),
+                            title: Text(l10n.phoneNumber),
+                            subtitle: Text(_phoneController.text.isEmpty
+                                ? l10n.notSet
+                                : _phoneController.text),
+                          ),
+                          ListTile(
+                            leading: const Icon(Icons.verified),
+                            title: Text(l10n.emailVerified),
+                            subtitle:
+                                Text(user.emailVerified ? l10n.yes : l10n.no),
+                            trailing: !user.emailVerified
+                                ? TextButton(
+                                    onPressed: () async {
+                                      await user.sendEmailVerification();
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                                l10n.verificationEmailSent),
+                                          ),
+                                        );
+                                      }
+                                    },
+                                    child: Text(l10n.verify),
+                                  )
+                                : null,
+                          ),
+                          ListTile(
+                            leading: const Icon(Icons.calendar_today),
+                            title: Text(l10n.memberSince),
+                            subtitle: Text(
+                              user.metadata.creationTime != null
+                                  ? '${user.metadata.creationTime!.day}/${user.metadata.creationTime!.month}/${user.metadata.creationTime!.year}'
+                                  : l10n.unknown,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          const Divider(),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8.0),
+                            child: TextButton.icon(
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.red,
+                              ),
+                              onPressed:
+                                  _isLoading ? null : _confirmDeleteAccount,
+                              icon: const Icon(Icons.delete_forever),
+                              label: Text(l10n.deleteAccount),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _phoneController,
-                      autovalidateMode: AutovalidateMode.onUserInteraction,
-                      validator: (value) => validatePhone(l10n, value),
-                      decoration: InputDecoration(
-                        labelText: l10n.phoneNumber,
-                        border: const OutlineInputBorder(),
-                        prefixIcon: const Icon(Icons.phone),
-                      ),
-                      keyboardType: TextInputType.phone,
-                    ),
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _isLoading ? null : _updateProfile,
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                        ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,  // theme-independent: over the avatar photo
-                                ),
-                              )
-                            : Text(l10n.saveChanges),
-                      ),
-                    ),
-                  ] else ...[
-                    Text(
-                      user.displayName ?? l10n.noNameSet,
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      user.email ?? '',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-                    ),
-                    const SizedBox(height: 32),
-                    // Absent until the aggregations land, rather than three
-                    // zeros that then jump: a zero is a real answer here, so
-                    // showing one we do not have yet is a lie about this
-                    // person's contribution.
-                    if (_stats case final stats?)
-                      UserStatsRow(stats: stats),
-                    const SizedBox(height: 32),
-                    const Divider(),
-                    ListTile(
-                      leading: const Icon(Icons.email),
-                      title: Text(l10n.email),
-                      subtitle: Text(user.email ?? l10n.notSet),
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.phone),
-                      title: Text(l10n.phoneNumber),
-                      subtitle: Text(_phoneController.text.isEmpty ? l10n.notSet : _phoneController.text),
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.verified),
-                      title: Text(l10n.emailVerified),
-                      subtitle: Text(user.emailVerified ? l10n.yes : l10n.no),
-                      trailing: !user.emailVerified
-                          ? TextButton(
-                              onPressed: () async {
-                                await user.sendEmailVerification();
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(l10n.verificationEmailSent),
-                                    ),
-                                  );
-                                }
-                              },
-                              child: Text(l10n.verify),
-                            )
-                          : null,
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.calendar_today),
-                      title: Text(l10n.memberSince),
-                      subtitle: Text(
-                        user.metadata.creationTime != null
-                            ? '${user.metadata.creationTime!.day}/${user.metadata.creationTime!.month}/${user.metadata.creationTime!.year}'
-                            : l10n.unknown,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    const Divider(),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0),
-                      child: TextButton.icon(
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.red,
-                        ),
-                        onPressed: _isLoading ? null : _confirmDeleteAccount,
-                        icon: const Icon(Icons.delete_forever),
-                        label: Text(l10n.deleteAccount),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-              ),
-            )),
+                  ),
+                )),
     );
   }
 }
