@@ -38,6 +38,28 @@ const OTHER = 'other-uid';
 
 let testEnv;
 
+/**
+ * A signed-in caller, email-verified unless told otherwise.
+ *
+ * Creating a signal or a comment requires `email_verified` (firestore.rules
+ * `isVerifiedCaller`, the second half of M-1), and every caller that legitimately
+ * reaches those rules has it: the app's router keeps unverified password users
+ * out of the create UI, and Google sign-in is verified by the provider. So a
+ * verified token — not a bare uid — is what "a signed-in user" means here.
+ * Tests about anonymous or unverified callers build their token explicitly.
+ */
+function authed(uid, token = {}) {
+  return testEnv.authenticatedContext(uid, { email_verified: true, ...token });
+}
+
+/** An anonymous session, as the app opens one for every visitor at startup. */
+function anonymous(uid) {
+  return testEnv.authenticatedContext(uid, {
+    email_verified: false,
+    firebase: { sign_in_provider: 'anonymous' },
+  });
+}
+
 /** A signal document as the app writes it, with `reporter` owned by `uid`. */
 function signalDoc(db, uid, overrides = {}) {
   return {
@@ -119,12 +141,12 @@ for (const coll of ['signals', 'signals_test']) {
     beforeEach(() => testEnv.clearFirestore());
 
     it('lets a signed-in user create a signal they report', async () => {
-      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      const db = authed(REPORTER).firestore();
       await assertSucceeds(addDoc(collection(db, coll), signalDoc(db, REPORTER)));
     });
 
     it('rejects a signal whose reporter is someone else (M-1: impersonation)', async () => {
-      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      const db = authed(REPORTER).firestore();
       await assertFails(addDoc(collection(db, coll), signalDoc(db, OTHER)));
     });
 
@@ -134,12 +156,12 @@ for (const coll of ['signals', 'signals_test']) {
     });
 
     it('rejects an empty title', async () => {
-      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      const db = authed(REPORTER).firestore();
       await assertFails(addDoc(collection(db, coll), signalDoc(db, REPORTER, { title: '' })));
     });
 
     it('accepts a 300-char title and rejects 301', async () => {
-      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      const db = authed(REPORTER).firestore();
       await assertSucceeds(
         addDoc(collection(db, coll), signalDoc(db, REPORTER, { title: 'a'.repeat(300) })),
       );
@@ -149,7 +171,7 @@ for (const coll of ['signals', 'signals_test']) {
     });
 
     it('accepts a 10000-char description and rejects 10001', async () => {
-      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      const db = authed(REPORTER).firestore();
       await assertSucceeds(
         addDoc(collection(db, coll), signalDoc(db, REPORTER, { description: 'a'.repeat(10000) })),
       );
@@ -164,12 +186,12 @@ for (const coll of ['signals', 'signals_test']) {
     // whose signals default to `rescue`. So the rules neither require it nor
     // range-check it: a retired field must not be able to reject a write.
     it('accepts a signal with no signalType at all', async () => {
-      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      const db = authed(REPORTER).firestore();
       await assertSucceeds(addDoc(collection(db, coll), signalDoc(db, REPORTER)));
     });
 
     it('still accepts a signalType from an older build, whatever its value', async () => {
-      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      const db = authed(REPORTER).firestore();
       for (const signalType of [0, 6, 99, 'anything']) {
         await assertSucceeds(
           addDoc(collection(db, coll), signalDoc(db, REPORTER, { signalType })),
@@ -178,7 +200,7 @@ for (const coll of ['signals', 'signals_test']) {
     });
 
     it('rejects a missing title/description', async () => {
-      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      const db = authed(REPORTER).firestore();
       for (const field of ['title', 'description']) {
         const data = signalDoc(db, REPORTER);
         delete data[field];
@@ -187,7 +209,7 @@ for (const coll of ['signals', 'signals_test']) {
     });
 
     it('accepts every real urgency (0-2) and rejects out-of-range or non-int', async () => {
-      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      const db = authed(REPORTER).firestore();
       for (const urgency of [0, 1, 2]) {
         await assertSucceeds(addDoc(collection(db, coll), signalDoc(db, REPORTER, { urgency })));
       }
@@ -201,14 +223,14 @@ for (const coll of ['signals', 'signals_test']) {
     // create signals without it. Requiring it would break signal creation for
     // every user who has not updated.
     it('still accepts a signal with no urgency field at all (old clients)', async () => {
-      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      const db = authed(REPORTER).firestore();
       const data = signalDoc(db, REPORTER);
       delete data.urgency;
       await assertSucceeds(addDoc(collection(db, coll), data));
     });
 
     it('accepts 1-3 help tags and rejects an empty or oversized list', async () => {
-      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      const db = authed(REPORTER).firestore();
       for (const helpNeededTags of [['rescue'], ['rescue', 'foster'], ['a', 'b', 'c']]) {
         await assertSucceeds(
           addDoc(collection(db, coll), signalDoc(db, REPORTER, { helpNeededTags })),
@@ -225,7 +247,7 @@ for (const coll of ['signals', 'signals_test']) {
     // build must not be rejected by an older deployed ruleset. An unrecognised
     // code simply never matches anyone in the fan-out.
     it('accepts a help tag code this ruleset has never heard of', async () => {
-      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      const db = authed(REPORTER).firestore();
       await assertSucceeds(
         addDoc(collection(db, coll), signalDoc(db, REPORTER, {
           helpNeededTags: ['somethingAddedLater'],
@@ -234,7 +256,7 @@ for (const coll of ['signals', 'signals_test']) {
     });
 
     it('accepts a string animalType and rejects other shapes', async () => {
-      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      const db = authed(REPORTER).firestore();
       await assertSucceeds(
         addDoc(collection(db, coll), signalDoc(db, REPORTER, { animalType: 'cat' })),
       );
@@ -256,7 +278,7 @@ for (const coll of ['signals', 'signals_test']) {
           signalDoc(ctx.firestore(), REPORTER),
         );
       });
-      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      const db = authed(REPORTER).firestore();
       await assertSucceeds(
         updateDoc(doc(db, coll, SIGNAL_U), { helpNeededTags: ['rescue', 'foster'] }),
       );
@@ -272,20 +294,38 @@ for (const coll of ['signals', 'signals_test']) {
     // create signals with neither field. Tightening these to mandatory is step 3
     // of the rollout, after adoption — not now.
     it('still accepts a signal with no tags or species (old clients)', async () => {
-      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      const db = authed(REPORTER).firestore();
       const data = signalDoc(db, REPORTER);
       delete data.helpNeededTags;
       delete data.animalType;
       await assertSucceeds(addDoc(collection(db, coll), data));
     });
 
-    // Documents the deliberate M-1 gap: the anonymous block is NOT deployed yet,
-    // because it must gate on `email_verified`, which goes stale in the ID token
-    // (see HelpAPaw/Flutter#67). When that clause lands, flip this to assertFails.
-    it('STILL ALLOWS anonymous creation — pending clause, see issue #67', async () => {
-      const db = testEnv
-        .authenticatedContext(REPORTER, { firebase: { sign_in_provider: 'anonymous' } })
-        .firestore();
+    // The second half of M-1 (HelpAPaw/Flutter#67), deployed once the client
+    // token-refresh fix reached released builds. The app has blocked anonymous
+    // creation in its own UI since 17327ff; this is the server saying so too.
+    it('denies an anonymous caller', async () => {
+      const db = anonymous(REPORTER).firestore();
+      await assertFails(addDoc(collection(db, coll), signalDoc(db, REPORTER)));
+    });
+
+    // The rule reads `email_verified`, not "is not anonymous", because an
+    // in-place upgrade (linkWithCredential) leaves `sign_in_provider` at
+    // 'anonymous' for a real user. So an unverified password account — which
+    // the app's router keeps out of the create UI anyway — is denied here even
+    // though it is not an anonymous session.
+    it('denies a signed-in but unverified caller', async () => {
+      const db = authed(REPORTER, { email_verified: false }).firestore();
+      await assertFails(addDoc(collection(db, coll), signalDoc(db, REPORTER)));
+    });
+
+    // The case that forced the 2026-07-23 rollback, stated as a test: a user
+    // who upgraded an anonymous account in place still carries
+    // sign_in_provider 'anonymous', and MUST be allowed once verified.
+    it('allows an in-place-upgraded caller whose provider still reads anonymous', async () => {
+      const db = authed(REPORTER, {
+        firebase: { sign_in_provider: 'anonymous' },
+      }).firestore();
       await assertSucceeds(addDoc(collection(db, coll), signalDoc(db, REPORTER)));
     });
   });
@@ -303,17 +343,29 @@ for (const coll of ['signals', 'signals_test']) {
     });
 
     it('lets a signed-in user comment as themselves', async () => {
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertSucceeds(addDoc(collection(db, commentsPath), commentDoc(db, OTHER)));
     });
 
     it('rejects a comment authored as someone else (M-1: impersonation)', async () => {
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertFails(addDoc(collection(db, commentsPath), commentDoc(db, REPORTER)));
     });
 
+    // The other half of M-1 (#67), on comments as well as signals — the app has
+    // gated commenting on a non-anonymous account since 17327ff.
+    it('rejects a comment from an anonymous or unverified caller', async () => {
+      const anon = anonymous(OTHER).firestore();
+      await assertFails(addDoc(collection(anon, commentsPath), commentDoc(anon, OTHER)));
+
+      const unverified = authed(OTHER, { email_verified: false }).firestore();
+      await assertFails(
+        addDoc(collection(unverified, commentsPath), commentDoc(unverified, OTHER)),
+      );
+    });
+
     it('rejects empty and over-long comment text', async () => {
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertFails(addDoc(collection(db, commentsPath), commentDoc(db, OTHER, { text: '' })));
       await assertFails(
         addDoc(collection(db, commentsPath), commentDoc(db, OTHER, { text: 'a'.repeat(2001) })),
@@ -324,7 +376,7 @@ for (const coll of ['signals', 'signals_test']) {
     });
 
     it('accepts a comment with a bounded mentions array, and one with none', async () => {
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertSucceeds(
         addDoc(collection(db, commentsPath), commentDoc(db, OTHER)),
       );
@@ -343,7 +395,7 @@ for (const coll of ['signals', 'signals_test']) {
     // cannot iterate a list — so it is the only thing worth pinning here. Entry
     // shape is the server's problem, and a forged entry reaches nobody.
     it('rejects more than ten mentions, and a mentions field that is not a list', async () => {
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       const eleven = Array.from({ length: 11 }, (_, i) => ({
         uid: REPORTER,
         start: i,
@@ -366,7 +418,7 @@ for (const coll of ['signals', 'signals_test']) {
     // The regression that matters most: status_change comments carry no `text`,
     // so an unconditional text check would break every status update.
     it('accepts a text-less status_change system comment', async () => {
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertSucceeds(
         addDoc(collection(db, commentsPath), {
           type: 'status_change',
@@ -384,10 +436,10 @@ for (const coll of ['signals', 'signals_test']) {
         await setDoc(doc(db, commentsPath, 'c1'), commentDoc(db, OTHER));
         await setDoc(doc(db, commentsPath, 'c2'), commentDoc(db, OTHER));
       });
-      const bystander = testEnv.authenticatedContext('third-uid').firestore();
+      const bystander = authed('third-uid').firestore();
       await assertFails(deleteDoc(doc(bystander, commentsPath, 'c1')));
 
-      const reporter = testEnv.authenticatedContext(REPORTER).firestore();
+      const reporter = authed(REPORTER).firestore();
       await assertSucceeds(deleteDoc(doc(reporter, commentsPath, 'c2')));
     });
 
@@ -402,10 +454,10 @@ for (const coll of ['signals', 'signals_test']) {
         });
       });
 
-      const bystander = testEnv.authenticatedContext(OTHER).firestore();
+      const bystander = authed(OTHER).firestore();
       await assertFails(addDoc(collection(bystander, commentsPath), commentDoc(bystander, OTHER)));
 
-      const reporter = testEnv.authenticatedContext(REPORTER).firestore();
+      const reporter = authed(REPORTER).firestore();
       await assertFails(addDoc(collection(reporter, commentsPath), commentDoc(reporter, REPORTER)));
     });
 
@@ -417,7 +469,7 @@ for (const coll of ['signals', 'signals_test']) {
           moderation: { commentsLocked: false },
         });
       });
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertSucceeds(addDoc(collection(db, commentsPath), commentDoc(db, OTHER)));
     });
 
@@ -425,7 +477,7 @@ for (const coll of ['signals', 'signals_test']) {
     // If the nested get() defaults were wrong, this would deny every comment in
     // production — the loudest possible regression, so it gets its own test.
     it('treats a signal with no moderation map as unlocked', async () => {
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertSucceeds(addDoc(collection(db, commentsPath), commentDoc(db, OTHER)));
     });
 
@@ -433,7 +485,7 @@ for (const coll of ['signals', 'signals_test']) {
       await testEnv.withSecurityRulesDisabled(async (ctx) => {
         await deleteDoc(doc(ctx.firestore(), coll, SIGNAL));
       });
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertFails(addDoc(collection(db, commentsPath), commentDoc(db, OTHER)));
     });
   });
@@ -451,7 +503,7 @@ for (const coll of ['signals', 'signals_test']) {
     });
 
     it('accepts a status_change and an urgency_change from any signed-in user', async () => {
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertSucceeds(addDoc(collection(db, eventsPath), eventDoc(db, OTHER)));
       await assertSucceeds(
         addDoc(
@@ -470,7 +522,7 @@ for (const coll of ['signals', 'signals_test']) {
     });
 
     it('rejects an event attributed to someone else', async () => {
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertFails(addDoc(collection(db, eventsPath), eventDoc(db, REPORTER)));
     });
 
@@ -483,14 +535,14 @@ for (const coll of ['signals', 'signals_test']) {
     // a comment, the note is not optional — that is the whole behaviour change,
     // and a rules regression to "only when present" would undo it invisibly.
     it('requires a non-empty note', async () => {
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertFails(addDoc(collection(db, eventsPath), omit(eventDoc(db, OTHER), 'note')));
       await assertFails(addDoc(collection(db, eventsPath), eventDoc(db, OTHER, { note: '' })));
       await assertFails(addDoc(collection(db, eventsPath), eventDoc(db, OTHER, { note: 42 })));
     });
 
     it('bounds the note at 500 characters', async () => {
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertSucceeds(
         addDoc(collection(db, eventsPath), eventDoc(db, OTHER, { note: 'a'.repeat(500) })),
       );
@@ -503,7 +555,7 @@ for (const coll of ['signals', 'signals_test']) {
     // rules accepted but the app could not render would be stored and then never
     // appear in anyone's history.
     it('rejects a type outside the vocabulary', async () => {
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertFails(
         addDoc(collection(db, eventsPath), eventDoc(db, OTHER, { type: 'ownership_transfer' })),
       );
@@ -511,7 +563,7 @@ for (const coll of ['signals', 'signals_test']) {
     });
 
     it('rejects a level outside the range the signal itself can hold', async () => {
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertFails(
         addDoc(collection(db, eventsPath), eventDoc(db, OTHER, { newStatus: 3 })),
       );
@@ -524,7 +576,7 @@ for (const coll of ['signals', 'signals_test']) {
     });
 
     it('rejects an event with no timestamp', async () => {
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertFails(
         addDoc(collection(db, eventsPath), omit(eventDoc(db, OTHER), 'createdAt')),
       );
@@ -537,7 +589,7 @@ for (const coll of ['signals', 'signals_test']) {
       });
 
       for (const uid of [OTHER, REPORTER]) {
-        const db = testEnv.authenticatedContext(uid).firestore();
+        const db = authed(uid).firestore();
         await assertFails(updateDoc(doc(db, eventsPath, 'e1'), { note: 'rewritten' }));
       }
     });
@@ -554,10 +606,10 @@ for (const coll of ['signals', 'signals_test']) {
         await setDoc(doc(db, eventsPath, 'e2'), eventDoc(db, OTHER));
       });
 
-      const author = testEnv.authenticatedContext(OTHER).firestore();
+      const author = authed(OTHER).firestore();
       await assertFails(deleteDoc(doc(author, eventsPath, 'e1')));
 
-      const reporter = testEnv.authenticatedContext(REPORTER).firestore();
+      const reporter = authed(REPORTER).firestore();
       await assertSucceeds(deleteDoc(doc(reporter, eventsPath, 'e2')));
     });
 
@@ -596,20 +648,20 @@ for (const coll of ['signals', 'signals_test']) {
     });
 
     it('lets a signed-in non-owner file one request', async () => {
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertSucceeds(setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER)));
     });
 
     // The document id IS the rate limit: create is allowed, update is not, so
     // one person gets one live request per signal.
     it('denies a second request from the same user', async () => {
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertSucceeds(setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER)));
       await assertFails(setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER)));
     });
 
     it('denies filing a request under someone else’s id, or authored by them', async () => {
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertFails(setDoc(doc(db, requestsPath, REPORTER), requestDoc(db, REPORTER)));
       await assertFails(setDoc(doc(db, requestsPath, OTHER), requestDoc(db, REPORTER)));
     });
@@ -617,18 +669,17 @@ for (const coll of ['signals', 'signals_test']) {
     // This is a NEW surface, so it can be strict from day one — the M-1 gap
     // exists only for collections already-released builds write anonymously.
     it('denies an anonymous caller', async () => {
-      const db = testEnv.authenticatedContext(OTHER, { firebase: { sign_in_provider: 'anonymous' } })
-        .firestore();
+      const db = anonymous(OTHER).firestore();
       await assertFails(setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER)));
     });
 
     it('denies the current signal owner requesting their own signal', async () => {
-      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      const db = authed(REPORTER).firestore();
       await assertFails(setDoc(doc(db, requestsPath, REPORTER), requestDoc(db, REPORTER)));
     });
 
     it('requires a note, pins the status to pending, and rejects extra fields', async () => {
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       const base = requestDoc(db, OTHER);
 
       await assertFails(setDoc(doc(db, requestsPath, OTHER), { ...base, note: '' }));
@@ -653,7 +704,7 @@ for (const coll of ['signals', 'signals_test']) {
       });
 
       for (const uid of [OTHER, REPORTER]) {
-        const db = testEnv.authenticatedContext(uid).firestore();
+        const db = authed(uid).firestore();
         await assertFails(updateDoc(doc(db, requestsPath, OTHER), { status: 'approved' }));
       }
     });
@@ -666,7 +717,7 @@ for (const coll of ['signals', 'signals_test']) {
         await setDoc(doc(db, requestsPath, OTHER), answeredDoc(db, OTHER, 'declined', 3));
       });
 
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertSucceeds(setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER)));
     });
 
@@ -676,7 +727,7 @@ for (const coll of ['signals', 'signals_test']) {
         await setDoc(doc(db, requestsPath, OTHER), answeredDoc(db, OTHER, 'declined', 0));
       });
 
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertFails(setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER)));
     });
 
@@ -686,7 +737,7 @@ for (const coll of ['signals', 'signals_test']) {
         await setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER));
       });
 
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertFails(setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER)));
     });
 
@@ -698,7 +749,7 @@ for (const coll of ['signals', 'signals_test']) {
         await setDoc(doc(db, requestsPath, OTHER), answeredDoc(db, OTHER, 'declined', 3));
       });
 
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       const base = requestDoc(db, OTHER);
       await assertFails(
         setDoc(doc(db, requestsPath, OTHER), { ...base, status: 'approved' }),
@@ -712,7 +763,7 @@ for (const coll of ['signals', 'signals_test']) {
         await setDoc(doc(db, requestsPath, OTHER), answeredDoc(db, OTHER, 'declined', 3));
       });
 
-      const db = testEnv.authenticatedContext(SECOND).firestore();
+      const db = authed(SECOND).firestore();
       await assertFails(setDoc(doc(db, requestsPath, OTHER), requestDoc(db, SECOND)));
     });
 
@@ -723,7 +774,7 @@ for (const coll of ['signals', 'signals_test']) {
         await setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER));
       });
 
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertSucceeds(
         updateDoc(doc(db, requestsPath, OTHER), {
           status: 'withdrawn',
@@ -743,10 +794,10 @@ for (const coll of ['signals', 'signals_test']) {
         await setDoc(doc(db, requestsPath, SECOND), answeredDoc(db, SECOND, 'declined', 0));
       });
 
-      const pending = testEnv.authenticatedContext(OTHER).firestore();
+      const pending = authed(OTHER).firestore();
       await assertFails(deleteDoc(doc(pending, requestsPath, OTHER)));
 
-      const answered = testEnv.authenticatedContext(SECOND).firestore();
+      const answered = authed(SECOND).firestore();
       await assertFails(deleteDoc(doc(answered, requestsPath, SECOND)));
     });
 
@@ -758,7 +809,7 @@ for (const coll of ['signals', 'signals_test']) {
         await setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER));
       });
 
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertFails(
         updateDoc(doc(db, requestsPath, OTHER), {
           status: 'withdrawn',
@@ -773,7 +824,7 @@ for (const coll of ['signals', 'signals_test']) {
         await setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER));
       });
 
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       for (const status of ['approved', 'declined', 'pending']) {
         await assertFails(
           updateDoc(doc(db, requestsPath, OTHER), {
@@ -793,10 +844,10 @@ for (const coll of ['signals', 'signals_test']) {
         await setDoc(doc(db, requestsPath, SECOND), answeredDoc(db, SECOND, 'withdrawn', 3));
       });
 
-      const tooSoon = testEnv.authenticatedContext(OTHER).firestore();
+      const tooSoon = authed(OTHER).firestore();
       await assertFails(setDoc(doc(tooSoon, requestsPath, OTHER), requestDoc(tooSoon, OTHER)));
 
-      const cooled = testEnv.authenticatedContext(SECOND).firestore();
+      const cooled = authed(SECOND).firestore();
       await assertSucceeds(setDoc(doc(cooled, requestsPath, SECOND), requestDoc(cooled, SECOND)));
     });
 
@@ -808,10 +859,10 @@ for (const coll of ['signals', 'signals_test']) {
         await setDoc(doc(db, requestsPath, OTHER), requestDoc(db, OTHER));
       });
 
-      const stranger = testEnv.authenticatedContext('stranger-uid').firestore();
+      const stranger = authed('stranger-uid').firestore();
       await assertFails(deleteDoc(doc(stranger, requestsPath, OTHER)));
 
-      const reporter = testEnv.authenticatedContext(REPORTER).firestore();
+      const reporter = authed(REPORTER).firestore();
       await assertSucceeds(deleteDoc(doc(reporter, requestsPath, OTHER)));
     });
 
@@ -820,7 +871,7 @@ for (const coll of ['signals', 'signals_test']) {
         await setDoc(doc(ctx.firestore(), requestsPath, OTHER), requestDoc(ctx.firestore(), OTHER));
       });
 
-      const signedIn = testEnv.authenticatedContext('anyone-uid').firestore();
+      const signedIn = authed('anyone-uid').firestore();
       await assertSucceeds(getDoc(doc(signedIn, requestsPath, OTHER)));
 
       const signedOut = testEnv.unauthenticatedContext().firestore();
@@ -842,10 +893,10 @@ for (const coll of ['signals', 'signals_test']) {
     });
 
     it('lets the reporter edit content, but not a non-reporter', async () => {
-      const reporter = testEnv.authenticatedContext(REPORTER).firestore();
+      const reporter = authed(REPORTER).firestore();
       await assertSucceeds(updateDoc(doc(reporter, coll, SIGNAL), { title: 'Updated' }));
 
-      const other = testEnv.authenticatedContext(OTHER).firestore();
+      const other = authed(OTHER).firestore();
       await assertFails(updateDoc(doc(other, coll, SIGNAL), { title: 'Vandalised' }));
     });
 
@@ -855,7 +906,7 @@ for (const coll of ['signals', 'signals_test']) {
     // responsibility for the signal first — through the signalOwnership callable,
     // which no rule can grant.
     it('rejects a non-owner advancing status, even self-stamping lastUpdatedBy', async () => {
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertFails(
         updateDoc(doc(db, coll, SIGNAL), { status: 1, lastUpdatedBy: doc(db, 'users', OTHER) }),
       );
@@ -866,7 +917,7 @@ for (const coll of ['signals', 'signals_test']) {
     // never be dropped: absent means the reporter holds it, so the reporter goes
     // through isSignalOwnerUpdate() as well as their own branch.
     it('lets the signal owner advance status on a legacy signal with no signalOwner', async () => {
-      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      const db = authed(REPORTER).firestore();
       await assertSucceeds(
         updateDoc(doc(db, coll, SIGNAL), { status: 1, lastUpdatedBy: doc(db, 'users', REPORTER) }),
       );
@@ -879,7 +930,7 @@ for (const coll of ['signals', 'signals_test']) {
           signalDoc(db, REPORTER, { signalOwner: doc(db, 'users', OTHER) }));
       });
 
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertSucceeds(
         updateDoc(doc(db, coll, SIGNAL), { status: 1, lastUpdatedBy: doc(db, 'users', OTHER) }),
       );
@@ -894,12 +945,12 @@ for (const coll of ['signals', 'signals_test']) {
         await setDoc(doc(db, coll, SIGNAL), signalDoc(db, REPORTER, { signalOwner: null }));
       });
 
-      const other = testEnv.authenticatedContext(OTHER).firestore();
+      const other = authed(OTHER).firestore();
       await assertFails(
         updateDoc(doc(other, coll, SIGNAL), { status: 1, lastUpdatedBy: doc(other, 'users', OTHER) }),
       );
 
-      const reporter = testEnv.authenticatedContext(REPORTER).firestore();
+      const reporter = authed(REPORTER).firestore();
       await assertSucceeds(updateDoc(doc(reporter, coll, SIGNAL), { title: 'Updated' }));
     });
 
@@ -908,13 +959,13 @@ for (const coll of ['signals', 'signals_test']) {
     // reporter could never be handed off from, and a patched client could seize
     // any case with a single field write and no timeline entry.
     it('denies every client writing signalOwner — the reporter and the owner alike', async () => {
-      const reporter = testEnv.authenticatedContext(REPORTER).firestore();
+      const reporter = authed(REPORTER).firestore();
       await assertFails(
         updateDoc(doc(reporter, coll, SIGNAL), { signalOwner: doc(reporter, 'users', REPORTER) }),
       );
       await assertFails(updateDoc(doc(reporter, coll, SIGNAL), { signalOwner: null }));
 
-      const other = testEnv.authenticatedContext(OTHER).firestore();
+      const other = authed(OTHER).firestore();
       await assertFails(
         updateDoc(doc(other, coll, SIGNAL), {
           signalOwner: doc(other, 'users', OTHER),
@@ -926,7 +977,7 @@ for (const coll of ['signals', 'signals_test']) {
     // ownerActiveAt is what the staleness rule reads, so an owner free to pick
     // its value could hold an abandoned signal forever.
     it('pins ownerActiveAt to the server clock on both branches', async () => {
-      const reporter = testEnv.authenticatedContext(REPORTER).firestore();
+      const reporter = authed(REPORTER).firestore();
       await assertFails(
         updateDoc(doc(reporter, coll, SIGNAL), { ownerActiveAt: new Date(2099, 0, 1) }),
       );
@@ -941,7 +992,7 @@ for (const coll of ['signals', 'signals_test']) {
 
     // Master spec 4.2: the owner completes tags as needs are resolved.
     it('lets the signal owner change urgency and help tags', async () => {
-      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      const db = authed(REPORTER).firestore();
       await assertSucceeds(
         updateDoc(doc(db, coll, SIGNAL), {
           urgency: 2,
@@ -952,14 +1003,14 @@ for (const coll of ['signals', 'signals_test']) {
     });
 
     it('rejects a non-reporter spoofing lastUpdatedBy to another user', async () => {
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertFails(
         updateDoc(doc(db, coll, SIGNAL), { status: 1, lastUpdatedBy: doc(db, 'users', REPORTER) }),
       );
     });
 
     it('rejects a non-reporter smuggling extra fields alongside status', async () => {
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertFails(
         updateDoc(doc(db, coll, SIGNAL), {
           status: 1,
@@ -970,7 +1021,7 @@ for (const coll of ['signals', 'signals_test']) {
     });
 
     it('rejects an out-of-range status from a non-reporter', async () => {
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertFails(
         updateDoc(doc(db, coll, SIGNAL), { status: 9, lastUpdatedBy: doc(db, 'users', OTHER) }),
       );
@@ -981,7 +1032,7 @@ for (const coll of ['signals', 'signals_test']) {
     // `urgency` out of its affectedKeys allowlist — these are the guards that
     // fail if someone "helpfully" adds it.
     it('rejects a non-reporter changing urgency, even alongside status', async () => {
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
 
       await assertFails(
         updateDoc(doc(db, coll, SIGNAL), { urgency: 2, lastUpdatedBy: doc(db, 'users', OTHER) }),
@@ -1001,14 +1052,14 @@ for (const coll of ['signals', 'signals_test']) {
         await setDoc(doc(db, coll, SIGNAL), signalDoc(db, REPORTER, { urgency: 2 }));
       });
 
-      const db = testEnv.authenticatedContext(OTHER).firestore();
+      const db = authed(OTHER).firestore();
       await assertFails(
         updateDoc(doc(db, coll, SIGNAL), { urgency: 0, lastUpdatedBy: doc(db, 'users', OTHER) }),
       );
     });
 
     it('lets the reporter change urgency', async () => {
-      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      const db = authed(REPORTER).firestore();
       await assertSucceeds(updateDoc(doc(db, coll, SIGNAL), { urgency: 2 }));
     });
 
@@ -1016,7 +1067,7 @@ for (const coll of ['signals', 'signals_test']) {
     // update rule an out-of-range value reaches the server, where `42 > 2` makes
     // every subsequent write look like an escalation and wakes all subscribers.
     it('rejects an out-of-range or non-int urgency from the reporter', async () => {
-      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      const db = authed(REPORTER).firestore();
       for (const urgency of [-1, 3, 42, '2', 1.5]) {
         await assertFails(updateDoc(doc(db, coll, SIGNAL), { urgency }));
       }
@@ -1027,7 +1078,7 @@ for (const coll of ['signals', 'signals_test']) {
     // patched client could stamp a far-future value, make the age permanently
     // negative, and freeze the signal behind its owner forever.
     it('rejects ownerActiveAt at creation, at any value', async () => {
-      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      const db = authed(REPORTER).firestore();
       for (const at of [new Date(2099, 0, 1), new Date(), serverTimestamp()]) {
         await assertFails(
           addDoc(collection(db, coll), { ...signalDoc(db, REPORTER), ownerActiveAt: at }),
@@ -1036,7 +1087,7 @@ for (const coll of ['signals', 'signals_test']) {
     });
 
     it('accepts a create that names the reporter as the signal owner, and no other', async () => {
-      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      const db = authed(REPORTER).firestore();
       await assertSucceeds(
         addDoc(collection(db, coll), {
           ...signalDoc(db, REPORTER),
@@ -1059,15 +1110,15 @@ for (const coll of ['signals', 'signals_test']) {
         await setDoc(doc(db, coll, SIGNAL), data);
       });
 
-      const db = testEnv.authenticatedContext(REPORTER).firestore();
+      const db = authed(REPORTER).firestore();
       await assertSucceeds(updateDoc(doc(db, coll, SIGNAL), { title: 'Updated' }));
     });
 
     it('lets only the reporter delete the signal', async () => {
-      const other = testEnv.authenticatedContext(OTHER).firestore();
+      const other = authed(OTHER).firestore();
       await assertFails(deleteDoc(doc(other, coll, SIGNAL)));
 
-      const reporter = testEnv.authenticatedContext(REPORTER).firestore();
+      const reporter = authed(REPORTER).firestore();
       await assertSucceeds(deleteDoc(doc(reporter, coll, SIGNAL)));
     });
 
@@ -1088,7 +1139,7 @@ for (const coll of ['signals', 'signals_test']) {
       });
 
       it('stops the reporter clearing their own comment lock', async () => {
-        const db = testEnv.authenticatedContext(REPORTER).firestore();
+        const db = authed(REPORTER).firestore();
         await assertFails(
           updateDoc(doc(db, coll, SIGNAL), { moderation: { commentsLocked: false } }),
         );
@@ -1096,13 +1147,13 @@ for (const coll of ['signals', 'signals_test']) {
       });
 
       it('stops the reporter removing a warning label or the whole map', async () => {
-        const db = testEnv.authenticatedContext(REPORTER).firestore();
+        const db = authed(REPORTER).firestore();
         await assertFails(updateDoc(doc(db, coll, SIGNAL), { 'moderation.label': null }));
         await assertFails(updateDoc(doc(db, coll, SIGNAL), { moderation: {} }));
       });
 
       it('stops the reporter smuggling it in alongside a legitimate edit', async () => {
-        const db = testEnv.authenticatedContext(REPORTER).firestore();
+        const db = authed(REPORTER).firestore();
         await assertFails(
           updateDoc(doc(db, coll, SIGNAL), {
             title: 'Updated',
@@ -1112,7 +1163,7 @@ for (const coll of ['signals', 'signals_test']) {
       });
 
       it('stops a non-reporter inventing a moderation map alongside a status change', async () => {
-        const db = testEnv.authenticatedContext(OTHER).firestore();
+        const db = authed(OTHER).firestore();
         await assertFails(
           updateDoc(doc(db, coll, SIGNAL), {
             status: 1,
@@ -1123,7 +1174,7 @@ for (const coll of ['signals', 'signals_test']) {
       });
 
       it('still lets the reporter edit everything else on a moderated signal', async () => {
-        const db = testEnv.authenticatedContext(REPORTER).firestore();
+        const db = authed(REPORTER).firestore();
         await assertSucceeds(updateDoc(doc(db, coll, SIGNAL), { title: 'Updated' }));
       });
     });
@@ -1139,8 +1190,8 @@ describe('users', () => {
   beforeEach(() => testEnv.clearFirestore());
 
   it('keeps the document owner-only', async () => {
-    const mine = testEnv.authenticatedContext(OWNER).firestore();
-    const theirs = testEnv.authenticatedContext(OTHER).firestore();
+    const mine = authed(OWNER).firestore();
+    const theirs = authed(OTHER).firestore();
 
     await assertSucceeds(setDoc(doc(mine, 'users', OWNER), { phone: '123' }));
     await assertFails(setDoc(doc(theirs, 'users', OWNER), { phone: '123' }));
@@ -1148,7 +1199,7 @@ describe('users', () => {
   });
 
   it('accepts tag and species preferences within bounds', async () => {
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     await assertSucceeds(
       setDoc(doc(db, 'users', OWNER), {
         notificationPreferences: {
@@ -1161,7 +1212,7 @@ describe('users', () => {
   });
 
   it('rejects a preference list long enough to bloat the fan-out', async () => {
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     await assertFails(
       setDoc(doc(db, 'users', OWNER), {
         notificationPreferences: {
@@ -1184,7 +1235,7 @@ describe('users', () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'users', OWNER), { phone: '123' });
     });
-    const mine = testEnv.authenticatedContext(OWNER).firestore();
+    const mine = authed(OWNER).firestore();
     await assertSucceeds(deleteDoc(doc(mine, 'users', OWNER)));
   });
 
@@ -1192,14 +1243,14 @@ describe('users', () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'users', OWNER), { phone: '123' });
     });
-    const theirs = testEnv.authenticatedContext(OTHER).firestore();
+    const theirs = authed(OTHER).firestore();
     await assertFails(deleteDoc(doc(theirs, 'users', OWNER)));
   });
 
   // Every writer of this document uses a merged partial write, so most updates
   // touch neither list. Requiring them would break all of those writers.
   it('still accepts writes that touch neither list', async () => {
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     await assertSucceeds(
       setDoc(doc(db, 'users', OWNER), {
         notificationPreferences: { enabled: true, locationRadiusKm: 10 },
@@ -1229,7 +1280,7 @@ describe('publicProfiles', () => {
 
   it('lets any signed-in user read a single profile, but not list them all', async () => {
     await seedProfile();
-    const db = testEnv.authenticatedContext(OTHER).firestore();
+    const db = authed(OTHER).firestore();
     await assertSucceeds(getDoc(doc(db, 'publicProfiles', OWNER)));
     await assertFails(getDocs(collection(db, 'publicProfiles')));
   });
@@ -1241,15 +1292,15 @@ describe('publicProfiles', () => {
   });
 
   it('lets the owner set their name, but not someone else', async () => {
-    const owner = testEnv.authenticatedContext(OWNER).firestore();
+    const owner = authed(OWNER).firestore();
     await assertSucceeds(setDoc(doc(owner, 'publicProfiles', OWNER), { name: 'Ivan' }));
 
-    const other = testEnv.authenticatedContext(OTHER).firestore();
+    const other = authed(OTHER).firestore();
     await assertFails(setDoc(doc(other, 'publicProfiles', OWNER), { name: 'Ivan' }));
   });
 
   it('accepts a 100-char name and rejects 101', async () => {
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     await assertSucceeds(
       setDoc(doc(db, 'publicProfiles', OWNER), { name: 'a'.repeat(100) })
     );
@@ -1259,7 +1310,7 @@ describe('publicProfiles', () => {
   });
 
   it('rejects an empty, blank, non-string or control-character name', async () => {
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     const ref = doc(db, 'publicProfiles', OWNER);
     await assertFails(setDoc(ref, { name: '' }));
     await assertFails(setDoc(ref, { name: '   ' }));
@@ -1269,7 +1320,7 @@ describe('publicProfiles', () => {
   });
 
   it('accepts non-ASCII names (Cyrillic, emoji) — the app is bilingual', async () => {
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     await assertSucceeds(
       setDoc(doc(db, 'publicProfiles', OWNER), { name: 'Иван Петров 🐾' })
     );
@@ -1281,7 +1332,7 @@ describe('publicProfiles', () => {
   // 200 code units and fail. So the unit is UTF-16 code units — which is also
   // what Dart's String.length counts. Don't "fix" the client clamp to runes.
   it('measures the 100 bound in UTF-16 code units', async () => {
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     await assertSucceeds(
       setDoc(doc(db, 'publicProfiles', OWNER), { name: 'я'.repeat(100) })
     );
@@ -1291,7 +1342,7 @@ describe('publicProfiles', () => {
   });
 
   it('rejects fields other than name/photoUrl, incl. clearing a deletion tombstone', async () => {
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     const ref = doc(db, 'publicProfiles', OWNER);
     await assertFails(setDoc(ref, { name: 'Ivan', role: 'admin' }));
 
@@ -1305,7 +1356,7 @@ describe('publicProfiles', () => {
   // is absent from the write allow-list above. Widening that list for
   // `photoUrl` is exactly the change that could have let it through, so pin it.
   it('still refuses to let a user write their own signalsPosted', async () => {
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     const ref = doc(db, 'publicProfiles', OWNER);
     await assertFails(setDoc(ref, { name: 'Ivan', signalsPosted: 9999 }));
 
@@ -1316,7 +1367,7 @@ describe('publicProfiles', () => {
   });
 
   it('accepts an avatar URL from the app\'s own Storage bucket', async () => {
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     await assertSucceeds(
       setDoc(doc(db, 'publicProfiles', OWNER), {
         name: 'Ivan',
@@ -1331,7 +1382,7 @@ describe('publicProfiles', () => {
   // older accounts still carry the earlier hosts. Pinning the digit would deny
   // those avatars forever, invisibly — the mirror is best-effort.
   it('accepts a Google account photo from any lh<n> host', async () => {
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     for (const host of ['lh3', 'lh4', 'lh5', 'lh6']) {
       await assertSucceeds(
         setDoc(doc(db, 'publicProfiles', OWNER), {
@@ -1356,12 +1407,12 @@ describe('publicProfiles', () => {
       name: 'Ivan',
       photoUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKq1w=s96-c',
     });
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     await assertSucceeds(
       updateDoc(doc(db, 'publicProfiles', OWNER), { photoUrl: deleteField() })
     );
 
-    const other = testEnv.authenticatedContext(OTHER).firestore();
+    const other = authed(OTHER).firestore();
     await assertFails(
       updateDoc(doc(other, 'publicProfiles', OWNER), { photoUrl: deleteField() })
     );
@@ -1370,7 +1421,7 @@ describe('publicProfiles', () => {
   // The whole reason the field is host-restricted: this value is handed to an
   // image loader on every other user's device.
   it('rejects an avatar URL on any other host, and a non-https one', async () => {
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     const ref = doc(db, 'publicProfiles', OWNER);
     await assertFails(setDoc(ref, { name: 'Ivan', photoUrl: 'https://evil.example/track.png' }));
     await assertFails(setDoc(ref, { name: 'Ivan', photoUrl: 'http://lh3.googleusercontent.com/a/x' }));
@@ -1390,7 +1441,7 @@ describe('publicProfiles', () => {
   // The Storage branch is pinned to the caller's own uid, so an avatar URL
   // cannot be used to pass off somebody else's picture as your own.
   it('rejects a Storage avatar URL naming another user', async () => {
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     await assertFails(
       setDoc(doc(db, 'publicProfiles', OWNER), {
         name: 'Ivan',
@@ -1405,7 +1456,7 @@ describe('publicProfiles', () => {
   // separate merge-writes), so neither may be forced to restate the other —
   // including on the create that happens when the profile does not exist yet.
   it('lets each field be written alone, but not an empty document', async () => {
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     const ref = doc(db, 'publicProfiles', OWNER);
     const photoUrl = 'https://lh3.googleusercontent.com/a/ACg8ocKq1w=s96-c';
 
@@ -1419,7 +1470,7 @@ describe('publicProfiles', () => {
   });
 
   it('validates the avatar on an update that only touches the name', async () => {
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     const ref = doc(db, 'publicProfiles', OWNER);
     await seedProfile({
       name: 'Ivan',
@@ -1431,10 +1482,10 @@ describe('publicProfiles', () => {
 
   it('lets only the owner delete their profile', async () => {
     await seedProfile();
-    const other = testEnv.authenticatedContext(OTHER).firestore();
+    const other = authed(OTHER).firestore();
     await assertFails(deleteDoc(doc(other, 'publicProfiles', OWNER)));
 
-    const owner = testEnv.authenticatedContext(OWNER).firestore();
+    const owner = authed(OWNER).firestore();
     await assertSucceeds(deleteDoc(doc(owner, 'publicProfiles', OWNER)));
   });
 });
@@ -1480,14 +1531,14 @@ describe('users/{uid}/notifications', () => {
 
   it('lets the owner get and list their own notifications', async () => {
     await seedNotification();
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     await assertSucceeds(getDoc(doc(db, 'users', OWNER, 'notifications', 'n1')));
     await assertSucceeds(getDocs(collection(db, 'users', OWNER, 'notifications')));
   });
 
   it("denies another user reading someone else's inbox", async () => {
     await seedNotification();
-    const db = testEnv.authenticatedContext(OTHER).firestore();
+    const db = authed(OTHER).firestore();
     await assertFails(getDoc(doc(db, 'users', OWNER, 'notifications', 'n1')));
     await assertFails(getDocs(collection(db, 'users', OWNER, 'notifications')));
   });
@@ -1499,7 +1550,7 @@ describe('users/{uid}/notifications', () => {
   });
 
   it('lets the catch-up create a nearby_signal entry in its own inbox', async () => {
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     await assertSucceeds(
       setDoc(doc(db, 'users', OWNER, 'notifications', 'nb_signal-1'), nearbyNotification())
     );
@@ -1515,7 +1566,7 @@ describe('users/{uid}/notifications', () => {
   // rule is a *client* write path, and NearbySignalChecker swallows a denial —
   // so rejecting either shape makes inbox entries silently stop appearing.
   it('accepts the shape the currently-shipped build writes', async () => {
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     const legacy = nearbyNotification();
     delete legacy.helpNeededTags;
     legacy.signalType = 0;
@@ -1525,7 +1576,7 @@ describe('users/{uid}/notifications', () => {
   });
 
   it('accepts an entry carrying neither field', async () => {
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     const bare = nearbyNotification();
     delete bare.helpNeededTags;
     await assertSucceeds(
@@ -1534,7 +1585,7 @@ describe('users/{uid}/notifications', () => {
   });
 
   it('accepts both fields at once, as the server mirrors them', async () => {
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     await assertSucceeds(
       setDoc(
         doc(db, 'users', OWNER, 'notifications', 'nb_both'),
@@ -1544,7 +1595,7 @@ describe('users/{uid}/notifications', () => {
   });
 
   it('accepts the tag field the catch-up actually writes', async () => {
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     for (const helpNeededTags of [['rescue'], ['foster', 'transport', 'food']]) {
       await assertSucceeds(
         setDoc(
@@ -1556,7 +1607,7 @@ describe('users/{uid}/notifications', () => {
   });
 
   it('rejects an unknown field, a bad type, and an over-long tag list', async () => {
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     await assertFails(
       setDoc(
         doc(db, 'users', OWNER, 'notifications', 'nb_extra'),
@@ -1580,7 +1631,7 @@ describe('users/{uid}/notifications', () => {
   // The point of pinning the type: a client must not be able to fabricate an
   // entry claiming the server sent it something.
   it('rejects a client creating any type other than nearby_signal', async () => {
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     for (const type of ['new_signal', 'status_change', 'new_comment']) {
       await assertFails(
         setDoc(doc(db, 'users', OWNER, 'notifications', type), nearbyNotification({ type }))
@@ -1589,14 +1640,14 @@ describe('users/{uid}/notifications', () => {
   });
 
   it("rejects a client creating in someone else's inbox", async () => {
-    const db = testEnv.authenticatedContext(OTHER).firestore();
+    const db = authed(OTHER).firestore();
     await assertFails(
       setDoc(doc(db, 'users', OWNER, 'notifications', 'nb_signal-1'), nearbyNotification())
     );
   });
 
   it('rejects a create that arrives already read', async () => {
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     await assertFails(
       setDoc(doc(db, 'users', OWNER, 'notifications', 'nb_1'), nearbyNotification({ read: true }))
     );
@@ -1604,7 +1655,7 @@ describe('users/{uid}/notifications', () => {
 
   // Size caps: an owner-only collection with no bounds is a free-storage vector.
   it('rejects oversize content and unknown fields', async () => {
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     const ref = (id) => doc(db, 'users', OWNER, 'notifications', id);
 
     await assertFails(setDoc(ref('a'), nearbyNotification({ body: 'x'.repeat(1001) })));
@@ -1615,7 +1666,7 @@ describe('users/{uid}/notifications', () => {
 
   // Without expiresAt the document would outlive the TTL policy forever.
   it('rejects a create with no expiresAt', async () => {
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     const data = nearbyNotification();
     delete data.expiresAt;
     await assertFails(setDoc(doc(db, 'users', OWNER, 'notifications', 'nb_1'), data));
@@ -1623,7 +1674,7 @@ describe('users/{uid}/notifications', () => {
 
   it('lets the owner mark a notification read, and nothing else', async () => {
     await seedNotification();
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     const ref = doc(db, 'users', OWNER, 'notifications', 'n1');
 
     await assertSucceeds(updateDoc(ref, { read: true }));
@@ -1633,7 +1684,7 @@ describe('users/{uid}/notifications', () => {
 
   it('denies another user marking it read', async () => {
     await seedNotification();
-    const db = testEnv.authenticatedContext(OTHER).firestore();
+    const db = authed(OTHER).firestore();
     await assertFails(
       updateDoc(doc(db, 'users', OWNER, 'notifications', 'n1'), { read: true })
     );
@@ -1641,10 +1692,10 @@ describe('users/{uid}/notifications', () => {
 
   it('lets only the owner delete a notification', async () => {
     await seedNotification();
-    const other = testEnv.authenticatedContext(OTHER).firestore();
+    const other = authed(OTHER).firestore();
     await assertFails(deleteDoc(doc(other, 'users', OWNER, 'notifications', 'n1')));
 
-    const owner = testEnv.authenticatedContext(OWNER).firestore();
+    const owner = authed(OWNER).firestore();
     await assertSucceeds(deleteDoc(doc(owner, 'users', OWNER, 'notifications', 'n1')));
   });
 });
@@ -1658,19 +1709,19 @@ describe('userCounters', () => {
   beforeEach(() => testEnv.clearFirestore());
 
   it('lets the owner read and write their own counter', async () => {
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     await assertSucceeds(setDoc(doc(db, 'userCounters', OWNER), { unread: 3, updatedAt: new Date() }));
     await assertSucceeds(getDoc(doc(db, 'userCounters', OWNER)));
   });
 
   it("denies reading or writing someone else's counter", async () => {
-    const db = testEnv.authenticatedContext(OTHER).firestore();
+    const db = authed(OTHER).firestore();
     await assertFails(getDoc(doc(db, 'userCounters', OWNER)));
     await assertFails(setDoc(doc(db, 'userCounters', OWNER), { unread: 0 }));
   });
 
   it('rejects a negative count, a non-int count, and unknown fields', async () => {
-    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const db = authed(OWNER).firestore();
     const ref = doc(db, 'userCounters', OWNER);
     await assertFails(setDoc(ref, { unread: -1 }));
     await assertFails(setDoc(ref, { unread: 'many' }));
@@ -1728,30 +1779,30 @@ describe('moderators roster', () => {
 
   it('lets a user read their own moderator document', async () => {
     await seedModerator();
-    const db = testEnv.authenticatedContext(MOD).firestore();
+    const db = authed(MOD).firestore();
     await assertSucceeds(getDoc(doc(db, 'moderators', MOD)));
   });
 
   it("denies reading someone else's moderator document", async () => {
     await seedModerator();
-    const db = testEnv.authenticatedContext(OTHER).firestore();
+    const db = authed(OTHER).firestore();
     await assertFails(getDoc(doc(db, 'moderators', MOD)));
   });
 
   it('denies listing the roster, even to a moderator', async () => {
     await seedModerator();
-    const db = testEnv.authenticatedContext(MOD).firestore();
+    const db = authed(MOD).firestore();
     await assertFails(getDocs(collection(db, 'moderators')));
   });
 
   it('denies self-promotion — nobody may write the roster', async () => {
-    const db = testEnv.authenticatedContext(OTHER).firestore();
+    const db = authed(OTHER).firestore();
     await assertFails(setDoc(doc(db, 'moderators', OTHER), { grantedAt: new Date() }));
   });
 
   it('denies a moderator promoting someone else or revoking themselves', async () => {
     await seedModerator();
-    const db = testEnv.authenticatedContext(MOD).firestore();
+    const db = authed(MOD).firestore();
     await assertFails(setDoc(doc(db, 'moderators', OTHER), { grantedAt: new Date() }));
     await assertFails(deleteDoc(doc(db, 'moderators', MOD)));
   });
@@ -1761,7 +1812,7 @@ describe('reports', () => {
   beforeEach(() => testEnv.clearFirestore());
 
   it('lets a signed-in user file a report at its deterministic id', async () => {
-    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const db = authed(REPORTER).firestore();
     const data = reportDoc(REPORTER);
     await assertSucceeds(setDoc(doc(db, 'reports', reportId(REPORTER, data)), data));
   });
@@ -1773,20 +1824,20 @@ describe('reports', () => {
   });
 
   it('rejects a report attributed to someone else (no framing)', async () => {
-    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const db = authed(REPORTER).firestore();
     const data = reportDoc(OTHER);
     await assertFails(setDoc(doc(db, 'reports', reportId(OTHER, data)), data));
   });
 
   it('rejects an id that does not match uid_targetType_targetId', async () => {
-    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const db = authed(REPORTER).firestore();
     const data = reportDoc(REPORTER);
     await assertFails(setDoc(doc(db, 'reports', 'a-random-id'), data));
     await assertFails(addDoc(collection(db, 'reports'), data));
   });
 
   it('rate-limits by id: a second report of the same target is denied', async () => {
-    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const db = authed(REPORTER).firestore();
     const data = reportDoc(REPORTER);
     const ref = doc(db, 'reports', reportId(REPORTER, data));
     await assertSucceeds(setDoc(ref, data));
@@ -1795,20 +1846,20 @@ describe('reports', () => {
   });
 
   it('lets the same user report a different target, and another user report the same one', async () => {
-    const mine = testEnv.authenticatedContext(REPORTER).firestore();
+    const mine = authed(REPORTER).firestore();
     const first = reportDoc(REPORTER);
     await assertSucceeds(setDoc(doc(mine, 'reports', reportId(REPORTER, first)), first));
 
     const second = reportDoc(REPORTER, { targetId: 'signal-2', signalId: 'signal-2' });
     await assertSucceeds(setDoc(doc(mine, 'reports', reportId(REPORTER, second)), second));
 
-    const theirs = testEnv.authenticatedContext(OTHER).firestore();
+    const theirs = authed(OTHER).firestore();
     const third = reportDoc(OTHER);
     await assertSucceeds(setDoc(doc(theirs, 'reports', reportId(OTHER, third)), third));
   });
 
   it('rejects a report that opens in any status but "open"', async () => {
-    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const db = authed(REPORTER).firestore();
     const data = reportDoc(REPORTER, { status: 'dismissed' });
     await assertFails(setDoc(doc(db, 'reports', reportId(REPORTER, data)), data));
   });
@@ -1816,7 +1867,7 @@ describe('reports', () => {
   it('rejects a testMode that disagrees with the collection', async () => {
     // The dangerous direction: a report against a PRODUCTION signal filed as
     // test mode lands in the test queue, where no production moderator looks.
-    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const db = authed(REPORTER).firestore();
     const prodAsTest = reportDoc(REPORTER, {
       collection: 'signals',
       testMode: true,
@@ -1837,7 +1888,7 @@ describe('reports', () => {
   });
 
   it('accepts both consistent pairings', async () => {
-    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const db = authed(REPORTER).firestore();
     const prod = reportDoc(REPORTER, {
       collection: 'signals',
       testMode: false,
@@ -1858,7 +1909,7 @@ describe('reports', () => {
   });
 
   it('rejects an unknown targetType or collection', async () => {
-    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const db = authed(REPORTER).firestore();
     const badType = reportDoc(REPORTER, { targetType: 'fundraiser' });
     await assertFails(setDoc(doc(db, 'reports', reportId(REPORTER, badType)), badType));
     const badColl = reportDoc(REPORTER, { collection: 'users' });
@@ -1866,7 +1917,7 @@ describe('reports', () => {
   });
 
   it('accepts 1000-char details and rejects 1001', async () => {
-    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const db = authed(REPORTER).firestore();
     const ok = reportDoc(REPORTER, { details: 'a'.repeat(1000) });
     await assertSucceeds(setDoc(doc(db, 'reports', reportId(REPORTER, ok)), ok));
     const tooLong = reportDoc(REPORTER, { targetId: 'signal-9', details: 'a'.repeat(1001) });
@@ -1874,13 +1925,13 @@ describe('reports', () => {
   });
 
   it('accepts a reason this ruleset has never heard of (newer client)', async () => {
-    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const db = authed(REPORTER).firestore();
     const data = reportDoc(REPORTER, { reason: 'someFutureReason' });
     await assertSucceeds(setDoc(doc(db, 'reports', reportId(REPORTER, data)), data));
   });
 
   it('rejects unknown fields', async () => {
-    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const db = authed(REPORTER).firestore();
     const data = reportDoc(REPORTER, { moderatorNote: 'sneaky' });
     await assertFails(setDoc(doc(db, 'reports', reportId(REPORTER, data)), data));
   });
@@ -1888,7 +1939,7 @@ describe('reports', () => {
   it('denies reads to the reporter and to any non-moderator', async () => {
     const data = reportDoc(REPORTER);
     const id = reportId(REPORTER, data);
-    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const db = authed(REPORTER).firestore();
     await assertSucceeds(setDoc(doc(db, 'reports', id), data));
     await assertFails(getDoc(doc(db, 'reports', id)));
     await assertFails(getDocs(collection(db, 'reports')));
@@ -1898,10 +1949,10 @@ describe('reports', () => {
     await seedModerator();
     const data = reportDoc(REPORTER);
     const id = reportId(REPORTER, data);
-    const reporterDb = testEnv.authenticatedContext(REPORTER).firestore();
+    const reporterDb = authed(REPORTER).firestore();
     await assertSucceeds(setDoc(doc(reporterDb, 'reports', id), data));
 
-    const modDb = testEnv.authenticatedContext(MOD).firestore();
+    const modDb = authed(MOD).firestore();
     await assertSucceeds(getDoc(doc(modDb, 'reports', id)));
     await assertSucceeds(getDocs(collection(modDb, 'reports')));
   });
@@ -1910,10 +1961,10 @@ describe('reports', () => {
     await seedModerator();
     const data = reportDoc(REPORTER);
     const id = reportId(REPORTER, data);
-    const reporterDb = testEnv.authenticatedContext(REPORTER).firestore();
+    const reporterDb = authed(REPORTER).firestore();
     await assertSucceeds(setDoc(doc(reporterDb, 'reports', id), data));
 
-    const modDb = testEnv.authenticatedContext(MOD).firestore();
+    const modDb = authed(MOD).firestore();
     await assertFails(updateDoc(doc(modDb, 'reports', id), { status: 'dismissed' }));
     await assertFails(deleteDoc(doc(modDb, 'reports', id)));
   });
@@ -1947,7 +1998,7 @@ describe('a moderator is still an ordinary user', () => {
   });
 
   it('keeps every ordinary ability', async () => {
-    const db = testEnv.authenticatedContext(MOD).firestore();
+    const db = authed(MOD).firestore();
 
     // Create a signal of their own.
     await assertSucceeds(addDoc(collection(db, 'signals'), signalDoc(db, MOD)));
@@ -1976,7 +2027,7 @@ describe('a moderator is still an ordinary user', () => {
   });
 
   it('gains no content powers — ownership still binds', async () => {
-    const db = testEnv.authenticatedContext(MOD).firestore();
+    const db = authed(MOD).firestore();
 
     // Cannot rewrite a stranger's signal…
     await assertFails(updateDoc(doc(db, 'signals', SIGNAL), { title: 'Vandalised' }));
@@ -2000,7 +2051,7 @@ describe('a moderator is still an ordinary user', () => {
     // The rules make `moderation` server-owned for EVERYONE. A moderator who
     // could clear a label directly would be doing so without an audit entry —
     // the one thing routing actions through a callable exists to prevent.
-    const db = testEnv.authenticatedContext(MOD).firestore();
+    const db = authed(MOD).firestore();
     await assertFails(
       updateDoc(doc(db, 'signals', SIGNAL), { 'moderation.label': null }),
     );
@@ -2027,7 +2078,7 @@ describe('a moderator is still an ordinary user', () => {
         moderation: { commentsLocked: true },
       });
     });
-    const db = testEnv.authenticatedContext(MOD).firestore();
+    const db = authed(MOD).firestore();
     await assertFails(
       addDoc(collection(db, `signals/${SIGNAL}/comments`), commentDoc(db, MOD)),
     );
@@ -2039,18 +2090,18 @@ describe('moderationActions audit log', () => {
 
   it('lets a moderator read the log', async () => {
     await seedModerator();
-    const db = testEnv.authenticatedContext(MOD).firestore();
+    const db = authed(MOD).firestore();
     await assertSucceeds(getDocs(collection(db, 'moderationActions')));
   });
 
   it('denies reads to everyone else', async () => {
-    const db = testEnv.authenticatedContext(OTHER).firestore();
+    const db = authed(OTHER).firestore();
     await assertFails(getDocs(collection(db, 'moderationActions')));
   });
 
   it('is unforgeable — not even a moderator may write it', async () => {
     await seedModerator();
-    const db = testEnv.authenticatedContext(MOD).firestore();
+    const db = authed(MOD).firestore();
     await assertFails(
       addDoc(collection(db, 'moderationActions'), {
         action: 'hideSignal',
@@ -2083,13 +2134,13 @@ describe('removedSignals', () => {
     // FROM its readers; a removed one is the reader's own content in their own
     // bin, and they have to see what is in there to decide what to restore.
     await seedRemoval(REPORTER);
-    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const db = authed(REPORTER).firestore();
     await assertSucceeds(getDoc(doc(db, 'removedSignals', 'signals__signal-1')));
   });
 
   it('lets the reporter list their own, filtered by reporter', async () => {
     await seedRemoval(REPORTER);
-    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const db = authed(REPORTER).firestore();
     await assertSucceeds(
       getDocs(
         query(
@@ -2105,13 +2156,13 @@ describe('removedSignals', () => {
     // query. Without it the collection is an enumeration of everything anyone
     // has ever taken down, contact phone numbers included.
     await seedRemoval(REPORTER);
-    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const db = authed(REPORTER).firestore();
     await assertFails(getDocs(collection(db, 'removedSignals')));
   });
 
   it('denies another user, by id and by query', async () => {
     await seedRemoval(REPORTER);
-    const db = testEnv.authenticatedContext(OTHER).firestore();
+    const db = authed(OTHER).firestore();
     await assertFails(getDoc(doc(db, 'removedSignals', 'signals__signal-1')));
     await assertFails(
       getDocs(
@@ -2130,7 +2181,7 @@ describe('removedSignals', () => {
     // same mistake the quarantine list exists to avoid.
     await seedRemoval(REPORTER);
     await seedModerator();
-    const db = testEnv.authenticatedContext(MOD).firestore();
+    const db = authed(MOD).firestore();
     await assertFails(getDoc(doc(db, 'removedSignals', 'signals__signal-1')));
   });
 
@@ -2146,7 +2197,7 @@ describe('removedSignals', () => {
     // that stops `onSignalCreated` re-notifying a whole city, or forge a
     // removal of a signal that was never theirs.
     await seedRemoval(REPORTER);
-    const db = testEnv.authenticatedContext(REPORTER).firestore();
+    const db = authed(REPORTER).firestore();
     const ref = doc(db, 'removedSignals', 'signals__signal-1');
     await assertFails(updateDoc(ref, { signalId: 'somewhere-else' }));
     await assertFails(deleteDoc(ref));
@@ -2175,11 +2226,11 @@ describe('moderationQuarantine', () => {
       });
     });
 
-    const modDb = testEnv.authenticatedContext(MOD).firestore();
+    const modDb = authed(MOD).firestore();
     await assertFails(getDoc(doc(modDb, 'moderationQuarantine', 'signals__signal-1')));
     await assertFails(getDocs(collection(modDb, 'moderationQuarantine')));
 
-    const anyDb = testEnv.authenticatedContext(OTHER).firestore();
+    const anyDb = authed(OTHER).firestore();
     await assertFails(getDoc(doc(anyDb, 'moderationQuarantine', 'signals__signal-1')));
   });
 });
