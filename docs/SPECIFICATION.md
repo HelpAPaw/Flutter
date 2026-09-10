@@ -1785,6 +1785,14 @@ full-width child sat left — so the page stopped centring half way down.
   (`linkified_text.dart`) draws them in both places, since the whole point of highlighting
   the draft is that it matches what gets posted.
 
+  The list is a rounded card with a gap under it — `AppTheme.radiusLarge`, the same 20
+  the dialogs and sheets use, flat with an outline rather than a shadow because
+  `cardTheme` is elevation 0 and surface tint is off throughout. Each row leads with up
+  to **two initials** on a `secondaryContainer` disc (`mentionInitials`): there are no
+  avatars to show, since `publicProfiles` stores a name and nothing else, and initials
+  are the only thing per row the data can differ on. Whitespace is the only separator,
+  so an email-local-part name (§14) yields one letter rather than a guess.
+
   **The suggestion list caps itself against the window height, not the body height.** A
   `Scaffold` strips `viewInsets` from its body's `MediaQuery`, so nothing inside the body
   can see the keyboard; the only thing that can is a `LayoutBuilder` around the whole body,

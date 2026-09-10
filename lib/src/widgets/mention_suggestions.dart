@@ -107,7 +107,7 @@ class MentionSuggestions extends StatelessWidget {
               return ListTile(
                 dense: true,
                 visualDensity: VisualDensity.compact,
-                leading: _Initial(name: candidate.name),
+                leading: _Initials(name: candidate.name),
                 title: Text(
                   candidate.name,
                   maxLines: 1,
@@ -126,38 +126,55 @@ class MentionSuggestions extends StatelessWidget {
   }
 }
 
-/// The round initial standing in for a face.
+/// Up to two initials for [name], the way a contact list does it.
+///
+/// First letter of the first word, plus the first letter of the second — one
+/// letter when that is all there is. **Whitespace is the only separator**: a
+/// name like `milen.danchev.marinov` is one word and yields `M`. Splitting on
+/// dots would read better for exactly the accounts whose name is an email local
+/// part (§14) and worse for everyone who writes `St. Petrov` or ends a title
+/// with a full stop, and guessing which is which from punctuation is not
+/// something this can get right.
+///
+/// Taken with `characters`, not `substring(0, 1)`, so a name beginning with an
+/// emoji or any non-BMP letter is not cut through the middle of a surrogate
+/// pair and rendered as a replacement glyph.
+String mentionInitials(String name) {
+  final words = name.trim().split(RegExp(r'\s+'))
+    ..removeWhere((word) => word.characters.isEmpty);
+  if (words.isEmpty) return '?';
+  return words
+      .take(2)
+      .map((word) => word.characters.first.toUpperCase())
+      .join();
+}
+
+/// The round initials standing in for a face.
 ///
 /// There are no avatars to show — `publicProfiles` stores a name and nothing
 /// else (§4.1) — and a row of identical `@` glyphs said nothing about *which*
-/// person each row was. An initial is the one thing the data can give that
-/// differs per row, and it reads as a person rather than as a syntax hint.
-class _Initial extends StatelessWidget {
-  const _Initial({required this.name});
+/// person each row was. Initials are the one thing the data can give that
+/// differs per row, and they read as a person rather than as a syntax hint.
+class _Initials extends StatelessWidget {
+  const _Initials({required this.name});
 
   final String name;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    // `characters`, not `substring(0, 1)`: a name starting with an emoji or any
-    // non-BMP letter would otherwise be cut through the middle of a surrogate
-    // pair and render as a replacement glyph. The roster never contains an
-    // empty name — a participant with no resolved name is left out entirely —
-    // but this must not throw if that ever changes.
-    final trimmed = name.trim();
-    final initial =
-        trimmed.isEmpty ? '?' : trimmed.characters.first.toUpperCase();
 
     return CircleAvatar(
       radius: 15,
       backgroundColor: scheme.secondaryContainer,
       child: Text(
-        initial,
+        mentionInitials(name),
         style: TextStyle(
           color: scheme.onSecondaryContainer,
           fontWeight: FontWeight.w600,
-          fontSize: 14,
+          // Two letters in a 30dp disc. Bulgarian initials are no wider than
+          // Latin ones, so this holds in both locales.
+          fontSize: 13,
         ),
       ),
     );
