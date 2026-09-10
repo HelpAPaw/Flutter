@@ -1890,7 +1890,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     const maxAttempts = 4;
     for (var attempt = 1; ; attempt++) {
       try {
-        return await PublicProfileService.readName(uid);
+        return (await PublicProfileService.read(uid)).name;
       } catch (_) {
         if (attempt == maxAttempts || !mounted) rethrow;
         await Future.delayed(const Duration(milliseconds: 500));

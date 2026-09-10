@@ -31,11 +31,6 @@ class UserStats {
 
   /// Comments this account has written.
   final int? commentsPosted;
-
-  /// Whether every number came back. False when at least one query failed and
-  /// its tile is showing a dash.
-  bool get isComplete =>
-      signalsPosted != null && signalsOwned != null && commentsPosted != null;
 }
 
 /// Computes the numbers shown on a profile, for any uid.
@@ -51,9 +46,14 @@ class UserStatsService {
 
   /// Load all three stats for [uid].
   ///
-  /// [profile] lets a caller that has already read the public profile (the
-  /// profile screen reads it for the name and avatar) hand it over instead of
-  /// paying for the document twice.
+  /// [profile] lets a caller that is already reading the public profile (the
+  /// profile screen reads it for the name and avatar) hand that read over
+  /// instead of paying for the document twice.
+  ///
+  /// **A `Future`, not a resolved value**, so only the one stat that needs the
+  /// document waits for it. Passing the resolved profile meant both
+  /// aggregations queued behind a round trip neither of them uses — a whole
+  /// extra RTT before either was even issued.
   ///
   /// The reads run concurrently rather than sequentially: they are independent,
   /// and awaited in turn they made the stats row wait out three round trips to
@@ -63,8 +63,11 @@ class UserStatsService {
   /// server-only aggregation — it does not fall back to the offline cache — so
   /// any connectivity blip fails one of these, and a zero is a real answer that
   /// must not be confused with an unread one. A query that fails leaves its
-  /// field null; [UserStats.isComplete] says whether any did.
-  static Future<UserStats> forUser(String uid, {PublicProfile? profile}) async {
+  /// field null, which [StatCard] renders as a dash.
+  static Future<UserStats> forUser(
+    String uid, {
+    Future<PublicProfile>? profile,
+  }) async {
     final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
 
     final results = await Future.wait([
@@ -117,10 +120,10 @@ class UserStatsService {
   static Future<int> _signalsPosted(
     String uid,
     DocumentReference<Map<String, dynamic>> userRef,
-    PublicProfile? profile,
+    Future<PublicProfile>? profile,
   ) async {
     final stored =
-        (profile ?? await PublicProfileService.read(uid)).signalsPosted;
+        (await (profile ?? PublicProfileService.read(uid))).signalsPosted;
     if (stored != null) return stored;
 
     final legacy = await FirebaseFirestore.instance

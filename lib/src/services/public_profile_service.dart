@@ -128,9 +128,12 @@ class PublicProfileService {
   /// that would make every caller re-decide what "no document" means, and would
   /// leave a `PublicProfile?` parameter unable to say "I have not looked yet".
   ///
-  /// Throws on a cache-only miss, for the reason [readName] documents: that is
-  /// the case where the answer is "we could not find out", which is the one a
-  /// caller does have to tell apart.
+  /// **Throws when the read did not produce an answer** — denied, offline, or
+  /// served from a cache that has never seen this profile. That last one is the
+  /// same trap as a missing signal document: the offline cache reports a
+  /// document it has never heard of as absent, which means "we don't know", not
+  /// "there is no profile". All three may succeed later, so callers that care
+  /// can retry; [getName] is the variant for callers that do not.
   static Future<PublicProfile> read(String uid) async {
     final doc = await _profiles.doc(uid).get();
     if (!doc.exists && doc.metadata.isFromCache) {
@@ -148,21 +151,12 @@ class PublicProfileService {
     );
   }
 
-  /// Resolve a user's public display name, or null if there is no name to
-  /// resolve — an account with no profile document, or one already anonymised.
-  ///
-  /// Throws if the read did not produce an answer — denied, offline, or served
-  /// from a cache that has never seen this profile. That last one is the same
-  /// trap as a missing signal document: the offline cache reports a document it
-  /// has never heard of as absent, which means "we don't know", not "there is
-  /// no profile". All three may succeed later, so callers that care can retry.
-  /// [getName] is the variant for callers that do not.
-  static Future<String?> readName(String uid) async => (await read(uid)).name;
-
-  /// Resolve a user's public display name, or null if unavailable.
+  /// Resolve a user's public display name, or null if unavailable — for
+  /// callers that cannot act on the difference between "no name" and "could not
+  /// read".
   static Future<String?> getName(String uid) async {
     try {
-      return await readName(uid);
+      return (await read(uid)).name;
     } catch (_) {
       return null;
     }

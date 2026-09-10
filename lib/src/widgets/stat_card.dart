@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'package:help_a_paw/l10n/app_localizations.dart';
+
+import '../services/user_stats_service.dart';
+
 /// One contribution statistic: a glyph, a number and a label.
 ///
 /// Lifted out of `profile_page.dart`, where it was private, when the read-only
@@ -65,18 +69,44 @@ class StatCard extends StatelessWidget {
   }
 }
 
-/// A row of [StatCard]s, each given an equal share of the width.
+/// One account's contribution statistics, as a row of [StatCard]s.
+///
+/// **Which glyph and which word belong to which number is decided here, once.**
+/// `UserStatsService` was extracted so the two profile screens could not
+/// disagree about what a figure *counts*; this is the other half — without it
+/// they can still disagree about what it is *called*, which is the same bug
+/// wearing a different hat.
 ///
 /// Equal shares rather than `spaceEvenly` over content-sized cards: the labels
 /// are translated and their widths are not knowable here, so anything that
-/// sizes to content is one long translation away from overflowing.
-class StatCardRow extends StatelessWidget {
-  const StatCardRow({super.key, required this.cards});
+/// sizes to content is one long Bulgarian translation away from overflowing a
+/// 411dp phone — see `test/widgets/bulgarian_layout_test.dart`.
+class UserStatsRow extends StatelessWidget {
+  const UserStatsRow({super.key, required this.stats});
 
-  final List<StatCard> cards;
+  final UserStats stats;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final cards = [
+      StatCard(
+        icon: Icons.pin_drop,
+        value: stats.signalsPosted,
+        label: l10n.signals,
+      ),
+      StatCard(
+        icon: Icons.volunteer_activism,
+        value: stats.signalsOwned,
+        label: l10n.helpingNow,
+      ),
+      StatCard(
+        icon: Icons.comment,
+        value: stats.commentsPosted,
+        label: l10n.comments,
+      ),
+    ];
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

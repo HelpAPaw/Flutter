@@ -138,10 +138,20 @@ class AuthService {
     final prefs = AppPreferencesService();
     if (prefs.isPhotoMirroredFor(user.uid, url)) return;
 
+    // Nothing to publish, and nothing recorded that would need withdrawing —
+    // an account that has simply never had an avatar. Writing the removal
+    // anyway would cost one billed write per email/password user on the first
+    // launch after this release, and again after every reinstall, to delete a
+    // field that was never there.
+    if (url.isEmpty && prefs.mirroredPhotoUrlFor(user.uid) == null) {
+      await prefs.setPhotoMirrored(user.uid, url);
+      return;
+    }
+
     try {
       // Time-boxed for the same reason the name is: callers await this on the
       // interactive sign-in path, and an avatar is not worth holding a tap for.
-      await PublicProfileService.setPhotoUrl(user.uid, url.isEmpty ? null : url)
+      await PublicProfileService.setPhotoUrl(user.uid, url)
           .timeout(const Duration(seconds: 10));
       await prefs.setPhotoMirrored(user.uid, url);
       debugPrint('Mirrored provider photo to publicProfiles');
@@ -162,6 +172,22 @@ class AuthService {
       // next launch tries again.
       debugPrint('Could not mirror provider photo: $e');
     }
+  }
+
+  /// Carry whatever the sign-in provider knows about this person onto the
+  /// records the app reads: their name, and their avatar.
+  ///
+  /// **One entry point, because every caller wants both.** The two halves stay
+  /// separate methods — they gate on different things, and folding the photo
+  /// inside the name's blank-name branch would run it for almost nobody (see
+  /// [mirrorProviderPhoto]) — but four call sites each pairing them by hand is
+  /// how a fifth sign-in path adopts the name and silently forgets the avatar.
+  /// The asymmetric await lives here too: the name is what the next screen
+  /// pre-fills from, the avatar is cosmetic and must not hold a tap.
+  static Future<void> adoptProviderProfile(User? user,
+      [UserCredential? credential]) async {
+    await adoptProviderDisplayName(user, credential);
+    unawaited(mirrorProviderPhoto(user));
   }
 
   /// How long to wait for the anonymous session the app runs on. The default

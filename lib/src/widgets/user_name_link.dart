@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import 'package:help_a_paw/l10n/app_localizations.dart';
+
+import 'linkified_text.dart';
 
 /// How much of the line opens the profile.
 enum NameTapTarget {
@@ -62,9 +66,16 @@ class UserNameLink extends StatefulWidget {
   /// Whose name this is. Also what [onTap] is handed.
   final String uid;
 
-  /// The screen's in-flight or completed name lookup. Null (or empty) means the
-  /// account has no public name, and [fallback] is shown instead.
-  final Future<String?> name;
+  /// The name, or the screen's in-flight lookup for it. Null (or empty) means
+  /// the account has no public name, and [fallback] is shown instead.
+  ///
+  /// **A `FutureOr`, so a caller that already has the string does not have to
+  /// invent a `Future` for it.** The moderation tab batch-resolves every name
+  /// before it renders a row; when this took a `Future` it had to keep a second
+  /// map of `Future.value` wrappers, memoized, purely so `FutureBuilder` would
+  /// not blank the line out for a frame on every rebuild. A plain `String` here
+  /// skips the builder entirely and there is nothing to memoize.
+  final FutureOr<String?> name;
 
   /// Builds the line around the resolved name.
   final String Function(String name) sentence;
@@ -124,8 +135,11 @@ class _UserNameLinkState extends State<UserNameLink> {
 
   @override
   Widget build(BuildContext context) {
+    final pending = widget.name;
+    if (pending is! Future<String?>) return _line(context, pending);
+
     return FutureBuilder<String?>(
-      future: widget.name,
+      future: pending,
       builder: (context, snapshot) {
         // Nothing while the lookup is in flight. `snapshot.data` is null until
         // it completes, so rendering unconditionally paints the fallback first
@@ -136,92 +150,80 @@ class _UserNameLinkState extends State<UserNameLink> {
         if (snapshot.connectionState != ConnectionState.done) {
           return const SizedBox.shrink();
         }
-
-        final resolved = snapshot.data;
-        final hasName = resolved != null && resolved.isNotEmpty;
-        final display = hasName ? resolved : widget.fallback;
-
-        // A fallback is not a name: "Someone" and "Unknown" stand for an
-        // account we could not resolve, and offering to open its profile
-        // promises something this widget cannot deliver.
-        if (!hasName || !_isLinkable) return _plain(display);
-
-        final template = widget.sentence(_marker);
-        final at = template.indexOf(_marker);
-        // Defensive: a `sentence` that drops its argument has nothing to link.
-        if (at < 0) return _plain(display);
-
-        final spanOnly = widget.tapTarget == NameTapTarget.name;
-        final text = Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(text: template.substring(0, at)),
-              TextSpan(
-                text: display,
-                style: _linkStyle(context),
-                recognizer: spanOnly ? _tapRecognizer() : null,
-              ),
-              TextSpan(text: template.substring(at + _marker.length)),
-            ],
-          ),
-          style: widget.style,
-          textAlign: widget.textAlign,
-          maxLines: widget.maxLines,
-          overflow: widget.maxLines == null ? null : TextOverflow.ellipsis,
-        );
-
-        // A span-only line carries no wrapper at all: the row around it owns
-        // the gesture and the semantics, and a button node spanning this line
-        // would hide the row's own action from a screen reader.
-        if (spanOnly) return text;
-
-        // Otherwise one semantics node for the whole line: the label is the
-        // line itself, the tap action comes from the [GestureDetector], and the
-        // hint says where the tap goes — "Ivan, 12 August 2026, button. Double
-        // tap to View profile." A HINT and not a `label:`, because a label here
-        // is *prepended* to the line rather than replacing it, which read the
-        // person's name out twice.
-        return MergeSemantics(
-          child: Semantics(
-            button: true,
-            onTapHint: AppLocalizations.of(context).viewProfile,
-            child: GestureDetector(
-              onTap: () => widget.onTap!(widget.uid),
-              // Opaque so the gaps between glyphs, and the empty width left by
-              // an ellipsized line, are part of the target rather than holes in
-              // it.
-              behavior: HitTestBehavior.opaque,
-              child: text,
-            ),
-          ),
-        );
+        return _line(context, snapshot.data);
       },
     );
   }
 
-  TapGestureRecognizer _tapRecognizer() => _recognizer ??=
-      TapGestureRecognizer()..onTap = () => widget.onTap?.call(widget.uid);
+  /// The finished line, for a name that has resolved to [resolved] (or to
+  /// nothing).
+  ///
+  /// **One path, whether or not the name is a link.** The link-ness is a
+  /// property of the middle span, not of the widget: building a separate plain
+  /// [Text] for the non-link case meant spelling out `style`/`textAlign`/
+  /// `maxLines`/`overflow` twice and assembling the sentence two different
+  /// ways, which callers' tests could see.
+  Widget _line(BuildContext context, String? resolved) {
+    final hasName = resolved != null && resolved.isNotEmpty;
+    final display = hasName ? resolved : widget.fallback;
 
-  Widget _plain(String display) => Text(
-        widget.sentence(display),
+    // A fallback is not a name: "Someone" and "Unknown" stand for an account we
+    // could not resolve, and offering to open its profile promises something
+    // this widget cannot deliver.
+    final template = widget.sentence(_marker);
+    final at = template.indexOf(_marker);
+    // `at < 0` is defensive: a `sentence` that drops its argument has no name
+    // in it to make tappable.
+    final linked = hasName && _isLinkable && at >= 0;
+
+    if (!linked) return _text(TextSpan(text: widget.sentence(display)));
+
+    final spanOnly = widget.tapTarget == NameTapTarget.name;
+    final text = _text(TextSpan(children: [
+      TextSpan(text: template.substring(0, at)),
+      TextSpan(
+        text: display,
+        style: linkTextStyle(context, widget.style),
+        recognizer: spanOnly ? _tapRecognizer() : null,
+      ),
+      TextSpan(text: template.substring(at + _marker.length)),
+    ]));
+
+    // A span-only line carries no wrapper at all: the row around it owns the
+    // gesture and the semantics, and a button node spanning this line would
+    // hide the row's own action from a screen reader.
+    if (spanOnly) return text;
+
+    // Otherwise one semantics node for the whole line: the label is the line
+    // itself, the tap action comes from the [GestureDetector], and the hint
+    // says where the tap goes — "Ivan, 12 August 2026, button. Double tap to
+    // View profile." A HINT and not a `label:`, because a label here is
+    // *prepended* to the line rather than replacing it, which read the person's
+    // name out twice.
+    return MergeSemantics(
+      child: Semantics(
+        button: true,
+        onTapHint: AppLocalizations.of(context).viewProfile,
+        child: GestureDetector(
+          onTap: () => widget.onTap!(widget.uid),
+          // Opaque so the gaps between glyphs, and the empty width left by an
+          // ellipsized line, are part of the target rather than holes in it.
+          behavior: HitTestBehavior.opaque,
+          child: text,
+        ),
+      ),
+    );
+  }
+
+  /// The four text properties every path shares, in one place.
+  Widget _text(InlineSpan span) => Text.rich(
+        span,
         style: widget.style,
         textAlign: widget.textAlign,
         maxLines: widget.maxLines,
         overflow: widget.maxLines == null ? null : TextOverflow.ellipsis,
       );
 
-  /// The same treatment `LinkifiedText` gives a URL, for the same reasons.
-  ///
-  /// `secondary` rather than `primary`: primary is #FF9800 in both schemes,
-  /// which is 2.16:1 on white. And the underline is not decoration — colour
-  /// alone is invisible to a red-green colour blind reader, so it would leave
-  /// the one interactive word on the line indistinguishable from the rest.
-  TextStyle _linkStyle(BuildContext context) {
-    final ink = Theme.of(context).colorScheme.secondary;
-    return (widget.style ?? const TextStyle()).copyWith(
-      color: ink,
-      decoration: TextDecoration.underline,
-      decorationColor: ink,
-    );
-  }
+  TapGestureRecognizer _tapRecognizer() => _recognizer ??=
+      TapGestureRecognizer()..onTap = () => widget.onTap?.call(widget.uid);
 }

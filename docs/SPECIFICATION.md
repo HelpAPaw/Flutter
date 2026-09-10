@@ -386,9 +386,13 @@ the avatar are written by two independent merge-writes; a create must carry at l
 of them (`hasAny`).
 
 **`signalsPosted` is server-owned, and this document is why it lives here.** The rules
-already restrict the client to `name` alone — `keys().hasOnly(['name'])` on create,
-`affectedKeys().hasOnly(['name'])` on update — so an Admin-SDK counter written beside it
-is unforgeable **without any rules change**. `userCounters` was the obvious alternative
+restrict the client to `name` and `photoUrl` and nothing else —
+`keys().hasOnly(['name', 'photoUrl'])` on create, `affectedKeys().hasOnly(...)` on
+update — so an Admin-SDK counter written beside them is unforgeable. It needed no rules
+change to become so; what it needs *now* is that nobody widens that allow-list without
+noticing what was relying on being excluded, which is why the rule carries a comment
+saying so and `firestore-tests/rules.test.js` pins the counter's unwritability
+explicitly rather than by implication. `userCounters` was the obvious alternative
 and is exactly wrong: that document *is* client-writable by design, so a statistic kept
 there would be one its own subject could set.
 
@@ -3027,6 +3031,22 @@ Things that live in more than one place and fail **silently** when they drift.
    title 300, description 10 000, comment 2000, **signal-event note 500**, profile name 100,
    feedback message 1000, email 254. The note pair is guarded by
    `test/signal_event_vocabulary_guard_test.dart`, which parses the rules.
+5h. **The avatar allow-list (×3).** `isValidProfilePhotoUrl()` in `firestore.rules`,
+   `PublicProfileService.maxPhotoUrlLength` (Dart), and
+   `functions/src/publicProfilePhoto.ts` — shared with
+   `backfill_public_photo_urls.js` the way `urgency.ts` is shared with
+   `backfill_urgency.js`, rather than restated in the script. Guarded together with
+   `maxNameLength` by `test/public_photo_url_guard_test.dart`, which parses the rules.
+
+   **All three failure directions are silent.** Dart's cap *below* the rules' and a
+   legal avatar is dropped with nothing recorded, so it is retried and dropped again on
+   every launch, forever. Dart's cap *above* and the write is denied — and
+   `AuthService.mirrorProviderPhoto` caches a denial as a permanent verdict, so the
+   avatar never appears again on that device. The TypeScript copy is worse than either,
+   because the backfill runs under the Admin SDK: it is the only check there is, and a
+   URL it lets through is one the owner can then never change. The host branch must stay
+   `lh[0-9]+`, not `lh3` — Google has served account photos from lh3 through lh6 and
+   older accounts still carry the earlier hosts.
 5c. **Report status vocabulary (×3).** `ReportStatus` (`models/report_status.dart`),
    `OUTCOMES` in `functions/src/moderation.ts` (terminal states only — `open` is
    client-written and server-read), and the `status == 'open'` pin in

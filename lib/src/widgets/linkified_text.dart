@@ -63,6 +63,29 @@ TextStyle mentionTextStyle(BuildContext context, TextStyle? base) =>
       fontWeight: FontWeight.w600,
     );
 
+/// How anything that opens something is drawn, wherever it is drawn.
+///
+/// URLs, phone numbers, addresses and a person's name all share one
+/// affordance, so they share one definition — the same argument
+/// [mentionTextStyle] makes, and the reason that function exists.
+///
+/// `secondary` rather than `primary`: primary is #FF9800 in both schemes,
+/// which is 2.16:1 on white. Secondary resolves to the darkened brand ink in
+/// light mode (5.21:1) and to the plain brand orange on black in dark mode
+/// (9.74:1). See AppColors' class doc, and theme_contrast_test.
+///
+/// The underline is not decoration: colour alone is invisible to a red-green
+/// colour blind reader, and this palette's link ink is a muted orange against
+/// near-black body text.
+TextStyle linkTextStyle(BuildContext context, TextStyle? base) {
+  final ink = Theme.of(context).colorScheme.secondary;
+  return (base ?? const TextStyle()).copyWith(
+    color: ink,
+    decoration: TextDecoration.underline,
+    decorationColor: ink,
+  );
+}
+
 class LinkifiedText extends StatefulWidget {
   const LinkifiedText(
     this.text, {
@@ -144,8 +167,8 @@ class _LinkifiedTextState extends State<LinkifiedText> {
   /// `(uid) => context.push(...)` does — would otherwise be calling the one
   /// from whenever the text last changed.
   TapGestureRecognizer? _recognizerFor(TextToken token) => switch (token) {
-        LinkToken(:final uri) =>
-          TapGestureRecognizer()..onTap = () => _open(uri),
+        LinkToken(:final uri) => TapGestureRecognizer()
+          ..onTap = () => _open(uri),
         MentionToken(:final uid) when widget.onMentionTap != null =>
           TapGestureRecognizer()..onTap = () => widget.onMentionTap?.call(uid),
         _ => null,
@@ -205,23 +228,12 @@ class _LinkifiedTextState extends State<LinkifiedText> {
     // is built.
     if (_isPlain) return Text(widget.text, style: widget.style);
 
-    // `secondary` rather than `primary`: primary is #FF9800 in both schemes,
-    // which is 2.16:1 on white. Secondary resolves to the darkened brand ink in
-    // light mode (5.21:1) and to the plain brand orange on black in dark mode
-    // (9.74:1). See AppColors' class doc, and theme_contrast_test.
-    //
-    // Resolved once: `Theme.of` registers an inherited-widget dependency on
-    // every call.
-    final linkInk = Theme.of(context).colorScheme.secondary;
+    // All three resolved once, outside the span loop: each calls `Theme.of`,
+    // which registers an inherited-widget dependency, and a comment with k
+    // mentions would otherwise allocate k identical mention styles.
+    final linkStyle = linkTextStyle(context, widget.style);
     final mentionStyle = mentionTextStyle(context, widget.style);
-    final linkStyle = (widget.style ?? const TextStyle()).copyWith(
-      color: linkInk,
-      // Colour alone is not an affordance: it is invisible to a red-green
-      // colour blind reader, and this palette's link ink is a muted orange
-      // against near-black body text.
-      decoration: TextDecoration.underline,
-      decorationColor: linkInk,
-    );
+    final mentionLinkStyle = linkTextStyle(context, mentionStyle);
 
     return Text.rich(
       TextSpan(
@@ -236,12 +248,7 @@ class _LinkifiedTextState extends State<LinkifiedText> {
                 ),
               MentionToken(:final text) => TextSpan(
                   text: text,
-                  style: recognizer == null
-                      ? mentionStyle
-                      : mentionStyle.copyWith(
-                          decoration: TextDecoration.underline,
-                          decorationColor: mentionStyle.color,
-                        ),
+                  style: recognizer == null ? mentionStyle : mentionLinkStyle,
                   recognizer: recognizer,
                 ),
             },

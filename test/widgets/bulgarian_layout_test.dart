@@ -6,6 +6,7 @@ import 'package:help_a_paw/src/models/signal_urgency.dart';
 import 'package:help_a_paw/src/widgets/app_bar_title.dart';
 import 'package:help_a_paw/src/widgets/level_chip.dart';
 import 'package:help_a_paw/src/widgets/mention_suggestions.dart';
+import 'package:help_a_paw/src/services/user_stats_service.dart';
 import 'package:help_a_paw/src/widgets/stat_card.dart';
 import 'package:help_a_paw/src/widgets/urgency_picker.dart';
 
@@ -200,7 +201,7 @@ void main() {
     });
   });
 
-  group('StatCardRow', () {
+  group('UserStatsRow', () {
     testWidgets('three profile stats fit a 411dp phone in Bulgarian',
         (tester) async {
       // The profile went from two stat cards to three when it started showing
@@ -209,29 +210,17 @@ void main() {
       // fit in English, which is exactly the failure this file exists for.
       await pumpAt411dp(
         tester,
-        Builder(
-          builder: (context) {
-            final l10n = AppLocalizations.of(context);
-            return Scaffold(
-              body: Padding(
-                padding: const EdgeInsets.all(24),
-                child: StatCardRow(
-                  cards: [
-                    StatCard(
-                        icon: Icons.pin_drop, value: 128, label: l10n.signals),
-                    StatCard(
-                        icon: Icons.volunteer_activism,
-                        value: 12,
-                        label: l10n.helpingNow),
-                    StatCard(
-                        icon: Icons.comment,
-                        value: 1024,
-                        label: l10n.comments),
-                  ],
-                ),
+        const Scaffold(
+          body: Padding(
+            padding: EdgeInsets.all(24),
+            child: UserStatsRow(
+              stats: UserStats(
+                signalsPosted: 128,
+                signalsOwned: 12,
+                commentsPosted: 1024,
               ),
-            );
-          },
+            ),
+          ),
         ),
       );
 

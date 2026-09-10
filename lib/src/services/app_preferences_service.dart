@@ -1,15 +1,18 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AppPreferencesService {
-  static final AppPreferencesService _instance = AppPreferencesService._internal();
+  static final AppPreferencesService _instance =
+      AppPreferencesService._internal();
   factory AppPreferencesService() => _instance;
   AppPreferencesService._internal();
 
   SharedPreferences? _prefs;
 
   // Keys
-  static const String _onboardingCompletedKey = 'notification_onboarding_completed';
-  static const String _onboardingDismissedKey = 'notification_onboarding_dismissed';
+  static const String _onboardingCompletedKey =
+      'notification_onboarding_completed';
+  static const String _onboardingDismissedKey =
+      'notification_onboarding_dismissed';
   static const String _testModeKey = 'test_mode_enabled';
   static const String _deferredLinkCheckedKey = 'deferred_link_checked';
   static const String _testModeSyncedUidKey = 'test_mode_synced_uid';
@@ -127,10 +130,19 @@ class AppPreferencesService {
   ///
   /// Safe to lose (a reinstall re-mirrors once) and safe to keep (a different
   /// account, or a provider photo that has changed, stops matching).
-  bool isPhotoMirroredFor(String uid, String url) {
-    return _prefs?.getString(_photoMirroredUidKey) == uid &&
-        _prefs?.getString(_photoMirroredUrlKey) == url;
-  }
+  bool isPhotoMirroredFor(String uid, String url) =>
+      mirroredPhotoUrlFor(uid) == url;
+
+  /// What was last mirrored for [uid], or null if this device has never
+  /// mirrored anything for that account.
+  ///
+  /// Null and `''` mean different things: null is "we have never written this
+  /// account's avatar", `''` is "we have written that it has none". Only the
+  /// second is a reason to issue a delete.
+  String? mirroredPhotoUrlFor(String uid) =>
+      _prefs?.getString(_photoMirroredUidKey) == uid
+          ? _prefs?.getString(_photoMirroredUrlKey)
+          : null;
 
   /// Record that [uid]'s public profile now carries [url].
   Future<void> setPhotoMirrored(String uid, String url) async {
@@ -139,6 +151,5 @@ class AppPreferencesService {
   }
 
   /// Returns the Firestore collection name based on test mode state
-  String get signalsCollectionName =>
-      isTestMode() ? 'signals_test' : 'signals';
+  String get signalsCollectionName => isTestMode() ? 'signals_test' : 'signals';
 }

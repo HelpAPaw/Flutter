@@ -1,11 +1,9 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
-import 'package:help_a_paw/src/services/app_preferences_service.dart';
 import 'package:help_a_paw/src/services/auth_service.dart';
 import 'package:help_a_paw/src/services/public_profile_service.dart';
 import 'package:help_a_paw/src/services/user_stats_service.dart';
@@ -20,6 +18,7 @@ import 'escape_leading.dart';
 import '../utils/error_text.dart';
 import 'page_width.dart';
 import 'stat_card.dart';
+import 'user_avatar.dart';
 import '../utils/profile_validators.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -242,13 +241,14 @@ class _ProfilePageState extends State<ProfilePage> {
 
       await user.updatePhotoURL(photoUrl);
 
-      // Mirror it to the world-readable public profile. Auth's `photoURL` is
-      // readable only by its owner, so without this the new avatar would be
-      // visible to nobody but the person who just chose it.
-      await PublicProfileService.setPhotoUrl(user.uid, photoUrl);
-      // Tell the launch-time mirror it has nothing to do, or it would write
-      // this identical URL again on the next start.
-      await AppPreferencesService().setPhotoMirrored(user.uid, photoUrl);
+      // Through the mirror, not around it. Auth's `photoURL` is readable only
+      // by its owner, so the public copy has to be written — but writing it
+      // here directly meant this screen owning half of `mirrorProviderPhoto`'s
+      // contract (its timeout, its permission-denied handling, its
+      // write-avoidance cache) and getting a different answer than every other
+      // caller. `updatePhotoURL` has already refreshed `currentUser`, so the
+      // mirror sees the new URL.
+      await AuthService.mirrorProviderPhoto(user);
 
       await user.reload();
 
@@ -369,15 +369,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   const SizedBox(height: 20),
                   Stack(
                     children: [
-                      CircleAvatar(
-                        radius: 60,
-                        backgroundImage: user.photoURL != null
-                            ? CachedNetworkImageProvider(user.photoURL!)
-                            : null,
-                        child: user.photoURL == null
-                            ? const Icon(Icons.person, size: 60)
-                            : null,
-                      ),
+                      UserAvatar(url: user.photoURL, radius: 60),
                       if (_isEditing)
                         Positioned(
                           bottom: 0,
@@ -461,25 +453,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     // showing one we do not have yet is a lie about this
                     // person's contribution.
                     if (_stats case final stats?)
-                      StatCardRow(
-                        cards: [
-                          StatCard(
-                            icon: Icons.pin_drop,
-                            value: stats.signalsPosted,
-                            label: l10n.signals,
-                          ),
-                          StatCard(
-                            icon: Icons.volunteer_activism,
-                            value: stats.signalsOwned,
-                            label: l10n.helpingNow,
-                          ),
-                          StatCard(
-                            icon: Icons.comment,
-                            value: stats.commentsPosted,
-                            label: l10n.comments,
-                          ),
-                        ],
-                      ),
+                      UserStatsRow(stats: stats),
                     const SizedBox(height: 32),
                     const Divider(),
                     ListTile(

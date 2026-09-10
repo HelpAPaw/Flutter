@@ -64,20 +64,21 @@ class _ModerationHiddenTabState extends State<ModerationHiddenTab> {
   /// moderators, so this is a couple of reads per refresh, not one per row.
   Map<String, String> _hiddenByNames = const {};
 
-  /// The same names, one already-completed future per uid, for [UserNameLink].
-  ///
-  /// Memoized rather than a fresh `Future.value` per build: a `FutureBuilder`
-  /// handed a new future renders nothing on the frame it is given it, so
-  /// rebuilding this row — which every refresh and every restore does — would
-  /// blink the whole line out and back.
-  ///
-  /// Cleared with [_hiddenByNames] in [_refresh], so a re-resolved name is
-  /// never masked by the previous load's answer.
-  final Map<String, Future<String?>> _hiddenByNameFutures = {};
-
   /// The collection this moderator is looking at, fixed for the tab's life so a
   /// refresh cannot silently switch which quarantine is listed.
   final String _collection = AppPreferencesService().signalsCollectionName;
+
+  /// Built once per locale, not once per row per build: `DateFormat` parses its
+  /// pattern and resolves locale data on construction, and this sits inside a
+  /// list builder.
+  late DateFormat _timestampFormat;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _timestampFormat =
+        DateFormat.yMd(Localizations.localeOf(context).languageCode).add_jm();
+  }
 
   @override
   void initState() {
@@ -101,7 +102,6 @@ class _ModerationHiddenTabState extends State<ModerationHiddenTab> {
       setState(() {
         _hidden = items;
         _hiddenByNames = names;
-        _hiddenByNameFutures.clear();
         _loading = false;
         _failed = false;
       });
@@ -153,18 +153,15 @@ class _ModerationHiddenTabState extends State<ModerationHiddenTab> {
     AppLocalizations l10n,
   ) {
     final style = Theme.of(context).textTheme.bodySmall;
-    final when = hiddenAt == null
-        ? null
-        : DateFormat.yMd(Localizations.localeOf(context).languageCode)
-            .add_jm()
-            .format(hiddenAt);
+    final when = hiddenAt == null ? null : _timestampFormat.format(hiddenAt);
 
     if (signal.hiddenBy.isEmpty) return Text(when ?? '', style: style);
 
     return UserNameLink(
       uid: signal.hiddenBy,
-      name: _hiddenByNameFutures[signal.hiddenBy] ??=
-          Future.value(_hiddenByNames[signal.hiddenBy]),
+      // Already resolved by [_refresh] — `UserNameLink` takes a `FutureOr`, so
+      // there is no builder to satisfy and nothing to memoize.
+      name: _hiddenByNames[signal.hiddenBy],
       sentence: (name) => [
         if (when != null) when,
         l10n.moderationHiddenBy(name),
@@ -259,8 +256,9 @@ class _ModerationHiddenTabState extends State<ModerationHiddenTab> {
                   child: Text(l10n.cancel),
                 ),
                 FilledButton(
-                  onPressed:
-                      note.isEmpty ? null : () => Navigator.of(context).pop(note),
+                  onPressed: note.isEmpty
+                      ? null
+                      : () => Navigator.of(context).pop(note),
                   child: Text(l10n.moderationRestore),
                 ),
               ],
@@ -343,7 +341,9 @@ class _ModerationHiddenTabState extends State<ModerationHiddenTab> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, size: 80, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                Icon(icon,
+                    size: 80,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
                 const SizedBox(height: 16),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 32),

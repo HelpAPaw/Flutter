@@ -269,15 +269,11 @@ Future<void> _bootstrapServices() async {
   unawaited(AuthService().syncTestMode());
 
   // Repair accounts that signed in through a build which didn't carry Google's
-  // name onto the Auth record (R5-001). A no-op for anonymous users and for
-  // anyone who already has a name, so it costs nothing after the first launch.
+  // name or photo onto the records other users read (R5-001). A no-op for
+  // anonymous users and for anyone already mirrored, so it costs nothing after
+  // the first launch.
   unawaited(
-      AuthService.adoptProviderDisplayName(FirebaseAuth.instance.currentUser));
-
-  // And carry a Google account photo onto the public profile, so other users
-  // see the avatar this account already has. Gated on a local cache, so it is
-  // a no-op after the first launch that mirrors it.
-  unawaited(AuthService.mirrorProviderPhoto(FirebaseAuth.instance.currentUser));
+      AuthService.adoptProviderProfile(FirebaseAuth.instance.currentUser));
 
   // Both need the uid from the sign-in above, but not each other — run them
   // together rather than making the restore of background tracking queue behind

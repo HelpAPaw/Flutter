@@ -50,30 +50,16 @@
 
 const admin = require("firebase-admin");
 
+// Shared with the server rather than restated here, the way backfill_urgency
+// requires ../lib/urgency — the Admin SDK bypasses rules, so this check is the
+// only thing standing between a stray provider URL and a field the client is
+// forbidden to write. Guarded by test/public_photo_url_guard_test.dart.
+const { isAllowedPhotoUrl } = require("../lib/publicProfilePhoto");
+
 // Firestore caps a batch at 500 writes; leave headroom.
 const BATCH_SIZE = 400;
 // listUsers' maximum.
 const PAGE_SIZE = 1000;
-
-// Kept in step with `isValidProfilePhotoUrl()` in firestore.rules. The Storage
-// branch is pinned to the account's own uid there, so it is pinned here too —
-// otherwise the backfill could write a value the owner could never edit.
-const MAX_PHOTO_URL_LENGTH = 500;
-
-function isAllowedPhotoUrl(url, uid) {
-  if (typeof url !== "string" || url.length === 0) return false;
-  if (url.length > MAX_PHOTO_URL_LENGTH) return false;
-  const storage = new RegExp(
-    "^https://firebasestorage\\.googleapis\\.com/v0/b/[a-zA-Z0-9._-]+/o/" +
-      "profile_photos%2F" +
-      uid +
-      "\\.jpg\\?.*$"
-  );
-  return (
-    storage.test(url) ||
-    /^https:\/\/lh[0-9]+\.googleusercontent\.com\/[^ ]*$/.test(url)
-  );
-}
 
 function parseArgs(argv) {
   const args = { apply: false, project: undefined };
@@ -169,13 +155,24 @@ async function main() {
     return;
   }
 
-  // Read the profiles first, in the same chunks the writes go out in, so a
-  // tombstoned account can be skipped. `deleteAccount` writes
-  // `{name: "Deleted user", deleted: true}`, and restoring an avatar on top of
-  // that would put a real person's face back on an erased account.
+  // Which accounts are tombstoned, in ONE query rather than a document read
+  // per user. `deleteAccount` writes `{name: "Deleted user", deleted: true}`,
+  // and restoring an avatar on top of that would put a real person's face back
+  // on an erased account. Single-field equality is auto-indexed and the
+  // tombstoned population is tiny, so this replaces N reads with a handful.
+  const tombstoned = new Set(
+    (
+      await db
+        .collection("publicProfiles")
+        .where("deleted", "==", true)
+        .select()
+        .get()
+    ).docs.map((doc) => doc.id)
+  );
+
   let written = 0;
-  let tombstoned = 0;
-  const entries = [...photos.entries()];
+  let unchanged = 0;
+  const entries = [...photos.entries()].filter(([uid]) => !tombstoned.has(uid));
 
   for (let i = 0; i < entries.length; i += BATCH_SIZE) {
     const chunk = entries.slice(i, i + BATCH_SIZE);
@@ -183,22 +180,18 @@ async function main() {
       db.collection("publicProfiles").doc(uid)
     );
     const existing = await db.getAll(...refs);
-    const deleted = new Set(
-      existing.filter((doc) => doc.get("deleted") === true).map((doc) => doc.id)
-    );
 
     const batch = db.batch();
     let batchCount = 0;
-    for (const [uid, url] of chunk) {
-      if (deleted.has(uid)) {
-        tombstoned += 1;
+    for (let j = 0; j < chunk.length; j++) {
+      const [, url] = chunk[j];
+      // A re-run converges to zero writes, not to the same N writes. The
+      // snapshots are already in hand, so comparing costs nothing.
+      if (existing[j].get("photoUrl") === url) {
+        unchanged += 1;
         continue;
       }
-      batch.set(
-        db.collection("publicProfiles").doc(uid),
-        { photoUrl: url },
-        { merge: true }
-      );
+      batch.set(refs[j], { photoUrl: url }, { merge: true });
       batchCount += 1;
       written += 1;
     }
@@ -206,7 +199,8 @@ async function main() {
   }
 
   console.log("");
-  console.log(`Tombstoned (skip) : ${tombstoned}`);
+  console.log(`Tombstoned (skip) : ${photos.size - entries.length}`);
+  console.log(`Already correct   : ${unchanged}`);
   console.log(`Profiles written  : ${written}`);
 }
 

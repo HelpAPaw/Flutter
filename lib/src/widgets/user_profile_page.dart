@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 
@@ -10,6 +9,8 @@ import 'app_bar_title.dart';
 import 'escape_leading.dart';
 import 'page_width.dart';
 import 'stat_card.dart';
+import 'status_view.dart';
+import 'user_avatar.dart';
 
 /// Somebody else's profile (master spec §3.5.1): who they are, and what they
 /// have done here.
@@ -33,54 +34,48 @@ class UserProfilePage extends StatefulWidget {
 }
 
 class _UserProfilePageState extends State<UserProfilePage> {
-  bool _loading = true;
+  /// Whether a load has ever finished. Not "is a load running": a
+  /// pull-to-refresh runs one too, and must keep showing the content it is
+  /// refreshing.
+  bool _loaded = false;
+
   PublicProfile? _profile;
   UserStats? _stats;
 
-  /// Set when the avatar URL resolved to something the image loader could not
-  /// fetch — a deleted Storage object, a rotated download token.
-  ///
-  /// Without it the person icon is chosen on the *presence* of a URL rather
-  /// than on whether it loaded, so a broken avatar renders as a blank grey
-  /// disc with nothing to say why.
-  bool _avatarFailed = false;
-
   /// Why the identity half failed, already reported and phrased for the user.
-  String? _profileError;
-
-  /// Why the statistics half failed.
   ///
-  /// **Tracked separately from [_profileError] on purpose.** `count()` is a
-  /// server-only aggregation with no offline fallback, so it fails on any
-  /// connectivity blip — far more often than the single document read beside
-  /// it. One shared error state would answer "who is this person?" with
-  /// "something went wrong" whenever only the numbers were unavailable.
-  String? _statsError;
+  /// **The only error state here.** A failed statistic does not need one: it
+  /// comes back null and renders as a dash, which says "not this number"
+  /// without claiming the person could not be found. `count()` is a
+  /// server-only aggregation with no offline cache, so it fails far more often
+  /// than the document read beside it, and one shared error would answer "who
+  /// is this person?" with "something went wrong" whenever only the numbers
+  /// were missing.
+  String? _profileError;
 
   @override
   void initState() {
     super.initState();
-    _load(initial: true);
+    _load();
   }
 
-  /// [initial] only on the first load, from `initState`.
-  ///
-  /// A pull-to-refresh must NOT set `_loading`: `build` swaps the whole
-  /// `RefreshIndicator` for a full-page spinner while that flag is up, which
-  /// tears the indicator — and the gesture driving it — out mid-pull.
-  Future<void> _load({bool initial = false}) async {
-    setState(() {
-      if (initial) _loading = true;
-      _profileError = null;
-      _statsError = null;
-    });
+  Future<void> _load() async {
+    setState(() => _profileError = null);
 
-    // Sequential, not concurrent: the stats need the profile document for
-    // `signalsPosted`, and running them in parallel would fetch it twice.
+    // ONE read of `publicProfiles`, shared. The screen needs it for the name
+    // and the avatar, and `signalsPosted` lives on the same document — but
+    // handed over as a *Future*, so the two aggregations fire immediately
+    // instead of queueing behind a round trip neither of them uses.
+    //
+    // `forUser` attaches its handler synchronously, so a rejection here is
+    // never an unhandled error even though it is awaited twice.
+    final pending = PublicProfileService.read(widget.uid);
+    final pendingStats = UserStatsService.forUser(widget.uid, profile: pending);
+
     PublicProfile? profile;
     String? profileError;
     try {
-      profile = await PublicProfileService.read(widget.uid);
+      profile = await pending;
     } catch (error, stack) {
       if (!mounted) return;
       profileError = reportAndDescribe(
@@ -92,35 +87,16 @@ class _UserProfilePageState extends State<UserProfilePage> {
       );
     }
 
-    // Not attempted when the profile read failed: `signalsPosted` comes from
-    // that same document, so it would fail again — a second request and a
-    // duplicate crash report to reach a screen already showing the first
-    // failure.
-    UserStats? stats;
-    String? statsError;
-    if (profile != null) {
-      try {
-        stats = await UserStatsService.forUser(widget.uid, profile: profile);
-      } catch (error, stack) {
-        if (!mounted) return;
-        statsError = reportAndDescribe(
-          AppLocalizations.of(context),
-          error,
-          stack: stack,
-          where: 'userProfile.stats',
-          fallback: AppLocalizations.of(context).errorLoadingStatistics,
-        );
-      }
-    }
+    // Never throws — a stat that fails comes back null and renders as a dash,
+    // so a lost aggregation costs one number rather than the whole screen.
+    final stats = await pendingStats;
 
     if (!mounted) return;
     setState(() {
-      _loading = false;
+      _loaded = true;
       _profile = profile;
-      _avatarFailed = false;
       _stats = stats;
       _profileError = profileError;
-      _statsError = statsError;
     });
   }
 
@@ -137,26 +113,36 @@ class _UserProfilePageState extends State<UserProfilePage> {
         ),
         title: AppBarTitle(l10n.profile),
       ),
+      // `RefreshIndicator` OUTSIDE the loading branch, the way the moderation
+      // tab does it. Putting the conditional above it swaps the indicator away
+      // mid-gesture on every pull, tearing out the state driving the animation.
       body: PageWidth(
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : RefreshIndicator(
-                onRefresh: _load,
-                child: SingleChildScrollView(
-                  // Always scrollable so pull-to-refresh works on a page whose
-                  // content is far shorter than the screen — which is every
-                  // page here.
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(24),
-                  child: _body(context, l10n),
-                ),
-              ),
+        child: RefreshIndicator(
+          onRefresh: _load,
+          child: SingleChildScrollView(
+            // Always scrollable so pull-to-refresh works on a page whose
+            // content is far shorter than the screen — which is every page
+            // here.
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(24),
+            child: _loaded
+                ? _body(context, l10n)
+                : const Center(
+                    child: Padding(
+                      padding: EdgeInsets.only(top: 64),
+                      child: CircularProgressIndicator(),
+                    ),
+                  ),
+          ),
+        ),
       ),
     );
   }
 
   Widget _body(BuildContext context, AppLocalizations l10n) {
-    if (_profileError != null) return _failure(context, _profileError!);
+    if (_profileError != null) {
+      return StatusView.error(title: _profileError!, onRetry: _load);
+    }
 
     // An account with no `publicProfiles` document reads as a profile with
     // nothing in it, not as a failure — legacy and Google sign-ups both have
@@ -167,7 +153,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
     return Column(
       children: [
         const SizedBox(height: 20),
-        _avatar(profile),
+        UserAvatar(url: profile?.photoUrl, radius: 60),
         const SizedBox(height: 24),
         Text(
           profile?.name ?? l10n.someone,
@@ -178,67 +164,8 @@ class _UserProfilePageState extends State<UserProfilePage> {
               ?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 32),
-        if (stats != null)
-          StatCardRow(
-            cards: [
-              StatCard(
-                icon: Icons.pin_drop,
-                value: stats.signalsPosted,
-                label: l10n.signals,
-              ),
-              StatCard(
-                icon: Icons.volunteer_activism,
-                value: stats.signalsOwned,
-                label: l10n.helpingNow,
-              ),
-              StatCard(
-                icon: Icons.comment,
-                value: stats.commentsPosted,
-                label: l10n.comments,
-              ),
-            ],
-          )
-        else if (_statsError != null)
-          _failure(context, _statsError!),
+        if (stats != null) UserStatsRow(stats: stats),
       ],
-    );
-  }
-
-  Widget _avatar(PublicProfile? profile) {
-    final url = _avatarFailed ? null : profile?.photoUrl;
-    return CircleAvatar(
-      radius: 60,
-      backgroundImage: url == null ? null : CachedNetworkImageProvider(url),
-      // Not `setState` straight from the callback: it fires during the image
-      // resolution that the build kicked off, so it has to wait for the frame
-      // to finish before asking for another one.
-      onBackgroundImageError: url == null
-          ? null
-          : (_, __) => WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) setState(() => _avatarFailed = true);
-              }),
-      child: url == null ? const Icon(Icons.person, size: 60) : null,
-    );
-  }
-
-  /// A message and a way to try again.
-  ///
-  /// Retry rather than only an apology: every failure that reaches here —
-  /// a denied read during the cold-launch auth window, an offline `count()` —
-  /// is one that typically succeeds a moment later.
-  Widget _failure(BuildContext context, String message) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 24),
-      child: Column(
-        children: [
-          Text(message, textAlign: TextAlign.center),
-          const SizedBox(height: 12),
-          TextButton(
-            onPressed: _load,
-            child: Text(AppLocalizations.of(context).retry),
-          ),
-        ],
-      ),
     );
   }
 }
