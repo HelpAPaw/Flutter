@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
+import 'package:help_a_paw/src/services/app_preferences_service.dart';
 import 'package:help_a_paw/src/services/auth_service.dart';
 import 'package:help_a_paw/src/services/public_profile_service.dart';
 import 'package:help_a_paw/src/services/user_stats_service.dart';
@@ -245,6 +246,9 @@ class _ProfilePageState extends State<ProfilePage> {
       // readable only by its owner, so without this the new avatar would be
       // visible to nobody but the person who just chose it.
       await PublicProfileService.setPhotoUrl(user.uid, photoUrl);
+      // Tell the launch-time mirror it has nothing to do, or it would write
+      // this identical URL again on the next start.
+      await AppPreferencesService().setPhotoMirrored(user.uid, photoUrl);
 
       await user.reload();
 
@@ -461,17 +465,17 @@ class _ProfilePageState extends State<ProfilePage> {
                         cards: [
                           StatCard(
                             icon: Icons.pin_drop,
-                            value: stats.signalsPosted.toString(),
+                            value: stats.signalsPosted,
                             label: l10n.signals,
                           ),
                           StatCard(
                             icon: Icons.volunteer_activism,
-                            value: stats.signalsOwned.toString(),
+                            value: stats.signalsOwned,
                             label: l10n.helpingNow,
                           ),
                           StatCard(
                             icon: Icons.comment,
-                            value: stats.commentsPosted.toString(),
+                            value: stats.commentsPosted,
                             label: l10n.comments,
                           ),
                         ],

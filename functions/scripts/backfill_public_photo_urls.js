@@ -70,7 +70,8 @@ function isAllowedPhotoUrl(url, uid) {
       "\\.jpg\\?.*$"
   );
   return (
-    storage.test(url) || /^https:\/\/lh3\.googleusercontent\.com\/[^ ]*$/.test(url)
+    storage.test(url) ||
+    /^https:\/\/lh[0-9]+\.googleusercontent\.com\/[^ ]*$/.test(url)
   );
 }
 

@@ -37,6 +37,14 @@ class _UserProfilePageState extends State<UserProfilePage> {
   PublicProfile? _profile;
   UserStats? _stats;
 
+  /// Set when the avatar URL resolved to something the image loader could not
+  /// fetch — a deleted Storage object, a rotated download token.
+  ///
+  /// Without it the person icon is chosen on the *presence* of a URL rather
+  /// than on whether it loaded, so a broken avatar renders as a blank grey
+  /// disc with nothing to say why.
+  bool _avatarFailed = false;
+
   /// Why the identity half failed, already reported and phrased for the user.
   String? _profileError;
 
@@ -52,12 +60,17 @@ class _UserProfilePageState extends State<UserProfilePage> {
   @override
   void initState() {
     super.initState();
-    _load();
+    _load(initial: true);
   }
 
-  Future<void> _load() async {
+  /// [initial] only on the first load, from `initState`.
+  ///
+  /// A pull-to-refresh must NOT set `_loading`: `build` swaps the whole
+  /// `RefreshIndicator` for a full-page spinner while that flag is up, which
+  /// tears the indicator — and the gesture driving it — out mid-pull.
+  Future<void> _load({bool initial = false}) async {
     setState(() {
-      _loading = true;
+      if (initial) _loading = true;
       _profileError = null;
       _statsError = null;
     });
@@ -104,6 +117,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
     setState(() {
       _loading = false;
       _profile = profile;
+      _avatarFailed = false;
       _stats = stats;
       _profileError = profileError;
       _statsError = statsError;
@@ -153,15 +167,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
     return Column(
       children: [
         const SizedBox(height: 20),
-        CircleAvatar(
-          radius: 60,
-          backgroundImage: profile?.photoUrl != null
-              ? CachedNetworkImageProvider(profile!.photoUrl!)
-              : null,
-          child: profile?.photoUrl == null
-              ? const Icon(Icons.person, size: 60)
-              : null,
-        ),
+        _avatar(profile),
         const SizedBox(height: 24),
         Text(
           profile?.name ?? l10n.someone,
@@ -177,17 +183,17 @@ class _UserProfilePageState extends State<UserProfilePage> {
             cards: [
               StatCard(
                 icon: Icons.pin_drop,
-                value: stats.signalsPosted.toString(),
+                value: stats.signalsPosted,
                 label: l10n.signals,
               ),
               StatCard(
                 icon: Icons.volunteer_activism,
-                value: stats.signalsOwned.toString(),
+                value: stats.signalsOwned,
                 label: l10n.helpingNow,
               ),
               StatCard(
                 icon: Icons.comment,
-                value: stats.commentsPosted.toString(),
+                value: stats.commentsPosted,
                 label: l10n.comments,
               ),
             ],
@@ -195,6 +201,23 @@ class _UserProfilePageState extends State<UserProfilePage> {
         else if (_statsError != null)
           _failure(context, _statsError!),
       ],
+    );
+  }
+
+  Widget _avatar(PublicProfile? profile) {
+    final url = _avatarFailed ? null : profile?.photoUrl;
+    return CircleAvatar(
+      radius: 60,
+      backgroundImage: url == null ? null : CachedNetworkImageProvider(url),
+      // Not `setState` straight from the callback: it fires during the image
+      // resolution that the build kicked off, so it has to wait for the frame
+      // to finish before asking for another one.
+      onBackgroundImageError: url == null
+          ? null
+          : (_, __) => WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) setState(() => _avatarFailed = true);
+              }),
+      child: url == null ? const Icon(Icons.person, size: 60) : null,
     );
   }
 

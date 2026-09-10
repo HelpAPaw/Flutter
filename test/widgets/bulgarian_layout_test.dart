@@ -218,14 +218,14 @@ void main() {
                 child: StatCardRow(
                   cards: [
                     StatCard(
-                        icon: Icons.pin_drop, value: '128', label: l10n.signals),
+                        icon: Icons.pin_drop, value: 128, label: l10n.signals),
                     StatCard(
                         icon: Icons.volunteer_activism,
-                        value: '12',
+                        value: 12,
                         label: l10n.helpingNow),
                     StatCard(
                         icon: Icons.comment,
-                        value: '1024',
+                        value: 1024,
                         label: l10n.comments),
                   ],
                 ),

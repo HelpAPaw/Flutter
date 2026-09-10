@@ -1,10 +1,19 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/signal_status.dart';
+import '../utils/error_text.dart';
 import 'app_preferences_service.dart';
 import 'public_profile_service.dart';
 
 /// One account's contribution statistics (master spec §3.5.1).
+///
+/// **Every field is nullable, and null means "could not be read", never
+/// zero.** The three come from three independent queries and one of them can
+/// fail on its own — most likely `signalsOwned`, whose composite index is the
+/// newest thing here and the one that will not exist yet if an app release
+/// ever lands before an index deploy. Failing the whole set together would
+/// blank out two numbers that were read perfectly well, on the user's own
+/// profile as much as anyone else's.
 class UserStats {
   const UserStats({
     required this.signalsPosted,
@@ -13,15 +22,20 @@ class UserStats {
   });
 
   /// Signals this account has ever reported.
-  final int signalsPosted;
+  final int? signalsPosted;
 
   /// Signals this account is responsible for *right now* — the one stat here
   /// that goes down as well as up, because it describes a present commitment
   /// rather than a past contribution.
-  final int signalsOwned;
+  final int? signalsOwned;
 
   /// Comments this account has written.
-  final int commentsPosted;
+  final int? commentsPosted;
+
+  /// Whether every number came back. False when at least one query failed and
+  /// its tile is showing a dash.
+  bool get isComplete =>
+      signalsPosted != null && signalsOwned != null && commentsPosted != null;
 }
 
 /// Computes the numbers shown on a profile, for any uid.
@@ -45,17 +59,18 @@ class UserStatsService {
   /// and awaited in turn they made the stats row wait out three round trips to
   /// show one line of numbers.
   ///
-  /// Throws if any read fails. `count()` is a **server-only** aggregation — it
-  /// does not fall back to the offline cache — so any connectivity blip lands
-  /// here, and a caller must decide whether to retry or show an error rather
-  /// than be handed a plausible-looking zero.
+  /// **Never throws, and never reports a failed read as zero.** `count()` is a
+  /// server-only aggregation — it does not fall back to the offline cache — so
+  /// any connectivity blip fails one of these, and a zero is a real answer that
+  /// must not be confused with an unread one. A query that fails leaves its
+  /// field null; [UserStats.isComplete] says whether any did.
   static Future<UserStats> forUser(String uid, {PublicProfile? profile}) async {
     final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
 
     final results = await Future.wait([
-      _signalsPosted(uid, userRef, profile),
-      _signalsOwned(userRef),
-      _commentsPosted(userRef),
+      _orNull(() => _signalsPosted(uid, userRef, profile), 'signalsPosted'),
+      _orNull(() => _signalsOwned(userRef), 'signalsOwned'),
+      _orNull(() => _commentsPosted(userRef), 'commentsPosted'),
     ]);
 
     return UserStats(
@@ -63,6 +78,18 @@ class UserStatsService {
       signalsOwned: results[1],
       commentsPosted: results[2],
     );
+  }
+
+  /// Runs one stat query, turning a failure into a null rather than letting it
+  /// take the other two down with it — `Future.wait` discards every result once
+  /// any of them rejects.
+  static Future<int?> _orNull(Future<int> Function() read, String what) async {
+    try {
+      return await read();
+    } catch (error, stack) {
+      reportError(error, stack, where: 'userStats.$what');
+      return null;
+    }
   }
 
   /// How many signals this account has reported (master spec §3.5.1).

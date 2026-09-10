@@ -74,16 +74,33 @@ class PublicProfileService {
   /// since before anything rendered another user's avatar; this is the field
   /// that finally points at it.
   ///
-  /// A null or blank URL is a no-op, not a delete: every caller here is
-  /// mirroring a value it just read from Auth, and an account that has no photo
-  /// yet must not clear one written by a different sign-in provider. Account
-  /// deletion removes the whole document through the Admin SDK.
+  /// **A null or blank URL DELETES the field.** Firebase Auth's `photoURL` is
+  /// the only source an avatar has, so a null there means the person removed
+  /// their picture — and the copy is the one every *other* user sees, which is
+  /// exactly the copy that must not outlive it. This used to be a no-op, which
+  /// left a deleted avatar world-readable indefinitely.
   ///
   /// Over-long URLs are dropped rather than truncated — a clipped URL is not a
   /// shorter URL, it is a broken one, and writing it would fail the rules
-  /// anyway.
+  /// anyway. Dropped, not treated as a removal: the person still has an avatar,
+  /// we just cannot store the address of it.
   static Future<void> setPhotoUrl(String uid, String? url) async {
-    if (url == null || url.isEmpty || url.length > maxPhotoUrlLength) return;
+    if (url != null && url.length > maxPhotoUrlLength) return;
+
+    if (url == null || url.isEmpty) {
+      // `update`, not `set(merge:)`: a merge carrying only a delete sentinel
+      // would CREATE an empty document for an account that has no profile yet,
+      // which the rules refuse (`hasAny`) — so every account without an avatar
+      // would issue a denied write. `update` says "clear this on the document
+      // that exists", and its absence is the answer, not an error.
+      try {
+        await _profiles.doc(uid).update({'photoUrl': FieldValue.delete()});
+      } on FirebaseException catch (e) {
+        if (e.code != 'not-found') rethrow;
+      }
+      return;
+    }
+
     await _profiles.doc(uid).set(
       {'photoUrl': url},
       SetOptions(merge: true),

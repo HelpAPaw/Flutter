@@ -1,4 +1,3 @@
-
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -130,8 +129,11 @@ class AuthService {
   /// provider photo costs one write. Best-effort — never fails a sign-in.
   static Future<void> mirrorProviderPhoto(User? user) async {
     if (user == null || user.isAnonymous) return;
-    final url = user.photoURL;
-    if (url == null || url.isEmpty) return;
+
+    // An empty string, not null, when the account has no photo: the cache has
+    // to be able to record "this account's avatar is *gone*" as distinctly as
+    // it records a URL, or removing an avatar would be retried every launch.
+    final url = user.photoURL ?? '';
 
     final prefs = AppPreferencesService();
     if (prefs.isPhotoMirroredFor(user.uid, url)) return;
@@ -139,12 +141,25 @@ class AuthService {
     try {
       // Time-boxed for the same reason the name is: callers await this on the
       // interactive sign-in path, and an avatar is not worth holding a tap for.
-      await PublicProfileService.setPhotoUrl(user.uid, url)
+      await PublicProfileService.setPhotoUrl(user.uid, url.isEmpty ? null : url)
           .timeout(const Duration(seconds: 10));
       await prefs.setPhotoMirrored(user.uid, url);
       debugPrint('Mirrored provider photo to publicProfiles');
+    } on FirebaseException catch (e) {
+      // A refusal is a VERDICT, not a blip, so record it as handled: an avatar
+      // on a host `isValidProfilePhotoUrl()` does not accept would otherwise
+      // be re-submitted and re-denied on every single launch, forever, with
+      // nothing but a debugPrint to show for it.
+      if (e.code == 'permission-denied') {
+        await prefs.setPhotoMirrored(user.uid, url);
+        debugPrint(
+            'Provider photo refused by rules, not retrying: ${user.photoURL}');
+        return;
+      }
+      debugPrint('Could not mirror provider photo: $e');
     } catch (e) {
-      // Not recorded as mirrored, so the next launch tries again.
+      // Anything else — offline, timeout — is transient. Not recorded, so the
+      // next launch tries again.
       debugPrint('Could not mirror provider photo: $e');
     }
   }

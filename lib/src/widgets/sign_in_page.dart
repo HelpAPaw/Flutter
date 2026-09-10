@@ -283,7 +283,11 @@ class _SignInPageState extends State<SignInPage> {
         await AuthService().mergeFcmTokens(existingUser.uid, anonTokens);
         // No-op if this account already has a name of its own (R5-001).
         await AuthService.adoptProviderDisplayName(existingUser, result);
-        await AuthService.mirrorProviderPhoto(existingUser);
+        // Unawaited: a Firestore write never resolves while offline, so
+        // awaiting it would hold an already-authenticated user on the sign-in
+        // screen for the full 10s timeout over a cosmetic mirror. The write
+        // survives as a queued local mutation either way.
+        unawaited(AuthService.mirrorProviderPhoto(existingUser));
         unawaited(NotificationService().onUserLogin());
       }
       if (context.mounted) {
@@ -334,7 +338,7 @@ class _SignInPageState extends State<SignInPage> {
             // Before navigating: Profile Completion pre-fills from the Auth
             // record, and linking doesn't carry Google's name over (R5-001).
             await AuthService.adoptProviderDisplayName(linked, result);
-            await AuthService.mirrorProviderPhoto(linked);
+            unawaited(AuthService.mirrorProviderPhoto(linked));
             if (context.mounted) await _onCredentialLinked(context, linked);
           }
         } on FirebaseAuthException catch (e) {
@@ -349,7 +353,7 @@ class _SignInPageState extends State<SignInPage> {
         final result =
             await FirebaseAuth.instance.signInWithCredential(credential);
         await AuthService.adoptProviderDisplayName(result.user, result);
-        await AuthService.mirrorProviderPhoto(result.user);
+        unawaited(AuthService.mirrorProviderPhoto(result.user));
         final isNewUser = result.additionalUserInfo?.isNewUser ?? false;
         if (context.mounted) {
           if (isNewUser) {

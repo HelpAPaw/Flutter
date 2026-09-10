@@ -368,6 +368,11 @@ service cloud.firestore {
     // URL on that host is a Google-hosted image, which is the property being
     // bought here.
     //
+    // `lh[0-9]+`, not `lh3` alone: Google has served account photos from lh3
+    // through lh6 over the years and older accounts still carry the earlier
+    // hosts. Pinning the digit would deny those avatars forever, and the denial
+    // is invisible — the mirror is best-effort and only `debugPrint`s.
+    //
     // Absent passes, for the same reason as the name: a name-only write must
     // not have to restate the avatar.
     function isValidProfilePhotoUrl(userId) {
@@ -377,7 +382,7 @@ service cloud.firestore {
                  && request.resource.data.photoUrl.matches(
                       'https://firebasestorage\\.googleapis\\.com/v0/b/[a-zA-Z0-9._-]+/o/profile_photos%2F'
                       + userId + '\\.jpg\\?.*'
-                      + '|https://lh3\\.googleusercontent\\.com/[^ ]*'));
+                      + '|https://lh[0-9]+\\.googleusercontent\\.com/[^ ]*'));
     }
 
     // The SIGNAL OWNER's coordination powers (master spec 4.5, 4.2, 5.2): the

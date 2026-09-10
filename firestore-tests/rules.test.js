@@ -22,6 +22,7 @@ import {
   addDoc,
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -1326,13 +1327,43 @@ describe('publicProfiles', () => {
     );
   });
 
-  it('accepts a Google account photo', async () => {
+  // lh3 through lh6 have all served Google account photos over the years, and
+  // older accounts still carry the earlier hosts. Pinning the digit would deny
+  // those avatars forever, invisibly — the mirror is best-effort.
+  it('accepts a Google account photo from any lh<n> host', async () => {
     const db = testEnv.authenticatedContext(OWNER).firestore();
-    await assertSucceeds(
+    for (const host of ['lh3', 'lh4', 'lh5', 'lh6']) {
+      await assertSucceeds(
+        setDoc(doc(db, 'publicProfiles', OWNER), {
+          name: 'Ivan',
+          photoUrl: `https://${host}.googleusercontent.com/a/ACg8ocKq1w=s96-c`,
+        })
+      );
+    }
+    // Still a closed list: a lookalike host is not a Google photo.
+    await assertFails(
       setDoc(doc(db, 'publicProfiles', OWNER), {
         name: 'Ivan',
-        photoUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKq1w=s96-c',
+        photoUrl: 'https://lh3.googleusercontent.com.evil.example/a/x',
       })
+    );
+  });
+
+  // Removing an avatar has to reach the copy every OTHER user sees, or a
+  // deleted picture stays world-readable indefinitely.
+  it('lets the owner clear their avatar', async () => {
+    await seedProfile({
+      name: 'Ivan',
+      photoUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKq1w=s96-c',
+    });
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    await assertSucceeds(
+      updateDoc(doc(db, 'publicProfiles', OWNER), { photoUrl: deleteField() })
+    );
+
+    const other = testEnv.authenticatedContext(OTHER).firestore();
+    await assertFails(
+      updateDoc(doc(other, 'publicProfiles', OWNER), { photoUrl: deleteField() })
     );
   });
 

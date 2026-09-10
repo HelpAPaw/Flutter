@@ -362,13 +362,24 @@ dynamically. `list` is denied so the user base can't be enumerated.
 handed to an image loader on every other viewer's device, so an unrestricted URL would
 let one user aim every viewer's phone at a resource of their choosing. `firestore.rules`
 accepts exactly two shapes: a Firebase Storage download URL under
-`profile_photos%2F{the caller's own uid}.jpg`, and any `lh3.googleusercontent.com` URL
-(a Google account photo, whose path carries an opaque account id and cannot be pinned).
+`profile_photos%2F{the caller's own uid}.jpg`, and any `lh[0-9]+.googleusercontent.com`
+URL (a Google account photo, whose path carries an opaque account id and cannot be
+pinned — and whose host digit has ranged over lh3–lh6 across the years, so pinning it
+would deny older accounts' avatars forever and *invisibly*).
 Firebase Auth's `photoURL` is readable only by its owner, which is why a copy has to
 live here at all; `AuthService.mirrorProviderPhoto` writes it on sign-in and launch
 (gated by a local write-avoidance cache, the same shape as `syncTestMode`'s), the profile
 screen writes it on upload, and `functions/scripts/backfill_public_photo_urls.js` fills
 it in for the existing installed base.
+
+**A removed avatar is removed here too.** `PublicProfileService.setPhotoUrl(uid, null)`
+deletes the field — through `update`, not `set(merge:)`, because a merge carrying only a
+delete sentinel would *create* an empty document for an account with no profile yet,
+which the rules refuse. Auth's `photoURL` is an avatar's only source, so a null there
+means the person took their picture down, and this copy is the one everybody else can
+see. A rules refusal is cached as a permanent verdict rather than retried: a URL on a
+host the rule does not accept would otherwise be re-submitted and re-denied on every
+launch, forever, with nothing but a `debugPrint`.
 
 **Both client fields are optional and validated only when present**, because the name and
 the avatar are written by two independent merge-writes; a create must carry at least one
@@ -1350,16 +1361,25 @@ redirects to `/profile`, done in the router rather than at each tap site so a li
 yourself behaves the same however it was reached.
 
 **Reaching it.** `UserNameLink` (`user_name_link.dart`) renders a resolved display name
-inside a sentence and makes the line tappable. Every other-user name on the signal screen
-goes through `_actorText`, which is now this widget — the reporter line, every timeline
-row's actor, the ownership hand-over sentence, and (through the `nameOf` adapter) the
-owner row and pending offers in `SignalOwnerBlock` — plus the "hidden by" line in the
-moderation tab. The *name* is coloured and underlined (`colorScheme.secondary`, the same
-treatment `LinkifiedText` gives a URL); the *whole line* is the tap target, because the
-name alone is a sub-48dp target on a dense meta line. The name's position inside the
-sentence comes from building it around a NUL sentinel, not from searching for the name in
-the result — a name can be a substring of the words around it, and the localized
-templates place it wherever the translation wants.
+inside a sentence and makes it tappable. Every other-user name on the signal screen goes
+through `_actorText`, which is now this widget — the reporter line, every timeline row's
+actor, the ownership hand-over sentence, and (through the `nameOf` adapter) the owner row
+and pending offers in `SignalOwnerBlock` — plus the "hidden by" line in the moderation
+tab, and every posted `@`-mention inside a comment (`LinkifiedText.onMentionTap`;
+`MentionToken` already carried the uid for this). The name is coloured and underlined
+(`colorScheme.secondary`, the same treatment `LinkifiedText` gives a URL). Its position
+inside the sentence comes from building it around a NUL sentinel, not from searching for
+the name in the result — a name can be a substring of the words around it, and the
+localized templates place it wherever the translation wants.
+
+`NameTapTarget` decides how much of the line is the target. `line` is the default: the
+name alone is a sub-48dp target on a dense meta row, and a date riding along in
+"Ivan · 12 August" opens the same profile, which is the harmless direction to be wrong
+in. `name` is for a line **inside something already tappable** — the moderation Hidden
+tab's subtitle sits in a `ListTile` whose own tap restores the signal, and a full-width
+target there is not a bigger hit area but a hole in the row's own one. A composer draft's
+mention likewise gets no handler at all, and therefore no underline: the affordance has
+to keep meaning "this opens something".
 
 **Stats** (`user_stats_service.dart`, shared by both screens so the numbers cannot
 disagree). Three, and each one is a different kind of number:
@@ -1369,6 +1389,12 @@ disagree). Three, and each one is a different kind of number:
 | Signals reported | `publicProfiles.signalsPosted`, live `count()` fallback | see above |
 | Helping now | `count()` on `signalOwner == user && status in openCodes` | under-counts signals created before ownership existed, whose `signalOwner` is *absent* and means the reporter — Firestore cannot query for an absent field, and the gap only shrinks |
 | Comments posted | `collectionGroup('comments').where('author')` `count()` | over-counts accounts old enough to have written `status_change` system comments before events were split out of `comments` (§4.6) |
+
+**Each number fails on its own.** `UserStats`' fields are nullable and a failed query
+leaves its field null, rendered as a dash — never as `0`, which is a real answer here.
+`Future.wait` discards every result once any of them rejects, so a single failure (most
+likely `signalsOwned`, whose composite index is the newest thing here) would otherwise
+blank two numbers that were read perfectly well.
 
 "Helping now" is a **live query, deliberately**, unlike the other two: they are past
 contributions and must survive the signal disappearing, while this one is a present

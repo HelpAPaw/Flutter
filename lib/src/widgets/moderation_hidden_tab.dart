@@ -171,6 +171,12 @@ class _ModerationHiddenTabState extends State<ModerationHiddenTab> {
       ].join(' · '),
       fallback: l10n.unknown,
       onTap: (uid) => context.push(Routes.userProfile(uid)),
+      // The name only. This line is the subtitle of a `ListTile` whose own tap
+      // opens the restore dialog, and a full-width target here would swallow
+      // it — a moderator reaching for the widest part of the row would land on
+      // a profile instead, usually their own, since they are generally the one
+      // who hid the signal.
+      tapTarget: NameTapTarget.name,
       style: style,
     );
   }

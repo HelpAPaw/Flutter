@@ -17,7 +17,14 @@ class StatCard extends StatelessWidget {
   });
 
   final IconData icon;
-  final String value;
+
+  /// The number, or null when the query behind it failed.
+  ///
+  /// Null renders as a dash rather than "0": a zero here is a real, meaningful
+  /// answer — nobody has reported anything yet — and showing one for a read
+  /// that did not happen states something false about the person.
+  final int? value;
+
   final String label;
 
   @override
@@ -34,7 +41,7 @@ class StatCard extends StatelessWidget {
             Icon(icon, size: 32, color: Theme.of(context).colorScheme.primary),
             const SizedBox(height: 8),
             Text(
-              value,
+              value?.toString() ?? '—',
               style: Theme.of(context)
                   .textTheme
                   .headlineSmall

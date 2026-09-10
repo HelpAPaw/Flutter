@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show SemanticsAction;
 import 'package:flutter_test/flutter_test.dart';
@@ -18,6 +19,7 @@ void main() {
     String Function(String name)? sentence,
     String fallback = 'Someone',
     void Function(String uid)? onTap,
+    NameTapTarget tapTarget = NameTapTarget.line,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -30,6 +32,7 @@ void main() {
             sentence: sentence ?? (n) => '$n · 12 August 2026',
             fallback: fallback,
             onTap: onTap,
+            tapTarget: tapTarget,
           ),
         ),
       ),
@@ -150,6 +153,70 @@ void main() {
     });
 
     expect(spans, ['Прехвърли сигнала на Иван, тоест на ', 'Иван', '']);
+  });
+
+  group('NameTapTarget.name', () {
+    // The Hidden tab's row is a ListTile whose own onTap restores the signal.
+    // A full-width target on its subtitle would swallow that: a moderator
+    // reaching for the widest part of the row would get a profile instead.
+    testWidgets('leaves the enclosing row its tap', (tester) async {
+      var rowTapped = false;
+      String? nameTapped;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: ListTile(
+              onTap: () => rowTapped = true,
+              subtitle: UserNameLink(
+                uid: 'ivan-uid',
+                name: Future.value('Ivan'),
+                sentence: (n) => '12 August · Hidden by $n',
+                fallback: 'Someone',
+                onTap: (uid) => nameTapped = uid,
+                tapTarget: NameTapTarget.name,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // No wrapper of its own — the row keeps both the gesture and the
+      // semantics for everything but the name run itself.
+      expect(
+        find.descendant(
+          of: find.byType(UserNameLink),
+          matching: find.byType(GestureDetector),
+        ),
+        findsNothing,
+      );
+
+      await tester.tap(find.byType(ListTile));
+      expect(rowTapped, isTrue, reason: 'the row must still restore');
+      expect(nameTapped, isNull);
+    });
+
+    testWidgets('but the name run still opens the profile', (tester) async {
+      String? tapped;
+      await pump(
+        tester,
+        uid: 'ivan-uid',
+        name: Future.value('Ivan'),
+        onTap: (uid) => tapped = uid,
+        tapTarget: NameTapTarget.name,
+      );
+      await tester.pumpAndSettle();
+
+      final span = (tester.widget<Text>(find.byType(Text)).textSpan! as TextSpan)
+          .children!
+          .cast<TextSpan>()
+          .firstWhere((s) => s.text == 'Ivan');
+      (span.recognizer! as TapGestureRecognizer).onTap!();
+      expect(tapped, 'ivan-uid');
+    });
   });
 
   testWidgets('announces itself as a button with a tap hint', (tester) async {
