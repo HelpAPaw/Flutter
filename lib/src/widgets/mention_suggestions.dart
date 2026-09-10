@@ -129,25 +129,35 @@ class MentionSuggestions extends StatelessWidget {
 /// Up to two initials for [name], the way a contact list does it.
 ///
 /// First letter of the first word, plus the first letter of the second — one
-/// letter when that is all there is. **Whitespace is the only separator**: a
-/// name like `milen.danchev.marinov` is one word and yields `M`. Splitting on
-/// dots would read better for exactly the accounts whose name is an email local
-/// part (§14) and worse for everyone who writes `St. Petrov` or ends a title
-/// with a full stop, and guessing which is which from punctuation is not
-/// something this can get right.
+/// letter when that is all there is.
+///
+/// **Whitespace first, dots only as a fallback.** A great many accounts here
+/// have no chosen display name and carry their email local part instead
+/// (§14, the `publicProfiles` gap), so `milen.danchev.marinov` is a real and
+/// common shape that whitespace alone reduces to a single `M`. Splitting on
+/// dots *unconditionally* would be worse, because it would take `St. Petrov`
+/// apart at the abbreviation and answer `SP`… by the wrong route, and a title
+/// ending in a full stop the same way. Trying dots only when whitespace found
+/// nothing keeps every spaced name — including those two — on the ordinary
+/// path, and reaches for punctuation exactly where there is no other signal.
 ///
 /// Taken with `characters`, not `substring(0, 1)`, so a name beginning with an
 /// emoji or any non-BMP letter is not cut through the middle of a surrogate
 /// pair and rendered as a replacement glyph.
 String mentionInitials(String name) {
-  final words = name.trim().split(RegExp(r'\s+'))
-    ..removeWhere((word) => word.characters.isEmpty);
-  if (words.isEmpty) return '?';
-  return words
+  final spaced = _splitOn(name, RegExp(r'\s+'));
+  final parts = spaced.length >= 2 ? spaced : _splitOn(name, RegExp(r'[\s.]+'));
+  if (parts.isEmpty) return '?';
+  return parts
       .take(2)
-      .map((word) => word.characters.first.toUpperCase())
+      .map((part) => part.characters.first.toUpperCase())
       .join();
 }
+
+List<String> _splitOn(String name, Pattern separator) => [
+      for (final part in name.trim().split(separator))
+        if (part.isNotEmpty) part,
+    ];
 
 /// The round initials standing in for a face.
 ///

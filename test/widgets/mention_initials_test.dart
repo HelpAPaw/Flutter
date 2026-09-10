@@ -13,9 +13,25 @@ void main() {
 
   test('falls back to one letter for a single-word name', () {
     expect(mentionInitials('Ana'), 'A');
-    // The email-local-part names the publicProfiles gap leaves behind: one
-    // word, because whitespace is the only separator.
-    expect(mentionInitials('milen.danchev.marinov'), 'M');
+  });
+
+  // The email-local-part names the publicProfiles gap leaves behind are a real
+  // and common shape, and whitespace alone reduces them to a single letter.
+  test('tries dots when whitespace found only one word', () {
+    expect(mentionInitials('milen.danchev.marinov'), 'MD');
+    expect(mentionInitials('ana.petrova'), 'AP');
+  });
+
+  // The reason the dot split is a FALLBACK and not the rule: these have a
+  // space, so they never reach it, and the abbreviation stays intact.
+  test('a spaced name never reaches the dot split', () {
+    expect(mentionInitials('St. Petrov'), 'SP');
+    expect(mentionInitials('J. R. Tolkien'), 'JR');
+  });
+
+  test('answers one letter when neither separator finds a second word', () {
+    expect(mentionInitials('Ana.'), 'A');
+    expect(mentionInitials('...'), '?');
   });
 
   test('uppercases, including Cyrillic', () {

@@ -1790,8 +1790,11 @@ full-width child sat left — so the page stopped centring half way down.
   `cardTheme` is elevation 0 and surface tint is off throughout. Each row leads with up
   to **two initials** on a `secondaryContainer` disc (`mentionInitials`): there are no
   avatars to show, since `publicProfiles` stores a name and nothing else, and initials
-  are the only thing per row the data can differ on. Whitespace is the only separator,
-  so an email-local-part name (§14) yields one letter rather than a guess.
+  are the only thing per row the data can differ on. Whitespace is the separator, with
+  **dots tried only when whitespace found a single word** — the email-local-part names
+  the `publicProfiles` gap leaves behind (§14) are a common shape that would otherwise
+  collapse to one letter, while splitting on dots unconditionally would take `St. Petrov`
+  apart at the abbreviation. A spaced name never reaches the fallback.
 
   **The suggestion list caps itself against the window height, not the body height.** A
   `Scaffold` strips `viewInsets` from its body's `MediaQuery`, so nothing inside the body
