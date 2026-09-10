@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -12,6 +11,7 @@ import 'package:help_a_paw/src/services/moderation_service.dart';
 import 'package:help_a_paw/src/services/notification_inbox_service.dart';
 import 'package:help_a_paw/src/services/notification_service.dart';
 import 'package:help_a_paw/src/services/share_service.dart';
+import 'package:help_a_paw/src/widgets/user_avatar.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class HomeRouteDrawer extends StatefulWidget {
@@ -134,13 +134,9 @@ class _HomeRouteDrawerState extends State<HomeRouteDrawer> {
                   children: [
                     ListTile(
                       enableFeedback: true,
-                      leading: CircleAvatar(
-                        backgroundImage: user?.photoURL != null
-                            ? CachedNetworkImageProvider(user!.photoURL!)
-                            : null,
-                        child: user?.photoURL == null
-                            ? const Icon(Icons.account_circle)
-                            : null,
+                      leading: UserAvatar(
+                        url: user?.photoURL,
+                        fallbackIcon: Icons.account_circle,
                       ),
                       onTap: () => {
                         context.push(Routes.profile),

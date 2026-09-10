@@ -41,6 +41,7 @@ import 'help_tag_picker_sheet.dart';
 import 'report_dialog.dart';
 import 'update_note_dialog.dart';
 import 'urgency_picker.dart';
+import 'user_name_link.dart';
 import '../models/moderation_target.dart';
 import '../models/removed_signal.dart';
 import '../models/report_reason.dart';
@@ -1570,7 +1571,11 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       icon: Icons.chat_bubble_outline,
       iconBackground: Theme.of(context).colorScheme.surfaceContainerHigh,
       iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
-      sentence: LinkifiedText(entry.text ?? '', mentions: entry.mentions),
+      sentence: LinkifiedText(
+        entry.text ?? '',
+        mentions: entry.mentions,
+        onMentionTap: _openUserProfile,
+      ),
       actorId: entry.actorId,
       date: _formatDate(entry, dateFormat),
       isLast: isLast,
@@ -1676,7 +1681,13 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   }
 
   /// Resolves [uid] to a display name through the per-screen memo and renders
-  /// [sentence] around it.
+  /// [sentence] around it, with the name itself opening that person's profile.
+  ///
+  /// **The single funnel for every other-user name on this screen** — the
+  /// reporter line, every timeline row's actor, the ownership hand-over
+  /// sentence, and (through [_nameWidget]) the owner row and pending offers in
+  /// [SignalOwnerBlock]. That is what makes names tappable everywhere at once
+  /// rather than in the four places somebody remembered.
   ///
   /// [maxLines] for the places the name shares a row with the date: it is
   /// user-supplied and capped at 100 chars, so it has to shrink rather than
@@ -1689,29 +1700,24 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     TextAlign? textAlign,
     int? maxLines,
   }) {
-    return FutureBuilder<String?>(
-      future: _nameFor(uid),
-      builder: (context, snapshot) {
-        // Nothing while the lookup is in flight. `snapshot.data` is null until
-        // it completes, so rendering unconditionally paints the fallback first
-        // and then flips to the real name — and since the created row now opens
-        // every signal, that made "Unknown reported this signal" flash on every
-        // open. On completion it always renders, falling back to [fallback].
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const SizedBox.shrink();
-        }
-        final name =
-            (snapshot.data?.isNotEmpty ?? false) ? snapshot.data! : fallback;
-        return Text(
-          sentence(name),
-          style: style,
-          textAlign: textAlign,
-          maxLines: maxLines,
-          overflow: maxLines == null ? null : TextOverflow.ellipsis,
-        );
-      },
+    return UserNameLink(
+      uid: uid,
+      name: _nameFor(uid),
+      sentence: sentence,
+      fallback: fallback,
+      onTap: _openUserProfile,
+      style: style,
+      textAlign: textAlign,
+      maxLines: maxLines,
     );
   }
+
+  /// Opens somebody's public profile.
+  ///
+  /// `push`, not `go`: the profile is a detour from the signal, and the reader
+  /// is expected back. Tapping your own name lands on the editable profile
+  /// instead — the route redirects, so this does not have to know.
+  void _openUserProfile(String uid) => context.push(Routes.userProfile(uid));
 
   @override
   void dispose() {
@@ -1884,7 +1890,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     const maxAttempts = 4;
     for (var attempt = 1; ; attempt++) {
       try {
-        return await PublicProfileService.readName(uid);
+        return (await PublicProfileService.read(uid)).name;
       } catch (_) {
         if (attempt == maxAttempts || !mounted) rethrow;
         await Future.delayed(const Duration(milliseconds: 500));

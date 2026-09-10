@@ -918,6 +918,15 @@ class AppLocalizationsBg extends AppLocalizations {
   String get errorLoadingStatistics => 'Статистиката не можа да се зареди.';
 
   @override
+  String get helpingNow => 'Помага сега';
+
+  @override
+  String get errorLoadingProfile => 'Профилът не можа да се зареди.';
+
+  @override
+  String get viewProfile => 'Виж профила';
+
+  @override
   String get saveChanges => 'Запази промените';
 
   @override

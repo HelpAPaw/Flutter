@@ -1,13 +1,12 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
-import 'package:help_a_paw/src/services/app_preferences_service.dart';
 import 'package:help_a_paw/src/services/auth_service.dart';
 import 'package:help_a_paw/src/services/public_profile_service.dart';
+import 'package:help_a_paw/src/services/user_stats_service.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
@@ -18,6 +17,8 @@ import 'app_bar_title.dart';
 import 'escape_leading.dart';
 import '../utils/error_text.dart';
 import 'page_width.dart';
+import 'stat_card.dart';
+import 'user_avatar.dart';
 import '../utils/profile_validators.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -39,8 +40,7 @@ class _ProfilePageState extends State<ProfilePage> {
   String _savedPhone = '';
 
   bool _isLoading = false;
-  int _signalsCount = 0;
-  int _commentsCount = 0;
+  UserStats? _stats;
 
   @override
   void initState() {
@@ -124,82 +124,34 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  /// Load the same three numbers the public profile shows, through the same
+  /// service.
+  ///
+  /// Shared rather than reimplemented here: two copies of "signals reported" is
+  /// how your own profile and everyone else's view of it end up disagreeing
+  /// about what the figure counts. What each number means, and where each one
+  /// is under- or over-counted, is documented on [UserStatsService].
   Future<void> _loadStatistics() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final userRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
-
     try {
-      // Two independent reads, so they overlap rather than queue. They used to
-      // be sequential awaits, which made the stats block wait out two round
-      // trips to show one row of numbers.
-      final results = await Future.wait([
-        _loadSignalsPosted(user.uid, userRef),
-        FirebaseFirestore.instance
-            .collectionGroup('comments')
-            .where('author', isEqualTo: userRef)
-            .count()
-            .get()
-            .then((snapshot) => snapshot.count ?? 0),
-      ]);
-
-      setState(() {
-        _signalsCount = results[0];
-        _commentsCount = results[1];
-      });
+      final stats = await UserStatsService.forUser(user.uid);
+      if (!mounted) return;
+      setState(() => _stats = stats);
     } catch (e, stack) {
       if (mounted) {
         final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(reportAndDescribe(l10n, e, stack: stack,
-                where: 'profile.loadStatistics', fallback: l10n.errorLoadingStatistics)),
+            content: Text(reportAndDescribe(l10n, e,
+                stack: stack,
+                where: 'profile.loadStatistics',
+                fallback: l10n.errorLoadingStatistics)),
           ),
         );
       }
     }
-  }
-
-  /// How many signals this account has reported (master spec §3.5.1).
-  ///
-  /// **A stored counter, not a query.** This used to be a live `count()` over
-  /// `signals` filtered by reporter, which quietly measured something else:
-  /// signals still *visible*. Every way a signal can leave that collection took
-  /// the credit with it — the reporter removing it (#68), a moderator hiding
-  /// it, and the ~6-month archive of §4.10 when it lands. §3.5.1 requires the
-  /// opposite: "these stats remain even when old cases are deleted or
-  /// archived". `handleSignalCreated` increments the counter once, at the
-  /// moment of reporting, and nothing decrements it.
-  ///
-  /// It lives on `publicProfiles/{uid}` because the rules there already limit
-  /// the client to the `name` field alone, so a server-written counter beside
-  /// it cannot be forged. `userCounters` was the obvious alternative and is
-  /// exactly wrong: that document *is* client-writable by design.
-  ///
-  /// **The fallback is the migration.** An account with no `signalsPosted`
-  /// predates the counter, so it falls back to the old live count rather than
-  /// showing a proud zero to someone who has reported for years. Drop the
-  /// fallback once the backfill has run everywhere — and note it under-reports
-  /// for exactly the accounts this change is meant to help, since a signal they
-  /// already removed is no longer there to count.
-  Future<int> _loadSignalsPosted(
-    String uid,
-    DocumentReference<Map<String, dynamic>> userRef,
-  ) async {
-    final profile = await FirebaseFirestore.instance
-        .collection('publicProfiles')
-        .doc(uid)
-        .get();
-    final stored = profile.data()?['signalsPosted'];
-    if (stored is int) return stored;
-
-    final legacy = await FirebaseFirestore.instance
-        .collection(AppPreferencesService().signalsCollectionName)
-        .where('reporter', isEqualTo: userRef)
-        .count()
-        .get();
-    return legacy.count ?? 0;
   }
 
   Future<void> _updateProfile() async {
@@ -219,14 +171,11 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       await user.updateDisplayName(displayName);
 
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .set({
-            'displayName': displayName,
-            'phone': _phoneController.text.trim(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'displayName': displayName,
+        'phone': _phoneController.text.trim(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
       // Mirror the new name to the world-readable public profile.
       await PublicProfileService.setName(user.uid, displayName);
@@ -247,8 +196,10 @@ class _ProfilePageState extends State<ProfilePage> {
         final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(reportAndDescribe(l10n, e, stack: stack,
-                where: 'profile.save', fallback: l10n.errorUpdatingProfile)),
+            content: Text(reportAndDescribe(l10n, e,
+                stack: stack,
+                where: 'profile.save',
+                fallback: l10n.errorUpdatingProfile)),
           ),
         );
       }
@@ -290,6 +241,14 @@ class _ProfilePageState extends State<ProfilePage> {
       final photoUrl = await ref.getDownloadURL();
 
       await user.updatePhotoURL(photoUrl);
+
+      // Through the mirror, so this screen does not own half of its contract
+      // (the timeout, the permission-denied handling, the write-avoidance
+      // cache) — but handing it the URL rather than the user, because
+      // `updatePhotoURL` has NOT refreshed the in-memory `User` yet and the
+      // mirror would read a stale null and publish "no avatar".
+      await AuthService.mirrorPhotoUrl(user.uid, photoUrl);
+
       await user.reload();
 
       if (mounted) {
@@ -304,8 +263,10 @@ class _ProfilePageState extends State<ProfilePage> {
         final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(reportAndDescribe(l10n, e, stack: stack,
-                where: 'profile.uploadAvatar', fallback: l10n.errorUploadingPhoto)),
+            content: Text(reportAndDescribe(l10n, e,
+                stack: stack,
+                where: 'profile.uploadAvatar',
+                fallback: l10n.errorUploadingPhoto)),
           ),
         );
       }
@@ -364,10 +325,10 @@ class _ProfilePageState extends State<ProfilePage> {
     return Scaffold(
       appBar: AppBar(
         leading: escapeLeading(
-            context,
-            label: AppLocalizations.of(context).back,
-            onLeave: () => context.popOrHome(),
-          ),
+          context,
+          label: AppLocalizations.of(context).back,
+          onLeave: () => context.popOrHome(),
+        ),
         title: AppBarTitle(l10n.profile),
         actions: [
           if (!_isEditing)
@@ -384,227 +345,203 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
         ],
       ),
-      body: PageWidth(child: user == null
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.account_circle, size: 80, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                  const SizedBox(height: 16),
-                  Text(l10n.pleaseSignInToViewProfile),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => context.push(Routes.signIn),
-                    child: Text(l10n.signIn),
-                  ),
-                ],
-              ),
-            )
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                children: [
-                  const SizedBox(height: 20),
-                  Stack(
+      body: PageWidth(
+          child: user == null
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      CircleAvatar(
-                        radius: 60,
-                        backgroundImage: user.photoURL != null
-                            ? CachedNetworkImageProvider(user.photoURL!)
-                            : null,
-                        child: user.photoURL == null
-                            ? const Icon(Icons.person, size: 60)
-                            : null,
+                      Icon(Icons.account_circle,
+                          size: 80,
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant),
+                      const SizedBox(height: 16),
+                      Text(l10n.pleaseSignInToViewProfile),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () => context.push(Routes.signIn),
+                        child: Text(l10n.signIn),
                       ),
-                      if (_isEditing)
-                        Positioned(
-                          bottom: 0,
-                          right: 0,
-                          child: CircleAvatar(
-                            backgroundColor: Theme.of(context).colorScheme.primary,
-                            child: IconButton(
-                              tooltip: l10n.changeProfilePhoto,
-                              icon: const Icon(Icons.camera_alt, color: Colors.white),  // theme-independent: over the avatar photo
-                              onPressed: _isLoading ? null : _pickAndUploadPhoto,
-                            ),
-                          ),
-                        ),
                     ],
                   ),
-                  const SizedBox(height: 24),
-                  if (_isEditing) ...[
-                    TextFormField(
-                      controller: _displayNameController,
-                      autovalidateMode: AutovalidateMode.onUserInteraction,
-                      validator: (value) => validateDisplayName(l10n, value),
-                      decoration: InputDecoration(
-                        labelText: l10n.displayName,
-                        border: const OutlineInputBorder(),
-                        prefixIcon: const Icon(Icons.person),
-                      ),
-                      // Mirrors the publicProfiles rules' bounds, so an
-                      // over-long or multi-line name is capped as it's typed
-                      // instead of failing with an opaque PERMISSION_DENIED.
-                      inputFormatters: [
-                        LengthLimitingTextInputFormatter(
-                            PublicProfileService.maxNameLength),
-                        FilteringTextInputFormatter.singleLineFormatter,
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _phoneController,
-                      autovalidateMode: AutovalidateMode.onUserInteraction,
-                      validator: (value) => validatePhone(l10n, value),
-                      decoration: InputDecoration(
-                        labelText: l10n.phoneNumber,
-                        border: const OutlineInputBorder(),
-                        prefixIcon: const Icon(Icons.phone),
-                      ),
-                      keyboardType: TextInputType.phone,
-                    ),
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _isLoading ? null : _updateProfile,
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                        ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,  // theme-independent: over the avatar photo
-                                ),
-                              )
-                            : Text(l10n.saveChanges),
-                      ),
-                    ),
-                  ] else ...[
-                    Text(
-                      user.displayName ?? l10n.noNameSet,
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      user.email ?? '',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-                    ),
-                    const SizedBox(height: 32),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                )
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
                       children: [
-                        _StatCard(
-                          icon: Icons.pin_drop,
-                          value: _signalsCount.toString(),
-                          label: l10n.signals,
+                        const SizedBox(height: 20),
+                        Stack(
+                          children: [
+                            UserAvatar(url: user.photoURL, radius: 60),
+                            if (_isEditing)
+                              Positioned(
+                                bottom: 0,
+                                right: 0,
+                                child: CircleAvatar(
+                                  backgroundColor:
+                                      Theme.of(context).colorScheme.primary,
+                                  child: IconButton(
+                                    tooltip: l10n.changeProfilePhoto,
+                                    icon: const Icon(Icons.camera_alt,
+                                        color: Colors
+                                            .white), // theme-independent: over the avatar photo
+                                    onPressed:
+                                        _isLoading ? null : _pickAndUploadPhoto,
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
-                        _StatCard(
-                          icon: Icons.comment,
-                          value: _commentsCount.toString(),
-                          label: l10n.comments,
-                        ),
+                        const SizedBox(height: 24),
+                        if (_isEditing) ...[
+                          TextFormField(
+                            controller: _displayNameController,
+                            autovalidateMode:
+                                AutovalidateMode.onUserInteraction,
+                            validator: (value) =>
+                                validateDisplayName(l10n, value),
+                            decoration: InputDecoration(
+                              labelText: l10n.displayName,
+                              border: const OutlineInputBorder(),
+                              prefixIcon: const Icon(Icons.person),
+                            ),
+                            // Mirrors the publicProfiles rules' bounds, so an
+                            // over-long or multi-line name is capped as it's typed
+                            // instead of failing with an opaque PERMISSION_DENIED.
+                            inputFormatters: [
+                              LengthLimitingTextInputFormatter(
+                                  PublicProfileService.maxNameLength),
+                              FilteringTextInputFormatter.singleLineFormatter,
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _phoneController,
+                            autovalidateMode:
+                                AutovalidateMode.onUserInteraction,
+                            validator: (value) => validatePhone(l10n, value),
+                            decoration: InputDecoration(
+                              labelText: l10n.phoneNumber,
+                              border: const OutlineInputBorder(),
+                              prefixIcon: const Icon(Icons.phone),
+                            ),
+                            keyboardType: TextInputType.phone,
+                          ),
+                          const SizedBox(height: 24),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: _isLoading ? null : _updateProfile,
+                              style: ElevatedButton.styleFrom(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 16),
+                              ),
+                              child: _isLoading
+                                  ? const SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors
+                                            .white, // theme-independent: over the avatar photo
+                                      ),
+                                    )
+                                  : Text(l10n.saveChanges),
+                            ),
+                          ),
+                        ] else ...[
+                          Text(
+                            user.displayName ?? l10n.noNameSet,
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineSmall
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            user.email ?? '',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyLarge
+                                ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant),
+                          ),
+                          const SizedBox(height: 32),
+                          // Absent until the aggregations land, rather than three
+                          // zeros that then jump: a zero is a real answer here, so
+                          // showing one we do not have yet is a lie about this
+                          // person's contribution.
+                          if (_stats case final stats?)
+                            UserStatsRow(stats: stats),
+                          const SizedBox(height: 32),
+                          const Divider(),
+                          ListTile(
+                            leading: const Icon(Icons.email),
+                            title: Text(l10n.email),
+                            subtitle: Text(user.email ?? l10n.notSet),
+                          ),
+                          ListTile(
+                            leading: const Icon(Icons.phone),
+                            title: Text(l10n.phoneNumber),
+                            subtitle: Text(_phoneController.text.isEmpty
+                                ? l10n.notSet
+                                : _phoneController.text),
+                          ),
+                          ListTile(
+                            leading: const Icon(Icons.verified),
+                            title: Text(l10n.emailVerified),
+                            subtitle:
+                                Text(user.emailVerified ? l10n.yes : l10n.no),
+                            trailing: !user.emailVerified
+                                ? TextButton(
+                                    onPressed: () async {
+                                      await user.sendEmailVerification();
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                                l10n.verificationEmailSent),
+                                          ),
+                                        );
+                                      }
+                                    },
+                                    child: Text(l10n.verify),
+                                  )
+                                : null,
+                          ),
+                          ListTile(
+                            leading: const Icon(Icons.calendar_today),
+                            title: Text(l10n.memberSince),
+                            subtitle: Text(
+                              user.metadata.creationTime != null
+                                  ? '${user.metadata.creationTime!.day}/${user.metadata.creationTime!.month}/${user.metadata.creationTime!.year}'
+                                  : l10n.unknown,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          const Divider(),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8.0),
+                            child: TextButton.icon(
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.red,
+                              ),
+                              onPressed:
+                                  _isLoading ? null : _confirmDeleteAccount,
+                              icon: const Icon(Icons.delete_forever),
+                              label: Text(l10n.deleteAccount),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
-                    const SizedBox(height: 32),
-                    const Divider(),
-                    ListTile(
-                      leading: const Icon(Icons.email),
-                      title: Text(l10n.email),
-                      subtitle: Text(user.email ?? l10n.notSet),
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.phone),
-                      title: Text(l10n.phoneNumber),
-                      subtitle: Text(_phoneController.text.isEmpty ? l10n.notSet : _phoneController.text),
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.verified),
-                      title: Text(l10n.emailVerified),
-                      subtitle: Text(user.emailVerified ? l10n.yes : l10n.no),
-                      trailing: !user.emailVerified
-                          ? TextButton(
-                              onPressed: () async {
-                                await user.sendEmailVerification();
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(l10n.verificationEmailSent),
-                                    ),
-                                  );
-                                }
-                              },
-                              child: Text(l10n.verify),
-                            )
-                          : null,
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.calendar_today),
-                      title: Text(l10n.memberSince),
-                      subtitle: Text(
-                        user.metadata.creationTime != null
-                            ? '${user.metadata.creationTime!.day}/${user.metadata.creationTime!.month}/${user.metadata.creationTime!.year}'
-                            : l10n.unknown,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    const Divider(),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0),
-                      child: TextButton.icon(
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.red,
-                        ),
-                        onPressed: _isLoading ? null : _confirmDeleteAccount,
-                        icon: const Icon(Icons.delete_forever),
-                        label: Text(l10n.deleteAccount),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-              ),
-            )),
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final IconData icon;
-  final String value;
-  final String label;
-
-  const _StatCard({
-    required this.icon,
-    required this.value,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-        child: Column(
-          children: [
-            Icon(icon, size: 32, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-            ),
-          ],
-        ),
-      ),
+                  ),
+                )),
     );
   }
 }

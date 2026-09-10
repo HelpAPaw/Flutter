@@ -22,6 +22,7 @@ import {
   addDoc,
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -1210,9 +1211,10 @@ describe('users', () => {
   });
 });
 
-// L-2. The app only ever writes `{name}` (PublicProfileService.setName) and only
-// ever reads one uid at a time, so both the field allowlist and the list denial
-// below are invisible to it.
+// L-2. The app only ever writes `{name}` and `{photoUrl}`
+// (PublicProfileService.setName / setPhotoUrl) and only ever reads one uid at a
+// time, so both the field allowlist and the list denial below are invisible to
+// it.
 describe('publicProfiles', () => {
   const OWNER = REPORTER;
 
@@ -1288,7 +1290,7 @@ describe('publicProfiles', () => {
     );
   });
 
-  it('rejects fields other than name, incl. clearing a deletion tombstone', async () => {
+  it('rejects fields other than name/photoUrl, incl. clearing a deletion tombstone', async () => {
     const db = testEnv.authenticatedContext(OWNER).firestore();
     const ref = doc(db, 'publicProfiles', OWNER);
     await assertFails(setDoc(ref, { name: 'Ivan', role: 'admin' }));
@@ -1297,6 +1299,134 @@ describe('publicProfiles', () => {
     await assertFails(updateDoc(ref, { name: 'Ivan', deleted: false }));
     // ...but the name alone may still be updated on a doc that carries them.
     await assertSucceeds(updateDoc(ref, { name: 'Ivan' }));
+  });
+
+  // `signalsPosted` is server-owned and the ONLY thing protecting it is that it
+  // is absent from the write allow-list above. Widening that list for
+  // `photoUrl` is exactly the change that could have let it through, so pin it.
+  it('still refuses to let a user write their own signalsPosted', async () => {
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const ref = doc(db, 'publicProfiles', OWNER);
+    await assertFails(setDoc(ref, { name: 'Ivan', signalsPosted: 9999 }));
+
+    await seedProfile({ name: 'Ivan', signalsPosted: 3 });
+    await assertFails(updateDoc(ref, { signalsPosted: 9999 }));
+    // The counter merely being on the document doesn't block a name edit.
+    await assertSucceeds(updateDoc(ref, { name: 'Ivan Petrov' }));
+  });
+
+  it('accepts an avatar URL from the app\'s own Storage bucket', async () => {
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    await assertSucceeds(
+      setDoc(doc(db, 'publicProfiles', OWNER), {
+        name: 'Ivan',
+        photoUrl:
+          `https://firebasestorage.googleapis.com/v0/b/help-a-paw-dev.firebasestorage.app` +
+          `/o/profile_photos%2F${OWNER}.jpg?alt=media&token=2b7e1f00-0000-4000-8000-000000000000`,
+      })
+    );
+  });
+
+  // lh3 through lh6 have all served Google account photos over the years, and
+  // older accounts still carry the earlier hosts. Pinning the digit would deny
+  // those avatars forever, invisibly — the mirror is best-effort.
+  it('accepts a Google account photo from any lh<n> host', async () => {
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    for (const host of ['lh3', 'lh4', 'lh5', 'lh6']) {
+      await assertSucceeds(
+        setDoc(doc(db, 'publicProfiles', OWNER), {
+          name: 'Ivan',
+          photoUrl: `https://${host}.googleusercontent.com/a/ACg8ocKq1w=s96-c`,
+        })
+      );
+    }
+    // Still a closed list: a lookalike host is not a Google photo.
+    await assertFails(
+      setDoc(doc(db, 'publicProfiles', OWNER), {
+        name: 'Ivan',
+        photoUrl: 'https://lh3.googleusercontent.com.evil.example/a/x',
+      })
+    );
+  });
+
+  // Removing an avatar has to reach the copy every OTHER user sees, or a
+  // deleted picture stays world-readable indefinitely.
+  it('lets the owner clear their avatar', async () => {
+    await seedProfile({
+      name: 'Ivan',
+      photoUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKq1w=s96-c',
+    });
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    await assertSucceeds(
+      updateDoc(doc(db, 'publicProfiles', OWNER), { photoUrl: deleteField() })
+    );
+
+    const other = testEnv.authenticatedContext(OTHER).firestore();
+    await assertFails(
+      updateDoc(doc(other, 'publicProfiles', OWNER), { photoUrl: deleteField() })
+    );
+  });
+
+  // The whole reason the field is host-restricted: this value is handed to an
+  // image loader on every other user's device.
+  it('rejects an avatar URL on any other host, and a non-https one', async () => {
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const ref = doc(db, 'publicProfiles', OWNER);
+    await assertFails(setDoc(ref, { name: 'Ivan', photoUrl: 'https://evil.example/track.png' }));
+    await assertFails(setDoc(ref, { name: 'Ivan', photoUrl: 'http://lh3.googleusercontent.com/a/x' }));
+    // A trusted host as a *substring* must not pass a whole-string RE2 match.
+    await assertFails(
+      setDoc(ref, {
+        name: 'Ivan',
+        photoUrl: 'https://evil.example/?u=https://lh3.googleusercontent.com/a/x',
+      })
+    );
+    await assertFails(setDoc(ref, { name: 'Ivan', photoUrl: 42 }));
+    await assertFails(
+      setDoc(ref, { name: 'Ivan', photoUrl: 'https://lh3.googleusercontent.com/' + 'a'.repeat(500) })
+    );
+  });
+
+  // The Storage branch is pinned to the caller's own uid, so an avatar URL
+  // cannot be used to pass off somebody else's picture as your own.
+  it('rejects a Storage avatar URL naming another user', async () => {
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    await assertFails(
+      setDoc(doc(db, 'publicProfiles', OWNER), {
+        name: 'Ivan',
+        photoUrl:
+          `https://firebasestorage.googleapis.com/v0/b/help-a-paw-dev.firebasestorage.app` +
+          `/o/profile_photos%2F${OTHER}.jpg?alt=media&token=t`,
+      })
+    );
+  });
+
+  // The two mirror-writes are independent (`setName` and `setPhotoUrl` are
+  // separate merge-writes), so neither may be forced to restate the other —
+  // including on the create that happens when the profile does not exist yet.
+  it('lets each field be written alone, but not an empty document', async () => {
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const ref = doc(db, 'publicProfiles', OWNER);
+    const photoUrl = 'https://lh3.googleusercontent.com/a/ACg8ocKq1w=s96-c';
+
+    // Create carrying only the avatar — setPhotoUrl arriving first.
+    await assertSucceeds(setDoc(ref, { photoUrl }, { merge: true }));
+    // ...then the name lands on top of it.
+    await assertSucceeds(setDoc(ref, { name: 'Ivan' }, { merge: true }));
+
+    await testEnv.clearFirestore();
+    await assertFails(setDoc(ref, {}));
+  });
+
+  it('validates the avatar on an update that only touches the name', async () => {
+    const db = testEnv.authenticatedContext(OWNER).firestore();
+    const ref = doc(db, 'publicProfiles', OWNER);
+    await seedProfile({
+      name: 'Ivan',
+      photoUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKq1w=s96-c',
+    });
+    // A stored, valid avatar must not make an unrelated name edit fail.
+    await assertSucceeds(updateDoc(ref, { name: 'Ivan Petrov' }));
   });
 
   it('lets only the owner delete their profile', async () => {

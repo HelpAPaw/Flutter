@@ -32,6 +32,7 @@ import 'package:help_a_paw/src/widgets/my_signals_page.dart';
 import 'package:help_a_paw/src/widgets/privacy_policy_page.dart';
 import 'package:help_a_paw/src/widgets/profile_completion_page.dart';
 import 'package:help_a_paw/src/widgets/profile_page.dart';
+import 'src/widgets/user_profile_page.dart';
 import 'package:help_a_paw/src/widgets/sign_in_page.dart';
 import 'package:help_a_paw/src/widgets/edit_signal_screen.dart';
 import 'package:help_a_paw/src/widgets/signal_details_screen.dart';
@@ -268,10 +269,11 @@ Future<void> _bootstrapServices() async {
   unawaited(AuthService().syncTestMode());
 
   // Repair accounts that signed in through a build which didn't carry Google's
-  // name onto the Auth record (R5-001). A no-op for anonymous users and for
-  // anyone who already has a name, so it costs nothing after the first launch.
+  // name or photo onto the records other users read (R5-001). A no-op for
+  // anonymous users and for anyone already mirrored, so it costs nothing after
+  // the first launch.
   unawaited(
-      AuthService.adoptProviderDisplayName(FirebaseAuth.instance.currentUser));
+      AuthService.adoptProviderProfile(FirebaseAuth.instance.currentUser));
 
   // Both need the uid from the sign-in above, but not each other — run them
   // together rather than making the restore of background tracking queue behind
@@ -423,6 +425,23 @@ final GoRouter _router = GoRouter(
       name: 'profile',
       path: Routes.profile,
       builder: (BuildContext context, GoRouterState state) => const ProfilePage(),
+    ),
+    GoRoute(
+      name: 'user_profile',
+      path: Routes.userProfilePath,
+      // Your own name opens the editable profile, not a read-only view of it.
+      // Here rather than at each tap site so a link to yourself behaves the
+      // same however it was reached — including a deep link into the app.
+      redirect: (BuildContext context, GoRouterState state) =>
+          FirebaseAuth.instance.currentUser?.uid == state.pathParameters['uid']
+              ? Routes.profile
+              : null,
+      builder: (BuildContext context, GoRouterState state) => UserProfilePage(
+        // Forces a fresh State when one profile is pushed on top of another:
+        // the screen loads for its uid once, in initState.
+        key: ValueKey(state.pathParameters['uid']),
+        uid: state.pathParameters['uid']!,
+      ),
     ),
     GoRoute(
       name: 'my_signals',

@@ -1,19 +1,24 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AppPreferencesService {
-  static final AppPreferencesService _instance = AppPreferencesService._internal();
+  static final AppPreferencesService _instance =
+      AppPreferencesService._internal();
   factory AppPreferencesService() => _instance;
   AppPreferencesService._internal();
 
   SharedPreferences? _prefs;
 
   // Keys
-  static const String _onboardingCompletedKey = 'notification_onboarding_completed';
-  static const String _onboardingDismissedKey = 'notification_onboarding_dismissed';
+  static const String _onboardingCompletedKey =
+      'notification_onboarding_completed';
+  static const String _onboardingDismissedKey =
+      'notification_onboarding_dismissed';
   static const String _testModeKey = 'test_mode_enabled';
   static const String _deferredLinkCheckedKey = 'deferred_link_checked';
   static const String _testModeSyncedUidKey = 'test_mode_synced_uid';
   static const String _testModeSyncedValueKey = 'test_mode_synced_value';
+  static const String _photoMirroredUidKey = 'public_photo_mirrored_uid';
+  static const String _photoMirroredUrlKey = 'public_photo_mirrored_url';
 
   /// Initialize SharedPreferences - must be called before using any other
   /// methods.
@@ -116,7 +121,35 @@ class AppPreferencesService {
     await _prefs?.setBool(_testModeSyncedValueKey, testMode);
   }
 
+  /// Whether [url] has already been mirrored to [uid]'s public profile.
+  ///
+  /// The same write-avoidance shape as [isTestModeSyncedFor], for the same
+  /// reason: `AuthService.mirrorProviderPhoto` runs on every launch and every
+  /// sign-in, and without this every launch would cost a Firestore write per
+  /// user to re-state an avatar that had not changed.
+  ///
+  /// Safe to lose (a reinstall re-mirrors once) and safe to keep (a different
+  /// account, or a provider photo that has changed, stops matching).
+  bool isPhotoMirroredFor(String uid, String url) =>
+      mirroredPhotoUrlFor(uid) == url;
+
+  /// What was last mirrored for [uid], or null if this device has never
+  /// mirrored anything for that account.
+  ///
+  /// Null and `''` mean different things: null is "we have never written this
+  /// account's avatar", `''` is "we have written that it has none". Only the
+  /// second is a reason to issue a delete.
+  String? mirroredPhotoUrlFor(String uid) =>
+      _prefs?.getString(_photoMirroredUidKey) == uid
+          ? _prefs?.getString(_photoMirroredUrlKey)
+          : null;
+
+  /// Record that [uid]'s public profile now carries [url].
+  Future<void> setPhotoMirrored(String uid, String url) async {
+    await _prefs?.setString(_photoMirroredUidKey, uid);
+    await _prefs?.setString(_photoMirroredUrlKey, url);
+  }
+
   /// Returns the Firestore collection name based on test mode state
-  String get signalsCollectionName =>
-      isTestMode() ? 'signals_test' : 'signals';
+  String get signalsCollectionName => isTestMode() ? 'signals_test' : 'signals';
 }

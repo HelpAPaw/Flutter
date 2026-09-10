@@ -6,6 +6,8 @@ import 'package:help_a_paw/src/models/signal_urgency.dart';
 import 'package:help_a_paw/src/widgets/app_bar_title.dart';
 import 'package:help_a_paw/src/widgets/level_chip.dart';
 import 'package:help_a_paw/src/widgets/mention_suggestions.dart';
+import 'package:help_a_paw/src/services/user_stats_service.dart';
+import 'package:help_a_paw/src/widgets/stat_card.dart';
 import 'package:help_a_paw/src/widgets/urgency_picker.dart';
 
 /// Bulgarian is the app's primary language and its strings are 40–70% longer
@@ -196,6 +198,44 @@ void main() {
 
       expectNoOverflow(tester);
       expect(tester.getSize(find.byType(MentionSuggestions)), Size.zero);
+    });
+  });
+
+  group('UserStatsRow', () {
+    testWidgets('three profile stats fit a 411dp phone in Bulgarian',
+        (tester) async {
+      // The profile went from two stat cards to three when it started showing
+      // "Помага сега" beside "Сигнали" and "Коментари". Content-sized cards
+      // (the old `spaceEvenly` row) overflow at that width in Bulgarian and
+      // fit in English, which is exactly the failure this file exists for.
+      // In a `SingleChildScrollView`, which is where both profile screens put
+      // it — and the difference that matters: a scroll view gives its child
+      // UNBOUNDED height, and a Row that asks its children to stretch into
+      // that throws `BoxConstraints forces an infinite height` and paints
+      // nothing. A bounded `Scaffold.body` hides that completely, which is how
+      // it reached a device.
+      await pumpAt411dp(
+        tester,
+        const Scaffold(
+          body: SingleChildScrollView(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              children: [
+                UserStatsRow(
+                  stats: UserStats(
+                    signalsPosted: 128,
+                    signalsOwned: 12,
+                    commentsPosted: 1024,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      expectNoOverflow(tester);
+      expect(find.byType(StatCard), findsNWidgets(3));
     });
   });
 

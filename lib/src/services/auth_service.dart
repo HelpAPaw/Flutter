@@ -1,4 +1,3 @@
-
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -110,6 +109,96 @@ class AuthService {
     } catch (e) {
       debugPrint('Could not adopt provider display name: $e');
     }
+  }
+
+  /// Mirror the signed-in user's avatar to their world-readable profile.
+  ///
+  /// **Separate from [adoptProviderDisplayName], and not folded into it**, for
+  /// a reason that is easy to get backwards: name adoption returns early when
+  /// the Auth record already has a name, and a fresh Google sign-in *always*
+  /// does — Firebase copies the provider's name onto the record at credential
+  /// sign-in. Mirroring the photo from inside that method would therefore run
+  /// for almost nobody, and new Google accounts — the population this is for —
+  /// would never get a public avatar at all.
+  ///
+  /// Firebase Auth's `photoURL` is readable only by its owner, so until this
+  /// runs an avatar exists but nobody else can see it.
+  ///
+  /// Called on every launch and every sign-in, so it is gated on a local
+  /// write-avoidance cache: the steady state costs nothing, and a changed
+  /// provider photo costs one write. Best-effort — never fails a sign-in.
+  static Future<void> mirrorProviderPhoto(User? user) async {
+    if (user == null || user.isAnonymous) return;
+    // An empty string, not null, when the account has no photo: the cache has
+    // to be able to record "this account's avatar is *gone*" as distinctly as
+    // it records a URL, or removing an avatar would be retried every launch.
+    await mirrorPhotoUrl(user.uid, user.photoURL ?? '');
+  }
+
+  /// Publish [url] as [uid]'s avatar, at most once per distinct value.
+  ///
+  /// **Takes the URL rather than reading it off a [User], because the caller
+  /// that has just produced one cannot rely on the Auth record having caught
+  /// up.** `updatePhotoURL` does not refresh the in-memory `User` synchronously
+  /// — the upload path called [mirrorProviderPhoto] straight after it, read a
+  /// still-null `photoURL`, and mirrored "this account has no avatar", then
+  /// cached that. The avatar existed and nobody but its owner could see it,
+  /// which is the exact bug the mirror exists to prevent.
+  ///
+  /// An empty [url] means the avatar is gone and clears the field.
+  static Future<void> mirrorPhotoUrl(String uid, String url) async {
+    final prefs = AppPreferencesService();
+    if (prefs.isPhotoMirroredFor(uid, url)) return;
+
+    // Nothing to publish, and nothing recorded that would need withdrawing —
+    // an account that has simply never had an avatar. Writing the removal
+    // anyway would cost one billed write per email/password user on the first
+    // launch after this release, and again after every reinstall, to delete a
+    // field that was never there.
+    if (url.isEmpty && prefs.mirroredPhotoUrlFor(uid) == null) {
+      await prefs.setPhotoMirrored(uid, url);
+      return;
+    }
+
+    try {
+      // Time-boxed for the same reason the name is: callers await this on the
+      // interactive sign-in path, and an avatar is not worth holding a tap for.
+      await PublicProfileService.setPhotoUrl(uid, url)
+          .timeout(const Duration(seconds: 10));
+      await prefs.setPhotoMirrored(uid, url);
+      debugPrint('Mirrored photo to publicProfiles');
+    } on FirebaseException catch (e) {
+      // A refusal is a VERDICT, not a blip, so record it as handled: an avatar
+      // on a host `isValidProfilePhotoUrl()` does not accept would otherwise
+      // be re-submitted and re-denied on every single launch, forever, with
+      // nothing but a debugPrint to show for it.
+      if (e.code == 'permission-denied') {
+        await prefs.setPhotoMirrored(uid, url);
+        debugPrint('Photo refused by rules, not retrying: $url');
+        return;
+      }
+      debugPrint('Could not mirror photo: $e');
+    } catch (e) {
+      // Anything else — offline, timeout — is transient. Not recorded, so the
+      // next launch tries again.
+      debugPrint('Could not mirror photo: $e');
+    }
+  }
+
+  /// Carry whatever the sign-in provider knows about this person onto the
+  /// records the app reads: their name, and their avatar.
+  ///
+  /// **One entry point, because every caller wants both.** The two halves stay
+  /// separate methods — they gate on different things, and folding the photo
+  /// inside the name's blank-name branch would run it for almost nobody (see
+  /// [mirrorProviderPhoto]) — but four call sites each pairing them by hand is
+  /// how a fifth sign-in path adopts the name and silently forgets the avatar.
+  /// The asymmetric await lives here too: the name is what the next screen
+  /// pre-fills from, the avatar is cosmetic and must not hold a tap.
+  static Future<void> adoptProviderProfile(User? user,
+      [UserCredential? credential]) async {
+    await adoptProviderDisplayName(user, credential);
+    unawaited(mirrorProviderPhoto(user));
   }
 
   /// How long to wait for the anonymous session the app runs on. The default

@@ -51,14 +51,40 @@ import '../utils/link_parser.dart';
 /// decision lives in one place rather than as two `copyWith` literals that can
 /// drift apart.
 ///
-/// `secondary` for the same reason as the link ink below, and **no underline**:
-/// underline is this screen's affordance for "this opens something", and a
-/// mention opens nothing.
+/// `secondary` for the same reason as the link ink below, and **no underline
+/// here**: underline is this screen's affordance for "this opens something",
+/// and in the composer a mention opens nothing. A *posted* mention does open
+/// the person's profile, so `LinkifiedText` adds the underline on top of this
+/// when it is given an `onMentionTap` — which is why the underline is not part
+/// of the shared style.
 TextStyle mentionTextStyle(BuildContext context, TextStyle? base) =>
     (base ?? const TextStyle()).copyWith(
       color: Theme.of(context).colorScheme.secondary,
       fontWeight: FontWeight.w600,
     );
+
+/// How anything that opens something is drawn, wherever it is drawn.
+///
+/// URLs, phone numbers, addresses and a person's name all share one
+/// affordance, so they share one definition — the same argument
+/// [mentionTextStyle] makes, and the reason that function exists.
+///
+/// `secondary` rather than `primary`: primary is #FF9800 in both schemes,
+/// which is 2.16:1 on white. Secondary resolves to the darkened brand ink in
+/// light mode (5.21:1) and to the plain brand orange on black in dark mode
+/// (9.74:1). See AppColors' class doc, and theme_contrast_test.
+///
+/// The underline is not decoration: colour alone is invisible to a red-green
+/// colour blind reader, and this palette's link ink is a muted orange against
+/// near-black body text.
+TextStyle linkTextStyle(BuildContext context, TextStyle? base) {
+  final ink = Theme.of(context).colorScheme.secondary;
+  return (base ?? const TextStyle()).copyWith(
+    color: ink,
+    decoration: TextDecoration.underline,
+    decorationColor: ink,
+  );
+}
 
 class LinkifiedText extends StatefulWidget {
   const LinkifiedText(
@@ -66,6 +92,7 @@ class LinkifiedText extends StatefulWidget {
     super.key,
     this.style,
     this.mentions = const [],
+    this.onMentionTap,
   });
 
   final String text;
@@ -77,6 +104,14 @@ class LinkifiedText extends StatefulWidget {
   /// the parser keeps its existing fast path and nothing but comments pays for
   /// this.
   final List<CommentMention> mentions;
+
+  /// Called with the mentioned uid when an `@name` is tapped.
+  ///
+  /// Null wherever a mention leads nowhere — the composer, which draws the same
+  /// highlight over a draft. A mention is only underlined when this is set, so
+  /// the underline keeps meaning "this opens something" rather than becoming
+  /// decoration on a run that does nothing.
+  final void Function(String uid)? onMentionTap;
 
   @override
   State<LinkifiedText> createState() => _LinkifiedTextState();
@@ -105,7 +140,8 @@ class _LinkifiedTextState extends State<LinkifiedText> {
     // finally carried its `mentions` array would otherwise keep rendering the
     // version without them.
     if (oldWidget.text != widget.text ||
-        !listEquals(oldWidget.mentions, widget.mentions)) {
+        !listEquals(oldWidget.mentions, widget.mentions) ||
+        (oldWidget.onMentionTap == null) != (widget.onMentionTap == null)) {
       _disposeRecognizers();
       _build();
     }
@@ -119,14 +155,24 @@ class _LinkifiedTextState extends State<LinkifiedText> {
 
   void _build() {
     _parts = parseLinks(widget.text, mentions: widget.mentions)
-        .map((token) => (
-              token,
-              token is LinkToken
-                  ? (TapGestureRecognizer()..onTap = () => _open(token.uri))
-                  : null,
-            ))
+        .map((token) => (token, _recognizerFor(token)))
         .toList(growable: false);
   }
+
+  /// The recognizer for one run, or null for a run that opens nothing.
+  ///
+  /// Both handlers read `widget` at tap time rather than capturing it here:
+  /// recognizers outlive a rebuild, and a caller that passes a fresh
+  /// `onMentionTap` closure on every build — which the obvious
+  /// `(uid) => context.push(...)` does — would otherwise be calling the one
+  /// from whenever the text last changed.
+  TapGestureRecognizer? _recognizerFor(TextToken token) => switch (token) {
+        LinkToken(:final uri) => TapGestureRecognizer()
+          ..onTap = () => _open(uri),
+        MentionToken(:final uid) when widget.onMentionTap != null =>
+          TapGestureRecognizer()..onTap = () => widget.onMentionTap?.call(uid),
+        _ => null,
+      };
 
   void _disposeRecognizers() {
     for (final (_, recognizer) in _parts) {
@@ -182,23 +228,12 @@ class _LinkifiedTextState extends State<LinkifiedText> {
     // is built.
     if (_isPlain) return Text(widget.text, style: widget.style);
 
-    // `secondary` rather than `primary`: primary is #FF9800 in both schemes,
-    // which is 2.16:1 on white. Secondary resolves to the darkened brand ink in
-    // light mode (5.21:1) and to the plain brand orange on black in dark mode
-    // (9.74:1). See AppColors' class doc, and theme_contrast_test.
-    //
-    // Resolved once: `Theme.of` registers an inherited-widget dependency on
-    // every call.
-    final linkInk = Theme.of(context).colorScheme.secondary;
+    // All three resolved once, outside the span loop: each calls `Theme.of`,
+    // which registers an inherited-widget dependency, and a comment with k
+    // mentions would otherwise allocate k identical mention styles.
+    final linkStyle = linkTextStyle(context, widget.style);
     final mentionStyle = mentionTextStyle(context, widget.style);
-    final linkStyle = (widget.style ?? const TextStyle()).copyWith(
-      color: linkInk,
-      // Colour alone is not an affordance: it is invisible to a red-green
-      // colour blind reader, and this palette's link ink is a muted orange
-      // against near-black body text.
-      decoration: TextDecoration.underline,
-      decorationColor: linkInk,
-    );
+    final mentionLinkStyle = linkTextStyle(context, mentionStyle);
 
     return Text.rich(
       TextSpan(
@@ -213,7 +248,8 @@ class _LinkifiedTextState extends State<LinkifiedText> {
                 ),
               MentionToken(:final text) => TextSpan(
                   text: text,
-                  style: mentionStyle,
+                  style: recognizer == null ? mentionStyle : mentionLinkStyle,
+                  recognizer: recognizer,
                 ),
             },
         ],

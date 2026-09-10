@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:intl/intl.dart';
 
@@ -8,6 +9,8 @@ import '../services/app_preferences_service.dart';
 import '../services/callable_client.dart';
 import '../services/moderation_service.dart';
 import '../services/public_profile_service.dart';
+import '../config/routes.dart';
+import 'user_name_link.dart';
 
 /// The signals a moderator has hidden, and the way to put one back
 /// (master spec §18.3 — hiding is "temporarily", which requires reversibility).
@@ -64,6 +67,18 @@ class _ModerationHiddenTabState extends State<ModerationHiddenTab> {
   /// The collection this moderator is looking at, fixed for the tab's life so a
   /// refresh cannot silently switch which quarantine is listed.
   final String _collection = AppPreferencesService().signalsCollectionName;
+
+  /// Built once per locale, not once per row per build: `DateFormat` parses its
+  /// pattern and resolves locale data on construction, and this sits inside a
+  /// list builder.
+  late DateFormat _timestampFormat;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _timestampFormat =
+        DateFormat.yMd(Localizations.localeOf(context).languageCode).add_jm();
+  }
 
   @override
   void initState() {
@@ -123,6 +138,44 @@ class _ModerationHiddenTabState extends State<ModerationHiddenTab> {
       for (final entry in entries)
         if (entry.value != null) entry.key: entry.value!,
     };
+  }
+
+  /// `<when> · Hidden by <moderator>`, with the moderator's name opening their
+  /// profile.
+  ///
+  /// One line rather than a date widget beside a name widget: they are a single
+  /// sentence, and splitting them would put the separator on the screen before
+  /// the half it separates whenever the name lookup had not landed.
+  Widget _hiddenByLine(
+    BuildContext context,
+    QuarantinedSignal signal,
+    DateTime? hiddenAt,
+    AppLocalizations l10n,
+  ) {
+    final style = Theme.of(context).textTheme.bodySmall;
+    final when = hiddenAt == null ? null : _timestampFormat.format(hiddenAt);
+
+    if (signal.hiddenBy.isEmpty) return Text(when ?? '', style: style);
+
+    return UserNameLink(
+      uid: signal.hiddenBy,
+      // Already resolved by [_refresh] — `UserNameLink` takes a `FutureOr`, so
+      // there is no builder to satisfy and nothing to memoize.
+      name: _hiddenByNames[signal.hiddenBy],
+      sentence: (name) => [
+        if (when != null) when,
+        l10n.moderationHiddenBy(name),
+      ].join(' · '),
+      fallback: l10n.unknown,
+      onTap: (uid) => context.push(Routes.userProfile(uid)),
+      // The name only. This line is the subtitle of a `ListTile` whose own tap
+      // opens the restore dialog, and a full-width target here would swallow
+      // it — a moderator reaching for the widest part of the row would land on
+      // a profile instead, usually their own, since they are generally the one
+      // who hid the signal.
+      tapTarget: NameTapTarget.name,
+      style: style,
+    );
   }
 
   Future<void> _confirmRestore(QuarantinedSignal signal) async {
@@ -203,8 +256,9 @@ class _ModerationHiddenTabState extends State<ModerationHiddenTab> {
                   child: Text(l10n.cancel),
                 ),
                 FilledButton(
-                  onPressed:
-                      note.isEmpty ? null : () => Navigator.of(context).pop(note),
+                  onPressed: note.isEmpty
+                      ? null
+                      : () => Navigator.of(context).pop(note),
                   child: Text(l10n.moderationRestore),
                 ),
               ],
@@ -259,19 +313,7 @@ class _ModerationHiddenTabState extends State<ModerationHiddenTab> {
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            [
-              if (hiddenAt != null)
-                DateFormat.yMd(Localizations.localeOf(context).languageCode)
-                    .add_jm()
-                    .format(hiddenAt),
-              if (signal.hiddenBy.isNotEmpty)
-                l10n.moderationHiddenBy(
-                  _hiddenByNames[signal.hiddenBy] ?? l10n.unknown,
-                ),
-            ].join(' · '),
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
+          _hiddenByLine(context, signal, hiddenAt, l10n),
           if (signal.note.isNotEmpty)
             Text(signal.note, maxLines: 2, overflow: TextOverflow.ellipsis),
         ],
@@ -299,7 +341,9 @@ class _ModerationHiddenTabState extends State<ModerationHiddenTab> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, size: 80, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                Icon(icon,
+                    size: 80,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
                 const SizedBox(height: 16),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 32),
