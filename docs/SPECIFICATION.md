@@ -1411,9 +1411,20 @@ collections.
 **Account deletion:** `AuthService.deleteAccount()` calls the `deleteAccount` callable
 over plain HTTPS (see §7.14 for why), then signs out. Server-side (§9) it strips phone
 numbers from authored signals in both collections **and from quarantined ones**, deletes
-the notifications subcollection and `userLocations/{uid}`, tombstones `users/{uid}` and
+the notifications subcollection, `userLocations/{uid}`, `userCounters/{uid}` and
+`moderators/{uid}`, tombstones `users/{uid}` and
 `publicProfiles/{uid}` as `"Deleted user"`, deletes the avatar, and finally deletes the
 Auth user.
+
+**The `moderators/{uid}` delete has to precede the Auth delete**, and that ordering is the
+whole point of it. The roster is maintained only by `scripts/grant_moderator.js`, which
+resolves its subject through Firebase Auth, so an entry whose Auth user is already gone
+was unreachable by the one tool that manages it — production carried such an orphan from
+2026-08-17 to 2026-09-10, and it had to be deleted out from under the script (the script
+has since been fixed to skip that check on `--revoke`, but the orphan should not be
+created in the first place). `moderationActions` is deliberately **not** swept: every
+action is audit-logged with the actor's uid, and that history is a different fact from
+"who currently holds the role".
 
 **It PURGES the user's `removedSignals` outright, rather than anonymizing them.** The
 sweeps above anonymize because a live or hidden signal is community content other people

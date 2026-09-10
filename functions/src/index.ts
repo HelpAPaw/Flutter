@@ -2186,6 +2186,27 @@ export const deleteAccount = onCall(
           console.error(`Failed to delete userCounters for ${uid}:`, error)
         );
 
+      // 2c. Revoke the moderator role, if they held one (D7).
+      //
+      // This has to happen HERE, before step 5 deletes the Auth user, because
+      // `moderators` is managed only by `scripts/grant_moderator.js` and that
+      // script resolves its subject through Firebase Auth. An entry whose Auth
+      // user is already gone was, until 2026-09-10, unreachable by the only
+      // tool that maintains the roster — production carried one such orphan
+      // from 2026-08-17 until it had to be deleted out from under the script.
+      //
+      // Deliberately NOT swept: `moderationActions`. Every action is
+      // audit-logged with the actor's uid, and that history is a different
+      // fact from "who currently holds the role". Erasing a departed
+      // moderator's trail is the harm, not the fix.
+      await db
+        .collection("moderators")
+        .doc(uid)
+        .delete()
+        .catch((error) =>
+          console.error(`Failed to delete moderators doc for ${uid}:`, error)
+        );
+
       // 3. Tombstone the user document - strip all PII, keep a neutral name
       //    so existing references still resolve to "Deleted user".
       await userRef.set({
