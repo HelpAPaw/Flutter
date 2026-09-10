@@ -36,8 +36,11 @@
  * - Dry-run by default. Pass --apply to actually write.
  * - `help-a-paw-dev` IS PRODUCTION despite the name (see CLAUDE.md). A grant
  *   there is a real person with real powers over real users' content.
- * - --uid is checked against Firebase Auth first, so a typo becomes an error
- *   rather than a roster entry for an account that does not exist.
+ * - On a GRANT, --uid is checked against Firebase Auth first, so a typo
+ *   becomes an error rather than a roster entry for an account that does not
+ *   exist. A REVOKE deliberately skips that check: an account can be deleted
+ *   while its roster entry survives, and those are the entries most in need
+ *   of revoking.
  *
  * USAGE
  *   cd functions
@@ -95,7 +98,17 @@ async function resolveUid(args) {
   if (args.uid) {
     // Verify it exists, so a mistyped uid fails here rather than silently
     // creating a roster entry nobody can use.
-    await admin.auth().getUser(args.uid);
+    //
+    // A REVOKE must not require this. `deleteAccount` removes the Auth user
+    // but not `moderators/{uid}`, so a deleted moderator leaves an orphaned
+    // roster entry — and demanding a live Auth record here made this script
+    // unable to remove exactly the entries most in need of removing, while
+    // --list went on displaying them. The typo guard exists to stop a grant
+    // landing on an account that cannot use it; a revoke of a document that
+    // is already there cannot be wrong in that way.
+    if (!args.revoke) {
+      await admin.auth().getUser(args.uid);
+    }
     return args.uid;
   }
   const user = await admin.auth().getUserByEmail(args.email);
