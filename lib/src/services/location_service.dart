@@ -31,8 +31,18 @@ enum LocationTrackingResult {
   /// when it is not — most often because only "While Using" was granted.
   foregroundOnly,
 
-  /// Nothing started; location permission was refused.
+  /// Nothing started; permission was refused, but the OS will show the dialog
+  /// again, so asking once more is a route back.
   denied,
+
+  /// Nothing started; permission is refused permanently. The OS will not ask
+  /// again, so the app's settings page is the only way back.
+  deniedForever,
+
+  /// Nothing started; location is off device-wide. The app's own permission may
+  /// be perfectly fine, so this needs different words and a different settings
+  /// page from the two above.
+  serviceDisabled,
 }
 
 /// Whether this permission lets the app show or use the user's position.
@@ -142,34 +152,25 @@ class LocationService with WidgetsBindingObserver {
         .getNotificationPreferences(user.uid);
     if (prefs?.locationTrackingEnabled != true) return;
 
-    // Check, never request. [startLocationTracking] calls requestPermission(),
-    // which prompts whenever the current state is `denied` — and this runs from
-    // the launch bootstrap with no user action behind it. Someone who enabled
-    // tracking and later revoked location in system Settings would be met by an
-    // OS permission dialog on startup, which is both jarring and the pattern
-    // iOS review rejects. Leave tracking off instead; the settings toggle asks
-    // properly, in response to a tap.
-    final permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      debugPrint(
-        'Location tracking is enabled but permission is $permission; '
-        'not restoring, and not prompting during startup.',
-      );
-      return;
+    // No permission pre-check: [startLocationTracking] only ever checks, so
+    // calling it from the launch bootstrap cannot put an OS dialog in front of
+    // someone who revoked location in system Settings. It reports what stopped
+    // it and leaves tracking off; the settings toggle is where the asking
+    // happens, in response to a tap.
+    final result = await startLocationTracking();
+    if (result != LocationTrackingResult.full &&
+        result != LocationTrackingResult.foregroundOnly) {
+      debugPrint('Location tracking is enabled but did not restore: $result');
     }
-
-    await startLocationTracking();
   }
 
-  /// Request location permission
+  /// Request location permission.
+  ///
+  /// Says nothing about whether location is switched on device-wide — that is
+  /// [startLocationTracking]'s to report. This used to answer `denied` when the
+  /// service was off, which is true only in the sense that nothing was granted
+  /// and left callers unable to tell "you refused" from "location is off".
   Future<LocationPermission> requestPermission() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      debugPrint('Location services are disabled');
-      return LocationPermission.denied;
-    }
-
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
@@ -193,17 +194,37 @@ class LocationService with WidgetsBindingObserver {
 
   /// Start listening to location changes.
   ///
-  /// Deliberately requests only foreground permission: this also runs on launch
-  /// to restore tracking, and escalating to "Always" there would put a system
-  /// prompt in front of the user during startup. Callers that want the upgrade
-  /// prompt should call [requestAlwaysPermission] first, from a user-initiated
-  /// action, and then read the returned [LocationTrackingResult] to find out
-  /// what actually started.
-  Future<LocationTrackingResult> startLocationTracking() async {
-    final permission = await requestPermission();
+  /// **Checks the permission, never requests it.** Callers that want a prompt
+  /// call [requestAlwaysPermission] first, from a user-initiated action, and
+  /// then read the returned [LocationTrackingResult] to find out what actually
+  /// started. Asking here would both put a dialog on the launch path, which has
+  /// no user action behind it, and — since every prompting caller has just
+  /// asked — show a second dialog for one tap. On Android that second refusal
+  /// is the one that blocks the permission for good.
+  ///
+  /// A caller that has just asked must pass what it got as [knownPermission]:
+  /// Android's `checkPermission` can never answer `deniedForever`, because
+  /// "permanently" is `shouldShowRequestPermissionRationale` being false, which
+  /// only the *request* reports. Without it a permanent refusal arrives here
+  /// looking like an ordinary one, and the user is told to try again on a
+  /// dialog the OS will never show. (Device-verified on Android 14: a
+  /// permission with USER_FIXED set still checks as plain `denied`.)
+  Future<LocationTrackingResult> startLocationTracking({
+    LocationPermission? knownPermission,
+  }) async {
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      debugPrint('Location services are disabled');
+      return LocationTrackingResult.serviceDisabled;
+    }
 
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
+    final permission = knownPermission ?? await Geolocator.checkPermission();
+
+    if (permission == LocationPermission.deniedForever) {
+      debugPrint('Location permission denied permanently');
+      return LocationTrackingResult.deniedForever;
+    }
+
+    if (permission == LocationPermission.denied) {
       debugPrint('Location permission denied');
       return LocationTrackingResult.denied;
     }
@@ -293,10 +314,6 @@ class LocationService with WidgetsBindingObserver {
 
     return await startLocationTracking() == LocationTrackingResult.full;
   }
-
-  /// Opens the OS settings page for this app, which is the only place the
-  /// "Allow all the time" permission can be granted once it has been refused.
-  Future<bool> openSystemAppSettings() => Geolocator.openAppSettings();
 
   /// Cancels only the foreground position stream.
   Future<void> _cancelPositionStream() async {

@@ -1852,11 +1852,40 @@ class AppLocalizationsEn extends AppLocalizations {
   String get moderationRestore => 'Restore';
 
   @override
+  String clusterSignalsHere(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count signals here',
+      one: '1 signal here',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String clusterClinicsHere(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count vet clinics here',
+      one: '1 vet clinic here',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get mapLegend => 'What the pins mean';
 
   @override
   String get mapLegendUrgencyNote =>
-      'Pin colour shows urgency — how serious it gets if nobody acts. Critical signals are never grouped into a cluster, so they stay visible at every zoom.';
+      'Pin colour shows urgency — how serious it gets if nobody acts. Signals close together are grouped into a bubble, which takes the colour of the most urgent one inside it. Tap a bubble to zoom in, or to list what is in it when they are too close to separate.';
+
+  @override
+  String get mapLegendCluster => 'Several signals; the number is how many';
+
+  @override
+  String get mapLegendClinicCluster =>
+      'Several vet clinics; the number is how many';
 
   @override
   String get mapLegendVetClinic => 'Vet clinic';
@@ -1917,4 +1946,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get changeProfilePhoto => 'Change profile photo';
+
+  @override
+  String get locationPermissionDeniedForever =>
+      'Location permission is blocked for this app. Allow it in Settings to use this feature.';
+
+  @override
+  String get locationServicesDisabled =>
+      'Location is turned off on this device. Turn it on to use this feature.';
+
+  @override
+  String get notificationPermissionRequired =>
+      'Notifications are turned off for this app. Allow them in Settings to hear about nearby signals.';
 }

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 
 import '../../models/signal_urgency.dart';
+import '../../utils/cluster_bubble_icons.dart';
+import '../../utils/map_marker_builder.dart';
 import '../section_header.dart';
 
 /// Explains the map's colour code.
@@ -64,6 +66,15 @@ class _MapLegendSheet extends StatelessWidget {
                 label: urgency.label(l10n),
                 description: urgency.description(l10n),
               ),
+            // Drawn here in Flutter rather than shown as the marker bitmap,
+            // at the legend's own 28px scale but from the bubble's own colours
+            // and weight, so a restyle cannot leave the two disagreeing. Amber,
+            // as the urgency an unknown signal defaults to and the middle of
+            // the scale.
+            _LegendRow(
+              icon: _LegendBubble(count: 3, color: SignalUrgency.amber.color),
+              label: l10n.mapLegendCluster,
+            ),
             const SizedBox(height: 8),
             Text(
               l10n.mapLegendUrgencyNote,
@@ -79,6 +90,13 @@ class _MapLegendSheet extends StatelessWidget {
                 height: 28,
               ),
               label: l10n.mapLegendVetClinic,
+            ),
+            _LegendRow(
+              icon: const _LegendBubble(
+                count: 2,
+                color: MapMarkerBuilder.clinicBlue,
+              ),
+              label: l10n.mapLegendClinicCluster,
             ),
           ],
         ),
@@ -126,6 +144,55 @@ class _LegendRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A cluster bubble as the legend shows it: the marker bitmap's shape redrawn
+/// at the legend's 28px icon column, with the bitmap's own halo alpha and label
+/// weight, and with widgets so it follows text scaling like its row.
+class _LegendBubble extends StatelessWidget {
+  const _LegendBubble({required this.count, required this.color});
+
+  final int count;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 28,
+      height: 28,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: color.withAlpha(ClusterBubbleIcons.haloAlpha),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(3),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: color,
+              border: Border.all(
+                color: Colors.white, // theme-independent: as on the map
+                width: 1.5,
+              ),
+            ),
+            child: Center(
+              child: Text(
+                '$count',
+                style: const TextStyle(
+                  // As on the map: white on a saturated fill reads in both
+                  // modes.
+                  color: Colors.white, // theme-independent
+                  fontSize: 11,
+                  fontWeight: ClusterBubbleIcons.labelWeight,
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

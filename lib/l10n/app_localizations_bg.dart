@@ -1880,11 +1880,40 @@ class AppLocalizationsBg extends AppLocalizations {
   String get moderationRestore => 'Възстановяване';
 
   @override
+  String clusterSignalsHere(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count сигнала тук',
+      one: '1 сигнал тук',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String clusterClinicsHere(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count ветеринарни клиники тук',
+      one: '1 ветеринарна клиника тук',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get mapLegend => 'Какво означават маркерите';
 
   @override
   String get mapLegendUrgencyNote =>
-      'Цветът на маркера показва спешността — колко сериозно става, ако никой не реагира. Критичните сигнали никога не се групират, така че остават видими при всяко приближение.';
+      'Цветът на маркера показва спешността — колко сериозно става, ако никой не реагира. Близки сигнали се групират в кръг, който взима цвета на най-спешния от тях. Докоснете кръга, за да приближите, или за да видите списъка, когато са твърде близо, за да се разделят.';
+
+  @override
+  String get mapLegendCluster => 'Няколко сигнала; числото показва колко са';
+
+  @override
+  String get mapLegendClinicCluster =>
+      'Няколко ветеринарни клиники; числото показва колко са';
 
   @override
   String get mapLegendVetClinic => 'Ветеринарна клиника';
@@ -1948,4 +1977,16 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get changeProfilePhoto => 'Смяна на профилната снимка';
+
+  @override
+  String get locationPermissionDeniedForever =>
+      'Разрешението за местоположение е блокирано за това приложение. Разрешете го в Настройки, за да използвате тази функционалност.';
+
+  @override
+  String get locationServicesDisabled =>
+      'Местоположението на това устройство е изключено. Включете го, за да използвате тази функционалност.';
+
+  @override
+  String get notificationPermissionRequired =>
+      'Известията за това приложение са изключени. Разрешете ги в Настройки, за да научавате за сигнали наблизо.';
 }

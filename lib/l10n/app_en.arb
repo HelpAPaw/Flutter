@@ -871,8 +871,28 @@
   "moderationRestoreTitle": "Restore this signal?",
   "moderationRestoreBody": "It goes back on the map for everyone. Its comments and history are still there.",
   "moderationRestore": "Restore",
+  "clusterSignalsHere": "{count, plural, =1{1 signal here} other{{count} signals here}}",
+  "@clusterSignalsHere": {
+    "description": "Title of the sheet listing the signals inside a cluster bubble that max zoom cannot split",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clusterClinicsHere": "{count, plural, =1{1 vet clinic here} other{{count} vet clinics here}}",
+  "@clusterClinicsHere": {
+    "description": "Title of the sheet listing the vet clinics inside a cluster bubble that max zoom cannot split",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "mapLegend": "What the pins mean",
-  "mapLegendUrgencyNote": "Pin colour shows urgency — how serious it gets if nobody acts. Critical signals are never grouped into a cluster, so they stay visible at every zoom.",
+  "mapLegendUrgencyNote": "Pin colour shows urgency — how serious it gets if nobody acts. Signals close together are grouped into a bubble, which takes the colour of the most urgent one inside it. Tap a bubble to zoom in, or to list what is in it when they are too close to separate.",
+  "mapLegendCluster": "Several signals; the number is how many",
+  "mapLegendClinicCluster": "Several vet clinics; the number is how many",
   "mapLegendVetClinic": "Vet clinic",
   "done": "Done",
   "signOutFailed": "Could not sign out. Please try again.",
@@ -898,5 +918,17 @@
   "keepEditing": "Keep editing",
   "close": "Close",
   "editProfile": "Edit profile",
-  "changeProfilePhoto": "Change profile photo"
+  "changeProfilePhoto": "Change profile photo",
+  "locationPermissionDeniedForever": "Location permission is blocked for this app. Allow it in Settings to use this feature.",
+  "@locationPermissionDeniedForever": {
+    "description": "Shown when location permission has been refused permanently, so the system dialog can no longer be shown and only the app settings page can grant it"
+  },
+  "locationServicesDisabled": "Location is turned off on this device. Turn it on to use this feature.",
+  "@locationServicesDisabled": {
+    "description": "Shown when device-wide location services are switched off, which is a different problem from the app's own permission"
+  },
+  "notificationPermissionRequired": "Notifications are turned off for this app. Allow them in Settings to hear about nearby signals.",
+  "@notificationPermissionRequired": {
+    "description": "Shown when the user turns the notifications switch on but the OS permission was refused, so the switch cannot stay on"
+  }
 }

@@ -46,7 +46,7 @@
 > | **Dark mode is ON** | `darkTheme` + `themeMode` are wired up for the first time. Every screen, dialog, sheet and the **map tiles** now have a night appearance nobody outside this repo has seen. Previously the app rendered light regardless. | **§14.1 (rewritten)** |
 > | **M3 purple is gone** | The app was `primarySwatch: orange` + `useMaterial3: true`, which M3 **ignores** — so all 45 dialog Cancels, switches, sliders, checkboxes, both TabBars, focus rings, most spinners and the whole sign-in screen were rendering **purple on lavender**. A real `ColorScheme` replaces ~294 colour literals. | §14.1 |
 > | **Status lost its colour** | Status and urgency were both red/amber/green running in **opposite directions**. Status is now a **glyph + neutral outlined chip**; urgency keeps the traffic light. Both scales were **relabelled**: *Low / Medium / Critical* and *Waiting for help / Someone is helping*. FAQ copy moved with them. | §2.2, §3.2, §3.3, §3.3b, §9 |
-> | **Red never clusters** | A critical signal stays its own pin at every zoom; amber and green still cluster. The Maps SDK draws the cluster bubble navy and Dart cannot restyle it, so this is the only lever there was. A new **map legend** explains the colours. | §2.2 |
+> | **Cluster bubbles carry urgency** | Clustering is now done in Dart. A bubble is the colour of its **most urgent member** (one red signal inside makes it red), and a cluster too tight to split by zooming opens a **sheet** listing what is in it. The **map legend** explains the colours and the bubble. | §2.2 |
 > | **Signal details restructured** | Eight peer blocks became **one `SignalStateCard`** (urgency / status / responsible / tags, with an urgency rail) plus a **Manage sheet** that owns every control that changes the signal — drawn only for someone who may coordinate. Timeline is one rail row per entry. | §3.2, §3.3, §3.3b |
 > | **Users never see an exception** | 14 `catch` blocks used to print `[firebase_storage/unauthorized] …` on screen and log **nothing**. `reportAndDescribe` now shows a sentence and records the real error to Crashlytics; the ARB strings lost their `{error}` placeholders; every empty/failed screen has one shape with a **working** retry. | **§11.3 (rewritten)**, §14.3 |
 > | **Bulgarian layout** | Three overflows shipped in `7.0.0+131` and none was visible in English — release builds paint no overflow stripe. App-bar titles now **shrink instead of truncating** (all 15 bars); the chip and filter-header overflows are fixed. | §9, §14.1 |
@@ -279,10 +279,13 @@
 - [ ] Signal markers appear on the map based on geo-query (100km radius from center)
 - [ ] ⚠️ **Marker colour is now URGENCY, not status** — Red / Orange (amber) / Green pin assets follow `SignalUrgency`. A signal that is *resolved* but was reported Red still shows a **red** pin; status appears only as a text chip on details and in My Signals. Anyone testing from memory of the last release will read this as a bug.
 - [ ] A signal created **before** the urgency system (no `urgency` field) renders as **amber** — unless its status is Solved, which renders green. Nothing legacy is ever derived as red.
-- [ ] Marker clustering works for nearby signals
-- [ ] 🔴 **A RED signal is never clustered.** Zoom out until amber and green signals collapse into navy cluster bubbles: every red pin must **still be drawn individually**, at every zoom level. This is the whole reason the map can say anything is critical — the SDK draws the bubble navy and Dart cannot restyle it, so a clustered red signal is invisible as an emergency. Guarded by `test/map_clustering_test.dart`; verify it on a device too, with ≥3 red signals close together.
-- [ ] Amber and green **do** still cluster (this is what keeps a city readable — a map of 200 individual pins is not the fix)
-- [ ] A signal with an **unrecognised** urgency code clusters (it falls back to amber, deliberately)
+- [ ] Nearby signals collapse into a **bubble** with a count; the bubble is a filled disc with a translucent halo and white number — **never Google's navy**
+- [ ] 🔴 **A bubble is the colour of its most urgent member.** With one red signal among greens, the bubble is **red**; amber among greens → amber; all green → green. Verify on a device with ≥3 signals close together, changing one's urgency. Guarded by `test/map_marker_builder_test.dart`
+- [ ] Bubbles re-form when a zoom or pan **ends** (camera idle), not during the gesture; at the moment they snap there is no leftover pin or stale bubble
+- [ ] A signal with an **unrecognised** urgency code tints its bubble amber at most (it falls back to amber, deliberately) — never green
+- [ ] **Cluster tap zooms to its bounds** when the members spread out; the bubble splits into pins or smaller bubbles
+- [ ] **Co-located cluster opens a sheet.** Tap the bubble over the four `signals_test` signals at pl. Sv. Nedelya (identical coordinates): instead of zooming to max and staying a bubble, a bottom sheet titled "4 signals here" lists them; each row opens its details. Also true for any cluster tapped at zoom ≥ 20
+- [ ] Open a bubble on a pin, then zoom out until its neighbours cluster: the **selected pin stays its own pin** with the bubble on it; dismiss the bubble and it joins the cluster
 **Signal bubble** (`SignalInfoCard` — replaced the native InfoWindow)
 > Automation note: the bubble is a Flutter widget with the semantic identifier **`signalInfoCard`**. Target it by element, not by hunting the old native window's cream RGB(255,243,219) — that surface no longer exists.
 > Verified 2026-09-06 on Android (Galaxy Tab A8, light + dark, bg) and iOS (iPad 6th gen, light + dark, en), including the clinic-tap dismiss below. Phone-width iOS is the remaining gap.
@@ -324,9 +327,9 @@
 
 ### 2.2b Map Legend (NEW)
 > Nothing anywhere in the app had ever said what the pin colours meant. Opened from the map's own app bar.
-- [ ] The legend opens from the map app bar and lists **most urgent first**: Critical, Medium, Low, then the vet clinic pin
+- [ ] The legend opens from the map app bar and lists **most urgent first**: Critical, Medium, Low, then the signal bubble, then the vet clinic pin and the clinic bubble
 - [ ] Each row shows the **real pin asset** — compare against the pins on the map behind it; they must be the same images
-- [ ] The note explains that critical signals are never grouped into a cluster (§2.2)
+- [ ] A **bubble row** ("Several signals; the number is how many") sits after the three pins, and the note explains that a bubble takes the colour of its most urgent signal and that tapping one zooms or lists (§2.2)
 - [ ] 🔴 **In Bulgarian at font scale 1.3, the last row (vet clinic) is fully visible.** This sheet overflowed by 43px and lost that row entirely at 411dp — the exact bug that reached `131`. Test on the smallest device available (SM J610FN, 411dp), not the tablet.
 - [ ] The sheet's title is not under the status bar, and the sheet scrolls rather than clipping when it cannot fit
 - [ ] Renders correctly in dark mode
@@ -343,7 +346,7 @@
 ### 2.3 Real-Time Updates
 - [ ] New signals from other users appear on the map in real time (Firestore stream)
 - [ ] **Urgency** changes update marker colour in real time (a *status* change does not — pin colour is urgency, §2.2)
-- [ ] Escalating a signal to Red while the map is open makes it **leave its cluster** and become its own pin
+- [ ] Escalating a signal to Red while the map is open **turns its bubble red** in real time (or its pin, if it is not clustered)
 - [ ] Stream updates when map center changes significantly or filter changes
 
 ---
@@ -786,6 +789,9 @@
 - [ ] Hospital icon in AppBar toggles vet clinic mode on/off
 - [ ] Active state indicated by darker background on toggle
 - [ ] Vet clinics shown as blue hospital pin markers
+- [ ] Clinics close together collapse into a **blue bubble** with a count — the clinic pin's blue, never red/amber/green, so it cannot be read as a signal bubble; a clinic never shares a bubble with a signal
+- [ ] Tapping a clinic bubble zooms to its clinics; if they are too close to split (or the camera is at zoom ≥ 20) a sheet titled "N vet clinics here" lists them by name and address, and a row opens the clinic's details
+- [ ] Toggling the clinic layer off removes clinic pins **and** bubbles together
 - [ ] "Search This Area" button appears when map panned >2km or zoom changes >2 levels
 - [ ] Button auto-hides after search and has 1-second debounce
 - [ ] Search radius calculated from zoom level (formula-based, 1-100km)
@@ -1215,7 +1221,7 @@
 - [ ] Inbox row strings: `notificationNewSignalTitle/Body`, `notificationStatusChangeTitle/Body`, `notificationNewCommentTitle`, `notificationNearbySignalBody` — rendered from structured fields, **not** from the English `title`/`body` stored on the document (§6.6)
 - [ ] An unsupported device locale falls back to English rather than crashing
 - [ ] The **hosted share page** localizes client-side (§15.3) — its Bulgarian **help-tag** names (`HELP_TAG_NAMES_BY_LANG.bg`) are a second copy of the vocabulary; confirm they match the app's
-- [ ] **Map legend** (§2.2b): `mapLegend`, `mapLegendUrgencyNote`, `mapLegendVetClinic`
+- [ ] **Map legend** (§2.2b): `mapLegend`, `mapLegendUrgencyNote`, `mapLegendCluster`, `mapLegendVetClinic`, `mapLegendClinicCluster`; cluster sheet titles `clusterSignalsHere` / `clusterClinicsHere` pluralise ("1 сигнал тук" / "4 сигнала тук")
 - [ ] **Error sentences** (§11.3): `notAllowedError`, `serverBusyError`, `cameraPermissionDenied`, `photosPermissionDenied`, and the eight rewritten `failedTo…` / `error…` strings, **none of which carries an `{error}` placeholder any more**
 - [ ] **Empty and failed states** (§11.3): `couldNotLoadSignals(+Hint)`, `couldNotLoadNotifications`, `couldNotLoadPrivacyPolicy(+Hint)`
 - [ ] **Discard-changes dialog** (§1.6): `discardChanges`, `discardChangesHint`, `discard`, `keepEditing`
@@ -1834,7 +1840,7 @@
   - `test/theme_literal_guard_test.dart` — fails the build if a colour literal returns to `lib/`. Deliberate exceptions are marked `// theme-independent` with a reason.
   - `test/error_text_test.dart` — fails if an ARB string regains an `{error}` placeholder (a slot for an exception is an invitation to pass one), and covers the fall-through for a Firebase `unknown` wrapping a `SocketException`
   - `test/widgets/bulgarian_layout_test.dart` — pumps at **411dp in `bg`** and fails on an overflow, a chip wider than the screen, an off-screen "Clear all", or an app-bar title that truncates rather than scales
-- [ ] `test/map_clustering_test.dart` passes — **red must never cluster** (§2.2), and this is the only automated statement of it
+- [ ] `test/map_clusterer_test.dart` and `test/map_marker_builder_test.dart` pass — the clusterer (identical points are one cluster, closeness is by distance not cell, exclusion, stable ids) and **a bubble with a red member is red** (§2.2)
 - [ ] `test/profile_validators_test.dart` passes — the name/phone rules the editor and the completion screen now share (§1.6)
 - [ ] `cd firestore-tests && npm ci && npm test` — Firestore **and** Storage rules suites pass, **including the new `events` cases**. Required before **every** rules deploy; device testing cannot validate undeployed rules because `help-a-paw-dev` is production.
 - [ ] `cd functions && npm ci && npm test` — covers `recipientSelection` tier ranking and the floor, the legacy headline shims (`displayTagsOf` / `signalHeadline`), the `events` encoder parity, and now `moderation`, `signalOwnership` and `removeSignal`. Every failure mode here is silent in production.

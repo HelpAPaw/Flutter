@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../models/vet_clinic.dart';
@@ -19,18 +21,34 @@ class ClinicInfoCard extends StatelessWidget {
     this.tailAlignment = 0.0,
   });
 
-  /// Everything but the address, which is the only part that wraps.
-  static const double _fixedHeight = 78.0;
+  /// The part of the height that never grows: the bubble's own padding and its
+  /// tail.
+  static const double _fixedHeight = 28.0;
 
-  /// Two lines of name plus two of address, which is what a Bulgarian street
-  /// address needs at this width.
+  /// The clinic's pin badge. Constant too, but it sets the floor — at a small
+  /// text scale it is taller than the two-line name and address beside it.
+  static const double _badgeHeight = 44.0;
+
+  /// The part that does grow: two lines of name, the gap under it, and two
+  /// lines of address, which is what a Bulgarian street address needs at this
+  /// width. Line heights round to whole pixels, so this is a couple of pixels
+  /// above the measured 1.0 case to stay a bound at every scale.
   static const double _textHeight = 76.0;
 
   /// Upper bound on the bubble's height, tail included — see
   /// [SignalInfoCard.maxHeightFor] for why this is an estimate and why it has
   /// to follow the text scaler.
+  ///
+  /// The badge and the text sit side by side in a [Row], so the content is as
+  /// tall as the taller of the two rather than the sum. Adding them — or
+  /// counting the name in both halves — over-estimates by half a bubble, and an
+  /// over-estimate flips the bubble below a pin that it would have cleared.
   static double maxHeightFor(BuildContext context) =>
-      _fixedHeight + _textHeight * MediaQuery.textScalerOf(context).scale(1.0);
+      _fixedHeight +
+      math.max(
+        _badgeHeight,
+        _textHeight * MediaQuery.textScalerOf(context).scale(1.0),
+      );
 
   final VetClinic clinic;
   final VoidCallback onTap;
@@ -61,8 +79,8 @@ class ClinicInfoCard extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: SizedBox(
-              width: 44,
-              height: 44,
+              width: _badgeHeight,
+              height: _badgeHeight,
               child: ColoredBox(
                 color: scheme.surfaceContainerHigh,
                 child: Center(

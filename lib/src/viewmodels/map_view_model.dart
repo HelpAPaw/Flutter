@@ -8,7 +8,6 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../models/new_signal_step.dart';
-import '../models/vet_clinic.dart';
 import '../repositories/repository_provider.dart';
 import '../repositories/signal_repository.dart';
 import '../services/app_preferences_service.dart';
@@ -479,7 +478,6 @@ class MapViewModel extends Notifier<MapScreenState> {
         showVetClinics: show,
         // Clear data when hiding
         clinics: show ? state.vetClinicState.clinics : [],
-        clinicMarkers: show ? state.vetClinicState.clinicMarkers : {},
         showSearchThisAreaButton: false,
         clearLastSearch: !show,
       ),
@@ -487,11 +485,12 @@ class MapViewModel extends Notifier<MapScreenState> {
   }
 
   /// Load vet clinics for the current map area
+  ///
+  /// Only the clinics are stored. Their markers are built on the map screen,
+  /// which clusters them for the current zoom — see `MapMarkerBuilder`.
   Future<void> loadVetClinics({
     required LatLng center,
     required double zoomLevel,
-    required BitmapDescriptor? hospitalPin,
-    required void Function(VetClinic clinic) onClinicMarkerTap,
   }) async {
     state = state.copyWith(
       vetClinicState: state.vetClinicState.copyWith(isLoading: true),
@@ -503,16 +502,9 @@ class MapViewModel extends Notifier<MapScreenState> {
 
       final clinics = await _vetClinicService.searchNearby(center, radiusMeters);
 
-      final markers = _buildClinicMarkers(
-        clinics: clinics,
-        hospitalPin: hospitalPin,
-        onClinicMarkerTap: onClinicMarkerTap,
-      );
-
       state = state.copyWith(
         vetClinicState: state.vetClinicState.copyWith(
           clinics: clinics,
-          clinicMarkers: markers,
           lastSearchCenter: center,
           lastSearchZoom: zoomLevel,
           showSearchThisAreaButton: false,
@@ -576,25 +568,5 @@ class MapViewModel extends Notifier<MapScreenState> {
   double _calculateSearchRadius(double zoomLevel) {
     final radiusKm = 20000 / (1 << zoomLevel.round());
     return radiusKm.clamp(1.0, 100.0);
-  }
-
-  Set<Marker> _buildClinicMarkers({
-    required List<VetClinic> clinics,
-    required BitmapDescriptor? hospitalPin,
-    required void Function(VetClinic clinic) onClinicMarkerTap,
-  }) {
-    return clinics.map((clinic) {
-      return Marker(
-        markerId: MarkerId('clinic_${clinic.id}'),
-        position: LatLng(clinic.latitude, clinic.longitude),
-        icon: hospitalPin ??
-            BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-        // No native InfoWindow: a clinic opens a ClinicInfoCard, the same
-        // bubble a signal opens. Two different window styles on one map read
-        // as two different apps — and the native one could only ever render
-        // two lines of platform-styled text.
-        onTap: () => onClinicMarkerTap(clinic),
-      );
-    }).toSet();
   }
 }

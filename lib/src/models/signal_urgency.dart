@@ -68,6 +68,21 @@ enum SignalUrgency {
   static SignalUrgency fromLegacyStatus(int statusCode) =>
       statusCode == 2 ? green : amber;
 
+  /// The most urgent of [codes], by declaration order — the severity ordering
+  /// this type already owns, rather than a second one written beside a caller.
+  ///
+  /// Unknown codes take the [fromCode] fallback (amber), so a signal from a
+  /// newer build reads as "needs help" and never as "fine". An empty [codes]
+  /// gives the least urgent level, which is what an empty group deserves.
+  static SignalUrgency highest(Iterable<int> codes) {
+    var highest = values.first;
+    for (final code in codes) {
+      final urgency = fromCode(code);
+      if (urgency.index > highest.index) highest = urgency;
+    }
+    return highest;
+  }
+
   /// Whether marking a signal at this level requires explicit confirmation.
   ///
   /// Red Alert is only meaningful while it stays rare, so promoting a signal to

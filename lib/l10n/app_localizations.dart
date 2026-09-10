@@ -3398,6 +3398,18 @@ abstract class AppLocalizations {
   /// **'Restore'**
   String get moderationRestore;
 
+  /// Title of the sheet listing the signals inside a cluster bubble that max zoom cannot split
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 signal here} other{{count} signals here}}'**
+  String clusterSignalsHere(int count);
+
+  /// Title of the sheet listing the vet clinics inside a cluster bubble that max zoom cannot split
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 vet clinic here} other{{count} vet clinics here}}'**
+  String clusterClinicsHere(int count);
+
   /// No description provided for @mapLegend.
   ///
   /// In en, this message translates to:
@@ -3407,8 +3419,20 @@ abstract class AppLocalizations {
   /// No description provided for @mapLegendUrgencyNote.
   ///
   /// In en, this message translates to:
-  /// **'Pin colour shows urgency — how serious it gets if nobody acts. Critical signals are never grouped into a cluster, so they stay visible at every zoom.'**
+  /// **'Pin colour shows urgency — how serious it gets if nobody acts. Signals close together are grouped into a bubble, which takes the colour of the most urgent one inside it. Tap a bubble to zoom in, or to list what is in it when they are too close to separate.'**
   String get mapLegendUrgencyNote;
+
+  /// No description provided for @mapLegendCluster.
+  ///
+  /// In en, this message translates to:
+  /// **'Several signals; the number is how many'**
+  String get mapLegendCluster;
+
+  /// No description provided for @mapLegendClinicCluster.
+  ///
+  /// In en, this message translates to:
+  /// **'Several vet clinics; the number is how many'**
+  String get mapLegendClinicCluster;
 
   /// No description provided for @mapLegendVetClinic.
   ///
@@ -3523,6 +3547,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Change profile photo'**
   String get changeProfilePhoto;
+
+  /// Shown when location permission has been refused permanently, so the system dialog can no longer be shown and only the app settings page can grant it
+  ///
+  /// In en, this message translates to:
+  /// **'Location permission is blocked for this app. Allow it in Settings to use this feature.'**
+  String get locationPermissionDeniedForever;
+
+  /// Shown when device-wide location services are switched off, which is a different problem from the app's own permission
+  ///
+  /// In en, this message translates to:
+  /// **'Location is turned off on this device. Turn it on to use this feature.'**
+  String get locationServicesDisabled;
+
+  /// Shown when the user turns the notifications switch on but the OS permission was refused, so the switch cannot stay on
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications are turned off for this app. Allow them in Settings to hear about nearby signals.'**
+  String get notificationPermissionRequired;
 }
 
 class _AppLocalizationsDelegate

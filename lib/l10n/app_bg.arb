@@ -667,8 +667,28 @@
   "moderationRestoreTitle": "Възстановяване на сигнала?",
   "moderationRestoreBody": "Сигналът се връща на картата за всички. Коментарите и историята му са запазени.",
   "moderationRestore": "Възстановяване",
+  "clusterSignalsHere": "{count, plural, =1{1 сигнал тук} other{{count} сигнала тук}}",
+  "@clusterSignalsHere": {
+    "description": "Title of the sheet listing the signals inside a cluster bubble that max zoom cannot split",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clusterClinicsHere": "{count, plural, =1{1 ветеринарна клиника тук} other{{count} ветеринарни клиники тук}}",
+  "@clusterClinicsHere": {
+    "description": "Title of the sheet listing the vet clinics inside a cluster bubble that max zoom cannot split",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "mapLegend": "Какво означават маркерите",
-  "mapLegendUrgencyNote": "Цветът на маркера показва спешността — колко сериозно става, ако никой не реагира. Критичните сигнали никога не се групират, така че остават видими при всяко приближение.",
+  "mapLegendUrgencyNote": "Цветът на маркера показва спешността — колко сериозно става, ако никой не реагира. Близки сигнали се групират в кръг, който взима цвета на най-спешния от тях. Докоснете кръга, за да приближите, или за да видите списъка, когато са твърде близо, за да се разделят.",
+  "mapLegendCluster": "Няколко сигнала; числото показва колко са",
+  "mapLegendClinicCluster": "Няколко ветеринарни клиники; числото показва колко са",
   "mapLegendVetClinic": "Ветеринарна клиника",
   "done": "Готово",
   "signOutFailed": "Неуспешно излизане. Моля, опитайте отново.",
@@ -694,5 +714,8 @@
   "keepEditing": "Продължи редакцията",
   "close": "Затвори",
   "editProfile": "Редактиране на профила",
-  "changeProfilePhoto": "Смяна на профилната снимка"
+  "changeProfilePhoto": "Смяна на профилната снимка",
+  "locationPermissionDeniedForever": "Разрешението за местоположение е блокирано за това приложение. Разрешете го в Настройки, за да използвате тази функционалност.",
+  "locationServicesDisabled": "Местоположението на това устройство е изключено. Включете го, за да използвате тази функционалност.",
+  "notificationPermissionRequired": "Известията за това приложение са изключени. Разрешете ги в Настройки, за да научавате за сигнали наблизо."
 }
