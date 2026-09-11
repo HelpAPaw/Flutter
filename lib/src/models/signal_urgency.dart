@@ -49,7 +49,34 @@ enum SignalUrgency {
   final Color color;
 
   /// Map-pin / list icon asset for this urgency.
+  ///
+  /// **Only for surfaces that are about the map**: the markers themselves, the
+  /// legend that explains them and the filter sheet that hides them. Anywhere
+  /// else — a chip, a dialog badge, a timeline row — use [icon]: a pin away
+  /// from a map reads as *location*, which is the one thing urgency is not.
   final String pinAsset;
+
+  /// The glyph for urgency off the map.
+  ///
+  /// **The same mark at every level, deliberately.** [color] already carries
+  /// which level this is, and it carries it everywhere (the ink, the fill, the
+  /// label); a second encoding would be a second thing to keep in step for no
+  /// extra meaning. What the glyph has to say is only "this is about urgency",
+  /// and a bare `!` says it at the 14px a chip gives it, where a warning
+  /// triangle turns into a smudge.
+  ///
+  /// Mirrors [SignalStatus.icon], which is per-value for the opposite reason:
+  /// status has no colour of its own (§4.6), so its glyph is all it has.
+  ///
+  /// Also reachable as [glyph] without a level, for the notification inbox,
+  /// which renders a row for an `urgency_change` *notification* and so has no
+  /// [SignalUrgency] in hand — it used to hold its own `Icons.priority_high`
+  /// and would have been the surface this change quietly missed.
+  IconData get icon => glyph;
+
+  /// [icon], for callers that have no level. See [icon] for why one mark serves
+  /// all three.
+  static const IconData glyph = Icons.priority_high;
 
   /// Resolve a persisted [code] to an urgency.
   ///

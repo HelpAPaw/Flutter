@@ -99,6 +99,44 @@ class SignalOwnershipService {
         'ownerActiveAt': FieldValue.serverTimestamp(),
       };
 
+  /// A coordination write: the changed fields, the stamp, and the timeline
+  /// events describing them, in **one batch**.
+  ///
+  /// Three screens' worth of write paths had this spelled out by hand — the
+  /// status dropdown, the urgency picker, the tag picker and the edit screen's
+  /// Save — and each copy could forget a different part of it. [coordinationStamp]
+  /// was extracted after the edit screen forgot the stamp; this is that
+  /// extraction finished, because the thing those paths share is not a two-key
+  /// map, it is the whole write:
+  ///
+  /// * the stamp cannot be left off, since this adds it;
+  /// * the field and the event describing it land together or not at all, which
+  ///   is what stops a notification going out with no history to explain it;
+  /// * `'events'` is named once rather than at every call site.
+  ///
+  /// [events] are already-encoded documents from `SignalEventType.eventData`, so
+  /// each payload stays type-checked against its own subtype at the call site —
+  /// taking the type and the values here would need one `Object?` pair and would
+  /// undo exactly the compile-time split `signal_event.dart` exists for. A write
+  /// with no event is allowed (the edit screen saving only a typo fix); a write
+  /// with several is too (one Save moving urgency *and* tags).
+  ///
+  /// Returns the batch uncommitted: callers own the failure message, and the
+  /// edit screen commits it alongside work of its own.
+  static WriteBatch coordinationBatch({
+    required DocumentReference signalRef,
+    required DocumentReference actor,
+    required Map<String, Object?> fields,
+    List<Map<String, dynamic>> events = const [],
+  }) {
+    final batch = FirebaseFirestore.instance.batch();
+    batch.update(signalRef, {...fields, ...coordinationStamp(actor)});
+    for (final event in events) {
+      batch.set(signalRef.collection('events').doc(), event);
+    }
+    return batch;
+  }
+
   FirebaseFirestore get _db => FirebaseFirestore.instance;
 
   /// Which signals collection this app is currently pointed at (§3.2).

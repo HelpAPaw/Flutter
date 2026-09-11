@@ -93,8 +93,11 @@ class UrgencyPicker extends StatelessWidget {
                           children: [
                             Row(
                               children: [
-                                Image.asset(urgency.pinAsset,
-                                    width: 18, height: 18),
+                                // The glyph, not the pin: this list is a
+                                // choice of severity, not a preview of the map
+                                // (see SignalUrgency.pinAsset).
+                                Icon(urgency.icon,
+                                    size: 18, color: urgency.color),
                                 const SizedBox(width: 8),
                                 Text(
                                   urgency.label(l10n),
@@ -142,7 +145,7 @@ class UrgencyChip extends StatelessWidget {
     return LevelChip.urgency(
       color: level.color,
       label: level.label(AppLocalizations.of(context)),
-      iconAsset: level.pinAsset,
+      icon: level.icon,
     );
   }
 }

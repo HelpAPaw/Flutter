@@ -483,6 +483,22 @@ void main() {
       expect(tagsAtReport(currentTags: const [], events: events), ['rescue']);
     });
 
+    test('a null currentTags means "not knowable yet", not "no tags"', () {
+      // The events listener has only answered from cache, so "nothing has
+      // changed the tags" is not yet a fact and the signal's current tags
+      // cannot stand in for the original ones.
+      expect(tagsAtReport(currentTags: null, events: const []), isEmpty);
+    });
+
+    test('a stored change answers even while the fallback cannot', () {
+      // The distinction that makes the null worth having: `oldTags` is a
+      // record, not an inference, so a cached event is a real answer and the
+      // opening row does not have to wait for the server to show it.
+      final events = [change('a', DateTime(2026, 9, 1), from: const ['rescue'])];
+
+      expect(tagsAtReport(currentTags: null, events: events), ['rescue']);
+    });
+
     test('an empty old list is an answer, not a missing one', () {
       // A signal created before the tag vocabulary genuinely had none — which is
       // why the rules allow an empty `oldTags`. The opening row then shows no

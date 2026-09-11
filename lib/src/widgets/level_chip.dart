@@ -39,9 +39,8 @@ class LevelChip extends StatelessWidget {
     super.key,
     required this.color,
     required this.label,
-    this.iconAsset,
-  })  : icon = null,
-        _filled = true;
+    required this.icon,
+  }) : _filled = true;
 
   /// The neutral, outlined variant — progress.
   const LevelChip.status({
@@ -49,7 +48,6 @@ class LevelChip extends StatelessWidget {
     required this.label,
     required this.icon,
   })  : color = null,
-        iconAsset = null,
         _filled = false;
 
   /// Accent colour. Urgency only; status has none by design.
@@ -57,11 +55,13 @@ class LevelChip extends StatelessWidget {
 
   final String label;
 
-  /// Leading image. Urgency passes its map pin.
-  final String? iconAsset;
-
-  /// Leading glyph. Status passes its progress icon.
-  final IconData? icon;
+  /// Leading glyph — [SignalUrgency.icon] or [SignalStatus.icon].
+  ///
+  /// An `IconData` for both, where urgency used to pass its map-pin *image*: a
+  /// pin on a chip reads as location (see [SignalUrgency.pinAsset]), and a
+  /// glyph also takes the chip's ink, so the two variants tint one way instead
+  /// of one tinting and one being a fixed-colour bitmap.
+  final IconData icon;
 
   final bool _filled;
 
@@ -80,13 +80,8 @@ class LevelChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (iconAsset != null) ...[
-            Image.asset(iconAsset!, width: 14, height: 14),
-            const SizedBox(width: 6),
-          ] else if (icon != null) ...[
-            Icon(icon, size: 14, color: ink),
-            const SizedBox(width: 6),
-          ],
+          Icon(icon, size: 14, color: ink),
+          const SizedBox(width: 6),
           // Flexible, not bare: these labels are whole sentences, and the
           // Bulgarian amber label ("Оранжево — нужна е помощ скоро") lays out
           // at 403px — wider than a 411dp phone. An unconstrained Row inside a

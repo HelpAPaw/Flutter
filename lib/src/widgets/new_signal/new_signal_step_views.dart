@@ -539,9 +539,8 @@ class NewSignalReviewStep extends ConsumerWidget {
             label: l10n.helpNeeded,
             value: formState.helpTags.isEmpty
                 ? l10n.newSignalNotProvided
-                : HelpTag.fromCodes(formState.helpTags)
-                    .map((tag) => tag.label(l10n))
-                    .join(', '),
+                : helpTagLabels(
+                    HelpTag.fromCodes(formState.helpTags), l10n),
             onChange: () => notifier.goToStep(NewSignalStep.helpTags),
           ),
         ],

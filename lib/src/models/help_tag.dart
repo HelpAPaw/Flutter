@@ -24,17 +24,20 @@ List<String> toggledCode(List<String> current, String code, {int? max}) {
   return [...current, code];
 }
 
-/// [codes] as one human sentence fragment — "Foster, Transport".
+/// [tags] as one human sentence fragment — "Foster, Transport".
 ///
-/// Used by the tag-change note dialog and by the timeline row it produces, so
-/// the sentence the case holder confirms is the sentence everybody else reads.
+/// Used by the new-signal review step, the tag-change note dialog and the
+/// timeline rows it produces, so the sentence the case holder confirms is the
+/// sentence everybody else reads. One rendering rule: change the separator, or
+/// the ordering, or move to [HelpTag.neededLabel], and every surface follows.
 ///
-/// Unknown codes are **dropped**, not rendered raw: an unrecognised code came
-/// from a newer build and this one has no label for it. A list of nothing but
-/// unknown codes therefore comes back empty, and callers show their own
-/// "needs updated" wording rather than a dangling "Needs set to ".
-String helpTagLabels(Iterable<String> codes, AppLocalizations l10n) =>
-    HelpTag.fromCodes(codes).map((tag) => tag.label(l10n)).join(', ');
+/// Takes **resolved tags, not codes**, so a caller that also needs to know
+/// *which* tags survived resolution — is the list empty because there were no
+/// tags, or because they all came from a newer build? — calls
+/// [HelpTag.fromCodes] once and asks the list, rather than inferring it from
+/// whether this returned an empty string.
+String helpTagLabels(Iterable<HelpTag> tags, AppLocalizations l10n) =>
+    tags.map((tag) => tag.label(l10n)).join(', ');
 
 /// A kind of help — declared by a signal ("this is what is needed") and by a
 /// user ("this is what I can do").

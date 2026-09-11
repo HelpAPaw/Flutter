@@ -252,6 +252,9 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
               .map((doc) => SignalHistoryEntry.fromDocument(doc.id, doc.data()))
               .whereType<SignalHistoryEntry>()
               .toList();
+          // Latches: once the server has spoken, a later cached snapshot does
+          // not un-answer it.
+          source.hasServerAnswer |= !snapshot.metadata.isFromCache;
         });
       },
       onError: (Object error) {
@@ -1193,19 +1196,28 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
           // what the signal was asking for, and the alternative (every change
           // row restating "was X, now Y") is the redundancy this avoids.
           //
-          // **Only once the events are actually in.** This screen renders as
-          // soon as EITHER source has delivered, so the comments can arrive
-          // first; deriving from an events list that is merely still empty
-          // would name today's tags as the opening ones and then silently
-          // correct itself a frame later. No line at all is the honest state
-          // while we cannot know, and it is also what a failed events read
-          // leaves behind — beside the notice that says so.
-          tags: _events.entries == null
-              ? const []
-              : tagsAtReport(
-                  currentTags: signal.helpNeededTags,
-                  events: _events.entries!,
-                ),
+          // **Only once the SERVER has answered for the events.** This screen
+          // renders as soon as either source has delivered, and Firestore
+          // raises a cached snapshot — usually an empty one — before the
+          // server's. Deriving from that would name today's tags as the
+          // opening ones and then silently correct itself when the real
+          // snapshot lands, which is the flicker this guard exists to prevent;
+          // waiting on `entries != null` alone does not, because an empty list
+          // is a delivered answer. No line at all is the honest state while we
+          // cannot know, and it is also what a failed events read leaves
+          // behind — beside the notice that says so.
+          tags: tagsAtReport(
+            // Null, not the signal's tags, until the SERVER has answered for
+            // the events: Firestore raises a cached snapshot — usually an empty
+            // one — before the server's, and falling back to today's tags there
+            // would name them as the opening ones and then correct itself when
+            // the real snapshot lands. A cached tag change still answers, since
+            // its `oldTags` is a record rather than an inference; only this
+            // fallback has to wait. A failed events read leaves the same null,
+            // beside the notice that says so.
+            currentTags: _events.hasServerAnswer ? signal.helpNeededTags : null,
+            events: _events.entries ?? const [],
+          ),
         ),
         comments: _comments.entries ?? const [],
         events: _events.entries ?? const [],
@@ -1456,7 +1468,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   Widget _buildCreatedRow(
       SignalHistoryEntry entry, DateFormat dateFormat, bool isLast) {
     final l10n = AppLocalizations.of(context);
-    final labels = helpTagLabels(entry.tags, l10n);
+    final needs = HelpTag.fromCodes(entry.tags);
 
     return _timelineRow(
       icon: Icons.flag_outlined,
@@ -1468,7 +1480,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       // Absent on a signal reported before the tag vocabulary, and on one whose
       // codes this build cannot name — both of which render exactly as this row
       // always did.
-      detail: labels.isEmpty ? null : l10n.needsAtReport(labels),
+      detail: needs.isEmpty ? null : l10n.needsAtReport(helpTagLabels(needs, l10n)),
       isLast: isLast,
     );
   }
@@ -1491,8 +1503,8 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     return _timelineRow(
       // `Icons.place` here read as a LOCATION — the one thing an urgency change
       // is not — because it is the map pin's glyph doing a second job away from
-      // the map. See `urgencyBadge`, which had the same problem.
-      icon: isUrgency ? urgencyIcon : SignalStatus.fromCode(level).icon,
+      // the map. See [SignalUrgency.pinAsset].
+      icon: urgency?.icon ?? SignalStatus.fromCode(level).icon,
       iconBackground: urgency == null
           ? scheme.primaryContainer
           : urgency.color.withAlpha(38),
@@ -1527,16 +1539,26 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
       SignalHistoryEntry entry, DateFormat dateFormat, bool isLast) {
     final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
-    final labels = helpTagLabels(entry.tags, l10n);
+    // Resolved once, and it is the LIST that answers "can this build name any
+    // of these codes" — the icon used to ask by testing whether the rendered
+    // label string came back empty, which is a vocabulary question answered
+    // through a display string.
+    final needs = HelpTag.fromCodes(entry.tags);
 
     return _timelineRow(
-      icon: HelpTag.primaryOf(entry.tags).icon,
+      // A neutral glyph when the codes are all from a newer build:
+      // `HelpTag.primaryOf` falls back to `rescue`, and drawing a rescue icon
+      // beside "Needs updated" would assert a need this build has no idea
+      // about — the misreporting `HelpTag.fromCode` returns null to avoid.
+      icon: needs.isEmpty ? Icons.help_outline : needs.first.icon,
       iconBackground: scheme.primaryContainer,
       iconColor: scheme.onPrimaryContainer,
       // Empty only when every code came from a newer build. The row still has
       // to render — who changed the needs and why is worth reading even when
       // this build cannot name what they changed them to.
-      sentence: Text(labels.isEmpty ? l10n.tagsUpdated : l10n.tagsSetTo(labels)),
+      sentence: Text(needs.isEmpty
+          ? l10n.tagsUpdated
+          : l10n.tagsSetTo(helpTagLabels(needs, l10n))),
       actorId: entry.actorId,
       date: _formatDate(entry, dateFormat),
       note: entry.note,
@@ -2042,45 +2064,55 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// signal without leaving anything behind saying who changed it or why.
   Future<void> _editHelpTags(Signal signal) async {
     final oldCodes = List<String>.of(signal.helpNeededTags);
-    final selected = await showHelpTagPicker(
-      context,
-      initial: HelpTag.fromCodes(oldCodes),
-    );
+    final initial = HelpTag.fromCodes(oldCodes);
+    final selected = await showHelpTagPicker(context, initial: initial);
     if (selected == null || !mounted || _isApplyingLevelChange) return;
 
-    final newCodes = selected.map((t) => t.code).toList();
     // Order is priority (§4.4), so a reordering IS a change — `listEquals`, not
     // a set comparison. Confirming the sheet without touching anything writes
     // nothing at all, which is what keeps the timeline free of rows that say
     // nothing happened.
-    if (listEquals(oldCodes, newCodes)) return;
+    //
+    // Compared against what the picker was OPENED with, not against the stored
+    // codes. The picker speaks `HelpTag`, so a code this build does not know is
+    // already gone from both sides: against the raw list, a signal tagged by a
+    // newer build would read as changed the moment the sheet opened, and
+    // confirming it untouched would push the case holder through a mandatory
+    // note to record a change they did not make. (The write still drops such a
+    // code — that is the picker's long-standing contract — but now only when
+    // they actually changed something, and the event's `oldTags` preserves what
+    // it was.)
+    if (listEquals(initial, selected)) return;
 
+    final newCodes = selected.map((t) => t.code).toList();
     final l10n = AppLocalizations.of(context);
     final note = await showUpdateNoteDialog(
       context,
-      headline: l10n.updateNoteChangingNeedsTo(helpTagLabels(newCodes, l10n)),
-      badge: tagBadge(HelpTag.primaryOf(newCodes)),
+      headline: l10n.updateNoteChangingNeedsTo(helpTagLabels(selected, l10n)),
+      badge: tagBadge(selected.first),
     );
     if (note == null || !mounted) return;
 
     await _runGuarded(() async {
-      // One batch, for the reason _applyLevelChange uses one: the field and the
-      // timeline entry describing it land together or not at all.
-      final batch = FirebaseFirestore.instance.batch();
-      batch.update(_signalRef, {
-        'helpNeededTags': newCodes,
-        // The shared stamp, so this write cannot forget the owner's proof of
-        // life the way the edit screen once did.
-        ...SignalOwnershipService.coordinationStamp(_userRef),
-      });
-      batch.set(
-        _signalRef.collection('events').doc(),
-        SignalEventType.tagsChange.eventData(
-          oldValue: oldCodes,
-          newValue: newCodes,
-          note: note,
-          actor: _userRef,
-        ),
+      // **Known asymmetry**: the other three write paths on this screen
+      // (`_applyLevelChange`, `_claimCase`, `_addComment`) also subscribe the
+      // actor to the signal, and this one does not. Left alone rather than
+      // decided by the side door — #80 is about recording the change, and
+      // signing someone up for notifications is a separate call to make. The
+      // case holder is normally subscribed already, which is why nobody has
+      // noticed.
+      final batch = SignalOwnershipService.coordinationBatch(
+        signalRef: _signalRef,
+        actor: _userRef,
+        fields: {SignalEventType.tagsChange.signalField: newCodes},
+        events: [
+          SignalEventType.tagsChange.eventData(
+            oldValue: oldCodes,
+            newValue: newCodes,
+            note: note,
+            actor: _userRef,
+          ),
+        ],
       );
 
       try {
@@ -2220,10 +2252,12 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     // top of one already in flight.
     //
     // The `old*` value this event records is the one read when the dropdown was
-    // opened, so a change made by someone else meanwhile leaves it stale. That
-    // is cosmetic — nothing reads `old*`; the renderer, the rules and the push
-    // all key off the new value — and fixing it properly means re-reading the
-    // signal, a round trip to correct a field nobody consults.
+    // opened, so a change made by someone else meanwhile leaves it stale. The
+    // renderer, the rules and the push all key off the NEW value, so on this
+    // path it stays cosmetic. (`oldTags` is the exception — `tagsAtReport`
+    // reads the earliest one to label the opening row — but that is the tag
+    // path, which re-reads its old list from the same snapshot the picker was
+    // opened with, and the blast radius is one derived label.)
     if (_isApplyingLevelChange) return;
 
     final user = FirebaseAuth.instance.currentUser!;
@@ -2235,23 +2269,20 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
 
     // One batch, so the field change and the timeline entry it describes land
     // together or not at all. Written separately, a failed second write left a
-    // notification sent with no history to explain it.
-    final batch = FirebaseFirestore.instance.batch();
-    batch.update(signalRef, {
-      eventType.signalField: newValue,
-      // `lastUpdatedBy` plus the owner's proof of life, from the one helper
-      // that defines what a coordination write carries — see its doc comment for
-      // what each is load-bearing for.
-      ...SignalOwnershipService.coordinationStamp(userRef),
-    });
-    batch.set(
-      signalRef.collection('events').doc(),
-      eventType.eventData(
-        oldValue: oldValue,
-        newValue: newValue,
-        note: note,
-        actor: userRef,
-      ),
+    // notification sent with no history to explain it. The stamp comes with it
+    // — see `coordinationBatch` for what each part is load-bearing for.
+    final batch = SignalOwnershipService.coordinationBatch(
+      signalRef: signalRef,
+      actor: userRef,
+      fields: {eventType.signalField: newValue},
+      events: [
+        eventType.eventData(
+          oldValue: oldValue,
+          newValue: newValue,
+          note: note,
+          actor: userRef,
+        ),
+      ],
     );
 
     try {
@@ -2728,6 +2759,15 @@ class _HistorySource {
 
   Object? error;
 
+  /// Whether the SERVER has answered, as opposed to the local cache.
+  ///
+  /// Firestore raises what it has cached first, so [entries] being non-null
+  /// only means *something* arrived. Anything derived from the absence of a
+  /// document — the opening row's needs, which fall back to the signal's
+  /// current tags when no tag change has happened yet — has to wait for this
+  /// instead, or it renders one answer and then replaces it.
+  bool hasServerAnswer = false;
+
   /// Nothing has arrived and nothing has failed: still waiting.
   bool get isSilent => entries == null && error == null;
 
@@ -2736,5 +2776,6 @@ class _HistorySource {
     sub = null;
     entries = null;
     error = null;
+    hasServerAnswer = false;
   }
 }
