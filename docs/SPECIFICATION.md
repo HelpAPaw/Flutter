@@ -1874,13 +1874,18 @@ full-width child sat left — so the page stopped centring half way down.
   also see pending offers, each answerable in place. The offers listener is `late final`
   and therefore **lazy** — a passer-by opening a released or self-held signal opens no
   listener at all.
-- **Urgency away from the map is an exclamation mark, not the pin** (`urgencyIcon`,
-  `level_badge.dart`). `SignalUrgency.pinAsset` is the *map's* vocabulary: on the map the pin
+- **Urgency away from the map is an exclamation mark, not the pin**
+  (`SignalUrgency.icon`, with `SignalUrgency.glyph` for callers holding no level —
+  the notification inbox renders a row for an `urgency_change` *notification* and
+  has no urgency in hand). `SignalUrgency.pinAsset` is the *map's* vocabulary: on the map the pin
   is the thing being pointed at, but in the update-note dialog and the timeline row there is
   no map and a pin reads as *location* — the one thing an urgency change is not. Colour still
   carries the level, so the glyph only has to say "this is about urgency". The pin stays
-  wherever it explains the map: the markers, the legend, the filter sheet and the urgency
-  picker.
+  wherever it explains the map — the markers, the legend and the filter sheet — and
+  nowhere else: the state card's chip, the urgency picker's rows, the note dialog's badge
+  and the timeline row all take the glyph. It lives on the model beside `pinAsset`,
+  mirroring `SignalStatus.icon`, so the next surface cannot pick up a literal the way the
+  inbox had.
 - **Urgency change:** `UrgencyPicker`, in the manage sheet, for the **reporter or signal
   owner** (§4.8);
   everyone else sees the card's read-only urgency row (§4.6). Updates `urgency` + `lastUpdatedBy` and appends an
@@ -1891,6 +1896,20 @@ full-width child sat left — so the page stopped centring half way down.
   need it on the reporter path — `handleSignalUpdated` uses it to skip notifying the
   actor, and a stale value from an earlier status change would mute the wrong
   subscriber.
+- **Coordination writes go through one writer** (`SignalOwnershipService.coordinationBatch`):
+  the changed fields, the `coordinationStamp`, and the timeline events describing them, in
+  one batch. The three write paths that share it — the status dropdown / urgency picker
+  (`_applyLevelChange`), the tag picker, and the edit screen's Save — each used to spell it
+  out, and the stamp was already extracted once *because the edit screen forgot it*. Field
+  names come off `SignalEventType.signalField`, so a write and the event describing it
+  cannot name different fields. Events are passed already-encoded, so each payload stays
+  type-checked against its own subtype (§12.5a); taking the type and raw values here would
+  need an `Object?` pair and undo that split. **Trip-wire:** the note dialog takes one
+  composed headline per *combination* of changing fields (`updateNoteChangingTo`,
+  `updateNoteChangingNeedsTo`, `updateNoteChangingUrgencyAndNeeds`, plus the two ownership
+  ones). Five strings for two fields plus a claim is still readable; a *third* field
+  joining the note protocol should make the dialog take a list of pending changes instead
+  of adding a sixth.
 - **Update note (master spec §4.6):** every timeline-writing change — both level changes
   and a tag change (#80) — goes through
   `showUpdateNoteDialog` (`update_note_dialog.dart`) before anything is written. Confirm
