@@ -2094,13 +2094,19 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     if (note == null || !mounted) return;
 
     await _runGuarded(() async {
-      // **Known asymmetry**: the other three write paths on this screen
-      // (`_applyLevelChange`, `_claimCase`, `_addComment`) also subscribe the
-      // actor to the signal, and this one does not. Left alone rather than
-      // decided by the side door — #80 is about recording the change, and
-      // signing someone up for notifications is a separate call to make. The
-      // case holder is normally subscribed already, which is why nobody has
-      // noticed.
+      // **No `_subscribeToSignal` here, unlike the screen's other write paths,
+      // and it is not an oversight**: only the reporter or the current owner
+      // can reach this (`isSignalOwnerUpdate` in the rules, mirrored by the
+      // manage sheet's gate), and both are already subscribed by construction —
+      // the reporter by `subscribeCreatorToSignal` when the signal was created,
+      // the owner by `subscribe()` inside the `signalOwnership` callable when
+      // they claimed it. The call would `arrayUnion` an id that is already in
+      // the array, on every tag change.
+      //
+      // The one thing it would buy is self-healing, since creation-time
+      // subscription is its own write and can fail: the status and comment
+      // paths quietly repair that, and this one would not. A redundant write
+      // per tag edit was judged the worse trade.
       final batch = SignalOwnershipService.coordinationBatch(
         signalRef: _signalRef,
         actor: _userRef,
