@@ -26,37 +26,78 @@ class SignalSubscriptionService {
       SignalSubscriptionService._();
 
   /// One `users/{uid}` listener, shared by the Watching tab and every follow
-  /// button on screen.
+  /// button on screen: both are alive at once inside the tab shell, and each
+  /// extra listener is a separate billed read of the same document.
+  StreamController<Set<String>>? _controller;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _upstream;
+  String? _uid;
+
+  /// The last value seen, replayed to every late subscriber.
   ///
-  /// Cached and broadcast rather than opened per caller: the details screen and
-  /// the Watching tab are alive at the same time inside the shell, and each open
-  /// listener is a separate billed read of the same document.
-  Stream<Set<String>>? _cached;
-  String? _cachedUid;
+  /// **This is the part a plain `asBroadcastStream()` does not do**, and getting
+  /// it wrong is invisible until two screens are open at once: a broadcast
+  /// stream delivers the current snapshot to whoever listens first and nothing
+  /// at all to anyone who arrives afterwards, so — depending on which order the
+  /// user opened them — the follow button would sit on `initialData: false` and
+  /// offer "Follow" for a signal already followed, or the Watching tab would
+  /// spin forever on a tab that has data. Neither corrects itself until the
+  /// document happens to change. Same shape, and the same reason, as
+  /// `ModerationService.watchIsModerator`.
+  Set<String> _latest = const <String>{};
 
-  Stream<Set<String>> watchSubscriptions() {
+  /// Every signal id the user follows, live.
+  Stream<Set<String>> watchSubscriptions() async* {
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return Stream.value(const <String>{});
-
-    if (_cached == null || _cachedUid != uid) {
-      _cachedUid = uid;
-      _cached = FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .snapshots()
-          .map(_idsOf)
-          .handleError((Object e) {
-            debugPrint('Subscription stream failed: $e');
-          })
-          .asBroadcastStream();
+    if (uid == null) {
+      yield const <String>{};
+      return;
     }
-    return _cached!;
+
+    _ensureSubscription(uid);
+    yield _latest;
+    yield* _controller!.stream;
   }
 
   /// Whether the user follows [signalId], as a stream that never emits the same
   /// answer twice in a row.
   Stream<bool> watchIsFollowing(String signalId) =>
       watchSubscriptions().map((ids) => ids.contains(signalId)).distinct();
+
+  void _ensureSubscription(String uid) {
+    if (_controller != null && _uid == uid) return;
+
+    // An account switch: drop the previous uid's listener rather than leaking
+    // it. Left running it would keep reading a document the signed-out user can
+    // no longer access, and start erroring on every change.
+    _teardown();
+
+    _uid = uid;
+    _controller = StreamController<Set<String>>.broadcast();
+    _upstream = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .snapshots()
+        .listen(
+      (doc) {
+        final ids = _idsOf(doc);
+        // Deduped: `users/{uid}` is written for reasons that have nothing to do
+        // with following — an FCM token save, a test-mode sync — and a rebuild
+        // per unrelated write is a re-read of every followed signal.
+        if (setEquals(ids, _latest)) return;
+        _latest = ids;
+        _controller?.add(ids);
+      },
+      onError: (Object e) => debugPrint('Subscription stream failed: $e'),
+    );
+  }
+
+  void _teardown() {
+    unawaited(_upstream?.cancel());
+    unawaited(_controller?.close());
+    _upstream = null;
+    _controller = null;
+    _latest = const <String>{};
+  }
 
   static Set<String> _idsOf(DocumentSnapshot<Map<String, dynamic>> doc) {
     final raw = doc.data()?['signalSubscriptions'];
@@ -89,8 +130,5 @@ class SignalSubscriptionService {
 
   /// Drops the cached listener, so the next read opens one for the new account.
   @visibleForTesting
-  void reset() {
-    _cached = null;
-    _cachedUid = null;
-  }
+  void reset() => _teardown();
 }

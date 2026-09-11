@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -140,6 +141,37 @@ class _WatchedListState extends State<_WatchedList> {
   /// not flicker back while the write lands.
   final Set<String> _pendingUnfollow = <String>{};
 
+  /// The merged chunk queries, memoized against the id window they were built
+  /// for.
+  ///
+  /// **Not built in `build`.** `StreamBuilder` keys on stream identity, so
+  /// handing it a freshly-constructed stream every rebuild cancels and
+  /// re-listens: the list blanks to a spinner and re-reads up to a full page of
+  /// signal documents. `_unfollow` alone calls `setState` twice, so without this
+  /// a single Unfollow tap would do that twice — and `_pendingUnfollow` would
+  /// never suppress anything, because the list is a spinner for the whole window
+  /// in which the flag is set. The same lesson `_RemovedSignalsTab` records in
+  /// `my_signals_page.dart` and `_ActiveSignalsTab` applies.
+  Stream<List<QuerySnapshot<Map<String, dynamic>>>>? _signals;
+  List<String>? _window;
+
+  Stream<List<QuerySnapshot<Map<String, dynamic>>>> _signalsFor(
+    List<String> window,
+  ) {
+    if (_signals == null || !listEquals(_window, window)) {
+      _window = window;
+      _signals = mergeLatestList(
+        chunked(window, firestoreWhereInLimit)
+            .map((ids) => FirebaseFirestore.instance
+                .collection(widget.collection)
+                .where(FieldPath.documentId, whereIn: ids)
+                .snapshots())
+            .toList(),
+      );
+    }
+    return _signals!;
+  }
+
   Future<void> _unfollow(String signalId) async {
     final l10n = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
@@ -193,15 +225,8 @@ class _WatchedListState extends State<_WatchedList> {
         final window = all.take(widget.limit).toList();
         final hasMore = all.length > window.length;
 
-        final chunks = chunked(window, firestoreWhereInLimit)
-            .map((ids) => FirebaseFirestore.instance
-                .collection(widget.collection)
-                .where(FieldPath.documentId, whereIn: ids)
-                .snapshots())
-            .toList();
-
         return StreamBuilder<List<QuerySnapshot<Map<String, dynamic>>>>(
-          stream: mergeLatestList(chunks),
+          stream: _signalsFor(window),
           builder: (context, snapshot) {
             if (snapshot.hasError) {
               debugPrint('Watching stream failed: ${snapshot.error}');
@@ -235,11 +260,25 @@ class _WatchedListState extends State<_WatchedList> {
                 .where((s) => !_pendingUnfollow.contains(s.id))
                 .toList();
 
+            // `hasMore` is counted before the own-signal filter above, so a
+            // window can come back entirely filtered out while there are still
+            // older ids to page to. Reporting a signal subscribes you to it, and
+            // that is the main way this array grows — so somebody who reported
+            // the last 60 signals they follow would otherwise be shown "you are
+            // not following anything" with no way to reach the ones they are.
             if (signals.isEmpty) {
-              return StatusView.empty(
-                icon: Icons.visibility_outlined,
-                title: l10n.noWatchedSignals,
-                hint: l10n.watchedSignalsHint,
+              if (!hasMore) {
+                return StatusView.empty(
+                  icon: Icons.visibility_outlined,
+                  title: l10n.noWatchedSignals,
+                  hint: l10n.watchedSignalsHint,
+                );
+              }
+              return Center(
+                child: TextButton(
+                  onPressed: widget.onLoadMore,
+                  child: Text(l10n.loadMore),
+                ),
               );
             }
 

@@ -49,6 +49,7 @@ class _MyNotificationsPageState extends ConsumerState<MyNotificationsPage> {
   // session.
   Stream<QuerySnapshot<Map<String, dynamic>>>? _inboxStream;
   bool? _inboxTestMode;
+  String? _inboxUid;
 
   @override
   void initState() {
@@ -273,12 +274,30 @@ class _MyNotificationsPageState extends ConsumerState<MyNotificationsPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Rebuilt on auth, not just read once. As a permanent tab this screen
+    // outlives a sign-out, and it is also a tab the app can *cold-start* onto
+    // (`initialShellLocation` deliberately allows it — the inbox is written for
+    // anonymous users too). Anonymous sign-in happens in `_bootstrapServices`
+    // after the first frame, so `currentUser` is null when this first builds:
+    // without a listener the tab would paint "please sign in" and stay there for
+    // the session, and after an account switch it would keep the previous uid's
+    // stream. Every other tab already wraps in this.
+    return StreamBuilder<User?>(
+      initialData: FirebaseAuth.instance.currentUser,
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, authSnapshot) => _build(context, authSnapshot.data),
+    );
+  }
+
+  Widget _build(BuildContext context, User? user) {
     final l10n = AppLocalizations.of(context);
-    final user = FirebaseAuth.instance.currentUser;
     final inbox = NotificationInboxService();
     final testMode = ref.watch(testModeProvider);
-    if (_inboxStream == null || _inboxTestMode != testMode) {
+    if (_inboxStream == null ||
+        _inboxTestMode != testMode ||
+        _inboxUid != user?.uid) {
       _inboxTestMode = testMode;
+      _inboxUid = user?.uid;
       _inboxStream = inbox.watchInbox();
     }
     final stream = _inboxStream;

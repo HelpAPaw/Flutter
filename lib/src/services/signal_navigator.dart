@@ -65,6 +65,21 @@ class SignalNavigator {
     return config.uri.path;
   }
 
+  /// Whether the tab shell itself is the top of the stack, with nothing pushed
+  /// over it.
+  ///
+  /// Deliberately **not** derived from [_currentPath]: go_router leaves
+  /// `currentConfiguration.uri` at the last `go()` location, so an imperative
+  /// `push` does not change it — on a tab it reads `/menu` whether or not the
+  /// New Signal wizard is open on top. The match list does tell the truth: the
+  /// shell alone is a single `ShellRouteMatch`, and anything pushed over it
+  /// appends an `ImperativeRouteMatch`.
+  bool get _shellIsOnTop {
+    final config = _router?.routerDelegate.currentConfiguration;
+    if (config == null || config.isEmpty) return false;
+    return config.matches.last is ShellRouteMatch;
+  }
+
   /// Whether a signal is already on screen — true when a deep link cold-launched
   /// the app straight into one.
   bool get isShowingSignal =>
@@ -96,10 +111,21 @@ class SignalNavigator {
     // map is the branch underneath. Skipped when nothing is attached: before the
     // first frame, or while the helper-tags gate is showing.
     //
-    // Deliberately not done for taps inside the app: an inbox row pushes
+    // **Only while the shell itself is on top**, and that guard is load-bearing.
+    // `goBranch` is `router.restore(_matchListForBranch(i))`, and go_router
+    // scopes a branch's saved match list by discarding every match after the
+    // shell route — so calling it while something is pushed over the shell
+    // *destroys that route*. A push notification arriving while the user is
+    // mid-way through the New Signal wizard would have thrown away their draft
+    // screen; same for Edit Signal. Backing out of the details page then returns
+    // to whatever they were doing, which is what it did before the bar existed.
+    //
+    // Deliberately not done for taps inside the app either: an inbox row pushes
     // straight from `my_notifications_page.dart`, and backing out of one should
     // return you to the inbox.
-    _showMapBranch?.call();
+    if (_shellIsOnTop) {
+      _showMapBranch?.call();
+    }
 
     router.push(location);
   }
