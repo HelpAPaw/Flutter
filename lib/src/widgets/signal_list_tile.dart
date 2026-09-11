@@ -31,10 +31,17 @@ class SignalListTile extends StatelessWidget {
   /// An extra chip in the metadata row, e.g. "You hold this".
   final Widget? badge;
 
-  static String formatDate(BuildContext context, DateTime date) => DateFormat(
-        'MMM d, yyyy',
-        Localizations.localeOf(context).languageCode,
-      ).format(date);
+  /// Cached per locale: this is called once per row, per build, and
+  /// constructing a `DateFormat` resolves the locale and parses the pattern
+  /// every time — identical work for every row on screen.
+  static final Map<String, DateFormat> _formats = <String, DateFormat>{};
+
+  static String formatDate(BuildContext context, DateTime date) {
+    final code = Localizations.localeOf(context).languageCode;
+    final format =
+        _formats.putIfAbsent(code, () => DateFormat('MMM d, yyyy', code));
+    return format.format(date);
+  }
 
   @override
   Widget build(BuildContext context) {

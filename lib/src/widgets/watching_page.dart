@@ -7,7 +7,6 @@ import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 
 import '../config/routes.dart';
-import '../models/signal.dart';
 import '../services/app_preferences_service.dart';
 import '../services/signal_subscription_service.dart';
 import '../utils/chunk.dart';
@@ -21,19 +20,52 @@ import 'status_view.dart';
 
 /// Signals the user follows — i.e. gets notified about — that are not their own.
 ///
-/// "Not their own" is resolved **after** the documents are fetched, by comparing
-/// `reporter` and `signalOwner` against the current uid. Doing it here rather
-/// than by subtracting a second query costs nothing: the documents are already
-/// in hand, and it is exact for the tri-state `signalOwner` (absent means the
-/// reporter holds it) in a way an equality query is not.
-class WatchingPage extends ConsumerStatefulWidget {
+/// "Not their own" is resolved **after** the documents are fetched, by asking
+/// the parsed [Signal] rather than re-deriving the rule from the raw map. Doing
+/// it here rather than by subtracting a second query costs nothing: the
+/// documents are already in hand, and `Signal.isHeldBy` is exact for the
+/// tri-state `signalOwner` (absent means the reporter holds it) in a way an
+/// equality query is not.
+class WatchingPage extends ConsumerWidget {
   const WatchingPage({super.key});
 
   @override
-  ConsumerState<WatchingPage> createState() => _WatchingPageState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+
+    // Watched, not read once: this screen lives for the whole session inside the
+    // shell, so a mid-session test-mode toggle has to re-point every query. The
+    // collection name is captured when a listener is *created*.
+    final testMode = ref.watch(testModeProvider);
+
+    return Scaffold(
+      appBar: AppBar(
+        // A tab root — nothing beneath it to go back to.
+        automaticallyImplyLeading: false,
+        title: AppBarTitle(l10n.watching),
+      ),
+      body: PageWidth(
+        child: _WatchedList(
+          // A new State, and so a fresh set of listeners, whenever the account
+          // or the mode changes.
+          key: ValueKey('$testMode:${FirebaseAuth.instance.currentUser?.uid}'),
+          collection: AppPreferencesService().signalsCollectionName,
+        ),
+      ),
+    );
+  }
 }
 
-class _WatchingPageState extends ConsumerState<WatchingPage> {
+class _WatchedList extends StatefulWidget {
+  const _WatchedList({super.key, required this.collection});
+
+  final String collection;
+
+  @override
+  State<_WatchedList> createState() => _WatchedListState();
+}
+
+class _WatchedListState extends State<_WatchedList> {
   /// How many followed signals are loaded. Two `whereIn` chunks to start.
   ///
   /// The subscription array is unbounded and nothing prunes it, so the tab must
@@ -43,115 +75,25 @@ class _WatchingPageState extends ConsumerState<WatchingPage> {
 
   int _limit = _pageSize;
 
-  /// Bumped by Retry, to tear down a failed listen and start a fresh one.
-  int _attempt = 0;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-
-    // Watched, not read once: this screen lives for the whole session inside the
-    // shell, so a mid-session test-mode toggle has to re-point every query. The
-    // collection name is captured when a listener is *created*.
-    final testMode = ref.watch(testModeProvider);
-    final collection = AppPreferencesService().signalsCollectionName;
-
-    return Scaffold(
-      appBar: AppBar(
-        // A tab root — nothing beneath it to go back to.
-        automaticallyImplyLeading: false,
-        title: AppBarTitle(l10n.watching),
-      ),
-      body: PageWidth(
-        child: StreamBuilder<User?>(
-          initialData: FirebaseAuth.instance.currentUser,
-          stream: FirebaseAuth.instance.authStateChanges(),
-          builder: (context, authSnapshot) {
-            final user = authSnapshot.data;
-            if (user == null || user.isAnonymous) {
-              return _SignInWall(l10n: l10n);
-            }
-            return _WatchedList(
-              key: ValueKey('$testMode:${user.uid}:$_limit:$_attempt'),
-              uid: user.uid,
-              collection: collection,
-              limit: _limit,
-              onRetry: () => setState(() => _attempt++),
-              onLoadMore: () =>
-                  setState(() => _limit += firestoreWhereInLimit),
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class _SignInWall extends StatelessWidget {
-  const _SignInWall({required this.l10n});
-
-  final AppLocalizations l10n;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.visibility_outlined,
-            size: 80,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-          const SizedBox(height: 16),
-          Text(l10n.pleaseSignInToViewSignals),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: () => context.push(Routes.signIn),
-            child: Text(l10n.signIn),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _WatchedList extends StatefulWidget {
-  const _WatchedList({
-    super.key,
-    required this.uid,
-    required this.collection,
-    required this.limit,
-    required this.onRetry,
-    required this.onLoadMore,
-  });
-
-  final String uid;
-  final String collection;
-  final int limit;
-  final VoidCallback onRetry;
-  final VoidCallback onLoadMore;
-
-  @override
-  State<_WatchedList> createState() => _WatchedListState();
-}
-
-class _WatchedListState extends State<_WatchedList> {
-  /// Ids whose unfollow is in flight or has just been undone, so the row does
-  /// not flicker back while the write lands.
+  /// Ids whose unfollow is in flight, so the row does not linger while the
+  /// write lands.
   final Set<String> _pendingUnfollow = <String>{};
 
+  /// Held, not rebuilt. **Every one of these returns a new object per call** —
+  /// `authStateChanges()` and `watchSubscriptions()` both do — and
+  /// `StreamBuilder` compares streams by identity, so building them in `build`
+  /// makes each rebuild cancel and re-listen. For the subscriptions stream that
+  /// is not merely churn: its builder branches on `connectionState`, so the
+  /// subtree below it is discarded, which cancels `mergeLatestList` and with it
+  /// every `whereIn` chunk listener — turning one Unfollow tap into a re-read of
+  /// the whole loaded window.
+  late final Stream<User?> _auth = FirebaseAuth.instance.authStateChanges();
+  late final Stream<Set<String>> _subscriptions =
+      SignalSubscriptionService.instance.watchSubscriptions();
+
   /// The merged chunk queries, memoized against the id window they were built
-  /// for.
-  ///
-  /// **Not built in `build`.** `StreamBuilder` keys on stream identity, so
-  /// handing it a freshly-constructed stream every rebuild cancels and
-  /// re-listens: the list blanks to a spinner and re-reads up to a full page of
-  /// signal documents. `_unfollow` alone calls `setState` twice, so without this
-  /// a single Unfollow tap would do that twice — and `_pendingUnfollow` would
-  /// never suppress anything, because the list is a spinner for the whole window
-  /// in which the flag is set. The same lesson `_RemovedSignalsTab` records in
-  /// `my_signals_page.dart` and `_ActiveSignalsTab` applies.
+  /// for — the same reason `_ActiveSignalsTab` and `_RemovedSignalsTab` memoize
+  /// theirs.
   Stream<List<QuerySnapshot<Map<String, dynamic>>>>? _signals;
   List<String>? _window;
 
@@ -198,12 +140,44 @@ class _WatchedListState extends State<_WatchedList> {
     }
   }
 
+  Widget _emptyState(AppLocalizations l10n) => StatusView.empty(
+        icon: Icons.visibility_outlined,
+        title: l10n.noWatchedSignals,
+        hint: l10n.watchedSignalsHint,
+      );
+
+  Widget _loadMoreButton(AppLocalizations l10n) => Center(
+        child: TextButton(
+          onPressed: () => setState(() => _limit += firestoreWhereInLimit),
+          child: Text(l10n.loadMore),
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
 
+    return StreamBuilder<User?>(
+      initialData: FirebaseAuth.instance.currentUser,
+      stream: _auth,
+      builder: (context, authSnapshot) {
+        final user = authSnapshot.data;
+        if (user == null || user.isAnonymous) {
+          return StatusView.signIn(
+            icon: Icons.visibility_outlined,
+            title: l10n.pleaseSignInToViewSignals,
+            onSignIn: () => context.push(Routes.signIn),
+            signInLabel: l10n.signIn,
+          );
+        }
+        return _buildList(context, l10n, user.uid);
+      },
+    );
+  }
+
+  Widget _buildList(BuildContext context, AppLocalizations l10n, String uid) {
     return StreamBuilder<Set<String>>(
-      stream: SignalSubscriptionService.instance.watchSubscriptions(),
+      stream: _subscriptions,
       builder: (context, subsSnapshot) {
         if (subsSnapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -212,17 +186,11 @@ class _WatchedListState extends State<_WatchedList> {
         // Newest-followed first: `arrayUnion` appends, and re-adding an id that
         // is already there does not move it, so the tail of the array is the
         // most recent interest.
-        final all = (subsSnapshot.data ?? const <String>{}).toList().reversed
-            .toList();
-        if (all.isEmpty) {
-          return StatusView.empty(
-            icon: Icons.visibility_outlined,
-            title: l10n.noWatchedSignals,
-            hint: l10n.watchedSignalsHint,
-          );
-        }
+        final all =
+            (subsSnapshot.data ?? const <String>{}).toList().reversed.toList();
+        if (all.isEmpty) return _emptyState(l10n);
 
-        final window = all.take(widget.limit).toList();
+        final window = all.take(_limit).toList();
         final hasMore = all.length > window.length;
 
         return StreamBuilder<List<QuerySnapshot<Map<String, dynamic>>>>(
@@ -233,7 +201,10 @@ class _WatchedListState extends State<_WatchedList> {
               return StatusView.error(
                 title: l10n.couldNotLoadWatched,
                 hint: l10n.couldNotLoadSignalsHint,
-                onRetry: widget.onRetry,
+                onRetry: () => setState(() {
+                  _signals = null;
+                  _window = null;
+                }),
               );
             }
             if (!snapshot.hasData) {
@@ -244,61 +215,37 @@ class _WatchedListState extends State<_WatchedList> {
             // signal, one purged after its recovery window, or an id belonging
             // to the other collection while test mode is the other way round.
             // Nothing to filter and nothing to report.
-            final docs = snapshot.data!.expand((s) => s.docs).toList();
+            final entries = sortNewestFirst(
+              snapshot.data!.expand((s) => s.docs),
+            );
 
             final userRef =
-                FirebaseFirestore.instance.collection('users').doc(widget.uid);
-            final theirs = docs.where((doc) {
-              final data = doc.data();
-              if (data['reporter'] == userRef) return false;
-              // Tri-state: only an explicit reference means somebody holds it.
-              final owner = data['signalOwner'];
-              return !(owner is DocumentReference && owner == userRef);
+                FirebaseFirestore.instance.collection('users').doc(uid);
+            final theirs = entries.where((entry) {
+              if (_pendingUnfollow.contains(entry.id)) return false;
+              final signal = entry.signal;
+              return signal.reporter != userRef && !signal.isHeldBy(uid);
             }).toList();
 
-            final signals = sortNewestFirst(theirs)
-                .where((s) => !_pendingUnfollow.contains(s.id))
-                .toList();
-
-            // `hasMore` is counted before the own-signal filter above, so a
-            // window can come back entirely filtered out while there are still
-            // older ids to page to. Reporting a signal subscribes you to it, and
-            // that is the main way this array grows — so somebody who reported
-            // the last 60 signals they follow would otherwise be shown "you are
-            // not following anything" with no way to reach the ones they are.
-            if (signals.isEmpty) {
-              if (!hasMore) {
-                return StatusView.empty(
-                  icon: Icons.visibility_outlined,
-                  title: l10n.noWatchedSignals,
-                  hint: l10n.watchedSignalsHint,
-                );
-              }
-              return Center(
-                child: TextButton(
-                  onPressed: widget.onLoadMore,
-                  child: Text(l10n.loadMore),
-                ),
-              );
+            // `hasMore` is counted before the filter above, so a window can come
+            // back entirely filtered out while there are still older ids to page
+            // to. Reporting a signal subscribes you to it, and that is the main
+            // way this array grows — so somebody who reported the last 60
+            // signals they follow would otherwise be shown "you are not
+            // following anything" with no way to reach the ones they are.
+            if (theirs.isEmpty) {
+              return hasMore ? _loadMoreButton(l10n) : _emptyState(l10n);
             }
 
             return ListView.builder(
               padding: const EdgeInsets.all(16),
-              itemCount: signals.length + (hasMore ? 1 : 0),
+              itemCount: theirs.length + (hasMore ? 1 : 0),
               itemBuilder: (context, index) {
-                if (index == signals.length) {
-                  return Center(
-                    child: TextButton(
-                      onPressed: widget.onLoadMore,
-                      child: Text(l10n.loadMore),
-                    ),
-                  );
-                }
+                if (index == theirs.length) return _loadMoreButton(l10n);
 
-                final entry = signals[index];
-                final signal = Signal.fromJson(entry.rawData);
+                final entry = theirs[index];
                 return SignalListTile(
-                  signal: signal,
+                  signal: entry.signal,
                   onTap: () => context.push(Routes.signalDetails(entry.id)),
                   trailing: PopupMenuButton<void>(
                     // An explicit menu as well as a swipe: every other list in

@@ -7,7 +7,7 @@ import 'package:help_a_paw/src/config/routes.dart';
 import 'package:help_a_paw/src/services/app_preferences_service.dart';
 import 'package:help_a_paw/src/state/map_state.dart';
 import 'package:help_a_paw/src/viewmodels/map_view_model.dart';
-import 'package:help_a_paw/src/widgets/home_bottom_bar.dart';
+import 'package:help_a_paw/src/services/unread_count_provider.dart';
 import 'package:help_a_paw/src/widgets/home_shell.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -16,8 +16,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// the map, remembering where you were, and getting out of the way while a
 /// signal is being placed.
 ///
-/// The real bar reads an unread count from Firestore, so these pump a stub one
-/// through `bottomBarBuilder` — the point here is the shell, not the badge.
+/// The real bar reads its unread count from Firestore, so these override
+/// `unreadCountProvider` in the scope the test is already building — the point
+/// here is the shell, not the badge.
 class _StubMapViewModel extends MapViewModel {
   _StubMapViewModel(this._placing);
 
@@ -43,13 +44,8 @@ void main() {
       initialLocation: initialLocation,
       routes: [
         StatefulShellRoute.indexedStack(
-          builder: (context, state, navigationShell) => HomeShell(
-            navigationShell: navigationShell,
-            bottomBarBuilder: (context, index, onSelected) => HomeBottomBar(
-              currentIndex: index,
-              onDestinationSelected: onSelected,
-            ),
-          ),
+          builder: (context, state, navigationShell) =>
+              HomeShell(navigationShell: navigationShell),
           branches: [
             for (final path in Routes.shellBranchPaths)
               StatefulShellBranch(
@@ -71,6 +67,7 @@ void main() {
         overrides: [
           mapViewModelProvider
               .overrideWith(() => _StubMapViewModel(placingSignal)),
+          unreadCountProvider.overrideWith((ref) => Stream.value(0)),
         ],
         child: MaterialApp.router(
           localizationsDelegates: AppLocalizations.localizationsDelegates,

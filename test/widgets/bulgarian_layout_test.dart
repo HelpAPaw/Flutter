@@ -23,28 +23,11 @@ import 'package:help_a_paw/src/widgets/urgency_picker.dart';
 void main() {
   /// A 411dp-wide phone — the SM-J610FN the device pass runs on, and the
   /// narrowest width the app supports.
-  Future<void> pumpAt411dp(WidgetTester tester, Widget home) async {
-    tester.view.physicalSize = const Size(1233, 2154);
-    tester.view.devicePixelRatio = 3.0;
-    addTearDown(tester.view.reset);
-    await tester.pumpWidget(
-      MaterialApp(
-        locale: const Locale('bg'),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: home,
-      ),
-    );
-    await tester.pumpAndSettle();
-  }
-
-  /// The same phone at a larger text scale, which is where a five-destination
-  /// bar runs out of room first.
-  Future<void> pumpScaled(
+  Future<void> pumpAt411dp(
     WidgetTester tester,
-    Widget home,
-    double textScale,
-  ) async {
+    Widget home, {
+    double textScale = 1.0,
+  }) async {
     tester.view.physicalSize = const Size(1233, 2154);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
@@ -375,7 +358,7 @@ void main() {
         );
 
     testWidgets('fits five Bulgarian labels at 411dp', (tester) async {
-      await pumpScaled(tester, bar(), 1.0);
+      await pumpAt411dp(tester, bar());
       expectNoOverflow(tester);
 
       // The short forms, not the screen titles.
@@ -388,18 +371,18 @@ void main() {
     testWidgets('still fits at the scale the device pass uses', (tester) async {
       // The bar clamps itself to 1.2 internally, so 1.3 is the real test of
       // whether that clamp is doing its job.
-      await pumpScaled(tester, bar(), 1.3);
+      await pumpAt411dp(tester, bar(), textScale: 1.3);
       expectNoOverflow(tester);
     });
 
     testWidgets('the unread badge does not push the row over', (tester) async {
-      await pumpScaled(tester, bar(unread: 99), 1.3);
+      await pumpAt411dp(tester, bar(unread: 99), textScale: 1.3);
       expectNoOverflow(tester);
       expect(find.text('99'), findsOneWidget);
     });
 
     testWidgets('no badge is drawn when nothing is unread', (tester) async {
-      await pumpScaled(tester, bar(), 1.0);
+      await pumpAt411dp(tester, bar());
       expect(find.byType(Badge), findsNothing);
     });
   });

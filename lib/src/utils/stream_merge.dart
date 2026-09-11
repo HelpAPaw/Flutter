@@ -1,65 +1,5 @@
 import 'dart:async';
 
-/// Combines two streams into one that emits whenever either side does.
-///
-/// Hand-rolled rather than pulled from `rxdart` or `package:async`: neither is a
-/// declared dependency, and this repo's npm/pub posture (see CLAUDE.md) is that a
-/// new dependency has to earn itself. Twenty lines is cheaper than a supply
-/// chain.
-///
-/// Nothing is emitted until **both** sides have produced a first value, so a
-/// caller merging two Firestore queries renders one complete list rather than a
-/// short one that visibly grows a frame later. A side that has failed can still
-/// satisfy that by emitting a fallback — see [onErrorEmitPartial].
-///
-/// Errors are forwarded, not swallowed. A caller that would rather degrade than
-/// fail should map its own stream's errors to a sentinel before merging.
-Stream<R> mergeLatest2<A, B, R>(
-  Stream<A> a,
-  Stream<B> b,
-  R Function(A a, B b) combine,
-) {
-  late StreamController<R> controller;
-  StreamSubscription<A>? subA;
-  StreamSubscription<B>? subB;
-
-  A? latestA;
-  B? latestB;
-  var hasA = false;
-  var hasB = false;
-
-  void emit() {
-    if (hasA && hasB) controller.add(combine(latestA as A, latestB as B));
-  }
-
-  controller = StreamController<R>(
-    onListen: () {
-      subA = a.listen(
-        (value) {
-          latestA = value;
-          hasA = true;
-          emit();
-        },
-        onError: controller.addError,
-      );
-      subB = b.listen(
-        (value) {
-          latestB = value;
-          hasB = true;
-          emit();
-        },
-        onError: controller.addError,
-      );
-    },
-    onCancel: () async {
-      await subA?.cancel();
-      await subB?.cancel();
-    },
-  );
-
-  return controller.stream;
-}
-
 /// Replaces a stream's errors with [fallback], so a merge can continue on one
 /// side when the other is broken.
 ///
@@ -85,6 +25,16 @@ Stream<T> onErrorEmitPartial<T>(
 
 /// Combines a fixed list of streams into one that emits the latest value of
 /// each, in the same order, once every one of them has produced a value.
+///
+/// Hand-rolled rather than pulled from `rxdart` or `package:async`: neither is a
+/// declared dependency, and this repo's pub posture (see CLAUDE.md) is that a
+/// new dependency has to earn itself. Forty lines is cheaper than a supply
+/// chain.
+///
+/// Nothing is emitted until **every** side has produced a first value, so a
+/// caller merging queries renders one complete list rather than a short one that
+/// visibly grows a frame later. A side that has failed can still satisfy that by
+/// emitting a fallback — see [onErrorEmitPartial].
 ///
 /// Exists for Firestore's 30-value `whereIn` cap: a list of followed signals is
 /// one query per chunk, and the screen wants them as a single list rather than a

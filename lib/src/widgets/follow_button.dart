@@ -34,6 +34,14 @@ class FollowButton extends StatefulWidget {
 }
 
 class _FollowButtonState extends State<FollowButton> {
+  /// Held, not rebuilt in `build`. `watchIsFollowing` is an `async*` chain, so
+  /// each call returns a new stream; `StreamBuilder` compares by identity and
+  /// would re-listen on every rebuild of this screen — dropping back to
+  /// `initialData: false` each time, which flickers a followed signal's button
+  /// to "Follow".
+  late final Stream<bool> _following =
+      SignalSubscriptionService.instance.watchIsFollowing(widget.signalId);
+
   /// The state we are optimistically showing while a write is in flight.
   ///
   /// Wins over the stream until the write lands or fails: the round trip is long
@@ -81,8 +89,7 @@ class _FollowButtonState extends State<FollowButton> {
 
     return StreamBuilder<bool>(
       initialData: false,
-      stream: SignalSubscriptionService.instance
-          .watchIsFollowing(widget.signalId),
+      stream: _following,
       builder: (context, snapshot) {
         final following = _pending ?? snapshot.data ?? false;
         final busy = _pending != null;

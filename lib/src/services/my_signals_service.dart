@@ -45,16 +45,15 @@ class MySignalsService {
         .orderBy('createdAt', descending: true)
         .snapshots();
 
-    return mergeLatest2<QuerySnapshot<Map<String, dynamic>>,
-        List<QueryDocumentSnapshot<Map<String, dynamic>>>, List<SignalWithId>>(
-      reported,
+    // Both sides mapped to `.docs` so one merge helper serves them: they only
+    // needed different types because one was left as a raw snapshot.
+    return mergeLatestList<List<QueryDocumentSnapshot<Map<String, dynamic>>>>([
+      reported.map((s) => s.docs),
       onErrorEmitPartial(
         owned.map((s) => s.docs),
         const [],
         onError: (e) => debugPrint('Owned signals stream failed: $e'),
       ),
-      (reportedSnapshot, ownedDocs) =>
-          mergeMine(reportedSnapshot.docs, ownedDocs),
-    );
+    ]).map((sides) => mergeMine(sides[0], sides[1]));
   }
 }

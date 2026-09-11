@@ -58,6 +58,13 @@ class SignalSubscriptionService {
     yield* _controller!.stream;
   }
 
+  /// Whether the user follows [signalId] right now, from the cached value.
+  ///
+  /// Synchronous on purpose: the alternative at the one call site was a `get()`
+  /// on `users/{uid}` — a billed read, on the comment-post path, of a document
+  /// this service is already listening to.
+  bool isFollowing(String signalId) => _latest.contains(signalId);
+
   /// Whether the user follows [signalId], as a stream that never emits the same
   /// answer twice in a row.
   Stream<bool> watchIsFollowing(String signalId) =>

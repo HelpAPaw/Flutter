@@ -39,6 +39,10 @@ class _MenuPageState extends State<MenuPage> {
   Stream<bool>? _moderatorStream;
   String? _moderatorUid;
 
+  /// Held for the same reason the moderator stream is cached: `userChanges()`
+  /// returns a new object per call.
+  late final Stream<User?> _userChanges = FirebaseAuth.instance.userChanges();
+
   Stream<bool> _moderatorStreamFor(String? uid) {
     if (_moderatorStream == null || _moderatorUid != uid) {
       _moderatorUid = uid;
@@ -121,7 +125,7 @@ class _MenuPageState extends State<MenuPage> {
           // userChanges() rather than authStateChanges(): the latter only fires
           // on sign-in/sign-out, so editing the name or avatar on the profile
           // screen left this row showing the old values until the next launch.
-          stream: FirebaseAuth.instance.userChanges(),
+          stream: _userChanges,
           initialData: FirebaseAuth.instance.currentUser,
           builder: (context, snapshot) {
             final user = snapshot.data;

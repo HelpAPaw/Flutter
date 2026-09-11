@@ -51,6 +51,10 @@ class _MyNotificationsPageState extends ConsumerState<MyNotificationsPage> {
   bool? _inboxTestMode;
   String? _inboxUid;
 
+  /// Held: `authStateChanges()` returns a new object per call, and
+  /// `StreamBuilder` compares by identity.
+  late final Stream<User?> _auth = FirebaseAuth.instance.authStateChanges();
+
   @override
   void initState() {
     super.initState();
@@ -284,7 +288,7 @@ class _MyNotificationsPageState extends ConsumerState<MyNotificationsPage> {
     // stream. Every other tab already wraps in this.
     return StreamBuilder<User?>(
       initialData: FirebaseAuth.instance.currentUser,
-      stream: FirebaseAuth.instance.authStateChanges(),
+      stream: _auth,
       builder: (context, authSnapshot) => _build(context, authSnapshot.data),
     );
   }

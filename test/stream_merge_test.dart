@@ -5,84 +5,116 @@ import 'package:help_a_paw/src/utils/stream_merge.dart';
 
 /// Hand-rolled because neither rxdart nor package:async is a declared
 /// dependency. The behaviours worth pinning are the ones a list screen depends
-/// on: nothing is emitted half-built, and both subscriptions are released.
+/// on: nothing is emitted half-built, and every subscription is released.
 void main() {
-  test('waits for both sides before emitting anything', () async {
-    final a = StreamController<int>();
-    final b = StreamController<int>();
-    final seen = <String>[];
+  group('mergeLatestList', () {
+    test('emits one empty list for no sources', () async {
+      expect(await mergeLatestList<int>([]).first, isEmpty);
+    });
 
-    final sub = mergeLatest2(a.stream, b.stream, (x, y) => '$x/$y')
-        .listen(seen.add);
+    test('waits for every side before emitting anything', () async {
+      final a = StreamController<int>();
+      final b = StreamController<int>();
+      final seen = <List<int>>[];
 
-    a.add(1);
-    await pumpEventQueue();
-    expect(seen, isEmpty, reason: 'one side is not a complete list');
+      final sub = mergeLatestList([a.stream, b.stream]).listen(seen.add);
 
-    b.add(2);
-    await pumpEventQueue();
-    expect(seen, ['1/2']);
+      a.add(1);
+      await pumpEventQueue();
+      expect(seen, isEmpty, reason: 'one side is not a complete list');
 
-    await sub.cancel();
-    await a.close();
-    await b.close();
-  });
+      b.add(2);
+      await pumpEventQueue();
+      expect(seen, [
+        [1, 2]
+      ]);
 
-  test('re-emits on every later change from either side', () async {
-    final a = StreamController<int>();
-    final b = StreamController<int>();
-    final seen = <String>[];
+      await sub.cancel();
+      await a.close();
+      await b.close();
+    });
 
-    final sub = mergeLatest2(a.stream, b.stream, (x, y) => '$x/$y')
-        .listen(seen.add);
+    test('re-emits on every later change, preserving source order', () async {
+      final a = StreamController<int>();
+      final b = StreamController<int>();
+      final seen = <List<int>>[];
 
-    a.add(1);
-    b.add(2);
-    await pumpEventQueue();
-    a.add(3);
-    await pumpEventQueue();
-    b.add(4);
-    await pumpEventQueue();
+      final sub = mergeLatestList([a.stream, b.stream]).listen(seen.add);
 
-    expect(seen, ['1/2', '3/2', '3/4']);
+      a.add(1);
+      b.add(2);
+      await pumpEventQueue();
+      a.add(3);
+      await pumpEventQueue();
+      b.add(4);
+      await pumpEventQueue();
 
-    await sub.cancel();
-    await a.close();
-    await b.close();
-  });
+      expect(seen, [
+        [1, 2],
+        [3, 2],
+        [3, 4],
+      ]);
 
-  test('cancelling releases both upstream subscriptions', () async {
-    final a = StreamController<int>();
-    final b = StreamController<int>();
+      await sub.cancel();
+      await a.close();
+      await b.close();
+    });
 
-    final sub = mergeLatest2(a.stream, b.stream, (x, y) => x + y).listen((_) {});
-    await pumpEventQueue();
-    expect(a.hasListener, isTrue);
-    expect(b.hasListener, isTrue);
+    test('cancelling releases every upstream subscription', () async {
+      final a = StreamController<int>();
+      final b = StreamController<int>();
 
-    await sub.cancel();
-    expect(a.hasListener, isFalse);
-    expect(b.hasListener, isFalse);
+      final sub = mergeLatestList([a.stream, b.stream]).listen((_) {});
+      await pumpEventQueue();
+      expect(a.hasListener, isTrue);
+      expect(b.hasListener, isTrue);
 
-    await a.close();
-    await b.close();
-  });
+      await sub.cancel();
+      expect(a.hasListener, isFalse);
+      expect(b.hasListener, isFalse);
 
-  test('an error is forwarded rather than swallowed', () async {
-    final a = StreamController<int>();
-    final b = StreamController<int>();
-    Object? caught;
+      await a.close();
+      await b.close();
+    });
 
-    final sub = mergeLatest2(a.stream, b.stream, (x, y) => x + y)
-        .listen((_) {}, onError: (Object e) => caught = e);
+    test('an error is forwarded rather than swallowed', () async {
+      final a = StreamController<int>();
+      final b = StreamController<int>();
+      Object? caught;
 
-    a.addError(StateError('boom'));
-    await pumpEventQueue();
-    expect(caught, isStateError);
+      final sub = mergeLatestList([a.stream, b.stream])
+          .listen((_) {}, onError: (Object e) => caught = e);
 
-    await sub.cancel();
-    await a.close();
-    await b.close();
+      a.addError(StateError('boom'));
+      await pumpEventQueue();
+      expect(caught, isStateError);
+
+      await sub.cancel();
+      await a.close();
+      await b.close();
+    });
+
+    test('scales past two sources', () async {
+      final controllers = List.generate(4, (_) => StreamController<int>());
+      final seen = <List<int>>[];
+
+      final sub = mergeLatestList(controllers.map((c) => c.stream).toList())
+          .listen(seen.add);
+
+      for (var i = 0; i < controllers.length; i++) {
+        controllers[i].add(i);
+        await pumpEventQueue();
+      }
+
+      expect(seen, [
+        [0, 1, 2, 3]
+      ]);
+
+      await sub.cancel();
+      for (final c in controllers) {
+        await c.close();
+      }
+    });
   });
 
   group('onErrorEmitPartial', () {
@@ -95,11 +127,10 @@ void main() {
       final logged = <Object>[];
       final seen = <List<int>>[];
 
-      final sub = mergeLatest2(
+      final sub = mergeLatestList([
         reported.stream,
         onErrorEmitPartial(owned.stream, const <int>[], onError: logged.add),
-        (r, o) => [...r, ...o],
-      ).listen(seen.add);
+      ]).map((sides) => [...sides[0], ...sides[1]]).listen(seen.add);
 
       reported.add([1, 2]);
       owned.addError(StateError('index not ready'));

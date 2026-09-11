@@ -1862,7 +1862,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
           'mentions': [for (final mention in mentions) mention.toJson()],
       });
 
-      await _subscribeToSignal(userId);
+      await _subscribeToSignal();
 
       _newCommentController.clear();
       FocusManager.instance.primaryFocus?.unfocus();
@@ -1888,28 +1888,15 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// with nothing having said so. Rather than a second `signalUnsubscriptions`
   /// array — which the fan-out in `functions/src/index.ts` would also have to
   /// honour — the resurrection stays, and says so, with an Undo.
-  Future<void> _subscribeToSignal(String userId) async {
-    var wasFollowing = true;
-    try {
-      final before = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .get();
-      final ids = before.data()?['signalSubscriptions'];
-      wasFollowing = ids is List && ids.contains(widget.signalId);
-    } catch (e) {
-      // Only decides whether to mention it. Assume they were already following
-      // rather than announcing something that may not have changed.
-      debugPrint('Could not read subscription state: $e');
-    }
+  Future<void> _subscribeToSignal() async {
+    // Read before the write, from the listener `FollowButton` already has open
+    // on this screen — not a fresh `get()`, which would be a billed read per
+    // comment posted.
+    final wasFollowing =
+        SignalSubscriptionService.instance.isFollowing(widget.signalId);
 
     try {
-      await FirebaseFirestore.instance.collection('users').doc(userId).set(
-        {
-          'signalSubscriptions': FieldValue.arrayUnion([widget.signalId]),
-        },
-        SetOptions(merge: true),
-      );
+      await SignalSubscriptionService.instance.follow(widget.signalId);
     } catch (e) {
       debugPrint('Error subscribing to signal: $e');
       return;
@@ -2344,7 +2331,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     try {
       // The subscription is independent and best-effort (it swallows its own
       // errors), so it overlaps the commit instead of adding a round trip.
-      await Future.wait([batch.commit(), _subscribeToSignal(user.uid)]);
+      await Future.wait([batch.commit(), _subscribeToSignal()]);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

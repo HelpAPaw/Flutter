@@ -1,14 +1,13 @@
 import 'dart:async';
 
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../config/routes.dart';
 import '../services/app_preferences_service.dart';
-import '../services/notification_inbox_service.dart';
 import '../services/signal_navigator.dart';
+import '../services/unread_count_provider.dart';
 import '../viewmodels/map_view_model.dart';
 import 'home_bottom_bar.dart';
 
@@ -36,21 +35,9 @@ import 'home_bottom_bar.dart';
 /// to change, the seam is one `isMapVisibleProvider` gating
 /// `signalsStreamProvider`.
 class HomeShell extends ConsumerStatefulWidget {
-  const HomeShell({
-    super.key,
-    required this.navigationShell,
-    this.bottomBarBuilder,
-  });
+  const HomeShell({super.key, required this.navigationShell});
 
   final StatefulNavigationShell navigationShell;
-
-  /// Builds the bar, given the selected index and a selection callback.
-  ///
-  /// Injectable for one reason: the default reads the unread count from
-  /// Firestore, and a widget test that wants to check the back behaviour or the
-  /// placement hide should not have to stand up Firebase to do it.
-  final Widget Function(BuildContext context, int index, ValueChanged<int>)?
-      bottomBarBuilder;
 
   @override
   ConsumerState<HomeShell> createState() => _HomeShellState();
@@ -83,30 +70,6 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   }
 
   void _showMapBranch() => widget.navigationShell.goBranch(0);
-
-  /// The inbox badge's unread count.
-  ///
-  /// Cached so the shell's frequent rebuilds — every tab switch is one — don't
-  /// open a fresh Firestore listener each time and re-read every unread
-  /// document.
-  ///
-  /// Keyed on **both** uid and test mode, unlike the drawer this replaces. The
-  /// drawer was disposed every time it closed, which silently repaired a stale
-  /// key; the shell lives for the whole session. The inbox query is scoped by
-  /// `testMode` at *subscription* time, so a stream opened before the seven-tap
-  /// gesture would keep counting the other mode's notifications forever.
-  Stream<int>? _unread;
-  String? _unreadUid;
-  bool? _unreadTestMode;
-
-  Stream<int> _unreadStream(String? uid, bool testMode) {
-    if (_unread == null || _unreadUid != uid || _unreadTestMode != testMode) {
-      _unreadUid = uid;
-      _unreadTestMode = testMode;
-      _unread = NotificationInboxService().watchUnreadCount();
-    }
-    return _unread!;
-  }
 
   /// Records the tab for the next cold start.
   ///
@@ -157,25 +120,13 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         body: widget.navigationShell,
         bottomNavigationBar: placingSignal
             ? null
-            : widget.bottomBarBuilder?.call(context, index, _select) ??
-                _badgedBar(index),
-      ),
-    );
-  }
-
-  Widget _badgedBar(int index) {
-    final testMode = ref.watch(testModeProvider);
-    return StreamBuilder<User?>(
-      initialData: FirebaseAuth.instance.currentUser,
-      stream: FirebaseAuth.instance.userChanges(),
-      builder: (context, authSnapshot) => StreamBuilder<int>(
-        initialData: 0,
-        stream: _unreadStream(authSnapshot.data?.uid, testMode),
-        builder: (context, unreadSnapshot) => HomeBottomBar(
-          currentIndex: index,
-          unreadCount: unreadSnapshot.data ?? 0,
-          onDestinationSelected: _select,
-        ),
+            : HomeBottomBar(
+                currentIndex: index,
+                // `.value ?? 0` rather than a spinner: a badge is chrome, and
+                // "no number yet" and "nothing unread" should look the same.
+                unreadCount: ref.watch(unreadCountProvider).value ?? 0,
+                onDestinationSelected: _select,
+              ),
       ),
     );
   }

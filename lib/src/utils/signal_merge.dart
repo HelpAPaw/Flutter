@@ -67,8 +67,18 @@ List<SignalWithId> mergeMine(
 
 /// One query's documents, newest first — the same ordering [mergeMine] applies,
 /// so every list of signals in the app reads the same way.
+///
+/// Calls the generic directly rather than `mergeMine(docs, const [])`: that
+/// spelling works, but it sends anyone tracing the Watching tab's ordering into
+/// a doc comment about the reported/owned overlap, which has nothing to do with
+/// it.
 List<SignalWithId> sortNewestFirst(Iterable<DocumentSnapshot> docs) =>
-    mergeMine(docs, const []);
+    mergeByIdNewestFirst<DocumentSnapshot>(
+      docs,
+      const [],
+      idOf: (doc) => doc.id,
+      createdAtOf: _createdAt,
+    ).map(SignalWithId.fromDocument).toList();
 
 Timestamp? _createdAt(DocumentSnapshot doc) {
   final data = doc.data();

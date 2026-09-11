@@ -4,13 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
-import 'package:help_a_paw/src/models/signal.dart';
 import 'package:help_a_paw/src/widgets/level_chip.dart';
 import 'package:help_a_paw/src/services/app_preferences_service.dart';
 import 'package:help_a_paw/src/services/my_signals_service.dart';
 import 'package:help_a_paw/src/repositories/signal_repository.dart';
 import 'package:help_a_paw/src/viewmodels/map_view_model.dart';
-import 'package:intl/intl.dart';
 
 import '../config/routes.dart';
 import '../models/removed_signal.dart';
@@ -21,16 +19,18 @@ import 'status_view.dart';
 import 'page_width.dart';
 
 
-String _formatDate(BuildContext context, DateTime date) => DateFormat(
-      'MMM d, yyyy',
-      Localizations.localeOf(context).languageCode,
-    ).format(date);
-
-class MySignalsPage extends ConsumerWidget {
+class MySignalsPage extends ConsumerStatefulWidget {
   const MySignalsPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MySignalsPage> createState() => _MySignalsPageState();
+}
+
+class _MySignalsPageState extends ConsumerState<MySignalsPage> {
+  late final Stream<User?> _auth = FirebaseAuth.instance.authStateChanges();
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     // Watched, not read once. This screen used to be pushed and popped, so it
     // re-read the collection name on every open; as a permanent tab it outlives
@@ -67,25 +67,19 @@ class MySignalsPage extends ConsumerWidget {
         ),
         body: PageWidth(child: StreamBuilder<User?>(
           initialData: FirebaseAuth.instance.currentUser,
-          stream: FirebaseAuth.instance.authStateChanges(),
+          // A held stream: `authStateChanges()` returns a new object per call,
+          // and StreamBuilder compares by identity, so building it here would
+          // cancel and re-listen on every rebuild.
+          stream: _auth,
           builder: (context, authSnapshot) {
             final user = authSnapshot.data;
 
             if (user == null) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.pin_drop, size: 80, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                    const SizedBox(height: 16),
-                    Text(l10n.pleaseSignInToViewSignals),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () => context.push(Routes.signIn),
-                      child: Text(l10n.signIn),
-                    ),
-                  ],
-                ),
+              return StatusView.signIn(
+                icon: Icons.pin_drop_outlined,
+                title: l10n.pleaseSignInToViewSignals,
+                onSignIn: () => context.push(Routes.signIn),
+                signInLabel: l10n.signIn,
               );
             }
 
@@ -194,8 +188,10 @@ class _ActiveSignalsTabState extends ConsumerState<_ActiveSignalsTab> {
           padding: const EdgeInsets.all(16),
           itemCount: entries.length,
           itemBuilder: (context, index) {
+            // `entry.signal` is already parsed — `SignalWithId.fromDocument`
+            // did it. Re-parsing per row, per build, is pure waste.
             final entry = entries[index];
-            final signal = Signal.fromJson(entry.rawData);
+            final signal = entry.signal;
             // Answers "why is this in my list" for a signal somebody else
             // reported and handed over.
             final heldNotReported = signal.reporter != userRef;
@@ -377,7 +373,7 @@ class _RemovedSignalsTabState extends State<_RemovedSignalsTab> {
                         if (purgeAt != null)
                           Text(
                             l10n.restorableUntil(
-                                _formatDate(context, purgeAt)),
+                                SignalListTile.formatDate(context, purgeAt)),
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                           ),
                       ],
