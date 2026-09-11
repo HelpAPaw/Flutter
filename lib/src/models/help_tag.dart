@@ -24,6 +24,18 @@ List<String> toggledCode(List<String> current, String code, {int? max}) {
   return [...current, code];
 }
 
+/// [codes] as one human sentence fragment — "Foster, Transport".
+///
+/// Used by the tag-change note dialog and by the timeline row it produces, so
+/// the sentence the case holder confirms is the sentence everybody else reads.
+///
+/// Unknown codes are **dropped**, not rendered raw: an unrecognised code came
+/// from a newer build and this one has no label for it. A list of nothing but
+/// unknown codes therefore comes back empty, and callers show their own
+/// "needs updated" wording rather than a dangling "Needs set to ".
+String helpTagLabels(Iterable<String> codes, AppLocalizations l10n) =>
+    HelpTag.fromCodes(codes).map((tag) => tag.label(l10n)).join(', ');
+
 /// A kind of help — declared by a signal ("this is what is needed") and by a
 /// user ("this is what I can do").
 ///

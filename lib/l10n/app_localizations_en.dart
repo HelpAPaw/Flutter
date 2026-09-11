@@ -630,6 +630,16 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String updateNoteChangingNeedsTo(String tags) {
+    return 'Changing needs to: $tags';
+  }
+
+  @override
+  String updateNoteChangingUrgencyAndNeeds(String level, String tags) {
+    return 'Changing to: $level, and needs to: $tags';
+  }
+
+  @override
   String get updateNoteTakingSignal => 'Taking responsibility for this signal';
 
   @override
@@ -773,6 +783,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String urgencySetTo(String urgency) {
     return 'Urgency set to $urgency';
   }
+
+  @override
+  String tagsSetTo(String tags) {
+    return 'Needs set to $tags';
+  }
+
+  @override
+  String get tagsUpdated => 'Needs updated';
 
   @override
   String get releasedSignalShort => 'Stepped down from this signal';

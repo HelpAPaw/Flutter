@@ -145,6 +145,79 @@ void main() {
     });
   });
 
+  group('tags_change', () {
+    // #80. The payload is a LIST, which is the whole reason this is a third
+    // subtype: hand `eventData` an int and it does not compile, and a stored
+    // event the decoder cannot read is the silent failure the vocabulary
+    // exists to prevent.
+    Map<String, dynamic> tagsEvent({Object? newTags = const ['foster', 'transport']}) => {
+          'type': 'tags_change',
+          'oldTags': const ['rescue'],
+          if (newTags != null) 'newTags': newTags,
+          'note': 'Vet is done, she needs a foster now',
+          'createdAt': DateTime(2026, 9, 11),
+          'actor': actor,
+        };
+
+    test('decodes to the tags the signal needs NOW', () {
+      final entry = SignalHistoryEntry.fromDocument('e9', tagsEvent())!;
+
+      expect(entry.kind, SignalHistoryKind.tagsChange);
+      expect(entry.tags, ['foster', 'transport']);
+      expect(entry.note, 'Vet is done, she needs a foster now');
+      expect(entry.isEvent, isTrue);
+      // The row says what the signal is now, like every other kind — the old
+      // list is stored but never rendered.
+      expect(entry.level, isNull);
+    });
+
+    test('keeps the order it was written in, because order is priority', () {
+      final entry = SignalHistoryEntry.fromDocument(
+        'e10',
+        tagsEvent(newTags: const ['transport', 'foster']),
+      )!;
+
+      // helpNeededTags[0] is the signal's category (SPECIFICATION §4.4), so a
+      // decoder that came back with a set would lose the one part of this
+      // payload that carries meaning beyond membership.
+      expect(entry.tags, ['transport', 'foster']);
+    });
+
+    test('drops codes it cannot read rather than the whole row', () {
+      final entry = SignalHistoryEntry.fromDocument(
+        'e11',
+        tagsEvent(newTags: const ['foster', 7, null]),
+      )!;
+
+      expect(entry.tags, ['foster']);
+      expect(entry.note, isNotNull);
+    });
+
+    test('keeps an unknown code, leaving the vocabulary to the renderer', () {
+      // A code from a NEWER build. The model has no opinion about the
+      // vocabulary — HelpTag.fromCodes drops what it cannot label — so decoding
+      // must not quietly filter here as well, or the row would render as if the
+      // tag had never been set.
+      final entry = SignalHistoryEntry.fromDocument(
+        'e12',
+        tagsEvent(newTags: const ['fromTheFuture']),
+      )!;
+
+      expect(entry.tags, ['fromTheFuture']);
+    });
+
+    test('rejects a payload that is not a list', () {
+      expect(
+        SignalHistoryEntry.fromDocument('e13', tagsEvent(newTags: 2)),
+        isNull,
+      );
+      expect(
+        SignalHistoryEntry.fromDocument('e14', tagsEvent(newTags: null)),
+        isNull,
+      );
+    });
+  });
+
   group('eventData', () {
     // The round trip is the point of having the encoder: before it existed the
     // field names were string literals in two widgets, and nothing could check
@@ -266,6 +339,64 @@ void main() {
       expect(written['newStatus'], 1);
       expect(written.containsKey('author'), isFalse);
       expect(written.containsKey('text'), isFalse);
+    });
+
+    group('tags_change (#80)', () {
+      test('survives a round trip through fromDocument', () {
+        final written = SignalEventType.tagsChange.eventData(
+          oldValue: const ['rescue', 'vetCare'],
+          newValue: const ['foster'],
+          note: 'Out of the clinic',
+          actor: actor,
+        );
+
+        final entry = SignalHistoryEntry.fromDocument('e0', written)!;
+
+        expect(entry.kind, SignalHistoryKind.tagsChange);
+        expect(entry.tags, ['foster']);
+        expect(entry.note, 'Out of the clinic');
+        expect(entry.actorId, 'u1');
+        expect(entry.createdAt, isNotNull);
+      });
+
+      test('names the fields isValidTagList validates', () {
+        final written = SignalEventType.tagsChange.eventData(
+          oldValue: const ['rescue'],
+          newValue: const ['foster', 'transport'],
+          note: 'n',
+          actor: actor,
+        );
+
+        expect(written['type'], 'tags_change');
+        expect(written['oldTags'], ['rescue']);
+        expect(written['newTags'], ['foster', 'transport']);
+      });
+
+      test('copies its lists, so later edits cannot reach the batch', () {
+        // Both call sites pass widget state that keeps being edited while the
+        // write is in flight: the picker's selection and the edit screen's
+        // `_helpTags`. Aliasing them would let a tap land in a document that
+        // was already built.
+        final live = ['rescue'];
+        final written = SignalEventType.tagsChange.eventData(
+          oldValue: live,
+          newValue: live,
+          note: 'n',
+          actor: actor,
+        );
+        live.add('foster');
+
+        expect(written['oldTags'], ['rescue']);
+        expect(written['newTags'], ['rescue']);
+      });
+
+      test('is a list-payload type, so it has no level encoder', () {
+        expect(SignalEventType.tagsChange, isA<TagsEventType>());
+        expect(SignalEventType.tagsChange, isNot(isA<LevelEventType>()));
+        // Client-written, unlike ownership: the picker and the edit screen both
+        // write it under isSignalOwnerUpdate().
+        expect(SignalEventType.tagsChange.serverOnly, isFalse);
+      });
     });
   });
 

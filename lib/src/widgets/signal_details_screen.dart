@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
@@ -1247,6 +1248,8 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         SignalHistoryKind.statusChange ||
         SignalHistoryKind.urgencyChange =>
           _buildEventRow(entry, dateFormat, isLast),
+        SignalHistoryKind.tagsChange =>
+          _buildTagsRow(entry, dateFormat, isLast),
         SignalHistoryKind.ownershipTransfer =>
           _buildOwnershipRow(entry, dateFormat, isLast),
         SignalHistoryKind.comment => _buildCommentRow(
@@ -1470,6 +1473,37 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     );
   }
 
+
+  /// A change to what the signal needs (#80), with the note that explains it.
+  ///
+  /// Its own builder rather than a branch in [_buildEventRow]: that one reads a
+  /// single `level` and colours itself from the urgency scale, and neither
+  /// applies to a list of tags.
+  ///
+  /// The sentence names the tags the signal has **now**, not the diff. A row
+  /// saying "removed Transport" is only readable next to the row before it,
+  /// which is not how a filtered timeline is read — and "Needs set to X, Y" is
+  /// the same shape as "Status set to Resolved".
+  Widget _buildTagsRow(
+      SignalHistoryEntry entry, DateFormat dateFormat, bool isLast) {
+    final l10n = AppLocalizations.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    final labels = helpTagLabels(entry.tags, l10n);
+
+    return _timelineRow(
+      icon: HelpTag.primaryOf(entry.tags).icon,
+      iconBackground: scheme.primaryContainer,
+      iconColor: scheme.onPrimaryContainer,
+      // Empty only when every code came from a newer build. The row still has
+      // to render — who changed the needs and why is worth reading even when
+      // this build cannot name what they changed them to.
+      sentence: Text(labels.isEmpty ? l10n.tagsUpdated : l10n.tagsSetTo(labels)),
+      actorId: entry.actorId,
+      date: _formatDate(entry, dateFormat),
+      note: entry.note,
+      isLast: isLast,
+    );
+  }
 
   /// Opens the moderator action sheet for this signal.
   ///
@@ -1955,26 +1989,63 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     }
   }
 
-  /// Change what the signal needs (master spec §4.2).
+  /// Change what the signal needs (master spec §4.2), and record it on the
+  /// timeline.
   ///
   /// An ordinary field write on the owner branch, not an ownership change — it
   /// travels through `isSignalOwnerUpdate()` like a status change does, and needs
   /// no callable.
+  ///
+  /// **It carries an update note and a `tags_change` event, exactly like a
+  /// status change** (#80). §4.2 describes the case holder completing tags as
+  /// needs are met, which makes this the working-the-case gesture rather than a
+  /// correction — and it was the only owner-editable field that changed the
+  /// signal without leaving anything behind saying who changed it or why.
   Future<void> _editHelpTags(Signal signal) async {
+    final oldCodes = List<String>.of(signal.helpNeededTags);
     final selected = await showHelpTagPicker(
       context,
-      initial: HelpTag.fromCodes(signal.helpNeededTags),
+      initial: HelpTag.fromCodes(oldCodes),
     );
     if (selected == null || !mounted || _isApplyingLevelChange) return;
 
+    final newCodes = selected.map((t) => t.code).toList();
+    // Order is priority (§4.4), so a reordering IS a change — `listEquals`, not
+    // a set comparison. Confirming the sheet without touching anything writes
+    // nothing at all, which is what keeps the timeline free of rows that say
+    // nothing happened.
+    if (listEquals(oldCodes, newCodes)) return;
+
+    final l10n = AppLocalizations.of(context);
+    final note = await showUpdateNoteDialog(
+      context,
+      headline: l10n.updateNoteChangingNeedsTo(helpTagLabels(newCodes, l10n)),
+      badge: tagBadge(HelpTag.primaryOf(newCodes)),
+    );
+    if (note == null || !mounted) return;
+
     await _runGuarded(() async {
+      // One batch, for the reason _applyLevelChange uses one: the field and the
+      // timeline entry describing it land together or not at all.
+      final batch = FirebaseFirestore.instance.batch();
+      batch.update(_signalRef, {
+        'helpNeededTags': newCodes,
+        // The shared stamp, so this write cannot forget the owner's proof of
+        // life the way the edit screen once did.
+        ...SignalOwnershipService.coordinationStamp(_userRef),
+      });
+      batch.set(
+        _signalRef.collection('events').doc(),
+        SignalEventType.tagsChange.eventData(
+          oldValue: oldCodes,
+          newValue: newCodes,
+          note: note,
+          actor: _userRef,
+        ),
+      );
+
       try {
-        await _signalRef.update({
-          'helpNeededTags': selected.map((t) => t.code).toList(),
-          // The shared stamp, so this write cannot forget the owner's proof of
-          // life the way the edit screen once did.
-          ...SignalOwnershipService.coordinationStamp(_userRef),
-        });
+        await batch.commit();
       } catch (_) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(

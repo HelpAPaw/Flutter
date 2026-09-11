@@ -240,6 +240,15 @@ calls them signals, not cases):
   note: string (1–500), createdAt, actor: Ref→users/{uid} }`
 - *Urgency change*: `{ type: 'urgency_change', oldUrgency: int, newUrgency: int,
   note: string (1–500), createdAt, actor: Ref }`
+- *Tags change*: `{ type: 'tags_change', oldTags: string[] (0–3), newTags: string[] (1–3),
+  note: string (1–500), createdAt, actor: Ref }` — what the signal *needs* (§4.2).
+  The old list may be **empty** and the new one may not: a signal created before
+  the tag vocabulary genuinely has no tags, so requiring one on the `old` side
+  would make the first tag change on a legacy signal the one change nobody could
+  record. `isValidTagList` in the rules bounds both at the same 1–3 the signal's
+  own `helpNeededTags` carries, and deliberately does **not** enumerate the
+  codes — `HelpTag` is the vocabulary and a copy in the rules would be one no
+  test parses.
 - *Ownership transfer*: `{ type: 'ownership_transfer', oldOwner: Ref|null,
   newOwner: Ref|null, note: string (1–500), createdAt, actor: Ref }` —
   **server-written only** (§4.8). Both owners are nullable and both nulls are
@@ -259,9 +268,17 @@ named **`actor`, not `author`**, so that query can never pick events up again.
 Adding an event type is a new `SignalEventType` plus a rules clause — nothing already
 stored is reshaped.
 
+`SignalEventType` is a **sealed hierarchy, not an enum**, because the payloads stopped
+being variations on one shape: `LevelEventType` carries two ints, `TagsEventType` two
+lists of tag codes, `OwnerEventType` two nullable refs. Each encoder lives on its own
+subtype, so encoding a tag list as two ints does not compile — the TypeScript side
+narrows `buildEventData` to `LevelSignalEventType` for the same reason, since an Admin
+SDK write of the wrong shape is accepted by Firestore and then dropped by the Dart
+decoder on read, silently.
+
 Both writers build the document through **one encoder**, `SignalEventType.eventData`
-(`models/signal_event.dart`), which also owns the `status`/`urgency` field name and the
-`old*`/`new*` key names. Before it existed those were string literals inside two widgets
+(`models/signal_event.dart`), which also owns the `status`/`urgency`/`helpNeededTags`
+field name and the `old*`/`new*` key names. Before it existed those were string literals inside two widgets
 and a switch in the decoder — three copies of one mapping, one of them guarded. The
 encoder/decoder round trip is unit-tested.
 
@@ -1867,7 +1884,8 @@ full-width child sat left — so the page stopped centring half way down.
   need it on the reporter path — `handleSignalUpdated` uses it to skip notifying the
   actor, and a stale value from an earlier status change would mute the wrong
   subscriber.
-- **Update note (master spec §4.6):** both level changes go through
+- **Update note (master spec §4.6):** every timeline-writing change — both level changes
+  and a tag change (#80) — goes through
   `showUpdateNoteDialog` (`update_note_dialog.dart`) before anything is written. Confirm
   stays disabled until the *trimmed* note is non-empty, and the field is capped at
   `SignalEventType.maxNoteLength` (500) to match the rules. Returning null means the user
@@ -1899,6 +1917,16 @@ full-width child sat left — so the page stopped centring half way down.
   *not* the edit screen, which carries the reporter's account of what they saw and stays
   theirs. The picker returns a **List**, not a Set — array order is priority order
   (§4.4), and a Set at the boundary would leave that resting on insertion order.
+  Changing them writes `helpNeededTags` + the coordination stamp **and a `tags_change`
+  event, behind the same update-note dialog a status change uses** — §4.2 describes the
+  case holder completing tags as needs are met, which makes this the working-the-case
+  gesture rather than a correction, and until #80 it was the only owner-editable field
+  that changed a signal leaving nothing behind saying who changed it or why. A
+  confirmation that changed nothing writes nothing (`listEquals`, so a *reordering*
+  counts — order is priority). **The edit screen writes the same event**, and when one
+  save changes urgency and tags together it asks for **one** note and writes **two**
+  events under it: two dialogs would be answered twice with the same sentence, while one
+  merged row would put two different payload shapes in one document.
 - **Comments:** text field capped at 2000 chars, whitespace-only input dropped
   client-side; posting also subscribes the author to the signal. Author names resolve
   through `publicProfiles`.
@@ -3092,12 +3120,20 @@ Things that live in more than one place and fail **silently** when they drift.
    `MAX_EVENT_NOTE_LENGTH` in `functions/src/events.ts`.
 
    `SignalEventType` is a **sealed hierarchy**, not an enum: `LevelEventType`
-   carries two ints and owns `eventData`, `OwnerEventType` carries two nullable
+   carries two ints and owns `eventData`, `TagsEventType` carries two lists of
+   tag codes and owns its own, `OwnerEventType` carries two nullable
    user references and has no client encoder at all. Encoding an ownership
    transfer as two ints therefore does not compile — it was a runtime throw, and
    an `assert` before that, which is compiled out in release precisely where the
    failure is silent. The decoder switches on the subtype, so a new one is a
    compile error rather than a row that never renders.
+
+   **TypeScript reproduces that split by narrowing, not by convention.**
+   `buildEventData` takes `LevelSignalEventType` (`LEVEL_SIGNAL_EVENT_TYPES`),
+   not the full union, so `buildEventData("tags_change", { oldValue: 1, … })`
+   does not compile either. Widening it back would type-check, store two ints
+   under `newTags`, and produce exactly the silent drop this invariant exists
+   to prevent.
 
    **The rules must match `clientCodes`, not `allCodes`.** `ownership_transfer` is
    `serverOnly` (§4.8): the callable writes it through the Admin SDK, which bypasses
@@ -3380,6 +3416,7 @@ silently breaks Auth/Firestore/FCM in release builds only.
 
 | Date | Change |
 |---|---|
+| 2026-09-11 | **Tag changes are on the signal timeline** (§4.1, §4.6, §12.5a; issue #80). What a signal *needs* was the only owner-editable coordination field that changed with nothing recording it — and by master spec §4.2 it is the working-the-case field, the one the case holder completes as needs are met, so the sequence of tag changes is the record of the signal being worked. Both writers (the manage sheet's picker and the edit screen) now batch the field write with a **`tags_change` event**, behind the same mandatory update note a status change carries. **A third payload shape, not a third int pair**: `TagsEventType` joins `LevelEventType` and `OwnerEventType` in the sealed hierarchy, and the TypeScript side narrows `buildEventData` to `LEVEL_SIGNAL_EVENT_TYPES` so the same mistake — two ints stamped into `newTags`, stored happily by the Admin SDK, dropped by the Dart decoder on read — stops compiling there too, which it previously did not. The rules' `isValidTagList` is **asymmetric on purpose**: `newTags` is 1–3, `oldTags` 0–3, because a signal created before the tag vocabulary has none and requiring one there would make the first tag change on a legacy signal the one change nobody could record; it deliberately does not enumerate the codes, taking the same position `isValidHelpTags` already takes on the signal document. A confirmation that changed nothing writes nothing, and since array order is priority (§4.4) a **reordering counts as a change** (`listEquals`). One save on the edit screen that changes urgency and tags asks for **one** note and writes **two** events under it. No new notification path: `handleSignalUpdated` ignores `helpNeededTags` and `events` has no trigger, so this is purely additive. 286 rules tests, 487 Dart tests, 122 functions tests. **Rollout: rules first, then the app release** — the event and the field write share one batch, so a client writing `tags_change` against undeployed rules fails the batch atomically and the tag change itself stops working. |
 | 2026-09-10 | **Closed the M-1 second half: signal and comment creation now require a verified, non-anonymous caller** (§5.1, §14; issue #67). `isVerifiedCaller()` gates on `request.auth.token.email_verified`, *not* `sign_in_provider` — an in-place `linkWithCredential` upgrade leaves a real user's token reading `'anonymous'` for the rest of the session, so `sign_in_provider` would lock out precisely the people the clause is meant to admit. The claim is baked in at mint time, which is why the first attempt was rolled back on 2026-07-23: `reload()` does not re-mint, and a restart inside the token's ~1h life reuses the stale one, so a user who verified mid-session was denied their first writes. The client force-refresh (`633da3b`) shipped in **6.0.2+126**, and every app version Crashlytics has seen in the field (120–132) also carries the client-side `canModifyData` gate from `17327ff`, so no released build could reach this rule anonymously anyway — this closes a server-side hole rather than removing a capability. The rules suite now carries the rollback case as a test (`allows an in-place-upgraded caller whose provider still reads anonymous`), and every other test had to start presenting a verified token, which is what a real caller has. 276 rules tests. |
 | 2026-09-10 | **@-mentions in comments** (§4.1, §7.5, §7.13, §9, §12.5g, §12.5h). The details screen is where strangers coordinate about an animal and the thread was flat: no way to address one person in it, so a reporter answering a volunteer had to hope they were reading. Typing `@` now offers the people who have **already interacted with this signal** — reporter, current owner, every past owner, every commenter — and the comment carries a `mentions` array beside its text. Three decisions carry the design. **The roster is derived, not stored**: those uids are already in the screen's own snapshot and its two history streams, so there is no `participants` field, no trigger to maintain it, no backfill and no read — and past owners fall out of the transfers' `ownerId` without an ownership-history field. It is also the only roster that can exist, because `publicProfiles` denies `list` on purpose and nothing may search the user base by name. **The offsets live beside the text, not inside it**: inline markup would render verbatim on every already released build, forever, since nothing here is backfilled; a parallel array those builds ignore renders as `@Ivan Petrov`, which is what the author typed. **A mention re-words a notification rather than sending one** — the fan-out intersects the named uids with the signal's subscribers, so it reaches nobody new, which is precisely what lets a client-written array stay safe under rules that can bound its length and nothing else. The accepted limit is the mirror of that: a participant who unsubscribed cannot be reached by naming them. Rendered mentions are styling only — no underline, no recognizer, because underline is this screen's "this opens something" and a mention opens nothing. The composer recomputes offsets from `(uid, "@Name")` instead of maintaining them, so the whole edit story is one rule (*a mention that no longer reads as it was inserted stops being one*) rather than a diff to get wrong. Three new guards: the mention cap (**×3** — Dart, rules and TypeScript), the inbox `type` vocabulary against the TypeScript union (which closes a documented silent failure that had been waiting for a fourth type to arrive), and the suggestion list's height against a short viewport. The list caps itself against the **window** height rather than the body's, because a `Scaffold` strips `viewInsets` from its body's `MediaQuery` and the only thing that can see the keyboard — a `LayoutBuilder` around the body — re-runs on every frame of the keyboard animation. Rows carry up to two initials (`mentionInitials`), whitespace-separated with dots as a fallback, so the email-local-part names the `publicProfiles` gap leaves behind do not all collapse to one letter. **Device-verified on SM-X205 2026-09-10** in test mode, in Bulgarian: the roster showed exactly the signal's participants with the viewer excluded, `@vol` narrowed it to one, the pick highlighted in the composer and rendered styled in the thread, the stored document carried `mentions:[{uid,start:0,end:19}]`, and `onTestCommentCreated` logged `1 subscriber(s), 1 mentioned` → two differently-worded pushes and two inbox documents (`type: mention` with `mentionedByName` vs an unchanged `new_comment`) sharing one `cmt_{id}` id; a plain comment logged `2 subscriber(s), 0 mentioned`. **Functions deployed to help-a-paw-dev 2026-09-10**, ahead of the app — safe because a comment with no `mentions` takes exactly the old path. |
 | 2026-09-06 | **Moved map clustering into Dart, so a bubble can carry urgency** (§7.3, §7.8, §14; issue #76 / COLOR-4). The SDK's `ClusterManager` drew every bubble in Google's navy and gave Dart nothing to restyle it with — the Dart type is an id and a tap callback, and neither platform plugin overrides the bubble renderer — so at the opening zoom, where nearly every signal sits in a bubble, the map could not say anything on it was critical; keeping red out of clustering had been the one lever, and it left amber reading as navy. `clusterPoints` merges points within 60px of each other at the camera's rounded zoom (the SDK's own distance-based idea, a grid only as the index); bubbles are canvas bitmaps cached per (fill, label) and drawn as ordinary markers. **A bubble takes the colour of its most urgent member**, by declaration order, so every urgency clusters now — red included — and a cluster with one critical signal is red at every zoom. The selected signal is held out of clustering while its bubble is open. Two things the SDK could never do came with it: **a cluster too tight to split opens a sheet** listing its members (four co-located `signals_test` signals at pl. Sv. Nedelya used to zoom to 21 and stay an unopenable "4"; identical coordinates never separate, and max zoom resolves ~5 m), and **vet clinics cluster too**, separately, in the pin's blue. The legend gained bubble rows. Lost: the SDK's animated merge/split — bubbles re-form at camera idle. 376 Dart tests (`map_clusterer_test`, `map_marker_builder_test`, `cluster_items_sheet_test` new; `map_clustering_test` and its "red never clusters" assertion retired). Client-only — no rules, functions or deploy. **Device-verified on SM-X205 2026-09-06** (bg, light): amber 4 → zoom → amber 3 over the co-located trio → sheet → details; the lone red merging into the city cluster turned it red; clinic bubbles blue and separate, gone with the toggle; the selected pin stayed out of its cluster with its bubble and rejoined on dismiss; **dark mode** on the tablet 2026-09-08 (map, legend, sheet). **iPad 6th gen (profile build, dark, en) 2026-09-09**: amber 4 → amber 3 → sheet → details, blue clinic bubbles with the amber signal bubble drawn above them, clinic-bubble zoom, layer-off, legend, red 10 merge. |

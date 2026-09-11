@@ -323,6 +323,9 @@ service cloud.firestore {
                 && isValidLevel('oldStatus') && isValidLevel('newStatus'))
                || (request.resource.data.type == 'urgency_change'
                    && isValidLevel('oldUrgency') && isValidLevel('newUrgency'))
+               || (request.resource.data.type == 'tags_change'
+                   && isValidTagList('oldTags', 0)
+                   && isValidTagList('newTags', 1))
              );
     }
 
@@ -354,6 +357,26 @@ service cloud.firestore {
     function isValidLevel(field) {
       let value = request.resource.data.get(field, -1);
       return value is int && value >= 0 && value <= 2;
+    }
+
+    // The before/after tag lists on a `tags_change` event (#80), bounded by the
+    // same 1..3 the signal's own `helpNeededTags` is (isValidHelpTags) — an
+    // event must not be able to claim a transition the signal could not hold.
+    //
+    // [minSize] differs by side and both values are deliberate. `newTags` is the
+    // state the signal is moving to, and the picker refuses to confirm an empty
+    // selection, so 1. `oldTags` is 0 because a signal created before the tag
+    // vocabulary genuinely has none, and requiring one there would make the very
+    // first tag change on a legacy signal the one thing nobody can record.
+    //
+    // The CODES are not enumerated here on purpose. `HelpTag` is the vocabulary,
+    // mirrored once in `functions/src/tags.ts` and guarded; a third copy in the
+    // rules would be one no test parses, and its drift would deny writes from a
+    // client that had added a tag. isValidHelpTags takes the same position on
+    // the signal document itself.
+    function isValidTagList(field, minSize) {
+      let value = request.resource.data.get(field, null);
+      return value is list && value.size() >= minSize && value.size() <= 3;
     }
 
     // Validates the display name on a publicProfiles write (L-2). Bounds the

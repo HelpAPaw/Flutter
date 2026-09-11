@@ -32,8 +32,9 @@ import 'comment_mention.dart';
 ///
 /// A **sealed hierarchy rather than an enum**, because the types stopped being
 /// variations on one shape. Status and urgency carry two ints on a fixed 0..2
-/// scale and are written by the client; ownership carries two nullable user
-/// references and is written only by the server. An enum reconciles that with a
+/// scale and are written by the client; tags carry two lists of vocabulary
+/// codes; ownership carries two nullable user references and is written only by
+/// the server. An enum reconciles that with a
 /// discriminator field and an encoder that is valid for only some of its
 /// values — a partial method, guarded at runtime, on a class whose entire
 /// purpose is to stop a malformed event being written.
@@ -115,6 +116,22 @@ sealed class SignalEventType {
     historyKind: SignalHistoryKind.urgencyChange,
   );
 
+  /// What the signal needs changed (master spec §4.2) — a tag added, dropped or
+  /// completed.
+  ///
+  /// This is the *working-the-case* gesture, not an edit of the reporter's
+  /// account: §4.2 describes the case holder removing tags as needs are met, so
+  /// the sequence of tag changes is the record of the signal being worked. It
+  /// went untraced until HelpAPaw/Flutter#80 — the only owner-editable
+  /// coordination field with no timeline entry behind it.
+  static const TagsEventType tagsChange = TagsEventType(
+    code: 'tags_change',
+    signalField: 'helpNeededTags',
+    oldKey: 'oldTags',
+    newKey: 'newTags',
+    historyKind: SignalHistoryKind.tagsChange,
+  );
+
   /// Signal ownership moved (master spec §4.5) — claimed, handed over or released.
   ///
   /// The first **server-only** type. See [serverOnly].
@@ -133,6 +150,7 @@ sealed class SignalEventType {
   static const List<SignalEventType> values = [
     statusChange,
     urgencyChange,
+    tagsChange,
     ownershipTransfer,
   ];
 
@@ -208,6 +226,52 @@ final class LevelEventType extends SignalEventType {
       };
 }
 
+/// An event whose before/after values are lists of [HelpTag] codes.
+///
+/// A third payload shape rather than a second [LevelEventType]: the values are
+/// lists of opaque strings, and handing `eventData` an `int` where the decoder
+/// expects a list is exactly the mistake that produces a stored event nobody
+/// ever sees. Sealed subtypes make it a compile error instead.
+///
+/// The codes are **not validated here**. `HelpTag` is the vocabulary and the
+/// rules are the cap (1..3 new, `isValidTagList` in `firestore.rules`); an
+/// encoder that also knew the vocabulary would be a fourth copy of it. The
+/// decoder is correspondingly tolerant — an unrecognised code means a newer
+/// build, and the renderer drops it while keeping the codes it knows.
+final class TagsEventType extends SignalEventType {
+  const TagsEventType({
+    required super.code,
+    required super.signalField,
+    required super.oldKey,
+    required super.newKey,
+    required super.historyKind,
+    super.serverOnly,
+  });
+
+  /// The document to write into `signals/{id}/events`.
+  ///
+  /// Mirrors [LevelEventType.eventData] field for field — same `note`, `actor`
+  /// and client-set `createdAt` — because the two are one protocol with two
+  /// payloads, and a timeline row that sorted or attributed differently by
+  /// payload would be a bug, not a feature.
+  Map<String, dynamic> eventData({
+    required List<String> oldValue,
+    required List<String> newValue,
+    required String note,
+    required DocumentReference actor,
+  }) =>
+      {
+        'type': code,
+        // Copied, not aliased: these lists come from widget state that keeps
+        // being edited after the batch is built.
+        oldKey: List<String>.of(oldValue),
+        newKey: List<String>.of(newValue),
+        'note': note,
+        'createdAt': DateTime.now(),
+        'actor': actor,
+      };
+}
+
 /// An event whose before/after values are references to `users/{uid}`.
 ///
 /// **Both are nullable, and both nulls are real**: `oldOwner` is null when a
@@ -235,6 +299,7 @@ enum SignalHistoryKind {
   created,
   statusChange,
   urgencyChange,
+  tagsChange,
   ownershipTransfer,
   comment,
 }
@@ -262,6 +327,7 @@ class SignalHistoryEntry {
     this.createdAt,
     this.level,
     this.ownerId,
+    this.tags = const [],
     this.note,
     this.text,
     this.mentions = const [],
@@ -297,6 +363,15 @@ class SignalHistoryEntry {
   /// no new owner. The renderer tells the two apart by [kind], which is why this
   /// stays nullable rather than carrying a sentinel.
   final String? ownerId;
+
+  /// What the signal needs **after** a tags change — raw `HelpTag` codes.
+  ///
+  /// Empty on every other kind, and the renderer resolves the codes it knows
+  /// rather than trusting them: a code from a newer build has no label here.
+  /// Only the new list is carried, for the same reason no kind carries its old
+  /// value — the row states what the signal is now, exactly as a status change
+  /// does.
+  final List<String> tags;
 
   /// Comment body. Null on every other kind.
   final String? text;
@@ -381,6 +456,21 @@ class SignalHistoryEntry {
           actorId: actor.id,
           createdAt: createdAt,
           level: raw,
+          note: note,
+        );
+
+      case TagsEventType():
+        if (raw is! List) return null;
+        return SignalHistoryEntry(
+          id: id,
+          kind: type.historyKind,
+          actorId: actor.id,
+          createdAt: createdAt,
+          // Non-string entries are dropped rather than rejecting the document:
+          // one bad element must not remove the whole row from the history, and
+          // the renderer already has to survive a list whose codes it does not
+          // recognise.
+          tags: raw.whereType<String>().toList(),
           note: note,
         );
 

@@ -253,6 +253,27 @@
       }
     }
   },
+  "updateNoteChangingNeedsTo": "Changing needs to: {tags}",
+  "@updateNoteChangingNeedsTo": {
+    "description": "Headline of the update-note dialog when only the help tags are changing.",
+    "placeholders": {
+      "tags": {
+        "type": "String"
+      }
+    }
+  },
+  "updateNoteChangingUrgencyAndNeeds": "Changing to: {level}, and needs to: {tags}",
+  "@updateNoteChangingUrgencyAndNeeds": {
+    "description": "Headline of the update-note dialog on the edit screen when one save changes both the urgency and the help tags.",
+    "placeholders": {
+      "level": {
+        "type": "String"
+      },
+      "tags": {
+        "type": "String"
+      }
+    }
+  },
   "updateNoteTakingSignal": "Taking responsibility for this signal",
   "updateNoteTakingSignalAndChangingTo": "Taking responsibility, and changing to: {level}",
   "@updateNoteTakingSignalAndChangingTo": {
@@ -349,6 +370,19 @@
         "type": "String"
       }
     }
+  },
+  "tagsSetTo": "Needs set to {tags}",
+  "@tagsSetTo": {
+    "description": "Signal timeline row for a tags_change event. {tags} is the comma-separated list of help tags the signal needs now.",
+    "placeholders": {
+      "tags": {
+        "type": "String"
+      }
+    }
+  },
+  "tagsUpdated": "Needs updated",
+  "@tagsUpdated": {
+    "description": "Fallback timeline row for a tags_change event whose tag codes all come from a newer app version, so none of them can be named here."
   },
   "releasedSignalShort": "Stepped down from this signal",
   "@releasedSignalShort": {},

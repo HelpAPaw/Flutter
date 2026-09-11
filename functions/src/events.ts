@@ -34,6 +34,7 @@
 export const SIGNAL_EVENT_TYPES = [
   "status_change",
   "urgency_change",
+  "tags_change",
   "ownership_transfer",
 ] as const;
 
@@ -53,9 +54,33 @@ export const SIGNAL_EVENT_TYPES = [
 export const CLIENT_SIGNAL_EVENT_TYPES = [
   "status_change",
   "urgency_change",
+  "tags_change",
 ] as const;
 
 export type SignalEventType = (typeof SIGNAL_EVENT_TYPES)[number];
+
+/**
+ * The types whose payload is a pair of `int` levels, and therefore the only
+ * ones {@link buildEventData} can encode.
+ *
+ * The TypeScript counterpart of Dart's `LevelEventType`: there, `eventData`
+ * exists on that subtype and nowhere else, so encoding a tag list as two ints
+ * does not compile. Without this narrowing the same call *would* compile here —
+ * `buildEventData("tags_change", { oldValue: 1, newValue: 2 })` is well-typed
+ * against the full union — and the Admin SDK would happily store an event the
+ * Dart decoder then drops on read. That is the silent failure this module
+ * exists to prevent, so the union is narrowed rather than documented.
+ *
+ * A runtime list as well as a type, so the tests can iterate exactly the types
+ * the encoder accepts; `satisfies` keeps it a subset of {@link
+ * SIGNAL_EVENT_TYPES} rather than a fourth free-standing vocabulary.
+ */
+export const LEVEL_SIGNAL_EVENT_TYPES = [
+  "status_change",
+  "urgency_change",
+] as const satisfies readonly SignalEventType[];
+
+export type LevelSignalEventType = (typeof LEVEL_SIGNAL_EVENT_TYPES)[number];
 
 /**
  * Field on the signal document that each event type describes, mirroring Dart's
@@ -64,6 +89,7 @@ export type SignalEventType = (typeof SIGNAL_EVENT_TYPES)[number];
 export const SIGNAL_EVENT_FIELDS: Record<SignalEventType, string> = {
   status_change: "status",
   urgency_change: "urgency",
+  tags_change: "helpNeededTags",
   ownership_transfer: "signalOwner",
 };
 
@@ -77,6 +103,7 @@ export const SIGNAL_EVENT_KEYS: Record<
 > = {
   status_change: { oldKey: "oldStatus", newKey: "newStatus" },
   urgency_change: { oldKey: "oldUrgency", newKey: "newUrgency" },
+  tags_change: { oldKey: "oldTags", newKey: "newTags" },
   ownership_transfer: { oldKey: "oldOwner", newKey: "newOwner" },
 };
 
@@ -126,7 +153,7 @@ export function isRestoredSignal(data: Record<string, unknown> | undefined) {
  * `collectionGroup('comments')` count can never pick events up.
  */
 export function buildEventData(
-  type: SignalEventType,
+  type: LevelSignalEventType,
   params: {
     oldValue: number;
     newValue: number;
