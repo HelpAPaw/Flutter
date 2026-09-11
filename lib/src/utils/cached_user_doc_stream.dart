@@ -65,10 +65,34 @@ class CachedUserDocStream<T> {
   T get value => _latest;
 
   /// The value now, then every change.
-  Stream<T> watch() async* {
+  ///
+  /// **Not `async*`.** The obvious spelling — `yield _latest; yield* stream;` —
+  /// has a race that is invisible until it bites: `yield` suspends until the
+  /// consumer asks for more, so the `yield*` subscribes to the broadcast
+  /// controller only on a later turn of the event loop. An update landing in
+  /// that gap has no listener and is dropped, and the subscriber keeps the stale
+  /// value until the document happens to change again. Observed on device: the
+  /// follow button offered "Follow" for a signal the user was already following,
+  /// while Firestore said otherwise.
+  ///
+  /// Subscribing *before* replaying closes it. There is no `await` between the
+  /// two statements, so [_latest] cannot change in between — Dart runs them in
+  /// one turn.
+  Stream<T> watch() {
     _ensureSubscription();
-    yield _latest;
-    yield* _controller.stream;
+
+    late StreamController<T> out;
+    StreamSubscription<T>? sub;
+    out = StreamController<T>(
+      onListen: () {
+        sub = _controller.stream.listen(out.add, onError: out.addError);
+        out.add(_latest);
+      },
+      onCancel: () async {
+        await sub?.cancel();
+      },
+    );
+    return out.stream;
   }
 
   void _ensureSubscription() {
