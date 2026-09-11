@@ -1490,6 +1490,12 @@ abstract class AppLocalizations {
   /// **'Needs set to {tags}'**
   String tagsSetTo(String tags);
 
+  /// Secondary line on the 'Reported this signal' timeline row, naming what the signal was reported needing. Past tense: later rows say what the needs were changed to.
+  ///
+  /// In en, this message translates to:
+  /// **'Needed: {tags}'**
+  String needsAtReport(String tags);
+
   /// Fallback timeline row for a tags_change event whose tag codes all come from a newer app version, so none of them can be named here.
   ///
   /// In en, this message translates to:

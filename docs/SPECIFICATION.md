@@ -1874,6 +1874,13 @@ full-width child sat left — so the page stopped centring half way down.
   also see pending offers, each answerable in place. The offers listener is `late final`
   and therefore **lazy** — a passer-by opening a released or self-held signal opens no
   listener at all.
+- **Urgency away from the map is an exclamation mark, not the pin** (`urgencyIcon`,
+  `level_badge.dart`). `SignalUrgency.pinAsset` is the *map's* vocabulary: on the map the pin
+  is the thing being pointed at, but in the update-note dialog and the timeline row there is
+  no map and a pin reads as *location* — the one thing an urgency change is not. Colour still
+  carries the level, so the glyph only has to say "this is about urgency". The pin stays
+  wherever it explains the map: the markers, the legend, the filter sheet and the urgency
+  picker.
 - **Urgency change:** `UrgencyPicker`, in the manage sheet, for the **reporter or signal
   owner** (§4.8);
   everyone else sees the card's read-only urgency row (§4.6). Updates `urgency` + `lastUpdatedBy` and appends an
@@ -1910,6 +1917,16 @@ full-width child sat left — so the page stopped centring half way down.
   is not stable, and the list would otherwise reshuffle between rebuilds. A document with
   an unknown `type` is **skipped, not thrown on**: it came from a newer build.
   *All* / *Events* chips filter in memory; both listeners stay subscribed either way.
+- **The opening row names the needs the signal was REPORTED with** (#80), derived by
+  `tagsAtReport` from the earliest `tags_change` event's `oldTags` — or, with no change yet,
+  from the signal's current tags. Nothing stores it and nothing is backfilled. That line is
+  what lets every later row say only what it changed *to*: "was X, now Y" on every row is
+  the restatement the timeline exists to avoid. Only rendered once the `events` listener has
+  actually delivered — this screen renders as soon as *either* source has, so deriving from
+  a merely-empty list would name today's tags as the opening ones and correct itself a frame
+  later. The one knowingly approximate case is a signal whose tags were changed *before*
+  `tags_change` existed: no event records it, so the row reports today's tags. It degrades
+  with time rather than staying wrong.
 - **Help tags:** a read-only row on `SignalStateCard`, plus a Change affordance **in the
   manage sheet** for the reporter or owner
   that opens `showHelpTagPicker` (`help_tag_picker_sheet.dart`, wrapping the existing

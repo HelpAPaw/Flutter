@@ -801,6 +801,11 @@ class AppLocalizationsBg extends AppLocalizations {
   }
 
   @override
+  String needsAtReport(String tags) {
+    return 'Нужна помощ: $tags';
+  }
+
+  @override
   String get tagsUpdated => 'Нуждите са променени';
 
   @override

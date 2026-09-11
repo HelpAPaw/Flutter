@@ -329,6 +329,14 @@
       }
     }
   },
+  "needsAtReport": "Нужна помощ: {tags}",
+  "@needsAtReport": {
+    "placeholders": {
+      "tags": {
+        "type": "String"
+      }
+    }
+  },
   "tagsUpdated": "Нуждите са променени",
   "releasedSignalShort": "Отказа се от този сигнал",
   "@releasedSignalShort": {},

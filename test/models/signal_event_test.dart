@@ -164,6 +164,9 @@ void main() {
 
       expect(entry.kind, SignalHistoryKind.tagsChange);
       expect(entry.tags, ['foster', 'transport']);
+      // Kept for the opening row alone (see tagsAtReport) — never rendered on
+      // this row.
+      expect(entry.previousTags, ['rescue']);
       expect(entry.note, 'Vet is done, she needs a foster now');
       expect(entry.isEvent, isTrue);
       // The row says what the signal is now, like every other kind — the old
@@ -397,6 +400,97 @@ void main() {
         // write it under isSignalOwnerUpdate().
         expect(SignalEventType.tagsChange.serverOnly, isFalse);
       });
+    });
+  });
+
+  group('tagsAtReport', () {
+    // The opening row names what the signal was REPORTED needing (#80), so that
+    // every later row can say only what changed. Nothing stores that list: the
+    // earliest tag change's `oldTags` IS it.
+    SignalHistoryEntry change(
+      String id,
+      DateTime? at, {
+      required List<String> from,
+      List<String> to = const ['foster'],
+    }) =>
+        SignalHistoryEntry(
+          id: id,
+          kind: SignalHistoryKind.tagsChange,
+          actorId: 'u1',
+          createdAt: at,
+          tags: to,
+          previousTags: from,
+        );
+
+    test('falls back to the current tags when nothing has changed yet', () {
+      expect(
+        tagsAtReport(currentTags: const ['rescue'], events: const []),
+        ['rescue'],
+      );
+    });
+
+    test('takes the EARLIEST change\'s old list, not the latest', () {
+      // The whole point: by the time three changes have happened, the current
+      // tags say nothing about what was reported.
+      final events = [
+        change('c', DateTime(2026, 9, 3), from: const ['foster']),
+        change('a', DateTime(2026, 9, 1), from: const ['rescue', 'vetCare']),
+        change('b', DateTime(2026, 9, 2), from: const ['vetCare']),
+      ];
+
+      expect(
+        tagsAtReport(currentTags: const ['transport'], events: events),
+        ['rescue', 'vetCare'],
+      );
+    });
+
+    test('breaks a timestamp tie by id, as the thread does', () {
+      // Two events written in one batch share a millisecond. The row must agree
+      // with the order the rows are drawn in, or the opening row names the
+      // needs from the second of them.
+      final at = DateTime(2026, 9, 11, 16, 5);
+      final events = [
+        change('b', at, from: const ['second']),
+        change('a', at, from: const ['first']),
+      ];
+
+      expect(tagsAtReport(currentTags: const [], events: events), ['first']);
+    });
+
+    test('sorts a timestamp-less change last, as the thread does', () {
+      // A local echo of a write still in flight. It is the NEWEST thing that has
+      // happened, so it must not be mistaken for the opening state.
+      final events = [
+        change('pending', null, from: const ['inFlight']),
+        change('a', DateTime(2026, 9, 1), from: const ['rescue']),
+      ];
+
+      expect(tagsAtReport(currentTags: const [], events: events), ['rescue']);
+    });
+
+    test('ignores events of every other kind', () {
+      final events = [
+        SignalHistoryEntry(
+          id: 's',
+          kind: SignalHistoryKind.statusChange,
+          actorId: 'u1',
+          createdAt: DateTime(2026, 8, 1),
+          level: 1,
+        ),
+        change('t', DateTime(2026, 9, 1), from: const ['rescue']),
+      ];
+
+      expect(tagsAtReport(currentTags: const [], events: events), ['rescue']);
+    });
+
+    test('an empty old list is an answer, not a missing one', () {
+      // A signal created before the tag vocabulary genuinely had none — which is
+      // why the rules allow an empty `oldTags`. The opening row then shows no
+      // needs line at all, rather than today's tags.
+      final events = [change('a', DateTime(2026, 9, 1), from: const [])];
+
+      expect(tagsAtReport(currentTags: const ['foster'], events: events),
+          isEmpty);
     });
   });
 

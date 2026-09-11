@@ -1187,6 +1187,25 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
         created: SignalHistoryEntry.created(
           reporterId: signal.reporter.id,
           createdAt: SignalHistoryEntry.dateFrom(signal.createdAt),
+          // Derived from the earliest tag change rather than stored (#80): see
+          // `tagsAtReport`. Naming the needs here is what lets every later row
+          // say only what CHANGED — without it the thread opens with no idea
+          // what the signal was asking for, and the alternative (every change
+          // row restating "was X, now Y") is the redundancy this avoids.
+          //
+          // **Only once the events are actually in.** This screen renders as
+          // soon as EITHER source has delivered, so the comments can arrive
+          // first; deriving from an events list that is merely still empty
+          // would name today's tags as the opening ones and then silently
+          // correct itself a frame later. No line at all is the honest state
+          // while we cannot know, and it is also what a failed events read
+          // leaves behind — beside the notice that says so.
+          tags: _events.entries == null
+              ? const []
+              : tagsAtReport(
+                  currentTags: signal.helpNeededTags,
+                  events: _events.entries!,
+                ),
         ),
         comments: _comments.entries ?? const [],
         events: _events.entries ?? const [],
@@ -1285,6 +1304,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     required String actorId,
     required String? date,
     required bool isLast,
+    String? detail,
     String? note,
     VoidCallback? onOptions,
   }) {
@@ -1361,6 +1381,15 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                   ),
                   const SizedBox(height: 2),
                   sentence,
+                  // App-written detail, above the user's own words when a row
+                  // has both. Its own slot rather than reusing `note` because
+                  // that one is linkified: running our own label through the
+                  // link parser to render a fixed string would be a hazard for
+                  // no gain.
+                  if (detail != null && detail.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(detail, style: meta),
+                  ],
                   if (note != null && note.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     LinkifiedText(note, style: meta),
@@ -1426,13 +1455,20 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// [SignalHistoryEntry.created].
   Widget _buildCreatedRow(
       SignalHistoryEntry entry, DateFormat dateFormat, bool isLast) {
+    final l10n = AppLocalizations.of(context);
+    final labels = helpTagLabels(entry.tags, l10n);
+
     return _timelineRow(
       icon: Icons.flag_outlined,
       iconBackground: Theme.of(context).colorScheme.surfaceContainerHigh,
       iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
-      sentence: Text(AppLocalizations.of(context).reportedThisSignalShort),
+      sentence: Text(l10n.reportedThisSignalShort),
       actorId: entry.actorId,
       date: _formatDate(entry, dateFormat),
+      // Absent on a signal reported before the tag vocabulary, and on one whose
+      // codes this build cannot name — both of which render exactly as this row
+      // always did.
+      detail: labels.isEmpty ? null : l10n.needsAtReport(labels),
       isLast: isLast,
     );
   }
@@ -1453,7 +1489,10 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     final urgency = isUrgency ? SignalUrgency.fromCode(level) : null;
 
     return _timelineRow(
-      icon: isUrgency ? Icons.place : SignalStatus.fromCode(level).icon,
+      // `Icons.place` here read as a LOCATION — the one thing an urgency change
+      // is not — because it is the map pin's glyph doing a second job away from
+      // the map. See `urgencyBadge`, which had the same problem.
+      icon: isUrgency ? urgencyIcon : SignalStatus.fromCode(level).icon,
       iconBackground: urgency == null
           ? scheme.primaryContainer
           : urgency.color.withAlpha(38),

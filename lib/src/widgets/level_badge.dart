@@ -12,14 +12,27 @@ import '../models/signal_urgency.dart';
 /// Built inline at each use site, that correspondence was coincidence: five
 /// copies across three files, free to drift.
 ///
-/// A status gets a neutral glyph and an urgency gets the map pin, deliberately:
+/// A status gets a neutral glyph and an urgency gets its colour, deliberately:
 /// colour is the urgency vocabulary (§4.6), and giving status a colour of its
 /// own put two traffic lights with opposite meanings in the same row. See
 /// [SignalStatus.icon].
 Widget statusBadge(SignalStatus status) => _StatusBadge(status);
 
-Widget urgencyBadge(SignalUrgency urgency) =>
-    Image.asset(urgency.pinAsset, width: 24, height: 24);
+/// The glyph that stands for urgency **off the map**.
+///
+/// An exclamation mark, not [SignalUrgency.pinAsset]. The pin is the map's
+/// vocabulary: on the map it is the thing being pointed at, but in a dialog or a
+/// timeline row there is no map, and a pin there reads as *location* — the one
+/// thing an urgency change is not. The pin stays where it means something (the
+/// markers, the legend, the filter sheet and the urgency picker, which all sit
+/// next to or explain the map).
+///
+/// Colour still carries the level, so the glyph only has to say "this is about
+/// urgency"; a bare `!` does that at 20px, where a warning triangle turns into a
+/// smudge.
+const IconData urgencyIcon = Icons.priority_high;
+
+Widget urgencyBadge(SignalUrgency urgency) => _UrgencyBadge(urgency);
 
 /// The badge for a tag change: the icon of the signal's **primary** tag, which
 /// is its category (§4.2, `helpNeededTags[0]`).
@@ -28,6 +41,19 @@ Widget urgencyBadge(SignalUrgency urgency) =>
 /// as the other two — the dialog and the timeline row both lay out around a
 /// single glyph, and the full list is already spelled out in words beside it.
 Widget tagBadge(HelpTag tag) => _TagBadge(tag);
+
+class _UrgencyBadge extends StatelessWidget {
+  const _UrgencyBadge(this.urgency);
+
+  final SignalUrgency urgency;
+
+  @override
+  Widget build(BuildContext context) => Icon(
+        urgencyIcon,
+        size: 20,
+        color: urgency.color,
+      );
+}
 
 class _TagBadge extends StatelessWidget {
   const _TagBadge(this.tag);

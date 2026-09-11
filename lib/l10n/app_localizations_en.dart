@@ -790,6 +790,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String needsAtReport(String tags) {
+    return 'Needed: $tags';
+  }
+
+  @override
   String get tagsUpdated => 'Needs updated';
 
   @override

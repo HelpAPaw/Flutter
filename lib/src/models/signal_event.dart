@@ -328,6 +328,7 @@ class SignalHistoryEntry {
     this.level,
     this.ownerId,
     this.tags = const [],
+    this.previousTags = const [],
     this.note,
     this.text,
     this.mentions = const [],
@@ -368,10 +369,23 @@ class SignalHistoryEntry {
   ///
   /// Empty on every other kind, and the renderer resolves the codes it knows
   /// rather than trusting them: a code from a newer build has no label here.
-  /// Only the new list is carried, for the same reason no kind carries its old
-  /// value — the row states what the signal is now, exactly as a status change
-  /// does.
+  /// The row states what the signal needs *now*, exactly as a status change
+  /// states the status it moved to.
+  ///
+  /// Also carries the signal's needs on the synthetic [created] row, where they
+  /// are [tagsAtReport]'s answer rather than a stored event's payload.
   final List<String> tags;
+
+  /// What the signal needed **before** a tags change.
+  ///
+  /// The one `old*` value any kind keeps, and it earns its place by answering a
+  /// question nothing else can: the earliest tags change's `oldTags` **is** the
+  /// list the signal was reported with, so the opening row can name it without a
+  /// stored field, a backfill or a read. See [tagsAtReport].
+  ///
+  /// Never rendered on the change row itself — "was X, now Y" on every row is
+  /// the restatement the timeline exists to avoid.
+  final List<String> previousTags;
 
   /// Comment body. Null on every other kind.
   final String? text;
@@ -391,12 +405,14 @@ class SignalHistoryEntry {
   factory SignalHistoryEntry.created({
     required String reporterId,
     required DateTime? createdAt,
+    List<String> tags = const [],
   }) =>
       SignalHistoryEntry(
         id: '_created',
         kind: SignalHistoryKind.created,
         actorId: reporterId,
         createdAt: createdAt,
+        tags: tags,
       );
 
   /// Decode one document from `events` **or** from `comments`.
@@ -471,6 +487,12 @@ class SignalHistoryEntry {
           // the renderer already has to survive a list whose codes it does not
           // recognise.
           tags: raw.whereType<String>().toList(),
+          // Tolerated missing, unlike the new list: the rules require it, but
+          // this side is read, and a document that somehow lacks it should cost
+          // the opening row its needs line, not the whole change row.
+          previousTags:
+              (data[type.oldKey] as List?)?.whereType<String>().toList() ??
+                  const [],
           note: note,
         );
 
@@ -502,6 +524,47 @@ class SignalHistoryEntry {
       };
 }
 
+/// What the signal was **reported** needing, for the opening row.
+///
+/// Derived, not stored — the same trick as the opening row itself. The earliest
+/// `tags_change` event records what the needs were *before* it, which is exactly
+/// the list the signal was created with; with no tag change yet, the signal's
+/// current [currentTags] are still the original ones. So every signal can name
+/// its opening needs with no new field, no write and no backfill.
+///
+/// **One case is knowingly approximate.** A signal whose tags were changed
+/// before `tags_change` existed (#80) has no event recording it, so this reports
+/// today's tags as the opening ones. That is the best available answer and it
+/// matches what the card shows; it degrades with time rather than being wrong
+/// forever, since every change from now on leaves an event behind.
+///
+/// Earliest is decided by the same rule the thread is sorted by — timestamp,
+/// then document id, a null timestamp last — so the row cannot disagree with the
+/// order the rows are drawn in.
+List<String> tagsAtReport({
+  required List<String> currentTags,
+  required Iterable<SignalHistoryEntry> events,
+}) {
+  SignalHistoryEntry? earliest;
+  for (final entry in events) {
+    if (entry.kind != SignalHistoryKind.tagsChange) continue;
+    if (earliest == null || _isBefore(entry, earliest)) earliest = entry;
+  }
+  return earliest?.previousTags ?? currentTags;
+}
+
+/// Whether [a] sorts before [b] in the thread. The comparator [mergeSignalHistory]
+/// uses, extracted so the two cannot drift apart.
+bool _isBefore(SignalHistoryEntry a, SignalHistoryEntry b) {
+  final at = a.createdAt;
+  final bt = b.createdAt;
+  if (at == null && bt == null) return a.id.compareTo(b.id) < 0;
+  if (at == null) return false;
+  if (bt == null) return true;
+  final byTime = at.compareTo(bt);
+  return byTime != 0 ? byTime < 0 : a.id.compareTo(b.id) < 0;
+}
+
 /// Merge the two stored sources plus the synthetic opener into one thread.
 ///
 /// The "created" row is always first: it is the moment the signal was reported, and a
@@ -516,15 +579,7 @@ List<SignalHistoryEntry> mergeSignalHistory({
   required List<SignalHistoryEntry> events,
 }) {
   final rest = [...comments, ...events]
-    ..sort((a, b) {
-      final at = a.createdAt;
-      final bt = b.createdAt;
-      if (at == null && bt == null) return a.id.compareTo(b.id);
-      if (at == null) return 1;
-      if (bt == null) return -1;
-      final byTime = at.compareTo(bt);
-      return byTime != 0 ? byTime : a.id.compareTo(b.id);
-    });
+    ..sort((a, b) => _isBefore(a, b) ? -1 : (_isBefore(b, a) ? 1 : 0));
 
   return [if (created != null) created, ...rest];
 }

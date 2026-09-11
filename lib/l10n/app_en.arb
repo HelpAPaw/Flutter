@@ -380,6 +380,15 @@
       }
     }
   },
+  "needsAtReport": "Needed: {tags}",
+  "@needsAtReport": {
+    "description": "Secondary line on the 'Reported this signal' timeline row, naming what the signal was reported needing. Past tense: later rows say what the needs were changed to.",
+    "placeholders": {
+      "tags": {
+        "type": "String"
+      }
+    }
+  },
   "tagsUpdated": "Needs updated",
   "@tagsUpdated": {
     "description": "Fallback timeline row for a tags_change event whose tag codes all come from a newer app version, so none of them can be named here."
