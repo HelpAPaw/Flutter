@@ -272,6 +272,43 @@ abstract final class AppTheme {
         indicatorColor: onGroundBrand,
         dividerColor: scheme.outlineVariant,
       ),
+      // The bottom navigation bar.
+      //
+      // A *surface*, not the brand orange: the app bar is already brand and so
+      // is the FAB, and a third orange band along the bottom of the map screen
+      // leaves the user no neutral ground at all. The selected ink is
+      // `onGroundBrand`, the same token the tab indicator above uses, so the
+      // two ways this app says "you are here" match in both themes.
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: scheme.surfaceContainer,
+        // M3 would otherwise blend `surfaceTint` into the bar by elevation,
+        // which drifts the colour the same way it did on the app bar.
+        surfaceTintColor: Colors.transparent,
+        elevation: 3,
+        // Five destinations with labels. The M3 default (80) is a lot of screen
+        // to give up on a phone, and the map wants every pixel.
+        height: 68,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        indicatorColor: AppColors.brand.withValues(alpha: isLight ? 0.20 : 0.28),
+        iconTheme: WidgetStateProperty.resolveWith(
+          (states) => IconThemeData(
+            size: 24,
+            color: states.contains(WidgetState.selected)
+                ? onGroundBrand
+                : scheme.onSurfaceVariant,
+          ),
+        ),
+        labelTextStyle: WidgetStateProperty.resolveWith(
+          (states) => _textTheme.labelSmall!.copyWith(
+            color: states.contains(WidgetState.selected)
+                ? onGroundBrand
+                : scheme.onSurfaceVariant,
+            fontWeight: states.contains(WidgetState.selected)
+                ? FontWeight.w600
+                : FontWeight.w500,
+          ),
+        ),
+      ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: scheme.surfaceContainer,

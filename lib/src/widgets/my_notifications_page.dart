@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -11,10 +12,9 @@ import '../models/signal_status.dart';
 import '../models/signal_urgency.dart';
 import '../services/app_badge_service.dart';
 import '../services/notification_inbox_service.dart';
-import '../utils/nav_extensions.dart';
+import '../viewmodels/map_view_model.dart';
 import 'app_bar_title.dart';
 import 'status_view.dart';
-import 'escape_leading.dart';
 import 'page_width.dart';
 
 /// The in-app notification inbox.
@@ -23,14 +23,15 @@ import 'page_width.dart';
 /// (`helpNeededTags`, `statusCode`, …) rather than from the stored `title`/`body`,
 /// which are the English strings the push carried and exist only as a fallback.
 /// The Cloud Function has no i18n, and this app is bilingual.
-class MyNotificationsPage extends StatefulWidget {
+class MyNotificationsPage extends ConsumerStatefulWidget {
   const MyNotificationsPage({super.key});
 
   @override
-  State<MyNotificationsPage> createState() => _MyNotificationsPageState();
+  ConsumerState<MyNotificationsPage> createState() =>
+      _MyNotificationsPageState();
 }
 
-class _MyNotificationsPageState extends State<MyNotificationsPage> {
+class _MyNotificationsPageState extends ConsumerState<MyNotificationsPage> {
   /// Bumped by Retry, and used as the inbox StreamBuilder's key so a failed
   /// listen is torn down and restarted rather than rebuilt as-is.
   int _attempt = 0;
@@ -39,7 +40,15 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
   // which would cancel and re-listen — flashing the spinner and re-reading up
   // to `pageSize` documents each time. Same `??=` shape as
   // SignalDetailsScreen's document stream.
+  //
+  // Re-keyed on test mode, which the drawer-era version did not need: this
+  // screen used to be pushed and popped, so it re-read the mode on every open.
+  // As a permanent tab it outlives the seven-tap gesture, and the inbox query is
+  // scoped by `testMode` when the listener is *created* — so without this the
+  // tab would keep showing the other mode's notifications for the rest of the
+  // session.
   Stream<QuerySnapshot<Map<String, dynamic>>>? _inboxStream;
+  bool? _inboxTestMode;
 
   @override
   void initState() {
@@ -267,15 +276,18 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
     final l10n = AppLocalizations.of(context);
     final user = FirebaseAuth.instance.currentUser;
     final inbox = NotificationInboxService();
-    final stream = _inboxStream ??= inbox.watchInbox();
+    final testMode = ref.watch(testModeProvider);
+    if (_inboxStream == null || _inboxTestMode != testMode) {
+      _inboxTestMode = testMode;
+      _inboxStream = inbox.watchInbox();
+    }
+    final stream = _inboxStream;
 
     return Scaffold(
       appBar: AppBar(
-        leading: escapeLeading(
-            context,
-            label: AppLocalizations.of(context).back,
-            onLeave: () => context.popOrHome(),
-          ),
+        // A tab root — there is nothing beneath it to escape to, so no
+        // `escapeLeading` and no implied back arrow.
+        automaticallyImplyLeading: false,
         title: AppBarTitle(l10n.myNotifications),
         actions: [
           if (user != null)

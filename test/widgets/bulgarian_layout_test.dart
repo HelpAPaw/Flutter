@@ -4,6 +4,8 @@ import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:help_a_paw/src/models/signal_status.dart';
 import 'package:help_a_paw/src/models/signal_urgency.dart';
 import 'package:help_a_paw/src/widgets/app_bar_title.dart';
+import 'package:help_a_paw/src/widgets/home_bottom_bar.dart';
+import 'package:help_a_paw/src/theme/app_theme.dart';
 import 'package:help_a_paw/src/widgets/level_chip.dart';
 import 'package:help_a_paw/src/widgets/mention_suggestions.dart';
 import 'package:help_a_paw/src/services/user_stats_service.dart';
@@ -30,6 +32,33 @@ void main() {
         locale: const Locale('bg'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
+        home: home,
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  /// The same phone at a larger text scale, which is where a five-destination
+  /// bar runs out of room first.
+  Future<void> pumpScaled(
+    WidgetTester tester,
+    Widget home,
+    double textScale,
+  ) async {
+    tester.view.physicalSize = const Size(1233, 2154);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('bg'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        theme: AppTheme.light,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: TextScaler.linear(textScale)),
+          child: child!,
+        ),
         home: home,
       ),
     );
@@ -328,6 +357,50 @@ void main() {
 
       await tester.tap(clearAll);
       expect(cleared, isTrue);
+    });
+  });
+
+  group('HomeBottomBar', () {
+    /// Five destinations share a 411dp phone — about 82dp each — and the
+    /// Bulgarian names are the longest in the app. This is why the bar's labels
+    /// are abbreviated (`tabWatching` = "Следени") while the full names ride
+    /// along as tooltips.
+    Widget bar({int unread = 0}) => Scaffold(
+          body: const SizedBox.expand(),
+          bottomNavigationBar: HomeBottomBar(
+            currentIndex: 0,
+            unreadCount: unread,
+            onDestinationSelected: (_) {},
+          ),
+        );
+
+    testWidgets('fits five Bulgarian labels at 411dp', (tester) async {
+      await pumpScaled(tester, bar(), 1.0);
+      expectNoOverflow(tester);
+
+      // The short forms, not the screen titles.
+      expect(find.text('Карта'), findsOneWidget);
+      expect(find.text('Следени'), findsOneWidget);
+      expect(find.text('Известия'), findsOneWidget);
+      expect(find.text('Меню'), findsOneWidget);
+    });
+
+    testWidgets('still fits at the scale the device pass uses', (tester) async {
+      // The bar clamps itself to 1.2 internally, so 1.3 is the real test of
+      // whether that clamp is doing its job.
+      await pumpScaled(tester, bar(), 1.3);
+      expectNoOverflow(tester);
+    });
+
+    testWidgets('the unread badge does not push the row over', (tester) async {
+      await pumpScaled(tester, bar(unread: 99), 1.3);
+      expectNoOverflow(tester);
+      expect(find.text('99'), findsOneWidget);
+    });
+
+    testWidgets('no badge is drawn when nothing is unread', (tester) async {
+      await pumpScaled(tester, bar(), 1.0);
+      expect(find.byType(Badge), findsNothing);
     });
   });
 }

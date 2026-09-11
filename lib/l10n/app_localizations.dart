@@ -3613,6 +3613,126 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Notifications are turned off for this app. Allow them in Settings to hear about nearby signals.'**
   String get notificationPermissionRequired;
+
+  /// Bottom bar label for the map. Kept short — five destinations leave ~72dp each. The full name is on the destination's Semantics label.
+  ///
+  /// In en, this message translates to:
+  /// **'Map'**
+  String get tabMap;
+
+  /// Bottom bar label for the signals the user reported or holds
+  ///
+  /// In en, this message translates to:
+  /// **'My signals'**
+  String get tabMySignals;
+
+  /// Bottom bar label for signals the user follows
+  ///
+  /// In en, this message translates to:
+  /// **'Watching'**
+  String get tabWatching;
+
+  /// Bottom bar label for the notification inbox
+  ///
+  /// In en, this message translates to:
+  /// **'Inbox'**
+  String get tabInbox;
+
+  /// Bottom bar label for the menu that replaced the navigation drawer
+  ///
+  /// In en, this message translates to:
+  /// **'Menu'**
+  String get tabMenu;
+
+  /// Title of the screen listing signals the user follows
+  ///
+  /// In en, this message translates to:
+  /// **'Watching'**
+  String get watching;
+
+  /// Title of the menu screen
+  ///
+  /// In en, this message translates to:
+  /// **'Menu'**
+  String get menu;
+
+  /// Button that subscribes the user to a signal's notifications
+  ///
+  /// In en, this message translates to:
+  /// **'Follow'**
+  String get follow;
+
+  /// State of the follow button once the user is subscribed
+  ///
+  /// In en, this message translates to:
+  /// **'Following'**
+  String get following;
+
+  /// Action that unsubscribes the user from a signal's notifications
+  ///
+  /// In en, this message translates to:
+  /// **'Unfollow'**
+  String get unfollow;
+
+  /// Explains what following a signal actually does — it is a notification subscription, not a bookmark
+  ///
+  /// In en, this message translates to:
+  /// **'Get notified when this signal changes'**
+  String get followSignalHint;
+
+  /// Shown after commenting, which subscribes the user automatically. Carries an Undo so the subscription is never silent.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re now following this signal'**
+  String get nowFollowingSignal;
+
+  /// Confirmation after unfollowing, shown with an Undo action
+  ///
+  /// In en, this message translates to:
+  /// **'Unfollowed'**
+  String get unfollowedSignal;
+
+  /// Shown when the follow/unfollow write fails and the button reverts
+  ///
+  /// In en, this message translates to:
+  /// **'Could not change this. Please try again.'**
+  String get followFailed;
+
+  /// Empty state of the Watching tab
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re not following any signals'**
+  String get noWatchedSignals;
+
+  /// Empty-state hint of the Watching tab, naming the exact action that fills it
+  ///
+  /// In en, this message translates to:
+  /// **'Signals you follow appear here. Open a signal and tap Follow to keep an eye on it.'**
+  String get watchedSignalsHint;
+
+  /// Error state of the Watching tab
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load the signals you follow'**
+  String get couldNotLoadWatched;
+
+  /// Loads the next page of older followed signals
+  ///
+  /// In en, this message translates to:
+  /// **'Load more'**
+  String get loadMore;
+
+  /// Chip on a My Signals row that the user holds but did not report, answering 'why is this in my list'
+  ///
+  /// In en, this message translates to:
+  /// **'You hold this'**
+  String get ownedByYou;
+
+  /// Accessibility label for the inbox tab's unread badge
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 unread} other{{count} unread}}'**
+  String unreadNotificationsCount(int count);
 }
 
 class _AppLocalizationsDelegate

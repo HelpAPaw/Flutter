@@ -70,13 +70,15 @@ class ModerationService {
   /// `true` costs nothing worse than a button that returns `permission-denied`.
   ///
   /// **Cached here rather than by the caller.** The obvious place looked like
-  /// the widget — memoize the stream in State — and for `ModerationQueuePage`
-  /// that works. For the drawer it does not: `DrawerController` does not build
-  /// its child while dismissed, so `HomeRouteDrawer`'s State is created on open
-  /// and disposed on close, and a State-held memo survives exactly one open.
-  /// Every drawer open by every user, anonymous included, was costing a fresh
-  /// billed read of a document that exists for a handful of accounts. One
-  /// process-lifetime listener replaces all of them: new subscribers get
+  /// the widget — memoize the stream in State — and it was not enough. This was
+  /// written for the navigation drawer, whose `DrawerController` does not build
+  /// its child while dismissed: its State was created on open and disposed on
+  /// close, so a State-held memo survived exactly one open and every drawer open
+  /// by every user, anonymous included, cost a fresh billed read of a document
+  /// that exists for a handful of accounts. The drawer is now `MenuPage`, a tab
+  /// that is never disposed, so the caller's memo does hold — but this listener
+  /// is still what keeps the *other* callers (`ModerationQueuePage`, the signal
+  /// details shield, every comment row) sharing one read. New subscribers get
   /// [_isModerator] immediately and then share the same upstream.
   ///
   /// Errors are swallowed to `false`: offline, the right answer to "should I

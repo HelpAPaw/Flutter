@@ -23,7 +23,6 @@ import '../utils/map_clusterer.dart';
 import '../utils/map_marker_builder.dart';
 import '../utils/map_projection.dart';
 import '../viewmodels/map_view_model.dart';
-import 'home_route_drawer.dart';
 import 'map/filter_bottom_sheet.dart';
 import 'map/map_legend_sheet.dart';
 import 'map/clinic_info_card.dart';
@@ -1298,7 +1297,6 @@ class _MapScreenState extends ConsumerState<MapScreen>
             ),
           ],
         ),
-        drawer: const HomeRouteDrawer(),
         // Hidden while the location bar is up: the bar sits in the same place
         // and carries its own Cancel, so leaving the FAB there would put two
         // competing ways out on top of each other.

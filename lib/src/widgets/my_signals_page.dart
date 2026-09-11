@@ -1,39 +1,42 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/src/models/signal.dart';
-import 'package:help_a_paw/src/models/signal_status.dart';
-import 'package:help_a_paw/src/models/signal_urgency.dart';
 import 'package:help_a_paw/src/widgets/level_chip.dart';
-import 'package:help_a_paw/src/widgets/urgency_picker.dart';
 import 'package:help_a_paw/src/services/app_preferences_service.dart';
+import 'package:help_a_paw/src/services/my_signals_service.dart';
+import 'package:help_a_paw/src/repositories/signal_repository.dart';
+import 'package:help_a_paw/src/viewmodels/map_view_model.dart';
 import 'package:intl/intl.dart';
 
 import '../config/routes.dart';
 import '../models/removed_signal.dart';
 import '../services/signal_removal_service.dart';
-import '../utils/nav_extensions.dart';
 import 'app_bar_title.dart';
+import 'signal_list_tile.dart';
 import 'status_view.dart';
-import 'escape_leading.dart';
 import 'page_width.dart';
 
-
-Color _urgencyColor(int urgency) => SignalUrgency.fromCode(urgency).color;
 
 String _formatDate(BuildContext context, DateTime date) => DateFormat(
       'MMM d, yyyy',
       Localizations.localeOf(context).languageCode,
     ).format(date);
 
-class MySignalsPage extends StatelessWidget {
+class MySignalsPage extends ConsumerWidget {
   const MySignalsPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    // Watched, not read once. This screen used to be pushed and popped, so it
+    // re-read the collection name on every open; as a permanent tab it outlives
+    // the seven-tap test-mode gesture and has to re-point its queries when the
+    // mode flips.
+    final testMode = ref.watch(testModeProvider);
 
     // Two tabs, because a removed signal has to be *findable* to be
     // recoverable. Without somewhere to see them, "you can restore it for 30
@@ -44,11 +47,8 @@ class MySignalsPage extends StatelessWidget {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          leading: escapeLeading(
-              context,
-              label: AppLocalizations.of(context).back,
-              onLeave: () => context.popOrHome(),
-            ),
+          // A tab root — nothing beneath it to escape to.
+          automaticallyImplyLeading: false,
           title: AppBarTitle(l10n.mySignals),
           bottom: TabBar(
             // On the brand app bar, so the ink is onPrimary — white in light,
@@ -91,14 +91,25 @@ class MySignalsPage extends StatelessWidget {
 
             return TabBarView(
               children: [
-                _ActiveSignalsTab(uid: user.uid),
+                _ActiveSignalsTab(
+                  // A new State, and so a new service pointed at the other
+                  // collection, whenever the account or the mode changes.
+                  key: ValueKey('$testMode:${user.uid}'),
+                  uid: user.uid,
+                ),
                 // Keyed by uid so a change of account builds a fresh State.
                 // The removals stream is `late final` and captures the uid it
                 // was created under; without this key the State survives a
                 // sign-out and keeps streaming the previous account's bin,
                 // which the rules then deny — an error message rather than a
                 // leak, but a confusing one.
-                _RemovedSignalsTab(key: ValueKey(user.uid)),
+                //
+                // Keyed by test mode for the same reason: `watchMine` reads
+                // `signalsCollectionName` when the stream is *created* and
+                // filters on it in memory, so as a permanent tab this list
+                // would go on showing the other mode's bin for the rest of the
+                // session after the seven-tap gesture.
+                _RemovedSignalsTab(key: ValueKey('$testMode:${user.uid}')),
               ],
             );
           },
@@ -109,35 +120,46 @@ class MySignalsPage extends StatelessWidget {
   }
 }
 
-/// The signals still on the map.
-class _ActiveSignalsTab extends StatefulWidget {
-  const _ActiveSignalsTab({required this.uid});
+/// The signals still on the map: everything this user reported, plus everything
+/// they hold.
+///
+/// "Plus everything they hold" is new — the list used to be `reporter == me`
+/// alone, so a signal handed to you for coordination appeared nowhere you could
+/// find it again.
+class _ActiveSignalsTab extends ConsumerStatefulWidget {
+  const _ActiveSignalsTab({super.key, required this.uid});
 
   final String uid;
 
   @override
-  State<_ActiveSignalsTab> createState() => _ActiveSignalsTabState();
+  ConsumerState<_ActiveSignalsTab> createState() => _ActiveSignalsTabState();
 }
 
-class _ActiveSignalsTabState extends State<_ActiveSignalsTab> {
+class _ActiveSignalsTabState extends ConsumerState<_ActiveSignalsTab> {
   /// Bumped by Retry. Keying the StreamBuilder on it tears the failed listen
   /// down and starts a fresh one — without it "Try again" would rebuild the
   /// same dead stream and change nothing.
   int _attempt = 0;
 
+  /// Memoized so a rebuild does not hand StreamBuilder a fresh Stream, which
+  /// would cancel and re-listen and re-read every document. The whole State is
+  /// re-created when the account or the test mode changes — see the ValueKey on
+  /// this widget — so there is nothing else for the memo to go stale against.
+  Stream<List<SignalWithId>>? _mine;
+
+  Stream<List<SignalWithId>> get _stream => _mine ??=
+      MySignalsService(collection: AppPreferencesService().signalsCollectionName)
+          .watchMine(widget.uid);
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final userRef =
+        FirebaseFirestore.instance.collection('users').doc(widget.uid);
 
-    return StreamBuilder<QuerySnapshot>(
+    return StreamBuilder<List<SignalWithId>>(
       key: ValueKey(_attempt),
-      stream: FirebaseFirestore.instance
-          .collection(AppPreferencesService().signalsCollectionName)
-          .where('reporter',
-              isEqualTo:
-                  FirebaseFirestore.instance.collection('users').doc(widget.uid))
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
+      stream: _stream,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           // The exception is for us, not for the reader — "PERMISSION_DENIED:
@@ -147,7 +169,10 @@ class _ActiveSignalsTabState extends State<_ActiveSignalsTab> {
           return StatusView.error(
             title: l10n.couldNotLoadSignals,
             hint: l10n.couldNotLoadSignalsHint,
-            onRetry: () => setState(() => _attempt++),
+            onRetry: () => setState(() {
+              _mine = null;
+              _attempt++;
+            }),
           );
         }
 
@@ -155,9 +180,9 @@ class _ActiveSignalsTabState extends State<_ActiveSignalsTab> {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final docs = snapshot.data?.docs ?? [];
+        final entries = snapshot.data ?? const <SignalWithId>[];
 
-        if (docs.isEmpty) {
+        if (entries.isEmpty) {
           return StatusView.empty(
             icon: Icons.pin_drop_outlined,
             title: l10n.noSignalsYet,
@@ -167,61 +192,23 @@ class _ActiveSignalsTabState extends State<_ActiveSignalsTab> {
 
         return ListView.builder(
           padding: const EdgeInsets.all(16),
-          itemCount: docs.length,
+          itemCount: entries.length,
           itemBuilder: (context, index) {
-            final doc = docs[index];
-            final signal = Signal.fromJson(doc.data() as Map<String, dynamic>);
-            final createdAt = signal.createdAt as Timestamp?;
-            final dateStr = createdAt != null
-                ? _formatDate(context, createdAt.toDate())
-                : l10n.unknownDate;
+            final entry = entries[index];
+            final signal = Signal.fromJson(entry.rawData);
+            // Answers "why is this in my list" for a signal somebody else
+            // reported and handed over.
+            final heldNotReported = signal.reporter != userRef;
 
-            return Card(
-              margin: const EdgeInsets.only(bottom: 12),
-              child: ListTile(
-                // Tinted by urgency, not status: colour means "how bad is it"
-                // everywhere in the app now, and a row whose avatar and chip
-                // disagreed about what red meant would reintroduce exactly the
-                // confusion this replaces.
-                leading: CircleAvatar(
-                  backgroundColor: _urgencyColor(signal.urgency).withAlpha(51),
-                  child: Icon(
-                    // The tag already carries an icon, so the row and the chips
-                    // on the details screen cannot drift.
-                    signal.primaryTag.icon,
-                    color: _urgencyColor(signal.urgency),
-                  ),
-                ),
-                title: Text(
-                  signal.displayTitle(l10n),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(signal.description,
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 4),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        UrgencyChip(urgency: signal.urgency),
-                        LevelChip.status(
-                          icon: SignalStatus.fromCode(signal.status).icon,
-                          label: SignalStatus.fromCode(signal.status).label(l10n),
-                        ),
-                        Text(dateStr,
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                      ],
-                    ),
-                  ],
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => context.push(Routes.signalDetails(doc.id)),
-              ),
+            return SignalListTile(
+              signal: signal,
+              badge: heldNotReported
+                  ? LevelChip.status(
+                      icon: Icons.assignment_ind_outlined,
+                      label: l10n.ownedByYou,
+                    )
+                  : null,
+              onTap: () => context.push(Routes.signalDetails(entry.id)),
             );
           },
         );

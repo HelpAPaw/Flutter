@@ -19,6 +19,7 @@ class AppPreferencesService {
   static const String _testModeSyncedValueKey = 'test_mode_synced_value';
   static const String _photoMirroredUidKey = 'public_photo_mirrored_uid';
   static const String _photoMirroredUrlKey = 'public_photo_mirrored_url';
+  static const String _lastTabKey = 'last_tab_path';
 
   /// Initialize SharedPreferences - must be called before using any other
   /// methods.
@@ -33,6 +34,29 @@ class AppPreferencesService {
   /// live `signals` collection while the user believes they are in test mode.
   Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();
+  }
+
+  /// Branch path of the bottom-bar tab the user was last on, or null.
+  ///
+  /// A *path* rather than an index, so adding or reordering a destination later
+  /// cannot strand anyone on a tab that has moved underneath them. The reader
+  /// ([initialShellLocation]) validates it against `Routes.shellBranchPaths` and
+  /// ignores anything it does not recognise, which is also what makes an
+  /// uninstalled-tab path harmless.
+  String? lastTabPath() {
+    return _prefs?.getString(_lastTabKey);
+  }
+
+  Future<void> setLastTabPath(String path) async {
+    await _prefs?.setString(_lastTabKey, path);
+  }
+
+  /// Forgets the last tab, so the next cold start opens the map.
+  ///
+  /// Called on sign-out: two of the five destinations are sign-in walls, and
+  /// reopening the app onto "please sign in" is a worse greeting than the map.
+  Future<void> clearLastTabPath() async {
+    await _prefs?.remove(_lastTabKey);
   }
 
   /// Whether the one-shot deferred deep-link check has already run.
