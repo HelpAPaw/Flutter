@@ -7,7 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../config/routes.dart';
 import '../services/app_preferences_service.dart';
 import '../services/signal_navigator.dart';
-import '../services/unread_count_provider.dart';
+import '../services/app_providers.dart';
 import '../viewmodels/map_view_model.dart';
 import 'home_bottom_bar.dart';
 

@@ -7,7 +7,7 @@ import 'package:help_a_paw/src/config/routes.dart';
 import 'package:help_a_paw/src/services/app_preferences_service.dart';
 import 'package:help_a_paw/src/state/map_state.dart';
 import 'package:help_a_paw/src/viewmodels/map_view_model.dart';
-import 'package:help_a_paw/src/services/unread_count_provider.dart';
+import 'package:help_a_paw/src/services/app_providers.dart';
 import 'package:help_a_paw/src/widgets/home_shell.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

@@ -5,10 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/src/widgets/level_chip.dart';
-import 'package:help_a_paw/src/services/app_preferences_service.dart';
-import 'package:help_a_paw/src/services/my_signals_service.dart';
-import 'package:help_a_paw/src/repositories/signal_repository.dart';
-import 'package:help_a_paw/src/viewmodels/map_view_model.dart';
+import 'package:help_a_paw/src/services/app_providers.dart';
 
 import '../config/routes.dart';
 import '../models/removed_signal.dart';
@@ -32,11 +29,6 @@ class _MySignalsPageState extends ConsumerState<MySignalsPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    // Watched, not read once. This screen used to be pushed and popped, so it
-    // re-read the collection name on every open; as a permanent tab it outlives
-    // the seven-tap test-mode gesture and has to re-point its queries when the
-    // mode flips.
-    final testMode = ref.watch(testModeProvider);
 
     // Two tabs, because a removed signal has to be *findable* to be
     // recoverable. Without somewhere to see them, "you can restore it for 30
@@ -85,12 +77,7 @@ class _MySignalsPageState extends ConsumerState<MySignalsPage> {
 
             return TabBarView(
               children: [
-                _ActiveSignalsTab(
-                  // A new State, and so a new service pointed at the other
-                  // collection, whenever the account or the mode changes.
-                  key: ValueKey('$testMode:${user.uid}'),
-                  uid: user.uid,
-                ),
+                const _ActiveSignalsTab(),
                 // Keyed by uid so a change of account builds a fresh State.
                 // The removals stream is `late final` and captures the uid it
                 // was created under; without this key the State survives a
@@ -103,7 +90,7 @@ class _MySignalsPageState extends ConsumerState<MySignalsPage> {
                 // filters on it in memory, so as a permanent tab this list
                 // would go on showing the other mode's bin for the rest of the
                 // session after the seven-tap gesture.
-                _RemovedSignalsTab(key: ValueKey('$testMode:${user.uid}')),
+                const _RemovedSignalsTab(),
               ],
             );
           },
@@ -120,96 +107,69 @@ class _MySignalsPageState extends ConsumerState<MySignalsPage> {
 /// "Plus everything they hold" is new — the list used to be `reporter == me`
 /// alone, so a signal handed to you for coordination appeared nowhere you could
 /// find it again.
-class _ActiveSignalsTab extends ConsumerStatefulWidget {
-  const _ActiveSignalsTab({super.key, required this.uid});
-
-  final String uid;
+class _ActiveSignalsTab extends ConsumerWidget {
+  const _ActiveSignalsTab();
 
   @override
-  ConsumerState<_ActiveSignalsTab> createState() => _ActiveSignalsTabState();
-}
-
-class _ActiveSignalsTabState extends ConsumerState<_ActiveSignalsTab> {
-  /// Bumped by Retry. Keying the StreamBuilder on it tears the failed listen
-  /// down and starts a fresh one — without it "Try again" would rebuild the
-  /// same dead stream and change nothing.
-  int _attempt = 0;
-
-  /// Memoized so a rebuild does not hand StreamBuilder a fresh Stream, which
-  /// would cancel and re-listen and re-read every document. The whole State is
-  /// re-created when the account or the test mode changes — see the ValueKey on
-  /// this widget — so there is nothing else for the memo to go stale against.
-  Stream<List<SignalWithId>>? _mine;
-
-  Stream<List<SignalWithId>> get _stream => _mine ??=
-      MySignalsService(collection: AppPreferencesService().signalsCollectionName)
-          .watchMine(widget.uid);
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final userRef =
-        FirebaseFirestore.instance.collection('users').doc(widget.uid);
+    final uid = ref.watch(sessionUidProvider).value;
+    final userRef = uid == null
+        ? null
+        : FirebaseFirestore.instance.collection('users').doc(uid);
 
-    return StreamBuilder<List<SignalWithId>>(
-      key: ValueKey(_attempt),
-      stream: _stream,
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          // The exception is for us, not for the reader — "PERMISSION_DENIED:
-          // Missing or insufficient permissions" is a fact about our rules
-          // that nobody can act on.
-          debugPrint('My Signals stream failed: ${snapshot.error}');
-          return StatusView.error(
-            title: l10n.couldNotLoadSignals,
-            hint: l10n.couldNotLoadSignalsHint,
-            onRetry: () => setState(() {
-              _mine = null;
-              _attempt++;
-            }),
-          );
-        }
+    // No memoized stream and no ValueKey: `mySignalsProvider` declares its
+    // dependency on the account and the collection, so Riverpod disposes and
+    // rebuilds it when either changes — which is what the hand-rolled keys here
+    // were reproducing.
+    return ref.watch(mySignalsProvider).when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, _) {
+            // The exception is for us, not for the reader — "PERMISSION_DENIED:
+            // Missing or insufficient permissions" is a fact about our rules
+            // that nobody can act on.
+            debugPrint('My Signals stream failed: $error');
+            return StatusView.error(
+              title: l10n.couldNotLoadSignals,
+              hint: l10n.couldNotLoadSignalsHint,
+              onRetry: () => ref.invalidate(mySignalsProvider),
+            );
+          },
+          data: (entries) {
+            if (entries.isEmpty) {
+              return StatusView.empty(
+                icon: Icons.pin_drop_outlined,
+                title: l10n.noSignalsYet,
+                hint: l10n.submittedSignalsAppearHere,
+              );
+            }
 
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
+            return ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: entries.length,
+              itemBuilder: (context, index) {
+                // `entry.signal` is already parsed — `SignalWithId.fromDocument`
+                // did it. Re-parsing per row, per build, is pure waste.
+                final entry = entries[index];
+                final signal = entry.signal;
+                // Answers "why is this in my list" for a signal somebody else
+                // reported and handed over.
+                final heldNotReported = signal.reporter != userRef;
 
-        final entries = snapshot.data ?? const <SignalWithId>[];
-
-        if (entries.isEmpty) {
-          return StatusView.empty(
-            icon: Icons.pin_drop_outlined,
-            title: l10n.noSignalsYet,
-            hint: l10n.submittedSignalsAppearHere,
-          );
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: entries.length,
-          itemBuilder: (context, index) {
-            // `entry.signal` is already parsed — `SignalWithId.fromDocument`
-            // did it. Re-parsing per row, per build, is pure waste.
-            final entry = entries[index];
-            final signal = entry.signal;
-            // Answers "why is this in my list" for a signal somebody else
-            // reported and handed over.
-            final heldNotReported = signal.reporter != userRef;
-
-            return SignalListTile(
-              signal: signal,
-              badge: heldNotReported
-                  ? LevelChip.status(
-                      icon: Icons.assignment_ind_outlined,
-                      label: l10n.ownedByYou,
-                    )
-                  : null,
-              onTap: () => context.push(Routes.signalDetails(entry.id)),
+                return SignalListTile(
+                  signal: signal,
+                  badge: heldNotReported
+                      ? LevelChip.status(
+                          icon: Icons.assignment_ind_outlined,
+                          label: l10n.ownedByYou,
+                        )
+                      : null,
+                  onTap: () => context.push(Routes.signalDetails(entry.id)),
+                );
+              },
             );
           },
         );
-      },
-    );
   }
 }
 
@@ -219,28 +179,16 @@ class _ActiveSignalsTabState extends ConsumerState<_ActiveSignalsTab> {
 /// row's buttons. Both are server round trips, and a double tap on Restore
 /// races two writes at the same id — the second comes back `already-exists`,
 /// reporting a failure for something that in fact succeeded.
-class _RemovedSignalsTab extends StatefulWidget {
-  const _RemovedSignalsTab({super.key});
+class _RemovedSignalsTab extends ConsumerStatefulWidget {
+  const _RemovedSignalsTab();
 
   @override
-  State<_RemovedSignalsTab> createState() => _RemovedSignalsTabState();
+  ConsumerState<_RemovedSignalsTab> createState() =>
+      _RemovedSignalsTabState();
 }
 
-class _RemovedSignalsTabState extends State<_RemovedSignalsTab> {
-  /// Bumped by Retry — see [_ActiveSignalsTabState._attempt].
-  int _attempt = 0;
-
+class _RemovedSignalsTabState extends ConsumerState<_RemovedSignalsTab> {
   final _service = SignalRemovalService();
-
-  /// The removals stream, subscribed **once**.
-  ///
-  /// `late final`, not a call inside `build()`. `StreamBuilder` keys off stream
-  /// *identity*, so a fresh `watchMine()` per build cancels the Firestore
-  /// listener and opens a new one — and `_run` calls `setState` twice, at the
-  /// start and end of every action. The visible symptom is the whole list
-  /// blinking back to a spinner the moment you tap Restore; the invisible one
-  /// is a billed listen per rebuild.
-  late final Stream<List<RemovedSignal>> _removals = _service.watchMine();
 
   /// Signal ids with an action in flight.
   final _busy = <String>{};
@@ -309,25 +257,20 @@ class _RemovedSignalsTabState extends State<_RemovedSignalsTab> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
 
-    return StreamBuilder<List<RemovedSignal>>(
-      key: ValueKey(_attempt),
-      stream: _removals,
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          debugPrint('Removed signals stream failed: ${snapshot.error}');
-          return StatusView.error(
-            title: l10n.couldNotLoadSignals,
-            hint: l10n.couldNotLoadSignalsHint,
-            onRetry: () => setState(() => _attempt++),
-          );
-        }
-
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        final removals = snapshot.data ?? const <RemovedSignal>[];
-
+    // The provider declares its own dependency on the account and the
+    // collection, so the memoized stream and the two keys this used to carry are
+    // Riverpod's job now.
+    return ref.watch(removedSignalsProvider).when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) {
+        debugPrint('Removed signals stream failed: $error');
+        return StatusView.error(
+          title: l10n.couldNotLoadSignals,
+          hint: l10n.couldNotLoadSignalsHint,
+          onRetry: () => ref.invalidate(removedSignalsProvider),
+        );
+      },
+      data: (removals) {
         if (removals.isEmpty) {
           return StatusView.empty(
             icon: Icons.delete_outline,

@@ -323,6 +323,9 @@ Future<void> syncBadgeCount() async {
 
 final GoRouter _router = GoRouter(
   debugLogDiagnostics: kDebugMode,
+  // Lets SignalNavigator see the real root stack rather than inferring it from
+  // the router's URI, which does not track imperative pushes.
+  observers: [SignalNavigator.instance.observer],
   // The tab the user was last on. Safe to read synchronously: this is a lazy
   // top-level final, first touched by `SignalNavigator.attach` and by
   // `MaterialApp.router`, both strictly after `AppPreferencesService.initialize`

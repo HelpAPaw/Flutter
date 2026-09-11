@@ -1,10 +1,8 @@
-import 'dart:async';
-
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../repositories/repository_provider.dart';
+import '../utils/cached_user_doc_stream.dart';
 
 /// Which signals the user follows.
 ///
@@ -28,89 +26,39 @@ class SignalSubscriptionService {
   /// One `users/{uid}` listener, shared by the Watching tab and every follow
   /// button on screen: both are alive at once inside the tab shell, and each
   /// extra listener is a separate billed read of the same document.
-  StreamController<Set<String>>? _controller;
-  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _upstream;
-  String? _uid;
-
-  /// The last value seen, replayed to every late subscriber.
   ///
-  /// **This is the part a plain `asBroadcastStream()` does not do**, and getting
-  /// it wrong is invisible until two screens are open at once: a broadcast
-  /// stream delivers the current snapshot to whoever listens first and nothing
-  /// at all to anyone who arrives afterwards, so — depending on which order the
-  /// user opened them — the follow button would sit on `initialData: false` and
-  /// offer "Follow" for a signal already followed, or the Watching tab would
-  /// spin forever on a tab that has data. Neither corrects itself until the
-  /// document happens to change. Same shape, and the same reason, as
-  /// `ModerationService.watchIsModerator`.
-  Set<String> _latest = const <String>{};
+  /// The replay, the account switch and the dedupe all live in
+  /// [CachedUserDocStream] — this used to hand-roll them, alongside a second
+  /// copy in `ModerationService` that had already drifted on what a sign-out
+  /// does.
+  final CachedUserDocStream<Set<String>> _subscriptions =
+      CachedUserDocStream<Set<String>>(
+    collection: 'users',
+    empty: const <String>{},
+    equals: setEquals,
+    debugLabel: 'Signal subscriptions',
+    project: (doc) {
+      final raw = doc.data()?['signalSubscriptions'];
+      if (raw is! List) return const <String>{};
+      return raw.whereType<String>().toSet();
+    },
+  );
 
   /// Every signal id the user follows, live.
-  Stream<Set<String>> watchSubscriptions() async* {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) {
-      yield const <String>{};
-      return;
-    }
-
-    _ensureSubscription(uid);
-    yield _latest;
-    yield* _controller!.stream;
-  }
+  Stream<Set<String>> watchSubscriptions() => _subscriptions.watch();
 
   /// Whether the user follows [signalId] right now, from the cached value.
   ///
   /// Synchronous on purpose: the alternative at the one call site was a `get()`
   /// on `users/{uid}` — a billed read, on the comment-post path, of a document
   /// this service is already listening to.
-  bool isFollowing(String signalId) => _latest.contains(signalId);
+  bool isFollowing(String signalId) =>
+      _subscriptions.value.contains(signalId);
 
   /// Whether the user follows [signalId], as a stream that never emits the same
   /// answer twice in a row.
   Stream<bool> watchIsFollowing(String signalId) =>
       watchSubscriptions().map((ids) => ids.contains(signalId)).distinct();
-
-  void _ensureSubscription(String uid) {
-    if (_controller != null && _uid == uid) return;
-
-    // An account switch: drop the previous uid's listener rather than leaking
-    // it. Left running it would keep reading a document the signed-out user can
-    // no longer access, and start erroring on every change.
-    _teardown();
-
-    _uid = uid;
-    _controller = StreamController<Set<String>>.broadcast();
-    _upstream = FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .snapshots()
-        .listen(
-      (doc) {
-        final ids = _idsOf(doc);
-        // Deduped: `users/{uid}` is written for reasons that have nothing to do
-        // with following — an FCM token save, a test-mode sync — and a rebuild
-        // per unrelated write is a re-read of every followed signal.
-        if (setEquals(ids, _latest)) return;
-        _latest = ids;
-        _controller?.add(ids);
-      },
-      onError: (Object e) => debugPrint('Subscription stream failed: $e'),
-    );
-  }
-
-  void _teardown() {
-    unawaited(_upstream?.cancel());
-    unawaited(_controller?.close());
-    _upstream = null;
-    _controller = null;
-    _latest = const <String>{};
-  }
-
-  static Set<String> _idsOf(DocumentSnapshot<Map<String, dynamic>> doc) {
-    final raw = doc.data()?['signalSubscriptions'];
-    if (raw is! List) return const <String>{};
-    return raw.whereType<String>().toSet();
-  }
 
   Future<void> follow(String signalId) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -137,5 +85,5 @@ class SignalSubscriptionService {
 
   /// Drops the cached listener, so the next read opens one for the new account.
   @visibleForTesting
-  void reset() => _teardown();
+  void reset() => _subscriptions.reset();
 }

@@ -66,12 +66,15 @@ class SignalRemovalService {
   ///
   /// The test-mode split is applied in memory rather than as a second `where`:
   /// this is a short list, and one composite index is enough.
-  Stream<List<RemovedSignal>> watchMine() {
+  /// [collection] is passed in rather than read here for the same reason the
+  /// inbox's is: this stream filters on the value it captured when it was
+  /// created, so a caller holding it across the seven-tap gesture would go on
+  /// showing the other mode's bin with nothing to indicate it.
+  Stream<List<RemovedSignal>> watchMine({required String collection}) {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return Stream.value(const []);
 
     final userRef = _firestore.collection('users').doc(uid);
-    final collection = _signalsCollection;
 
     return _firestore
         .collection(_collection)

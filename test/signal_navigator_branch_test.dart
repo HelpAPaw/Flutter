@@ -18,6 +18,7 @@ void main() {
   /// shell alone is one `ShellRouteMatch`, and a push appends an
   /// `ImperativeRouteMatch`. A flat router cannot reproduce that.
   GoRouter buildRouter() => GoRouter(
+        observers: [SignalNavigator.instance.observer],
         initialLocation: Routes.home,
         routes: [
           StatefulShellRoute.indexedStack(
@@ -42,7 +43,10 @@ void main() {
         ],
       );
 
-  setUp(() => branchSwitches = <String>[]);
+  setUp(() {
+    branchSwitches = <String>[];
+    SignalNavigator.instance.observer.reset();
+  });
 
   Future<GoRouter> pump(WidgetTester tester) async {
     final router = buildRouter();
@@ -113,5 +117,57 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(branchSwitches, isEmpty);
+  });
+
+  testWidgets('isShowingSignal sees a pushed signal, not just a cold link',
+      (tester) async {
+    // The blind spot the observer exists to close: `currentConfiguration.uri`
+    // stays at the tab's location through an imperative push, so this used to
+    // report false while signal details was open — which is what
+    // DeferredDeepLinkService asks to decide whether a link already took the
+    // user somewhere.
+    await pump(tester);
+    expect(SignalNavigator.instance.isShowingSignal, isFalse);
+
+    SignalNavigator.instance.open('abc123');
+    await tester.pumpAndSettle();
+    expect(SignalNavigator.instance.isShowingSignal, isTrue);
+  });
+
+  testWidgets('re-tapping the same notification does not stack a duplicate',
+      (tester) async {
+    // Same root cause: the dedupe compared against the router URI, which never
+    // became the pushed signal, so a second tap pushed details again.
+    final router = await pump(tester);
+    SignalNavigator.instance.open('abc123');
+    await tester.pumpAndSettle();
+
+    SignalNavigator.instance.open('abc123');
+    await tester.pumpAndSettle();
+
+    expect(find.text('details'), findsOneWidget);
+
+    // One page deep, not two: popping once leaves the shell showing.
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(find.text('details'), findsNothing);
+  });
+
+  testWidgets('popping details clears the over-shell stack', (tester) async {
+    final router = await pump(tester);
+    SignalNavigator.instance.open('abc123');
+    await tester.pumpAndSettle();
+
+    router.pop();
+    await tester.pumpAndSettle();
+
+    expect(SignalNavigator.instance.isShowingSignal, isFalse,
+        reason: 'the observer must un-track a popped route');
+
+    // And a switch is allowed again, because a tab is back on top.
+    branchSwitches.clear();
+    SignalNavigator.instance.open('def456');
+    await tester.pumpAndSettle();
+    expect(branchSwitches, ['map']);
   });
 }
