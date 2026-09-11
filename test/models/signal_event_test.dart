@@ -145,6 +145,82 @@ void main() {
     });
   });
 
+  group('tags_change', () {
+    // #80. The payload is a LIST, which is the whole reason this is a third
+    // subtype: hand `eventData` an int and it does not compile, and a stored
+    // event the decoder cannot read is the silent failure the vocabulary
+    // exists to prevent.
+    Map<String, dynamic> tagsEvent({Object? newTags = const ['foster', 'transport']}) => {
+          'type': 'tags_change',
+          'oldTags': const ['rescue'],
+          if (newTags != null) 'newTags': newTags,
+          'note': 'Vet is done, she needs a foster now',
+          'createdAt': DateTime(2026, 9, 11),
+          'actor': actor,
+        };
+
+    test('decodes to the tags the signal needs NOW', () {
+      final entry = SignalHistoryEntry.fromDocument('e9', tagsEvent())!;
+
+      expect(entry.kind, SignalHistoryKind.tagsChange);
+      expect(entry.tags, ['foster', 'transport']);
+      // Kept for the opening row alone (see tagsAtReport) — never rendered on
+      // this row.
+      expect(entry.previousTags, ['rescue']);
+      expect(entry.note, 'Vet is done, she needs a foster now');
+      expect(entry.isEvent, isTrue);
+      // The row says what the signal is now, like every other kind — the old
+      // list is stored but never rendered.
+      expect(entry.level, isNull);
+    });
+
+    test('keeps the order it was written in, because order is priority', () {
+      final entry = SignalHistoryEntry.fromDocument(
+        'e10',
+        tagsEvent(newTags: const ['transport', 'foster']),
+      )!;
+
+      // helpNeededTags[0] is the signal's category (SPECIFICATION §4.4), so a
+      // decoder that came back with a set would lose the one part of this
+      // payload that carries meaning beyond membership.
+      expect(entry.tags, ['transport', 'foster']);
+    });
+
+    test('drops codes it cannot read rather than the whole row', () {
+      final entry = SignalHistoryEntry.fromDocument(
+        'e11',
+        tagsEvent(newTags: const ['foster', 7, null]),
+      )!;
+
+      expect(entry.tags, ['foster']);
+      expect(entry.note, isNotNull);
+    });
+
+    test('keeps an unknown code, leaving the vocabulary to the renderer', () {
+      // A code from a NEWER build. The model has no opinion about the
+      // vocabulary — HelpTag.fromCodes drops what it cannot label — so decoding
+      // must not quietly filter here as well, or the row would render as if the
+      // tag had never been set.
+      final entry = SignalHistoryEntry.fromDocument(
+        'e12',
+        tagsEvent(newTags: const ['fromTheFuture']),
+      )!;
+
+      expect(entry.tags, ['fromTheFuture']);
+    });
+
+    test('rejects a payload that is not a list', () {
+      expect(
+        SignalHistoryEntry.fromDocument('e13', tagsEvent(newTags: 2)),
+        isNull,
+      );
+      expect(
+        SignalHistoryEntry.fromDocument('e14', tagsEvent(newTags: null)),
+        isNull,
+      );
+    });
+  });
+
   group('eventData', () {
     // The round trip is the point of having the encoder: before it existed the
     // field names were string literals in two widgets, and nothing could check
@@ -266,6 +342,171 @@ void main() {
       expect(written['newStatus'], 1);
       expect(written.containsKey('author'), isFalse);
       expect(written.containsKey('text'), isFalse);
+    });
+
+    group('tags_change (#80)', () {
+      test('survives a round trip through fromDocument', () {
+        final written = SignalEventType.tagsChange.eventData(
+          oldValue: const ['rescue', 'vetCare'],
+          newValue: const ['foster'],
+          note: 'Out of the clinic',
+          actor: actor,
+        );
+
+        final entry = SignalHistoryEntry.fromDocument('e0', written)!;
+
+        expect(entry.kind, SignalHistoryKind.tagsChange);
+        expect(entry.tags, ['foster']);
+        expect(entry.note, 'Out of the clinic');
+        expect(entry.actorId, 'u1');
+        expect(entry.createdAt, isNotNull);
+      });
+
+      test('names the fields isValidTagList validates', () {
+        final written = SignalEventType.tagsChange.eventData(
+          oldValue: const ['rescue'],
+          newValue: const ['foster', 'transport'],
+          note: 'n',
+          actor: actor,
+        );
+
+        expect(written['type'], 'tags_change');
+        expect(written['oldTags'], ['rescue']);
+        expect(written['newTags'], ['foster', 'transport']);
+      });
+
+      test('copies its lists, so later edits cannot reach the batch', () {
+        // Both call sites pass widget state that keeps being edited while the
+        // write is in flight: the picker's selection and the edit screen's
+        // `_helpTags`. Aliasing them would let a tap land in a document that
+        // was already built.
+        final live = ['rescue'];
+        final written = SignalEventType.tagsChange.eventData(
+          oldValue: live,
+          newValue: live,
+          note: 'n',
+          actor: actor,
+        );
+        live.add('foster');
+
+        expect(written['oldTags'], ['rescue']);
+        expect(written['newTags'], ['rescue']);
+      });
+
+      test('is a list-payload type, so it has no level encoder', () {
+        expect(SignalEventType.tagsChange, isA<TagsEventType>());
+        expect(SignalEventType.tagsChange, isNot(isA<LevelEventType>()));
+        // Client-written, unlike ownership: the picker and the edit screen both
+        // write it under isSignalOwnerUpdate().
+        expect(SignalEventType.tagsChange.serverOnly, isFalse);
+      });
+    });
+  });
+
+  group('tagsAtReport', () {
+    // The opening row names what the signal was REPORTED needing (#80), so that
+    // every later row can say only what changed. Nothing stores that list: the
+    // earliest tag change's `oldTags` IS it.
+    SignalHistoryEntry change(
+      String id,
+      DateTime? at, {
+      required List<String> from,
+      List<String> to = const ['foster'],
+    }) =>
+        SignalHistoryEntry(
+          id: id,
+          kind: SignalHistoryKind.tagsChange,
+          actorId: 'u1',
+          createdAt: at,
+          tags: to,
+          previousTags: from,
+        );
+
+    test('falls back to the current tags when nothing has changed yet', () {
+      expect(
+        tagsAtReport(currentTags: const ['rescue'], events: const []),
+        ['rescue'],
+      );
+    });
+
+    test('takes the EARLIEST change\'s old list, not the latest', () {
+      // The whole point: by the time three changes have happened, the current
+      // tags say nothing about what was reported.
+      final events = [
+        change('c', DateTime(2026, 9, 3), from: const ['foster']),
+        change('a', DateTime(2026, 9, 1), from: const ['rescue', 'vetCare']),
+        change('b', DateTime(2026, 9, 2), from: const ['vetCare']),
+      ];
+
+      expect(
+        tagsAtReport(currentTags: const ['transport'], events: events),
+        ['rescue', 'vetCare'],
+      );
+    });
+
+    test('breaks a timestamp tie by id, as the thread does', () {
+      // Two events written in one batch share a millisecond. The row must agree
+      // with the order the rows are drawn in, or the opening row names the
+      // needs from the second of them.
+      final at = DateTime(2026, 9, 11, 16, 5);
+      final events = [
+        change('b', at, from: const ['second']),
+        change('a', at, from: const ['first']),
+      ];
+
+      expect(tagsAtReport(currentTags: const [], events: events), ['first']);
+    });
+
+    test('sorts a timestamp-less change last, as the thread does', () {
+      // A local echo of a write still in flight. It is the NEWEST thing that has
+      // happened, so it must not be mistaken for the opening state.
+      final events = [
+        change('pending', null, from: const ['inFlight']),
+        change('a', DateTime(2026, 9, 1), from: const ['rescue']),
+      ];
+
+      expect(tagsAtReport(currentTags: const [], events: events), ['rescue']);
+    });
+
+    test('ignores events of every other kind', () {
+      final events = [
+        SignalHistoryEntry(
+          id: 's',
+          kind: SignalHistoryKind.statusChange,
+          actorId: 'u1',
+          createdAt: DateTime(2026, 8, 1),
+          level: 1,
+        ),
+        change('t', DateTime(2026, 9, 1), from: const ['rescue']),
+      ];
+
+      expect(tagsAtReport(currentTags: const [], events: events), ['rescue']);
+    });
+
+    test('a null currentTags means "not knowable yet", not "no tags"', () {
+      // The events listener has only answered from cache, so "nothing has
+      // changed the tags" is not yet a fact and the signal's current tags
+      // cannot stand in for the original ones.
+      expect(tagsAtReport(currentTags: null, events: const []), isEmpty);
+    });
+
+    test('a stored change answers even while the fallback cannot', () {
+      // The distinction that makes the null worth having: `oldTags` is a
+      // record, not an inference, so a cached event is a real answer and the
+      // opening row does not have to wait for the server to show it.
+      final events = [change('a', DateTime(2026, 9, 1), from: const ['rescue'])];
+
+      expect(tagsAtReport(currentTags: null, events: events), ['rescue']);
+    });
+
+    test('an empty old list is an answer, not a missing one', () {
+      // A signal created before the tag vocabulary genuinely had none — which is
+      // why the rules allow an empty `oldTags`. The opening row then shows no
+      // needs line at all, rather than today's tags.
+      final events = [change('a', DateTime(2026, 9, 1), from: const [])];
+
+      expect(tagsAtReport(currentTags: const ['foster'], events: events),
+          isEmpty);
     });
   });
 

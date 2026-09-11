@@ -110,7 +110,7 @@ class SignalStateCard extends StatelessWidget {
                           child: LevelChip.urgency(
                             color: urgency.color,
                             label: urgency.label(l10n),
-                            iconAsset: urgency.pinAsset,
+                            icon: urgency.icon,
                           ),
                         ),
                       ),

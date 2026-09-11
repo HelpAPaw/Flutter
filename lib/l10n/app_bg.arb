@@ -222,6 +222,25 @@
   "updateNoteTitle": "Какво се промени?",
   "nothingWasSaved": "Нищо не беше запазено.",
   "updateNoteChangingTo": "Промяна на: {level}",
+  "updateNoteChangingNeedsTo": "Промяна на нуждите на: {tags}",
+  "@updateNoteChangingNeedsTo": {
+    "placeholders": {
+      "tags": {
+        "type": "String"
+      }
+    }
+  },
+  "updateNoteChangingUrgencyAndNeeds": "Промяна на: {level} и на нуждите на: {tags}",
+  "@updateNoteChangingUrgencyAndNeeds": {
+    "placeholders": {
+      "level": {
+        "type": "String"
+      },
+      "tags": {
+        "type": "String"
+      }
+    }
+  },
   "updateNoteTakingSignal": "Поемате отговорност за този сигнал",
   "updateNoteTakingSignalAndChangingTo": "Поемате отговорност и променяте на: {level}",
   "updateNoteSteppingDown": "Отказвате се от този сигнал",
@@ -302,6 +321,23 @@
       }
     }
   },
+  "tagsSetTo": "Нуждите са променени на {tags}",
+  "@tagsSetTo": {
+    "placeholders": {
+      "tags": {
+        "type": "String"
+      }
+    }
+  },
+  "needsAtReport": "Нужна помощ: {tags}",
+  "@needsAtReport": {
+    "placeholders": {
+      "tags": {
+        "type": "String"
+      }
+    }
+  },
+  "tagsUpdated": "Нуждите са променени",
   "releasedSignalShort": "Отказа се от този сигнал",
   "@releasedSignalShort": {},
   "tookResponsibilityShort": "Пое отговорност за този сигнал",

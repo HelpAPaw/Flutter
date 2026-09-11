@@ -32,8 +32,9 @@ import 'comment_mention.dart';
 ///
 /// A **sealed hierarchy rather than an enum**, because the types stopped being
 /// variations on one shape. Status and urgency carry two ints on a fixed 0..2
-/// scale and are written by the client; ownership carries two nullable user
-/// references and is written only by the server. An enum reconciles that with a
+/// scale and are written by the client; tags carry two lists of vocabulary
+/// codes; ownership carries two nullable user references and is written only by
+/// the server. An enum reconciles that with a
 /// discriminator field and an encoder that is valid for only some of its
 /// values — a partial method, guarded at runtime, on a class whose entire
 /// purpose is to stop a malformed event being written.
@@ -115,6 +116,22 @@ sealed class SignalEventType {
     historyKind: SignalHistoryKind.urgencyChange,
   );
 
+  /// What the signal needs changed (master spec §4.2) — a tag added, dropped or
+  /// completed.
+  ///
+  /// This is the *working-the-case* gesture, not an edit of the reporter's
+  /// account: §4.2 describes the case holder removing tags as needs are met, so
+  /// the sequence of tag changes is the record of the signal being worked. It
+  /// went untraced until HelpAPaw/Flutter#80 — the only owner-editable
+  /// coordination field with no timeline entry behind it.
+  static const TagsEventType tagsChange = TagsEventType(
+    code: 'tags_change',
+    signalField: 'helpNeededTags',
+    oldKey: 'oldTags',
+    newKey: 'newTags',
+    historyKind: SignalHistoryKind.tagsChange,
+  );
+
   /// Signal ownership moved (master spec §4.5) — claimed, handed over or released.
   ///
   /// The first **server-only** type. See [serverOnly].
@@ -133,6 +150,7 @@ sealed class SignalEventType {
   static const List<SignalEventType> values = [
     statusChange,
     urgencyChange,
+    tagsChange,
     ownershipTransfer,
   ];
 
@@ -151,6 +169,34 @@ sealed class SignalEventType {
   /// `isSignalEventCreate()` in `firestore.rules` accepts.
   static final List<String> clientCodes =
       List.unmodifiable(values.where((t) => !t.serverOnly).map((t) => t.code));
+
+  /// The part of an event document that every type writes identically.
+  ///
+  /// The subtypes own their payload and nothing else: `'note'`, `'actor'` and
+  /// the client-set `'createdAt'` were spelled out once per encoder, so a
+  /// change to the envelope — a server timestamp, say — had to be found in each
+  /// of them, and a fourth payload type would have copied them again.
+  ///
+  /// [oldValue]/[newValue] are `Object?` here and typed on the way in: the
+  /// public encoders take `int` or `List<String>`, so this cannot be reached
+  /// with a payload of the wrong shape for the type. That is the split's whole
+  /// point and it stays at the boundary, where the compiler can see it.
+  Map<String, dynamic> _envelope({
+    required Object? oldValue,
+    required Object? newValue,
+    required String note,
+    required DocumentReference actor,
+  }) =>
+      {
+        'type': code,
+        oldKey: oldValue,
+        newKey: newValue,
+        'note': note,
+        // Client-set, not a server sentinel: the history sorts on this and a
+        // pending write with no timestamp would have nowhere to go.
+        'createdAt': DateTime.now(),
+        'actor': actor,
+      };
 
   /// Resolve a persisted [code], or null if it is unknown.
   ///
@@ -196,16 +242,56 @@ final class LevelEventType extends SignalEventType {
     required String note,
     required DocumentReference actor,
   }) =>
-      {
-        'type': code,
-        oldKey: oldValue,
-        newKey: newValue,
-        'note': note,
-        // Client-set, not a server sentinel: the history sorts on this and a
-        // pending write with no timestamp would have nowhere to go.
-        'createdAt': DateTime.now(),
-        'actor': actor,
-      };
+      _envelope(
+        oldValue: oldValue,
+        newValue: newValue,
+        note: note,
+        actor: actor,
+      );
+}
+
+/// An event whose before/after values are lists of [HelpTag] codes.
+///
+/// A third payload shape rather than a second [LevelEventType]: the values are
+/// lists of opaque strings, and handing `eventData` an `int` where the decoder
+/// expects a list is exactly the mistake that produces a stored event nobody
+/// ever sees. Sealed subtypes make it a compile error instead.
+///
+/// The codes are **not validated here**. `HelpTag` is the vocabulary and the
+/// rules are the cap (1..3 new, `isValidTagList` in `firestore.rules`); an
+/// encoder that also knew the vocabulary would be a fourth copy of it. The
+/// decoder is correspondingly tolerant — an unrecognised code means a newer
+/// build, and the renderer drops it while keeping the codes it knows.
+final class TagsEventType extends SignalEventType {
+  const TagsEventType({
+    required super.code,
+    required super.signalField,
+    required super.oldKey,
+    required super.newKey,
+    required super.historyKind,
+    super.serverOnly,
+  });
+
+  /// The document to write into `signals/{id}/events`.
+  ///
+  /// Mirrors [LevelEventType.eventData] field for field — same `note`, `actor`
+  /// and client-set `createdAt` — because the two are one protocol with two
+  /// payloads, and a timeline row that sorted or attributed differently by
+  /// payload would be a bug, not a feature.
+  Map<String, dynamic> eventData({
+    required List<String> oldValue,
+    required List<String> newValue,
+    required String note,
+    required DocumentReference actor,
+  }) =>
+      _envelope(
+        // Copied, not aliased: these lists come from widget state that keeps
+        // being edited after the batch is built.
+        oldValue: List<String>.of(oldValue),
+        newValue: List<String>.of(newValue),
+        note: note,
+        actor: actor,
+      );
 }
 
 /// An event whose before/after values are references to `users/{uid}`.
@@ -235,6 +321,7 @@ enum SignalHistoryKind {
   created,
   statusChange,
   urgencyChange,
+  tagsChange,
   ownershipTransfer,
   comment,
 }
@@ -262,6 +349,8 @@ class SignalHistoryEntry {
     this.createdAt,
     this.level,
     this.ownerId,
+    this.tags = const [],
+    this.previousTags = const [],
     this.note,
     this.text,
     this.mentions = const [],
@@ -298,6 +387,28 @@ class SignalHistoryEntry {
   /// stays nullable rather than carrying a sentinel.
   final String? ownerId;
 
+  /// What the signal needs **after** a tags change — raw `HelpTag` codes.
+  ///
+  /// Empty on every other kind, and the renderer resolves the codes it knows
+  /// rather than trusting them: a code from a newer build has no label here.
+  /// The row states what the signal needs *now*, exactly as a status change
+  /// states the status it moved to.
+  ///
+  /// Also carries the signal's needs on the synthetic [created] row, where they
+  /// are [tagsAtReport]'s answer rather than a stored event's payload.
+  final List<String> tags;
+
+  /// What the signal needed **before** a tags change.
+  ///
+  /// The one `old*` value any kind keeps, and it earns its place by answering a
+  /// question nothing else can: the earliest tags change's `oldTags` **is** the
+  /// list the signal was reported with, so the opening row can name it without a
+  /// stored field, a backfill or a read. See [tagsAtReport].
+  ///
+  /// Never rendered on the change row itself — "was X, now Y" on every row is
+  /// the restatement the timeline exists to avoid.
+  final List<String> previousTags;
+
   /// Comment body. Null on every other kind.
   final String? text;
 
@@ -316,12 +427,14 @@ class SignalHistoryEntry {
   factory SignalHistoryEntry.created({
     required String reporterId,
     required DateTime? createdAt,
+    List<String> tags = const [],
   }) =>
       SignalHistoryEntry(
         id: '_created',
         kind: SignalHistoryKind.created,
         actorId: reporterId,
         createdAt: createdAt,
+        tags: tags,
       );
 
   /// Decode one document from `events` **or** from `comments`.
@@ -384,6 +497,28 @@ class SignalHistoryEntry {
           note: note,
         );
 
+      case TagsEventType():
+        if (raw is! List) return null;
+        return SignalHistoryEntry(
+          id: id,
+          kind: type.historyKind,
+          actorId: actor.id,
+          createdAt: createdAt,
+          // Non-string entries are dropped rather than rejecting the document:
+          // one bad element must not remove the whole row from the history, and
+          // the renderer already has to survive a list whose codes it does not
+          // recognise.
+          tags: _codesFrom(raw),
+          // Tolerated missing OR wrong-typed, unlike the new list: the rules
+          // require it, but this side is read, and a document that somehow
+          // lacks a usable one should cost the opening row its needs line, not
+          // the whole change row. A cast here would throw instead — out of a
+          // method that promises to return null rather than throw, through the
+          // `.map()` in the listener, taking the entire history with it.
+          previousTags: _codesFrom(data[type.oldKey]),
+          note: note,
+        );
+
       case OwnerEventType():
         // A null new owner is a RELEASE, not a malformed document, so unlike a
         // missing level it must not be rejected. Only a value of the wrong type
@@ -412,29 +547,79 @@ class SignalHistoryEntry {
       };
 }
 
+/// What the signal was **reported** needing, for the opening row.
+///
+/// Derived, not stored — the same trick as the opening row itself. The earliest
+/// `tags_change` event records what the needs were *before* it, which is exactly
+/// the list the signal was created with; with no tag change yet, the signal's
+/// current [currentTags] are still the original ones. So every signal can name
+/// its opening needs with no new field, no write and no backfill.
+///
+/// **One case is knowingly approximate.** A signal whose tags were changed
+/// before `tags_change` existed (#80) has no event recording it, so this reports
+/// today's tags as the opening ones. That is the best available answer and it
+/// matches what the card shows; it degrades with time rather than being wrong
+/// forever, since every change from now on leaves an event behind.
+///
+/// Earliest is decided by the same rule the thread is sorted by — timestamp,
+/// then document id, a null timestamp last — so the row cannot disagree with the
+/// order the rows are drawn in.
+/// [currentTags] is **nullable, and null is not "no tags"** — it means the
+/// caller cannot vouch for them yet (the events listener has only answered from
+/// cache, so "no tag change has happened" is not yet a fact). A stored tag
+/// change still answers in that state, because its `oldTags` is a record rather
+/// than an inference; only the fallback has to wait.
+List<String> tagsAtReport({
+  required List<String>? currentTags,
+  required Iterable<SignalHistoryEntry> events,
+}) {
+  SignalHistoryEntry? earliest;
+  for (final entry in events) {
+    if (entry.kind != SignalHistoryKind.tagsChange) continue;
+    if (earliest == null || _compareEntries(entry, earliest) < 0) {
+      earliest = entry;
+    }
+  }
+  return earliest?.previousTags ?? currentTags ?? const [];
+}
+
+/// The thread's ordering, in one place so [mergeSignalHistory] and
+/// [tagsAtReport] cannot disagree about which row comes first.
+///
+/// Timestamp, then document id — Dart's `sort` is not stable, so the id is what
+/// stops the list reshuffling between rebuilds. A null timestamp sorts last:
+/// that is a write still in flight, which is the newest thing that has happened.
+int _compareEntries(SignalHistoryEntry a, SignalHistoryEntry b) {
+  final at = a.createdAt;
+  final bt = b.createdAt;
+  if (at == null && bt == null) return a.id.compareTo(b.id);
+  if (at == null) return 1;
+  if (bt == null) return -1;
+  final byTime = at.compareTo(bt);
+  return byTime != 0 ? byTime : a.id.compareTo(b.id);
+}
+
+/// Codes out of a stored array field, dropping anything that is not a string
+/// and treating a missing or wrong-typed field as none.
+///
+/// One definition for both tag lists on an event: the decoder must never throw
+/// (see [SignalHistoryEntry.fromDocument]), and "not a list" and "a list with
+/// junk in it" both mean the same thing to every caller — take what is readable.
+List<String> _codesFrom(Object? value) =>
+    value is List ? value.whereType<String>().toList() : const [];
+
 /// Merge the two stored sources plus the synthetic opener into one thread.
 ///
 /// The "created" row is always first: it is the moment the signal was reported, and a
 /// signal whose first status change somehow carries an earlier timestamp is a
-/// clock skew, not a reordering. Everything else sorts by [createdAt], with the
-/// document id breaking ties so the list does not reshuffle between rebuilds
-/// (Dart's `sort` is not stable). A null timestamp sorts last — that is where a
-/// write still in flight belongs.
+/// clock skew, not a reordering. Everything else goes in [_compareEntries]
+/// order.
 List<SignalHistoryEntry> mergeSignalHistory({
   SignalHistoryEntry? created,
   required List<SignalHistoryEntry> comments,
   required List<SignalHistoryEntry> events,
 }) {
-  final rest = [...comments, ...events]
-    ..sort((a, b) {
-      final at = a.createdAt;
-      final bt = b.createdAt;
-      if (at == null && bt == null) return a.id.compareTo(b.id);
-      if (at == null) return 1;
-      if (bt == null) return -1;
-      final byTime = at.compareTo(bt);
-      return byTime != 0 ? byTime : a.id.compareTo(b.id);
-    });
+  final rest = [...comments, ...events]..sort(_compareEntries);
 
   return [if (created != null) created, ...rest];
 }

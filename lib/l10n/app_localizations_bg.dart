@@ -637,6 +637,16 @@ class AppLocalizationsBg extends AppLocalizations {
   }
 
   @override
+  String updateNoteChangingNeedsTo(String tags) {
+    return 'Промяна на нуждите на: $tags';
+  }
+
+  @override
+  String updateNoteChangingUrgencyAndNeeds(String level, String tags) {
+    return 'Промяна на: $level и на нуждите на: $tags';
+  }
+
+  @override
   String get updateNoteTakingSignal => 'Поемате отговорност за този сигнал';
 
   @override
@@ -784,6 +794,19 @@ class AppLocalizationsBg extends AppLocalizations {
   String urgencySetTo(String urgency) {
     return 'Спешността е променена на $urgency';
   }
+
+  @override
+  String tagsSetTo(String tags) {
+    return 'Нуждите са променени на $tags';
+  }
+
+  @override
+  String needsAtReport(String tags) {
+    return 'Нужна помощ: $tags';
+  }
+
+  @override
+  String get tagsUpdated => 'Нуждите са променени';
 
   @override
   String get releasedSignalShort => 'Отказа се от този сигнал';

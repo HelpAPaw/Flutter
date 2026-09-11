@@ -108,6 +108,25 @@ function eventDoc(db, uid, overrides = {}) {
 }
 
 /**
+ * A `tags_change` event (#80) — the third payload shape, a pair of LISTS.
+ *
+ * Its own factory rather than overrides on `eventDoc`, because the level keys
+ * have to be absent, not overridden: a document carrying both shapes would pass
+ * for reasons that say nothing about the clause under test.
+ */
+function tagsEventDoc(db, uid, overrides = {}) {
+  return {
+    type: 'tags_change',
+    oldTags: ['rescue'],
+    newTags: ['foster', 'transport'],
+    note: 'Out of the clinic, needs a foster.',
+    createdAt: new Date(),
+    actor: doc(db, 'users', uid),
+    ...overrides,
+  };
+}
+
+/**
  * `obj` without `keys`.
  *
  * Setting a field to `undefined` would not do: the SDK rejects undefined values
@@ -518,6 +537,67 @@ for (const coll of ['signals', 'signals_test']) {
             'newStatus',
           ),
         ),
+      );
+    });
+
+    // #80: what the signal NEEDS is coordination state like its status, so a
+    // change to it is a timeline event and not a silent field write.
+    it('accepts a tags_change from any signed-in user', async () => {
+      const db = authed(OTHER).firestore();
+      await assertSucceeds(addDoc(collection(db, eventsPath), tagsEventDoc(db, OTHER)));
+    });
+
+    // The same 1..3 cap the signal's own helpNeededTags carries. An event must
+    // not be able to claim a transition the signal itself could not hold.
+    it('bounds the new tag list at the signal cap', async () => {
+      const db = authed(OTHER).firestore();
+      await assertSucceeds(
+        addDoc(
+          collection(db, eventsPath),
+          tagsEventDoc(db, OTHER, { newTags: ['rescue', 'vetCare', 'transport'] }),
+        ),
+      );
+      await assertFails(
+        addDoc(
+          collection(db, eventsPath),
+          tagsEventDoc(db, OTHER, {
+            newTags: ['rescue', 'vetCare', 'transport', 'foster'],
+          }),
+        ),
+      );
+    });
+
+    // Asymmetric on purpose, and this is the half that is easy to get wrong: a
+    // signal created before the tag vocabulary has NO tags, so requiring a
+    // non-empty `oldTags` would make the first tag change on a legacy signal the
+    // one change nobody can record.
+    it('accepts an empty oldTags but not an empty newTags', async () => {
+      const db = authed(OTHER).firestore();
+      await assertSucceeds(
+        addDoc(collection(db, eventsPath), tagsEventDoc(db, OTHER, { oldTags: [] })),
+      );
+      await assertFails(
+        addDoc(collection(db, eventsPath), tagsEventDoc(db, OTHER, { newTags: [] })),
+      );
+    });
+
+    it('rejects a tags_change whose payload is not a list', async () => {
+      const db = authed(OTHER).firestore();
+      await assertFails(
+        addDoc(collection(db, eventsPath), tagsEventDoc(db, OTHER, { newTags: 'foster' })),
+      );
+      await assertFails(
+        addDoc(collection(db, eventsPath), omit(tagsEventDoc(db, OTHER), 'newTags')),
+      );
+      await assertFails(
+        addDoc(collection(db, eventsPath), omit(tagsEventDoc(db, OTHER), 'oldTags')),
+      );
+    });
+
+    it('requires a note on a tags_change too', async () => {
+      const db = authed(OTHER).firestore();
+      await assertFails(
+        addDoc(collection(db, eventsPath), omit(tagsEventDoc(db, OTHER), 'note')),
       );
     });
 

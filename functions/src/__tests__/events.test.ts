@@ -17,6 +17,7 @@
 import {
   buildEventData,
   isRestoredSignal,
+  LEVEL_SIGNAL_EVENT_TYPES,
   SIGNAL_EVENT_FIELDS,
   SIGNAL_EVENT_KEYS,
   SIGNAL_EVENT_TYPES,
@@ -89,11 +90,30 @@ describe("buildEventData", () => {
     expect(status).not.toHaveProperty("newUrgency");
   });
 
+  // #80 added `tags_change`, whose payload is a pair of LISTS. It is a member
+  // of SIGNAL_EVENT_TYPES — the server has to KNOW it, or a client-written tag
+  // change is a type this runtime cannot reason about — but it must never reach
+  // this encoder, which would stamp two ints into `oldTags`/`newTags` and
+  // produce a document the Dart decoder drops on read, silently.
+  //
+  // The guarantee is a compile-time one (`buildEventData` takes
+  // LevelSignalEventType), so what is left to assert at runtime is that the two
+  // lists really are different — a "fix" that widened the parameter back to the
+  // full union would leave every other test in this file passing.
+  it("encodes only the level types", () => {
+    expect([...LEVEL_SIGNAL_EVENT_TYPES]).toEqual([
+      "status_change",
+      "urgency_change",
+    ]);
+    expect(SIGNAL_EVENT_TYPES).toContain("tags_change");
+    expect([...LEVEL_SIGNAL_EVENT_TYPES]).not.toContain("tags_change");
+  });
+
   it("uses `actor`, never `author`", () => {
     // profile_page.dart counts collectionGroup('comments') by `author`. Naming
     // the field `author` here would put moderator actions into someone's
     // comment count — the bug the events subcollection was split out to fix.
-    for (const type of SIGNAL_EVENT_TYPES) {
+    for (const type of LEVEL_SIGNAL_EVENT_TYPES) {
       const event = buildEventData(type, {
         oldValue: 0,
         newValue: 1,
@@ -110,7 +130,7 @@ describe("buildEventData", () => {
     // Spec 4.6: every change requires an update note. `isValidEventNote()`
     // makes it mandatory for clients; nothing enforces it on the server but
     // this expectation and the callable's own validation.
-    for (const type of SIGNAL_EVENT_TYPES) {
+    for (const type of LEVEL_SIGNAL_EVENT_TYPES) {
       const event = buildEventData(type, {
         oldValue: 0,
         newValue: 1,

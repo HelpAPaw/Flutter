@@ -68,7 +68,9 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
       case 'status_change':
         return Icons.info;
       case 'urgency_change':
-        return Icons.priority_high;
+        // The one off-map urgency glyph (see SignalUrgency.icon), not a literal
+        // — this row is the fifth surface showing it and the easiest to miss.
+        return SignalUrgency.glyph;
       case 'nearby_signal':
         return Icons.location_on;
       // Signal ownership (master spec 4.5). An offer and its answer share the

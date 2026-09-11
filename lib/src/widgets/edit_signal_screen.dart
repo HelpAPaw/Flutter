@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
@@ -41,6 +42,11 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
   /// Urgency as loaded, so a save can tell whether it actually changed and
   /// record a timeline entry to match the details screen.
   int _originalUrgency = SignalUrgency.amber.code;
+
+  /// Tags as loaded, for the same reason and with the same consequence (#80):
+  /// this screen writes `helpNeededTags` too, so it owes the timeline the same
+  /// `tags_change` event the details screen's picker writes.
+  List<String> _originalHelpTags = const [];
   bool _isLoading = true;
   bool _isSaving = false;
 
@@ -75,6 +81,7 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
         // requires a choice before saving, which quietly migrates them as their
         // reporters edit — no backfill needed.
         _helpTags = List.of(signal.helpNeededTags);
+        _originalHelpTags = List.of(signal.helpNeededTags);
         _animalType = signal.animalType;
       } else {
         if (mounted) context.pop();
@@ -115,19 +122,37 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
     }
 
     final urgencyChanged = _urgency != _originalUrgency;
+    // Order is priority (§4.4), so a reordering is a change — the same
+    // `listEquals` comparison the details screen's picker makes.
+    final tagsChanged = !listEquals(_originalHelpTags, _helpTags);
 
-    // Spec §4.6: an urgency change carries an update note wherever it is made.
-    // Asked before the save starts, so cancelling leaves the form as it is and
-    // nothing is written — the same protocol as the details screen, which is
-    // the point: two ways to escalate a signal must not produce two different
-    // kinds of history.
+    // Spec §4.6: an urgency or tag change carries an update note wherever it is
+    // made. Asked before the save starts, so cancelling leaves the form as it is
+    // and nothing is written — the same protocol as the details screen, which is
+    // the point: two ways to escalate or re-triage a signal must not produce two
+    // different kinds of history.
+    //
+    // **One note covers both**, and the headline names both. Two dialogs for one
+    // Save would be answered twice with the same sentence, and the two events
+    // that come out of this batch describe one act of re-triage anyway.
     String? note;
-    if (urgencyChanged) {
+    if (urgencyChanged || tagsChanged) {
       final urgency = SignalUrgency.fromCode(_urgency);
+      final tags = HelpTag.fromCodes(_helpTags);
+      final tagLabels = helpTagLabels(tags, l10n);
       note = await showUpdateNoteDialog(
         context,
-        headline: l10n.updateNoteChangingTo(urgency.label(l10n)),
-        badge: urgencyBadge(urgency),
+        headline: switch ((urgencyChanged, tagsChanged)) {
+          (true, true) =>
+            l10n.updateNoteChangingUrgencyAndNeeds(urgency.label(l10n), tagLabels),
+          (true, false) => l10n.updateNoteChangingTo(urgency.label(l10n)),
+          (false, _) => l10n.updateNoteChangingNeedsTo(tagLabels),
+        },
+        // On a tags-only save the urgency is unchanged, so its pin would be the
+        // one thing on the dialog that is not about to happen.
+        badge: urgencyChanged
+            ? urgencyBadge(urgency)
+            : tagBadge(HelpTag.primaryOf(_helpTags)),
       );
       // Backing out of the note abandons the whole save, including the title,
       // description, phone and tag edits made alongside it. That is the right
@@ -155,51 +180,62 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
         .collection('users')
         .doc(FirebaseAuth.instance.currentUser!.uid);
 
-    // One batch so an urgency change and the timeline entry describing it land
-    // together — a failed second write would leave a push sent with no history
-    // to explain it — and so the whole save costs one round trip.
-    final batch = FirebaseFirestore.instance.batch();
-    batch.update(signalRef, {
-      'title': _titleController.text.trim(),
-      'description': _descriptionController.text.trim(),
-      'contactPhone': _phoneController.text.trim(),
-      'urgency': _urgency,
-      'helpNeededTags': _helpTags,
-      'animalType': _animalType,
-      // Changing urgency here fires the same update notification as the
-      // details screen, so the actor has to be recorded — otherwise a stale
-      // lastUpdatedBy from an earlier status change decides who gets skipped.
-      // The same helper the details screen uses, which also carries the owner's
-      // proof of life: this screen is a coordination write like any other, and
-      // omitting the stamp let a reporter actively re-triaging their own signal
-      // fall into the stale-owner path anyway.
-      ...SignalOwnershipService.coordinationStamp(userRef),
-    });
-
-    // Same timeline entry the details screen writes. Without it, escalating
-    // to Red from this screen would push every subscriber while the signal
-    // history showed nothing changed — and the spec's Red-Alert-misuse
-    // handling has nothing to review.
-    if (urgencyChanged) {
-      batch.set(
-        signalRef.collection('events').doc(),
-        // Built by the same encoder the details screen uses, so the two writers
-        // cannot drift on field names — the spec's standing warning that these
-        // must stay in step is now a shared function rather than a comment.
-        SignalEventType.urgencyChange.eventData(
-          oldValue: _originalUrgency,
-          newValue: _urgency,
-          // Non-null under the same `urgencyChanged` guard that produced it:
-          // the block above returns when the dialog is cancelled.
-          note: note!,
-          actor: userRef,
-        ),
-      );
-    }
+    // One batch so a change and the timeline entry describing it land together
+    // — a failed second write would leave a push sent with no history to
+    // explain it — and so the whole save costs one round trip. The shared
+    // writer also carries the stamp: changing urgency here fires the same
+    // update notification as the details screen, so the actor has to be
+    // recorded or a stale `lastUpdatedBy` decides who gets skipped, and
+    // omitting the owner's proof of life let a reporter actively re-triaging
+    // their own signal fall into the stale-owner path. This screen forgot that
+    // stamp once, which is what the helper exists to make impossible.
+    final batch = SignalOwnershipService.coordinationBatch(
+      signalRef: signalRef,
+      actor: userRef,
+      fields: {
+        'title': _titleController.text.trim(),
+        'description': _descriptionController.text.trim(),
+        'contactPhone': _phoneController.text.trim(),
+        SignalEventType.urgencyChange.signalField: _urgency,
+        SignalEventType.tagsChange.signalField: _helpTags,
+        'animalType': _animalType,
+      },
+      // Two events, not one combined row: the timeline is read one row per
+      // thing that changed, and the payloads are different shapes anyway — the
+      // reason `SignalEventType` has subtypes. They share the note explaining
+      // both, which is why one dialog covers the save.
+      //
+      // `note!` is non-null under the same guard that produced these flags: the
+      // block above returns when the dialog is cancelled.
+      //
+      // Built by the same encoders the details screen uses, so the two writers
+      // cannot drift on field names — the spec's standing warning that these
+      // must stay in step is a shared function rather than a comment. Without
+      // the urgency one, escalating to Red from here would push every
+      // subscriber while the history showed nothing changed, and the spec's
+      // Red-Alert-misuse handling would have nothing to review.
+      events: [
+        if (urgencyChanged)
+          SignalEventType.urgencyChange.eventData(
+            oldValue: _originalUrgency,
+            newValue: _urgency,
+            note: note!,
+            actor: userRef,
+          ),
+        if (tagsChanged)
+          SignalEventType.tagsChange.eventData(
+            oldValue: _originalHelpTags,
+            newValue: _helpTags,
+            note: note!,
+            actor: userRef,
+          ),
+      ],
+    );
 
     try {
       await batch.commit();
       _originalUrgency = _urgency;
+      _originalHelpTags = List.of(_helpTags);
 
       if (!mounted) return;
 

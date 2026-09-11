@@ -1226,6 +1226,18 @@ abstract class AppLocalizations {
   /// **'Changing to: {level}'**
   String updateNoteChangingTo(String level);
 
+  /// Headline of the update-note dialog when only the help tags are changing.
+  ///
+  /// In en, this message translates to:
+  /// **'Changing needs to: {tags}'**
+  String updateNoteChangingNeedsTo(String tags);
+
+  /// Headline of the update-note dialog on the edit screen when one save changes both the urgency and the help tags.
+  ///
+  /// In en, this message translates to:
+  /// **'Changing to: {level}, and needs to: {tags}'**
+  String updateNoteChangingUrgencyAndNeeds(String level, String tags);
+
   /// No description provided for @updateNoteTakingSignal.
   ///
   /// In en, this message translates to:
@@ -1471,6 +1483,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Urgency set to {urgency}'**
   String urgencySetTo(String urgency);
+
+  /// Signal timeline row for a tags_change event. {tags} is the comma-separated list of help tags the signal needs now.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs set to {tags}'**
+  String tagsSetTo(String tags);
+
+  /// Secondary line on the 'Reported this signal' timeline row, naming what the signal was reported needing. Past tense: later rows say what the needs were changed to.
+  ///
+  /// In en, this message translates to:
+  /// **'Needed: {tags}'**
+  String needsAtReport(String tags);
+
+  /// Fallback timeline row for a tags_change event whose tag codes all come from a newer app version, so none of them can be named here.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs updated'**
+  String get tagsUpdated;
 
   /// No description provided for @releasedSignalShort.
   ///
