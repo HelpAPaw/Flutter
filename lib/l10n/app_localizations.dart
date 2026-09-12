@@ -191,7 +191,7 @@ abstract class AppLocalizations {
   /// No description provided for @statusInProgress.
   ///
   /// In en, this message translates to:
-  /// **'Someone is helping'**
+  /// **'In progress'**
   String get statusInProgress;
 
   /// No description provided for @statusResolved.
@@ -2231,7 +2231,7 @@ abstract class AppLocalizations {
   /// No description provided for @faqWhatStatusesMeanAnswer.
   ///
   /// In en, this message translates to:
-  /// **'Waiting for help: Nobody has taken this on yet.\nSomeone is helping: Someone is working on helping.\nResolved: The animal has received help or the situation is resolved.\n\nStatus is about how far along the response is. It is separate from urgency, which is what the pin colour shows.'**
+  /// **'Waiting for help: Nobody has taken this on yet.\nIn progress: Someone is working on helping.\nResolved: The animal has received help or the situation is resolved.\n\nStatus is about how far along the response is. It is separate from urgency, which is what the pin colour shows.'**
   String get faqWhatStatusesMeanAnswer;
 
   /// No description provided for @faqWhatUrgencyMeans.

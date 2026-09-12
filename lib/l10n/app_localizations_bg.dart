@@ -54,7 +54,7 @@ class AppLocalizationsBg extends AppLocalizations {
   String get statusNeedsHelp => 'Чака помощ';
 
   @override
-  String get statusInProgress => 'Някой помага';
+  String get statusInProgress => 'В процес';
 
   @override
   String get statusResolved => 'Приключен';
@@ -1220,7 +1220,7 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get faqWhatStatusesMeanAnswer =>
-      'Чака помощ: Все още никой не се е заел със сигнала.\nНякой помага: Някой работи по проблема.\nПриключен: Животното е получило помощ или ситуацията е разрешена.\n\nСтатусът показва докъде е стигнала реакцията. Той е отделен от спешността, която се вижда по цвета на маркера.';
+      'Чака помощ: Все още никой не се е заел със сигнала.\nВ процес: Някой работи по проблема.\nПриключен: Животното е получило помощ или ситуацията е разрешена.\n\nСтатусът показва докъде е стигнала реакцията. Той е отделен от спешността, която се вижда по цвета на маркера.';
 
   @override
   String get faqWhatUrgencyMeans => 'Какво означават цветовете на маркерите?';

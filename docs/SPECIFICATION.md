@@ -645,7 +645,7 @@ already resolved, a migration mechanism would have cost more than the data.
 | code | enum | label (en) | glyph |
 |---|---|---|---|
 | 0 | `needsHelp` | Waiting for help | `hourglass_empty` |
-| 1 | `inProgress` | Someone is helping | `sync` |
+| 1 | `inProgress` | In progress | `sync` |
 | 2 | `resolved` | Resolved | `check_circle` |
 
 **Status has no colour.** It used to be red / orange / green — the same three hues as
@@ -663,12 +663,19 @@ slotted where it should appear. `SignalStatus.openCodes` derives the "still need
 attention" set used as a Firestore `whereIn` filter. Unknown codes resolve to
 `needsHelp`. The server mirrors labels in `SIGNAL_STATUSES` keyed by code.
 
-**The labels were rewritten** in the same pass. "Needs help" / "In progress" became
-**"Waiting for help" / "Someone is helping"**, because the old wording collided with
-urgency's: `urgencyAmber` was "Оранжево — нужна е помощ скоро" against `statusNeedsHelp`
-"Нужна е помощ" — three shared words in the primary language, near-homographs on two
-axes that answer different questions. Only the ARB **values** changed; the keys are
-unchanged, so the wording can be revised again without touching code. The FAQ answer
+**The labels were rewritten** in the same pass. "Needs help" became **"Waiting for
+help"**, because the old wording collided with urgency's: `urgencyAmber` was "Оранжево —
+нужна е помощ скоро" against `statusNeedsHelp` "Нужна е помощ" — three shared words in
+the primary language, near-homographs on two axes that answer different questions.
+
+Status 1 was briefly **"Someone is helping"** in the same pass and has been reverted to
+**"In progress"** ("В процес"). The helping phrasing read as *reassurance* — a signal
+someone had claimed but not resolved looked like a signal that no longer needed anyone,
+which suppresses exactly the second volunteer the status exists to recruit. "In progress"
+states the response stage and claims nothing about sufficiency.
+
+Only the ARB **values** changed in both passes; the keys are unchanged, so the wording
+can be revised again without touching code. The FAQ answer
 (`faqWhatStatusesMeanAnswer`) is part of the same copy and must move with it.
 
 Map pins encode urgency and only urgency — see §4.6.
