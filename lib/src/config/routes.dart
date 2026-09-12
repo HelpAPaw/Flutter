@@ -15,6 +15,27 @@ class Routes {
   static const privacyPolicy = '/privacy_policy';
   static const about = '/about';
 
+  /// Signals the user follows — i.e. is subscribed to notifications for — minus
+  /// the ones they reported or hold, which live under [mySignals].
+  static const watching = '/watching';
+
+  /// Everything the navigation drawer used to hold that did not become a tab.
+  static const menu = '/menu';
+
+  /// The bottom bar's destinations, in bar order.
+  ///
+  /// The index into this list is the `StatefulShellBranch` index, but it is the
+  /// **path** that gets persisted as the last-used tab — so inserting a
+  /// destination later cannot strand anyone on a tab that has moved underneath
+  /// them. See `initialShellLocation`.
+  static const shellBranchPaths = <String>[
+    home,
+    mySignals,
+    watching,
+    myNotifications,
+    menu,
+  ];
+
   /// The moderator report queue (master spec §18).
   ///
   /// Not gated by the router's `redirect`: the role check is a Firestore read

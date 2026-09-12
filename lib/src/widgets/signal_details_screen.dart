@@ -35,6 +35,8 @@ import '../models/signal_doc_state.dart';
 import '../models/signal_status.dart';
 import '../models/help_tag.dart';
 import '../models/signal_urgency.dart';
+import '../services/signal_subscription_service.dart';
+import 'follow_button.dart';
 import 'signal_owner_block.dart';
 import 'manage_signal_sheet.dart';
 import 'signal_state_card.dart';
@@ -112,10 +114,9 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// and every comment row — and wrapping each of a long comment list's rows in
   /// its own builder to ask the same question is a lot of machinery for a bool.
   ///
-  /// Safe to hold in State here, unlike in `HomeRouteDrawer`, whose State is
-  /// created and disposed on every drawer open. `ModerationService` fans a
-  /// single process-lifetime listener out to its subscribers, so this costs no
-  /// extra read.
+  /// Safe to hold in State: `ModerationService` fans a single process-lifetime
+  /// listener out to its subscribers, so this costs no extra read however many
+  /// surfaces ask.
   ///
   /// A **UI affordance only** — the real check is in the `moderateAction`
   /// callable, so a stale `true` costs nothing worse than a button that returns
@@ -947,6 +948,19 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
                                 onClaim: _claimCase,
                                 onSignInRequired: _showSignInDialog,
                               ),
+                            ),
+                            const SizedBox(height: 16),
+                            // Directly under "who is responsible", because the
+                            // question it answers — am I being told about this
+                            // one — is the same question one step out.
+                            //
+                            // Not in the app bar: that already carries up to
+                            // five actions, and an icon-only bell reads as
+                            // either "mute" or "subscribe" depending on who is
+                            // looking at it.
+                            FollowButton(
+                              signalId: widget.signalId,
+                              onSignInRequired: _showSignInDialog,
                             ),
                             const SizedBox(height: 22),
                             _buildSignalHistory(signal, dateFormat),
@@ -1848,7 +1862,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
           'mentions': [for (final mention in mentions) mention.toJson()],
       });
 
-      await _subscribeToSignal(userId);
+      await _subscribeToSignal();
 
       _newCommentController.clear();
       FocusManager.instance.primaryFocus?.unfocus();
@@ -1866,17 +1880,40 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     }
   }
 
-  Future<void> _subscribeToSignal(String userId) async {
+  /// Subscribes the commenter to this signal.
+  ///
+  /// Commenting has always done this silently. Now that following is an explicit
+  /// control with an explicit off switch, silence is the wrong behaviour: a user
+  /// who unfollowed and later commented would find themselves following again
+  /// with nothing having said so. Rather than a second `signalUnsubscriptions`
+  /// array — which the fan-out in `functions/src/index.ts` would also have to
+  /// honour — the resurrection stays, and says so, with an Undo.
+  Future<void> _subscribeToSignal() async {
+    // Read before the write, from the listener `FollowButton` already has open
+    // on this screen — not a fresh `get()`, which would be a billed read per
+    // comment posted.
+    final wasFollowing =
+        SignalSubscriptionService.instance.isFollowing(widget.signalId);
+
     try {
-      await FirebaseFirestore.instance.collection('users').doc(userId).set(
-        {
-          'signalSubscriptions': FieldValue.arrayUnion([widget.signalId]),
-        },
-        SetOptions(merge: true),
-      );
+      await SignalSubscriptionService.instance.follow(widget.signalId);
     } catch (e) {
       debugPrint('Error subscribing to signal: $e');
+      return;
     }
+
+    if (wasFollowing || !mounted) return;
+    final l10n = AppLocalizations.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(l10n.nowFollowingSignal),
+        action: SnackBarAction(
+          label: l10n.undo,
+          onPressed: () =>
+              SignalSubscriptionService.instance.unfollow(widget.signalId),
+        ),
+      ),
+    );
   }
 
   /// Everyone this comment box may mention, named and sorted.
@@ -2294,7 +2331,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     try {
       // The subscription is independent and best-effort (it swallows its own
       // errors), so it overlaps the commit instead of adding a round trip.
-      await Future.wait([batch.commit(), _subscribeToSignal(user.uid)]);
+      await Future.wait([batch.commit(), _subscribeToSignal()]);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

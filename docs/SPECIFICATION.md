@@ -1227,15 +1227,30 @@ cannot validate undeployed rules, and the deploy target is production.
 Declarative `GoRouter` configured in `main.dart`; all paths are constants in
 `config/routes.dart`.
 
+**Five of those paths are bottom-bar destinations**, held in a
+`StatefulShellRoute.indexedStack` whose builder is
+`HelperTagsGate(child: HomeShell(...))`. `indexedStack` rather than a plain
+`ShellRoute` because a shared Navigator would tear down and rebuild the
+`GoogleMap` platform view on every tab switch — losing the camera, re-clustering
+the markers and re-running the fly-to-location in `onMapCreated`. The map branch
+is `preload: true`, so `SignalNavigator.pendingFocusSignalId` always has a
+`MapScreen.build` to consume it.
+
+Every **other** route in the table sits outside the shell and so renders on the
+root Navigator, over the bar — which is what keeps `context.push` unchanged at
+every call site.
+
 | Path | Screen | Notes |
 |---|---|---|
-| `/home` | `HomeRoute` → `MapScreen` | initial location |
+| `/home` | `HomeRoute` → `MapScreen` | **tab 1**; router `initialLocation` when no tab is remembered |
 | `/sign_in` | `SignInPage` | accepts `?email=`/`?password=` prefill |
 | `/verify_email` | `EmailVerificationPage` | redirect target for unverified password users |
 | `/complete_profile` | `ProfileCompletionPage` | |
 | `/profile` | `ProfilePage` | |
-| `/my_signals` | `MySignalsPage` | |
-| `/my_notifications` | `MyNotificationsPage` | in-app inbox, reached from the drawer (§7.13) |
+| `/my_signals` | `MySignalsPage` | **tab 2**; signals `reporter == me` **or** `signalOwner == me` |
+| `/watching` | `WatchingPage` | **tab 3**; followed signals that are not the user's own |
+| `/my_notifications` | `MyNotificationsPage` | **tab 4**; in-app inbox (§7.13), unread badge on the tab icon |
+| `/menu` | `MenuPage` | **tab 5**; everything the navigation drawer held that did not become a tab |
 | `/notification-settings` | `NotificationSettingsPage` | |
 | `/select-region` | `RegionSelectionPage` | returns a region map via `context.pop(result)` |
 | `/signal_details/:signalId` | `SignalDetailsScreen` | id validated in a route `redirect`; page keyed by id |
@@ -1245,6 +1260,20 @@ Declarative `GoRouter` configured in `main.dart`; all paths are constants in
 | `/clinic_details/:clinicId` | `ClinicDetailsScreen` | |
 | `/moderation` | `ModerationQueuePage` | moderator report queue (§7.16); **no role redirect** — the screen gates itself |
 | `/faqs`, `/feedback`, `/privacy_policy`, `/about` | static pages | |
+
+**Last tab.** `AppPreferencesService.lastTabPath()` records the branch *path* —
+not an index, so inserting or reordering a destination cannot strand anyone —
+and `initialShellLocation` decides whether to honour it. It falls back to `/home`
+for an unrecognised path, and for `/my_signals` or `/watching` without a real
+account, since both are sign-in walls. A cold **deep link** needs no handling:
+`GoRouter` prefers the platform's route whenever it is not `/`. A cold
+**notification** tap is different — `getInitialMessage()` fires after the first
+frame — so the remembered tab paints briefly before details is pushed over it.
+
+**Back.** `HomeShell`'s `PopScope` returns any non-map tab to the map; from the
+map the pop bubbles out and the app exits. It composes with the map's own
+`PopScope` (the placement flow) without arbitration, because go_router asks
+navigators innermost-first.
 
 **Redirect logic:** a signed-in user with a password provider and `emailVerified == false`
 is redirected to `/verify_email` unless already there or on `/complete_profile`. The
@@ -1456,7 +1485,7 @@ phone number to survive account deletion, which is exactly the bug the quarantin
 had to be added to fix when hiding introduced the third. The purge takes the photos and
 subcollections with it, which the anonymizing sweeps deliberately leave alone.
 
-**Sign-out** (drawer): best-effort `onUserLogout()` (arrayRemove this device's FCM
+**Sign-out** (the Menu tab): best-effort `onUserLogout()` (arrayRemove this device's FCM
 token, 5s timeout) → `GoogleSignIn.signOut()` (so the next sign-in shows the chooser) →
 `AuthService.signOutToAnonymous()`. The app stays usable anonymously — literally: the
 anonymous session is re-established there and then, not at the next launch.
@@ -2395,16 +2424,18 @@ can reach says otherwise.
 ### 7.12 Static pages
 
 `/about`, `/faqs`, `/privacy_policy` — localized static content;
-`/privacy_policy` renders in a `webview_flutter` view. The drawer also links out to
+`/privacy_policy` renders in a `webview_flutter` view. The Menu tab also links out to
 `https://www.helpapaw.org` and offers "Share the app".
 
 ### 7.13 My notifications — the in-app inbox
 
 `/my_notifications` shows the newest 50 entries from `users/{uid}/notifications`
 ordered by `createdAt desc`: unread bold with an orange dot, swipe-to-delete,
-mark-all-read and clear-all, plus signed-out and empty states. It is reached from the
-drawer tile (index 10, between "My signals" and "Notification settings"), whose icon
-carries a `Badge.count` of unread entries.
+mark-all-read and clear-all, plus signed-out and empty states. It is **tab 4** of the
+bottom bar, whose icon carries a `Badge.count` of unread entries. (It was a drawer tile
+until the bar replaced the drawer; the badge moved with it, and its stream is now keyed on
+uid **and** test mode, because the bar is never disposed and the inbox query is scoped by
+`testMode` when the listener is created.)
 
 The feature was deferred on 2026-05-30 — the page and route were kept but deliberately
 left unreachable — and completed on 2026-08-04. The four gaps that had to close, all
@@ -2418,8 +2449,9 @@ verified rather than assumed before the work started:
 2. **The rules denied every operation the page performs**, because rules do not cascade
    into subcollections (§5.1). There is now a `match /users/{userId}/notifications/{id}`
    block, covered by `firestore-tests/rules.test.js`.
-3. **No UI entry point.** Added to `home_route_drawer.dart`, deliberately *outside* the
-   signed-in branch: the arrival catch-up writes entries for anonymous users too.
+3. **No UI entry point.** Added to the navigation drawer, deliberately *outside* the
+   signed-in branch: the arrival catch-up writes entries for anonymous users too. (Now a
+   bottom-bar tab, shown on the same terms.)
 4. **The `type` vocabularies diverged.** The page rendered `signal_update` / `comment` /
    `status_change` / `nearby_signal`; the functions emitted `new_signal` /
    `status_change` / `new_comment`. **The page moved, not the wire** — `data.type` is a
@@ -2552,7 +2584,7 @@ token, so a *revocation* would not land until the token expired — up to an hou
 removed moderator keeps every power. It would also be a second copy of the value, which is
 what §12 exists to warn about. Reading a document costs one read on paths that are rare by
 nature, and both grant and revoke take effect on the next request. `watchIsModerator()`
-is a live stream for the same reason: the drawer entry disappears without a restart.
+is a live stream for the same reason: the Menu tab's entry disappears without a restart.
 
 **Reporting.** `showReportDialog` writes a `reports` document directly — an ordinary user
 write with no privilege attached, so routing it through a function would buy nothing. A
@@ -2694,7 +2726,7 @@ which does not do what it reads like: **Material 3 ignores `primarySwatch` entir
 and with no `colorScheme` and no `colorSchemeSeed` `ThemeData` falls through to the M3
 baseline. So every unstyled widget rendered **purple `#6750A4` on a lavender `#FEF7FF`
 scaffold** — all 45 dialog "Cancel" buttons, switches, sliders, checkboxes, both
-`TabBar`s, focus rings, most spinners, the drawer's selected tile and the whole
+`TabBar`s, focus rings, most spinners, the navigation drawer's selected tile and the whole
 `firebase_ui_auth` sign-in screen. The ~294 hardcoded colour literals scattered through
 `lib/` existed to paint around exactly that.
 
@@ -2871,6 +2903,78 @@ string, on the screen a Bulgarian user is most likely to reach from a consent pr
 - **`AdaptiveContainer` (`adaptive_components`) is gone.** With no constraints passed it
   rendered a `Container` with every argument null — a pass-through, plus a `LayoutBuilder`
   on every rebuild and a nested `Scaffold` on two screens. The dependency was removed.
+
+
+### 7.18 The bottom bar (`home_shell.dart`, `home_bottom_bar.dart`, `menu_page.dart`, `watching_page.dart`)
+
+Five destinations, no drawer. The routing half is §6; this is what the screens do.
+
+**`HomeShell`'s Scaffold owns only the bar.** Each branch keeps its own `Scaffold`
+and app bar, because those bars are deeply branch-specific — the map's title
+carries the seven-tap test-mode gesture and its actions read map state, and My
+Signals puts a `TabBar` in `AppBar.bottom` under its own controller. Nested
+`Scaffold`s are correct here and cost one `Material`; `ScaffoldMessenger` shows a
+SnackBar only in the root of a nested set, so there is exactly one, above the bar.
+The five tab roots take `automaticallyImplyLeading: false` and drop
+`escapeLeading`, which would otherwise draw a back arrow on every one of them
+(it fires when `Navigator.canPop()` is false, which is a branch root's normal
+state).
+
+**The map's Firestore subscription is not paused off-tab, deliberately.** That is
+not a new cost — every drawer destination was already pushed *over* `/home`, so
+`MapScreen` has always survived the whole session — and resuming would re-read the
+entire geo window rather than a delta. The seam, if it ever changes, is one
+`isMapVisibleProvider` gating `signalsStreamProvider`.
+
+**What a permanent tab changes.** Four screens that used to be pushed and popped
+now live for the session, so anything they read *once* on open is now read once
+per launch. Every stream scoped by test mode is keyed on `testModeProvider`
+(My Signals, Watching, `MyNotificationsPage._inboxStream`, the unread badge), and
+the badge and the moderator stream are keyed on uid as well — the drawer was
+disposed on close, which had been silently repairing both.
+
+**My Signals** is `reporter == me` merged with `signalOwner == me`
+(`MySignalsService`), deduped by id and sorted newest-first by `mergeMine`. Two
+queries rather than `Filter.or`: an OR query needs the same per-disjunct indexes
+and cannot be unit-tested. `signalOwner` is tri-state, so an equality match finds
+only signals somebody was actually handed; the ones you reported and still hold
+arrive through the reporter side. The owner stream degrades to empty on error, so
+a still-building index costs missing rows rather than the screen. Rows the user
+holds but did not report carry a chip saying so.
+
+**Watching** is the first reader in the app of `users/{uid}.signalSubscriptions`.
+It excludes the user's own signals by checking `reporter` and `signalOwner` on
+documents already fetched — free, and exact for the tri-state in a way a second
+equality query is not. Ids are taken newest-followed-first (`arrayUnion` appends,
+and re-adding an existing id does not move it), fetched in `whereIn` chunks of 30,
+and capped at 60 per page, so opening the tab costs a bounded read however long
+the array is. The array is unbounded and nothing prunes it; a server-side trim is
+the open follow-up. Ids that resolve to nothing are dropped silently, which is
+also how the test-mode/production id split takes care of itself.
+
+**Following is a notification subscription, not a bookmark**, and every label says
+so. `FollowButton` sits in the body under the owner block rather than in the app
+bar — that bar already carries up to five actions, and an icon-only bell reads as
+"mute" or "subscribe" depending on who is looking at it. It gives
+`unsubscribeFromSignal` its first call site since it was written.
+`SignalSubscriptionService` keeps one cached `users/{uid}` listener shared by the
+tab and every follow button on screen. Commenting still re-subscribes you —
+suppressing that would need a `signalUnsubscriptions` array that the fan-out in
+`functions/src/index.ts` would also have to honour — but it announces itself with
+an Undo instead of doing it silently.
+
+**Labels.** Five destinations share ~82dp each on a 411dp phone, and the Bulgarian
+names do not fit, so the bar's labels are separate ARB keys (`tabWatching` =
+"Следени") with the full names as tooltips and as the screens' own app-bar
+titles, and the bar clamps its own text scaling to 1.2 while the rest of the app
+keeps scaling. `bulgarian_layout_test` covers it at 1.0 and 1.3.
+
+Note `NavigationBar` derives each destination's **accessibility name from the
+visible label, not the tooltip** (verified on device: the node reads
+"Мои, Раздел 2 от 5"), so the short form is what a screen reader announces and
+what element-based device testing matches on. That is fine because every short
+form is a real word; it would stop being fine if one were abbreviated into
+something unreadable.
 
 ---
 
@@ -3452,6 +3556,9 @@ silently breaks Auth/Firestore/FCM in release builds only.
 
 | Date | Change |
 |---|---|
+| 2026-09-12 | **Deep links replace the navigation stack, and that is survivable — the install hand-off's launch check was not** (§6, §7.18). Investigating how the bottom bar behaves when a link arrives over a screen hierarchy turned up that **both** platforms enable Flutter's built-in deep linking (`flutter_deeplinking_enabled`, `FlutterDeepLinkingEnabled`) **and** run an app_links listener — two handlers for one link. The built-in one wins and treats the link as a new *location*, so it replaces the configuration rather than pushing: device-verified on SM-X205, a link arriving over the New Signal wizard destroys that route, and two links in a row leave only the second. `SignalNavigator.open`'s `_shellIsOnTop` guard therefore protects the FCM-tap and deferred-install paths, which really do call `open()`, but not the link path — which also means `signal_navigator_branch_test`'s wizard-preservation case asserts a guarantee the app does not deliver on Android, because it drives the seam directly. **The damage is bounded and the cheap mitigation is the right one:** the wizard keeps its draft *and its step* in `mapViewModelProvider` by design (see the class doc on `NewSignalWizardPage`), so re-entry resumes exactly where the reporter was — verified: a link fired at step 3 of 7 destroyed the route, and tapping Continue on the map returned to step 3 with the draft intact. Turning the flag off would restore push semantics but is a bigger change than it looks, so it stays open. What *was* fixed is the real hazard behind it: `DeferredDeepLinkService.resolve` took `launchedFromLink` from `SignalNavigator.isShowingSignal` in a post-frame callback, which is only reliable while the built-in path installs the route before that frame. Any asynchronous delivery makes it read false on a genuine link launch, and the hand-off then opens a **stale stored signal instead of the one the user tapped**. It now asks `AppLinks.getInitialLink()` — a direct question with no ordering dependency, correct under either arrangement. Also fixed, and found the same way: `CachedUserDocStream.watch` was `async*`, so `yield*` subscribed a turn after `yield _latest` and a broadcast controller dropped anything landing in between; the follow button offered "Follow" for a signal Firestore said was followed. Subscribe-then-replay closes it (device-verified: the button now reads "Следвате" on entry). 551 Dart tests. |
+| 2026-09-11 | **Made test mode and the account declared dependencies, and gave the navigator a real stack** (§6, §7.18). Three follow-ups from reviewing the bottom-bar work, done rather than deferred. `NotificationInboxService.watchInbox`/`watchUnreadCount` now take the mode and `SignalRemovalService.watchMine` takes the collection, so a query that captures either at *subscription* time cannot be constructed without naming it — the compiler located all three call sites. `lib/src/services/app_providers.dart` derives `signalsCollectionProvider` from `testModeProvider` and `sessionUidProvider` from `authStateChanges`, and the five screen streams hang off them, so Riverpod's disposal replaces the nullable key fields and rebuild-if-changed checks four screens were each hand-rolling; a sixth mode-dependent query now inherits the behaviour instead of having to remember it. **`CachedUserDocStream` extracted** and both `ModerationService` and `SignalSubscriptionService` point at it — they were the same machine (watch `{collection}/{uid}`, project, fan out, re-point on account change) and had already drifted on the invisible half: one re-pointed on `authStateChanges`, the other only when next asked, so they disagreed about what a sign-out does. **`SignalNavigator` reads a `NavigatorObserver`** instead of `currentConfiguration.uri`, which is the last `go()` location and does not move on an imperative push — so all three questions asked of it disagreed with reality, and two were wrong: `isShowingSignal` returned false while details was open over a tab, and the re-tap dedupe never fired for a pushed signal. Two things the probes settled and the comments now record: the observer is handed the tab branches' own routes as well, so the over-shell stack is discriminated by `Routes.shellBranchPaths`; and go_router names a page after its *declared path*, so a pushed signal reports `/signal_details/:signalId` and the id is tracked beside it. **`WatchingService` extracted** — the chunking, the own-signal filter and the paging were inline in a `StreamBuilder` closure and unreachable without a widget and a Firestore, and the filter re-derived the `signalOwner` tri-state from the raw map where `MySignalsService` expresses it as a query; it asks the parsed `Signal` now, and `hasMore` is counted *after* the filter, so a window that is entirely the user's own signals pages on by itself instead of making them tap Load More once per empty page. 549 Dart tests. **iPad re-verified 2026-09-11** (profile build, dark, en): the re-tap dedupe proven on device — the same link fired twice pushed one page, and a single back returned to a focused map, which the old build could not do; and the seven-tap gesture re-pointed **all four** tabs, with My Signals and Watching dropping their test-mode rows and the inbox badge clearing, the exact failure the hand-keyed version existed to prevent. **Android re-verified on SM-X205 2026-09-12** (debug, light, bg), matching: the same link fired twice from the **Menu** tab pushed one page and a single back landed on the map with the pin focused; the seven-tap gesture re-pointed My Signals, its **Removed** sub-tab, Watching and the map, all through the providers. Both devices left in test mode as found. |
+| 2026-09-11 | **Replaced the navigation drawer with a five-tab bottom bar** (§6, §7.13, §7.18). Every destination that was not the map lived behind a hamburger on the map's app bar, which made the map the only screen most people ever found — and there was no list anywhere of the signals a user follows. The bar is **Map / My signals / Watching / Inbox / Menu**, held in a `StatefulShellRoute.indexedStack`; `home_route_drawer.dart` is deleted and its remaining tiles are `MenuPage`. `indexedStack` rather than a plain `ShellRoute` because a shared Navigator would tear down the `GoogleMap` platform view on every tab switch; the map branch is `preload: true` so `pendingFocusSignalId` always has a `MapScreen.build` to consume it, and `SignalNavigator.open` now moves the branch underneath to the map before pushing, so backing out of a notification still lands on a focused pin (an inbox row, which pushes directly, deliberately still returns you to the inbox). **Only the five tab roots are branches** — every other route stays outside the shell and renders over the bar, which is why not one `context.push` call site changed. `extendBody` stays false, and that single choice is what leaves every `Positioned(bottom:)` item on the map, the `centerFloat` FAB, Google's own controls and the bubble projection working with no coordinate changes; the bar hides entirely while a signal is being placed, since `NewSignalLocationBar` owns that strip. **Making four screens permanent broke an assumption nobody had written down**: they used to be pushed and popped, so each re-read `signalsCollectionName` on open, and as tabs they outlive the seven-tap gesture — so My Signals, Watching, the inbox stream and the unread badge are all now keyed on `testModeProvider`, and the badge and the moderator stream on uid as well (the drawer was disposed on close, which had been silently repairing both). **My signals now means reported *or* held** — two queries merged client-side rather than a `Filter.or`, which would need the same per-disjunct indexes and could not be unit-tested; the owner side degrades to empty on error so a still-building index costs missing rows, not a dead screen. New `signalOwner ASC, createdAt DESC` index on **both** collections, with `signal_index_guard_test` now failing the build if `signals` and `signals_test` ever diverge — the drift that only breaks for people using test mode. **Watching** reads `users/{uid}.signalSubscriptions`, which until now had no reader in the app at all, and excludes the user's own by comparing `reporter`/`signalOwner` on documents already in hand; ids are fetched in `whereIn` chunks of 30 newest-followed-first and capped at 60 per page, so the tab costs a bounded read however long the (unbounded, unpruned) array is, and ids that resolve to nothing — removed signals, the other collection's ids — simply drop out. **Following is now explicit in both directions**: `FollowButton` on signal details finally gives `unsubscribeFromSignal` its first call site, and the Watching rows carry an unfollow with undo. Commenting still re-subscribes you — suppressing that would need a second array the fan-out would also have to honour — but it no longer does so silently: the auto-subscribe announces itself with an Undo. Bar labels are abbreviated in Bulgarian (`Следени`, `Мои`) with the full names as tooltips and as the screens' app-bar titles, the bar clamps its own text scaling to 1.2, and `bulgarian_layout_test` covers five labels at 411dp at 1.0 and 1.3. One thing the device pass corrected: `NavigationBar` takes a destination's accessibility name from the **visible label**, not the tooltip, so the short form is what a screen reader and appium see — acceptable only because each short form is a real word. 537 Dart tests, 286 rules tests. **Indexes deployed to help-a-paw-dev 2026-09-11** (`--only firestore:indexes`; the live set was verified beforehand to contain nothing missing from the file, so the deploy created 2 and deleted 0, and rules were compiled but not deployed). **Device-verified on SM-X205 the same day**, in test mode and in Bulgarian: all five tabs, no hamburger and no stray back arrows; My Signals' merged stream resolved without error against the new index; Watching correctly *excluded* the user's own signal (creating one auto-subscribes you) and showed the empty state; back from Menu returned to the map with the camera preserved; the FAB tap hid the bar entirely and back cancelled placement instead of switching tabs (the map's `PopScope` winning, as designed); a signal bubble opened above its pin and details pushed over the shell with the bar hidden; Follow flipped to "Следвате", the signal appeared under Watching, the ⋮ unfollow showed its SnackBar **above** the bar with Undo restoring the row; and a cold relaunch reopened on Watching. **The external-link hand-off was verified last**, from the Menu tab: firing `link.helpapaw.org/signal/{id}` at the running app opened details over the shell, and backing out landed on the **map** — not Menu — with the camera panned to the pin and its bubble open, i.e. `attachShell` moved the branch and `MapScreen.build` consumed `pendingFocusSignalId`. That exercises the shared `SignalNavigator.open` seam; the FCM-specific entry (`onMessageOpenedApp`) is unchanged code that funnels into the same call, and was not separately driven because sending a `data` push needs a credential this environment would not mint. **iPad (6th gen, iOS 17.7.11, profile build) verified 2026-09-11**, in **dark mode** and English — which also covers the dark `NavigationBarThemeData` and the tablet width, where `PageWidth` caps the list rows: all five tabs, no back arrows on tab roots, the inbox badge (5) on the tab icon, Watching listing a genuinely-followed signal that the account did not report, the Follow button and its hint rendering in the details body, placement hiding the bar and Cancel restoring it, the same external-link hand-off landing back on a focused map, and a terminate/relaunch reopening on the Inbox tab. iOS has no system back button, so the shell's `PopScope` rule is Android-only by nature. |
 | 2026-09-11 | **Tag changes are on the signal timeline** (§4.1, §4.6, §12.5a; issue #80). What a signal *needs* was the only owner-editable coordination field that changed with nothing recording it — and by master spec §4.2 it is the working-the-case field, the one the case holder completes as needs are met, so the sequence of tag changes is the record of the signal being worked. Both writers (the manage sheet's picker and the edit screen) now batch the field write with a **`tags_change` event**, behind the same mandatory update note a status change carries. **A third payload shape, not a third int pair**: `TagsEventType` joins `LevelEventType` and `OwnerEventType` in the sealed hierarchy, and the TypeScript side narrows `buildEventData` to `LEVEL_SIGNAL_EVENT_TYPES` so the same mistake — two ints stamped into `newTags`, stored happily by the Admin SDK, dropped by the Dart decoder on read — stops compiling there too, which it previously did not. The rules' `isValidTagList` is **asymmetric on purpose**: `newTags` is 1–3, `oldTags` 0–3, because a signal created before the tag vocabulary has none and requiring one there would make the first tag change on a legacy signal the one change nobody could record; it deliberately does not enumerate the codes, taking the same position `isValidHelpTags` already takes on the signal document. A confirmation that changed nothing writes nothing, and since array order is priority (§4.4) a **reordering counts as a change** (`listEquals`). One save on the edit screen that changes urgency and tags asks for **one** note and writes **two** events under it. No new notification path: `handleSignalUpdated` ignores `helpNeededTags` and `events` has no trigger, so this is purely additive. 286 rules tests, 487 Dart tests, 122 functions tests. **Rollout: rules first, then the app release** — the event and the field write share one batch, so a client writing `tags_change` against undeployed rules fails the batch atomically and the tag change itself stops working. **Rules deployed to help-a-paw-dev 2026-09-11** (the live ruleset was byte-identical to this branch's base beforehand, so the deploy added the new clause and nothing else) and **device-verified on SM-G975F the same day**, in test mode: confirming the picker unchanged wrote nothing and showed no dialog; dropping `vetCare` for `foster` produced the note dialog headlined "Changing needs to: Rescue, Fostering" with Confirm disabled until the note was non-empty, then one `tags_change` document (`oldTags:[rescue,vetCare]`, `newTags:[rescue,foster]`, note, `actor`) and the row "Needs set to Rescue, Fostering" carrying its note, surviving the Events filter; one edit-screen save moving urgency Low→Medium **and** adding `transport` asked for **one** note under the combined headline and wrote **two** events sharing it, in one batch (identical `createTime`). `onTestSignalUpdated` fired for the tags-only change and sent nothing, and no inbox document was written. **Bulgarian verified the same day** — "Подаде този сигнал / Нужна помощ: Спасяване, Ветеринарна помощ", "Нуждите са променени на …", and the dialog headline "Промяна на нуждите на: …" — by pinning `locale` in `MaterialApp.router` for one run and reverting it, since the test phone is Android 12 (no `LocaleManager`, and this One UI build offers no per-app language for the app). **The post-cleanup build was re-verified on the same device** once `coordinationBatch` had taken over all three write paths: a status change wrote `status`, a fresh server `ownerActiveAt`, `lastUpdatedBy` and its `status_change` event, and a tag change wrote its own — the refactor is behaviour-identical where it matters, and the glyph reached the state card's chip and the picker's rows. |
 | 2026-09-10 | **Closed the M-1 second half: signal and comment creation now require a verified, non-anonymous caller** (§5.1, §14; issue #67). `isVerifiedCaller()` gates on `request.auth.token.email_verified`, *not* `sign_in_provider` — an in-place `linkWithCredential` upgrade leaves a real user's token reading `'anonymous'` for the rest of the session, so `sign_in_provider` would lock out precisely the people the clause is meant to admit. The claim is baked in at mint time, which is why the first attempt was rolled back on 2026-07-23: `reload()` does not re-mint, and a restart inside the token's ~1h life reuses the stale one, so a user who verified mid-session was denied their first writes. The client force-refresh (`633da3b`) shipped in **6.0.2+126**, and every app version Crashlytics has seen in the field (120–132) also carries the client-side `canModifyData` gate from `17327ff`, so no released build could reach this rule anonymously anyway — this closes a server-side hole rather than removing a capability. The rules suite now carries the rollback case as a test (`allows an in-place-upgraded caller whose provider still reads anonymous`), and every other test had to start presenting a verified token, which is what a real caller has. 276 rules tests. |
 | 2026-09-10 | **@-mentions in comments** (§4.1, §7.5, §7.13, §9, §12.5g, §12.5h). The details screen is where strangers coordinate about an animal and the thread was flat: no way to address one person in it, so a reporter answering a volunteer had to hope they were reading. Typing `@` now offers the people who have **already interacted with this signal** — reporter, current owner, every past owner, every commenter — and the comment carries a `mentions` array beside its text. Three decisions carry the design. **The roster is derived, not stored**: those uids are already in the screen's own snapshot and its two history streams, so there is no `participants` field, no trigger to maintain it, no backfill and no read — and past owners fall out of the transfers' `ownerId` without an ownership-history field. It is also the only roster that can exist, because `publicProfiles` denies `list` on purpose and nothing may search the user base by name. **The offsets live beside the text, not inside it**: inline markup would render verbatim on every already released build, forever, since nothing here is backfilled; a parallel array those builds ignore renders as `@Ivan Petrov`, which is what the author typed. **A mention re-words a notification rather than sending one** — the fan-out intersects the named uids with the signal's subscribers, so it reaches nobody new, which is precisely what lets a client-written array stay safe under rules that can bound its length and nothing else. The accepted limit is the mirror of that: a participant who unsubscribed cannot be reached by naming them. Rendered mentions are styling only — no underline, no recognizer, because underline is this screen's "this opens something" and a mention opens nothing. The composer recomputes offsets from `(uid, "@Name")` instead of maintaining them, so the whole edit story is one rule (*a mention that no longer reads as it was inserted stops being one*) rather than a diff to get wrong. Three new guards: the mention cap (**×3** — Dart, rules and TypeScript), the inbox `type` vocabulary against the TypeScript union (which closes a documented silent failure that had been waiting for a fourth type to arrive), and the suggestion list's height against a short viewport. The list caps itself against the **window** height rather than the body's, because a `Scaffold` strips `viewInsets` from its body's `MediaQuery` and the only thing that can see the keyboard — a `LayoutBuilder` around the body — re-runs on every frame of the keyboard animation. Rows carry up to two initials (`mentionInitials`), whitespace-separated with dots as a fallback, so the email-local-part names the `publicProfiles` gap leaves behind do not all collapse to one letter. **Device-verified on SM-X205 2026-09-10** in test mode, in Bulgarian: the roster showed exactly the signal's participants with the viewer excluded, `@vol` narrowed it to one, the pick highlighted in the composer and rendered styled in the thread, the stored document carried `mentions:[{uid,start:0,end:19}]`, and `onTestCommentCreated` logged `1 subscriber(s), 1 mentioned` → two differently-worded pushes and two inbox documents (`type: mention` with `mentionedByName` vs an unchanged `new_comment`) sharing one `cmt_{id}` id; a plain comment logged `2 subscriber(s), 0 mentioned`. **Functions deployed to help-a-paw-dev 2026-09-10**, ahead of the app — safe because a comment with no `mentions` takes exactly the old path. |

@@ -29,7 +29,27 @@ class StatusView extends StatelessWidget {
     this.hint,
   })  : onRetry = null,
         retryLabel = null,
-        _isError = false;
+        _isError = false,
+        _isSignIn = false;
+
+  /// There is nothing to show because nobody is signed in.
+  ///
+  /// Its own constructor rather than an [empty] with a button bolted on: the
+  /// screens that need it are the ones gated on an account, the way forward is
+  /// always the same, and before this each of them grew its own icon-plus-text-
+  /// plus-button column — which is the exact drift the class doc above is
+  /// complaining about.
+  const StatusView.signIn({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.hint,
+    required VoidCallback onSignIn,
+    required String signInLabel,
+  })  : onRetry = onSignIn,
+        retryLabel = signInLabel,
+        _isError = false,
+        _isSignIn = true;
 
   /// Something failed. [onRetry] is what makes this a state rather than a
   /// dead end.
@@ -40,7 +60,8 @@ class StatusView extends StatelessWidget {
     this.hint,
     required this.onRetry,
     this.retryLabel,
-  }) : _isError = true;
+  })  : _isError = true,
+        _isSignIn = false;
 
   final IconData icon;
 
@@ -56,6 +77,7 @@ class StatusView extends StatelessWidget {
   final String? retryLabel;
 
   final bool _isError;
+  final bool _isSignIn;
 
   @override
   Widget build(BuildContext context) {
@@ -93,11 +115,17 @@ class StatusView extends StatelessWidget {
             ],
             if (onRetry != null) ...[
               const SizedBox(height: 24),
-              FilledButton.tonalIcon(
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh),
-                label: Text(retryLabel ?? l10n.retry),
-              ),
+              if (_isSignIn)
+                FilledButton(
+                  onPressed: onRetry,
+                  child: Text(retryLabel ?? l10n.signIn),
+                )
+              else
+                FilledButton.tonalIcon(
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh),
+                  label: Text(retryLabel ?? l10n.retry),
+                ),
             ],
           ],
         ),

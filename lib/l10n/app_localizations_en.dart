@@ -1990,4 +1990,73 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get notificationPermissionRequired =>
       'Notifications are turned off for this app. Allow them in Settings to hear about nearby signals.';
+
+  @override
+  String get tabMap => 'Map';
+
+  @override
+  String get tabMySignals => 'My signals';
+
+  @override
+  String get tabWatching => 'Watching';
+
+  @override
+  String get tabInbox => 'Inbox';
+
+  @override
+  String get tabMenu => 'Menu';
+
+  @override
+  String get watching => 'Watching';
+
+  @override
+  String get menu => 'Menu';
+
+  @override
+  String get follow => 'Follow';
+
+  @override
+  String get following => 'Following';
+
+  @override
+  String get unfollow => 'Unfollow';
+
+  @override
+  String get followSignalHint => 'Get notified when this signal changes';
+
+  @override
+  String get nowFollowingSignal => 'You\'re now following this signal';
+
+  @override
+  String get unfollowedSignal => 'Unfollowed';
+
+  @override
+  String get followFailed => 'Could not change this. Please try again.';
+
+  @override
+  String get noWatchedSignals => 'You\'re not following any signals';
+
+  @override
+  String get watchedSignalsHint =>
+      'Signals you follow appear here. Open a signal and tap Follow to keep an eye on it.';
+
+  @override
+  String get couldNotLoadWatched => 'Could not load the signals you follow';
+
+  @override
+  String get loadMore => 'Load more';
+
+  @override
+  String get ownedByYou => 'You hold this';
+
+  @override
+  String unreadNotificationsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count unread',
+      one: '1 unread',
+    );
+    return '$_temp0';
+  }
 }

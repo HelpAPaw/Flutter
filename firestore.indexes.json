@@ -213,6 +213,20 @@
       ]
     },
     {
+      "collectionGroup": "signals",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "signalOwner",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "signals_test",
       "queryScope": "COLLECTION",
       "fields": [
@@ -223,6 +237,20 @@
         {
           "fieldPath": "status",
           "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "signals_test",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "signalOwner",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
         }
       ]
     }

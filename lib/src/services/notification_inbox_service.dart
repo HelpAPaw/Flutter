@@ -59,28 +59,35 @@ class NotificationInboxService {
     return FirebaseFirestore.instance.collection('userCounters').doc(uid);
   }
 
-  /// Entries for the mode the app is currently in.
+  /// Entries for one mode.
   ///
   /// The mode filter is not cosmetic: a test-mode entry's `signalId` points into
   /// `signals_test`, so opening it from the production inbox would navigate to a
   /// document that does not exist.
+  ///
+  /// **Passed in, not read from preferences.** These queries capture the mode at
+  /// *subscription* time and never re-check it, so a caller that keeps a stream
+  /// across the seven-tap gesture silently goes on showing the other mode's
+  /// notifications. When the mode was read ambiently in here, remembering to
+  /// re-subscribe was an unenforceable obligation on every caller; as a
+  /// parameter it is one you cannot express without stating.
   Query<Map<String, dynamic>> _scoped(
     CollectionReference<Map<String, dynamic>> collection,
+    bool testMode,
   ) {
-    return collection.where(
-      'testMode',
-      isEqualTo: AppPreferencesService().isTestMode(),
-    );
+    return collection.where('testMode', isEqualTo: testMode);
   }
 
   /// Newest [pageSize] notifications for the current user and mode.
   ///
   /// Returns `null` when nobody is signed in, so the caller can render its
   /// signed-out state rather than an empty list.
-  Stream<QuerySnapshot<Map<String, dynamic>>>? watchInbox() {
+  Stream<QuerySnapshot<Map<String, dynamic>>>? watchInbox({
+    required bool testMode,
+  }) {
     final collection = _collection();
     if (collection == null) return null;
-    return _scoped(collection)
+    return _scoped(collection, testMode)
         .orderBy('createdAt', descending: true)
         .limit(pageSize)
         .snapshots();
@@ -90,10 +97,10 @@ class NotificationInboxService {
   ///
   /// A capped snapshot rather than a `count()` aggregation because this one is
   /// live: the badge has to clear the moment the user reads something.
-  Stream<int> watchUnreadCount() {
+  Stream<int> watchUnreadCount({required bool testMode}) {
     final collection = _collection();
     if (collection == null) return Stream.value(0);
-    return _scoped(collection)
+    return _scoped(collection, testMode)
         .where('read', isEqualTo: false)
         .limit(pageSize)
         .snapshots()
@@ -105,12 +112,15 @@ class NotificationInboxService {
   }
 
   /// Marks every unread notification in the current mode as read.
+  ///
+  /// One-shot, so it reads the mode as it acts — there is no stream to go stale.
   Future<void> markAllRead() async {
     final collection = _collection();
     if (collection == null) return;
 
     await _walkInBatches(
-      _scoped(collection).where('read', isEqualTo: false),
+      _scoped(collection, AppPreferencesService().isTestMode())
+          .where('read', isEqualTo: false),
       (batch, doc) => batch.update(doc.reference, {'read': true}),
     );
     await syncUnreadCounter();
@@ -122,7 +132,7 @@ class NotificationInboxService {
     if (collection == null) return;
 
     await _walkInBatches(
-      _scoped(collection),
+      _scoped(collection, AppPreferencesService().isTestMode()),
       (batch, doc) => batch.delete(doc.reference),
     );
     await syncUnreadCounter();

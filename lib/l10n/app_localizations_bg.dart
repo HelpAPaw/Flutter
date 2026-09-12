@@ -2021,4 +2021,74 @@ class AppLocalizationsBg extends AppLocalizations {
   @override
   String get notificationPermissionRequired =>
       'Известията за това приложение са изключени. Разрешете ги в Настройки, за да научавате за сигнали наблизо.';
+
+  @override
+  String get tabMap => 'Карта';
+
+  @override
+  String get tabMySignals => 'Мои';
+
+  @override
+  String get tabWatching => 'Следени';
+
+  @override
+  String get tabInbox => 'Известия';
+
+  @override
+  String get tabMenu => 'Меню';
+
+  @override
+  String get watching => 'Наблюдавани';
+
+  @override
+  String get menu => 'Меню';
+
+  @override
+  String get follow => 'Следвай';
+
+  @override
+  String get following => 'Следвате';
+
+  @override
+  String get unfollow => 'Спри да следваш';
+
+  @override
+  String get followSignalHint =>
+      'Получавайте известия при промени по този сигнал';
+
+  @override
+  String get nowFollowingSignal => 'Вече следвате този сигнал';
+
+  @override
+  String get unfollowedSignal => 'Спряхте да следвате';
+
+  @override
+  String get followFailed => 'Промяната не бе запазена. Опитайте отново.';
+
+  @override
+  String get noWatchedSignals => 'Не следвате никакви сигнали';
+
+  @override
+  String get watchedSignalsHint =>
+      'Тук се появяват сигналите, които следвате. Отворете сигнал и натиснете „Следвай“.';
+
+  @override
+  String get couldNotLoadWatched => 'Следените сигнали не се заредиха';
+
+  @override
+  String get loadMore => 'Покажи още';
+
+  @override
+  String get ownedByYou => 'Вие го поехте';
+
+  @override
+  String unreadNotificationsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count непрочетени',
+      one: '1 непрочетено',
+    );
+    return '$_temp0';
+  }
 }

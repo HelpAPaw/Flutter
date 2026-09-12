@@ -31,6 +31,10 @@ class DeepLinkService {
   final AppLinks _appLinks = AppLinks();
   StreamSubscription<Uri>? _subscription;
 
+  /// Cached, because the plugin only reports a launch link once per process and
+  /// two callers must not race to consume it.
+  Future<bool>? _launchedFromSignalLink;
+
   /// Starts listening. Safe to call more than once; later calls are ignored.
   void initialize() {
     if (_subscription != null) return;
@@ -38,6 +42,36 @@ class DeepLinkService {
       _handle,
       onError: (Object e) => debugPrint('Deep link stream error: $e'),
     );
+  }
+
+  /// Whether *this launch* was started by a signal link.
+  ///
+  /// Asked of the plugin, not inferred from the router. The deferred-install
+  /// hand-off needs this answer to decide whether a link has already taken the
+  /// user somewhere, and it used to read `SignalNavigator.isShowingSignal` in a
+  /// post-frame callback — which is only reliable while Flutter's built-in
+  /// deep linking is installing the route *before* the first frame. Any path
+  /// that delivers the link asynchronously (app_links does, and would be the
+  /// only path if `flutter_deeplinking_enabled` were ever turned off) makes that
+  /// read return false on a real link launch, and the hand-off then opens a
+  /// *stale stored* signal instead of the one the user tapped.
+  ///
+  /// `getInitialLink()` is a direct question with no ordering dependency, so it
+  /// is correct under either arrangement.
+  Future<bool> wasLaunchedFromSignalLink() =>
+      _launchedFromSignalLink ??= _resolveLaunchLink();
+
+  Future<bool> _resolveLaunchLink() async {
+    try {
+      final uri = await _appLinks.getInitialLink();
+      return uri != null && signalIdForUri(uri) != null;
+    } catch (e) {
+      // Never let this block startup. Reporting "not from a link" is the safe
+      // direction: the hand-off then checks the referrer, which is itself a
+      // one-shot and guarded.
+      debugPrint('Initial link check failed: $e');
+      return false;
+    }
   }
 
   void _handle(Uri uri) {

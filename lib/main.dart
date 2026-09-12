@@ -25,6 +25,10 @@ import 'package:help_a_paw/src/widgets/faqs_page.dart';
 import 'package:help_a_paw/src/widgets/feedback_page.dart';
 import 'package:help_a_paw/src/widgets/helper_tags_gate.dart';
 import 'package:help_a_paw/src/widgets/home_route.dart';
+import 'package:help_a_paw/src/widgets/home_shell.dart';
+import 'package:help_a_paw/src/widgets/menu_page.dart';
+import 'package:help_a_paw/src/widgets/watching_page.dart';
+import 'package:help_a_paw/src/config/initial_location.dart';
 import 'package:help_a_paw/src/widgets/moderation_queue_page.dart';
 import 'package:help_a_paw/src/widgets/my_notifications_page.dart';
 import 'package:help_a_paw/src/widgets/new_signal/new_signal_wizard_page.dart';
@@ -240,14 +244,24 @@ Future<void> _bootstrapServices() async {
   DeepLinkService.instance.initialize();
 
   // One-shot: if this launch is the first after an install that a shared link
-  // sent the user to the store for, open that signal. Deferred to after the
-  // first frame because it needs to know whether a link already took the user
-  // somewhere, and the router has no location to report until the Router widget
-  // has built.
+  // sent the user to the store for, open that signal.
+  //
+  // Still after the first frame, so navigation has somewhere to go — but the
+  // "did a link already bring us here" question is now asked of the plugin
+  // rather than of the router. Reading the router here was only reliable while
+  // Flutter's built-in deep linking installs the route before that frame; see
+  // `DeepLinkService.wasLaunchedFromSignalLink`.
   WidgetsBinding.instance.addPostFrameCallback((_) {
-    unawaited(DeferredDeepLinkService.instance
-        .resolve(launchedFromLink: SignalNavigator.instance.isShowingSignal)
-        .catchError((e) => debugPrint('Deferred deep link failed: $e')));
+    unawaited(() async {
+      try {
+        final launchedFromLink =
+            await DeepLinkService.instance.wasLaunchedFromSignalLink();
+        await DeferredDeepLinkService.instance
+            .resolve(launchedFromLink: launchedFromLink);
+      } catch (e) {
+        debugPrint('Deferred deep link failed: $e');
+      }
+    }());
   });
 
   // Warm up google_sign_in so the button is responsive on first tap. Not
@@ -319,7 +333,18 @@ Future<void> syncBadgeCount() async {
 
 final GoRouter _router = GoRouter(
   debugLogDiagnostics: kDebugMode,
-  initialLocation: Routes.home,
+  // Lets SignalNavigator see the real root stack rather than inferring it from
+  // the router's URI, which does not track imperative pushes.
+  observers: [SignalNavigator.instance.observer],
+  // The tab the user was last on. Safe to read synchronously: this is a lazy
+  // top-level final, first touched by `SignalNavigator.attach` and by
+  // `MaterialApp.router`, both strictly after `AppPreferencesService.initialize`
+  // in `main()`. A cold deep link overrides this — go_router prefers the
+  // platform's route whenever it is not `/`.
+  initialLocation: initialShellLocation(
+    savedPath: AppPreferencesService().lastTabPath(),
+    hasAccount: FirebaseAuth.instance.currentUser?.isAnonymous == false,
+  ),
   redirect: (context, state) {
     final user = FirebaseAuth.instance.currentUser;
     final onAuthRoute = Routes.authRoutes.contains(state.matchedLocation);
@@ -340,15 +365,83 @@ final GoRouter _router = GoRouter(
     return null;
   },
   refreshListenable: GoRouterRefreshStream(FirebaseAuth.instance.authStateChanges()),
-  routes: <GoRoute>[
-    GoRoute(
-      name: 'initial_route',
-      path: Routes.home,
-      // Wrapped rather than gated by a `redirect`, so the check can be async
-      // and so signal-details deep links are exempt without any route matching.
-      // See HelperTagsGate for the full reasoning.
-      builder: (BuildContext context, GoRouterState state) =>
-          const HelperTagsGate(child: HomeRoute()),
+  routes: <RouteBase>[
+    // The five bottom-bar destinations.
+    //
+    // `indexedStack` rather than a plain ShellRoute: a ShellRoute shares one
+    // Navigator, so switching tabs would tear down and rebuild the GoogleMap
+    // platform view every time — losing the camera, re-clustering the markers,
+    // and re-running the fly-to-location in `onMapCreated`.
+    //
+    // Every *other* route in this table stays where it is, outside the shell, so
+    // it pushes over the bar on the root Navigator. That is what keeps every
+    // existing `context.push` call site unchanged.
+    StatefulShellRoute.indexedStack(
+      // The gate wraps the whole shell, not branch 0. Inside a branch it would
+      // be weaker than today's drawer-inside-the-map arrangement: the user could
+      // tab away from onboarding that is supposed to have no escape hatch. See
+      // HelperTagsGate for why this is a widget and not a redirect — and note
+      // that signal-details deep links are still exempt, because they are a
+      // different route and never build this.
+      builder: (context, state, navigationShell) =>
+          HelperTagsGate(child: HomeShell(navigationShell: navigationShell)),
+      branches: [
+        StatefulShellBranch(
+          // Built at startup, as the map has always been. `SignalNavigator`
+          // leaves `pendingFocusSignalId` for `MapScreen.build` to consume, so
+          // there has to be a map to consume it even when the app reopens on
+          // another tab.
+          preload: true,
+          routes: [
+            GoRoute(
+              name: 'initial_route',
+              path: Routes.home,
+              builder: (BuildContext context, GoRouterState state) =>
+                  const HomeRoute(),
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              name: 'my_signals',
+              path: Routes.mySignals,
+              builder: (BuildContext context, GoRouterState state) =>
+                  const MySignalsPage(),
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              name: 'watching',
+              path: Routes.watching,
+              builder: (BuildContext context, GoRouterState state) =>
+                  const WatchingPage(),
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              name: 'my_notifications',
+              path: Routes.myNotifications,
+              builder: (BuildContext context, GoRouterState state) =>
+                  const MyNotificationsPage(),
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              name: 'menu',
+              path: Routes.menu,
+              builder: (BuildContext context, GoRouterState state) =>
+                  const MenuPage(),
+            ),
+          ],
+        ),
+      ],
     ),
     GoRoute(
       name: 'sign_in',
@@ -442,16 +535,6 @@ final GoRouter _router = GoRouter(
         key: ValueKey(state.pathParameters['uid']),
         uid: state.pathParameters['uid']!,
       ),
-    ),
-    GoRoute(
-      name: 'my_signals',
-      path: Routes.mySignals,
-      builder: (BuildContext context, GoRouterState state) => const MySignalsPage(),
-    ),
-    GoRoute(
-      name: 'my_notifications',
-      path: Routes.myNotifications,
-      builder: (BuildContext context, GoRouterState state) => const MyNotificationsPage(),
     ),
     // Moderator report queue (master spec §18). No role redirect — see the doc
     // comment on Routes.moderation; the screen gates itself and the rules are

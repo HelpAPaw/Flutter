@@ -1,7 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
+import 'package:help_a_paw/src/services/app_providers.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
@@ -11,10 +13,8 @@ import '../models/signal_status.dart';
 import '../models/signal_urgency.dart';
 import '../services/app_badge_service.dart';
 import '../services/notification_inbox_service.dart';
-import '../utils/nav_extensions.dart';
 import 'app_bar_title.dart';
 import 'status_view.dart';
-import 'escape_leading.dart';
 import 'page_width.dart';
 
 /// The in-app notification inbox.
@@ -23,23 +23,32 @@ import 'page_width.dart';
 /// (`helpNeededTags`, `statusCode`, …) rather than from the stored `title`/`body`,
 /// which are the English strings the push carried and exist only as a fallback.
 /// The Cloud Function has no i18n, and this app is bilingual.
-class MyNotificationsPage extends StatefulWidget {
+class MyNotificationsPage extends ConsumerStatefulWidget {
   const MyNotificationsPage({super.key});
 
   @override
-  State<MyNotificationsPage> createState() => _MyNotificationsPageState();
+  ConsumerState<MyNotificationsPage> createState() =>
+      _MyNotificationsPageState();
 }
 
-class _MyNotificationsPageState extends State<MyNotificationsPage> {
-  /// Bumped by Retry, and used as the inbox StreamBuilder's key so a failed
-  /// listen is torn down and restarted rather than rebuilt as-is.
-  int _attempt = 0;
-
+class _MyNotificationsPageState extends ConsumerState<MyNotificationsPage> {
   // Memoized so a rebuild doesn't hand StreamBuilder a fresh Stream instance,
   // which would cancel and re-listen — flashing the spinner and re-reading up
   // to `pageSize` documents each time. Same `??=` shape as
   // SignalDetailsScreen's document stream.
-  Stream<QuerySnapshot<Map<String, dynamic>>>? _inboxStream;
+  //
+  // Re-keyed on test mode, which the drawer-era version did not need: this
+  // screen used to be pushed and popped, so it re-read the mode on every open.
+  // As a permanent tab it outlives the seven-tap gesture, and the inbox query is
+  // scoped by `testMode` when the listener is *created* — so without this the
+  // tab would keep showing the other mode's notifications for the rest of the
+  // session.
+  // No memoized stream and no uid/test-mode key fields: `inboxProvider` and
+  // `sessionUidProvider` declare both dependencies, so Riverpod re-creates the
+  // stream when either changes. This screen is a permanent tab *and* one the app
+  // can cold-start onto, so it has to survive anonymous sign-in landing after
+  // the first frame and an account switch mid-session — which is exactly what a
+  // watched provider gives it.
 
   @override
   void initState() {
@@ -265,17 +274,16 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final user = FirebaseAuth.instance.currentUser;
     final inbox = NotificationInboxService();
-    final stream = _inboxStream ??= inbox.watchInbox();
+    final uid = ref.watch(sessionUidProvider).value;
+    final user = uid == null ? null : FirebaseAuth.instance.currentUser;
+    final entries = ref.watch(inboxProvider);
 
     return Scaffold(
       appBar: AppBar(
-        leading: escapeLeading(
-            context,
-            label: AppLocalizations.of(context).back,
-            onLeave: () => context.popOrHome(),
-          ),
+        // A tab root — there is nothing beneath it to escape to, so no
+        // `escapeLeading` and no implied back arrow.
+        automaticallyImplyLeading: false,
         title: AppBarTitle(l10n.myNotifications),
         actions: [
           if (user != null)
@@ -312,33 +320,25 @@ class _MyNotificationsPageState extends State<MyNotificationsPage> {
             ),
         ],
       ),
-      body: PageWidth(child: user == null || stream == null
+      body: PageWidth(child: uid == null
           ? StatusView.empty(
               icon: Icons.notifications_off,
               title: l10n.pleaseSignInToViewNotifications,
             )
-          : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              key: ValueKey(_attempt),
-              stream: stream,
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  // Logged, not shown: a raw Firebase exception is a fact
-                  // about our rules, not something a reader can act on.
-                  debugPrint('Inbox stream failed: ${snapshot.error}');
-                  return StatusView.error(
-                    title: l10n.couldNotLoadNotifications,
-                    hint: l10n.couldNotLoadSignalsHint,
-                    onRetry: () => setState(() => _attempt++),
-                  );
-                }
-
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(),
-                  );
-                }
-
-                final docs = snapshot.data?.docs ?? [];
+          : entries.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, _) {
+                // Logged, not shown: a raw Firebase exception is a fact
+                // about our rules, not something a reader can act on.
+                debugPrint('Inbox stream failed: $error');
+                return StatusView.error(
+                  title: l10n.couldNotLoadNotifications,
+                  hint: l10n.couldNotLoadSignalsHint,
+                  onRetry: () => ref.invalidate(inboxProvider),
+                );
+              },
+              data: (snapshot) {
+                final docs = snapshot?.docs ?? [];
 
                 if (docs.isEmpty) {
                   return StatusView.empty(

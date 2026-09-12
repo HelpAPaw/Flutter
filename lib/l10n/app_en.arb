@@ -976,5 +976,90 @@
   "notificationPermissionRequired": "Notifications are turned off for this app. Allow them in Settings to hear about nearby signals.",
   "@notificationPermissionRequired": {
     "description": "Shown when the user turns the notifications switch on but the OS permission was refused, so the switch cannot stay on"
+  },
+  "tabMap": "Map",
+  "@tabMap": {
+    "description": "Bottom bar label for the map. Kept short — five destinations leave ~72dp each. The full name is on the destination's Semantics label."
+  },
+  "tabMySignals": "My signals",
+  "@tabMySignals": {
+    "description": "Bottom bar label for the signals the user reported or holds"
+  },
+  "tabWatching": "Watching",
+  "@tabWatching": {
+    "description": "Bottom bar label for signals the user follows"
+  },
+  "tabInbox": "Inbox",
+  "@tabInbox": {
+    "description": "Bottom bar label for the notification inbox"
+  },
+  "tabMenu": "Menu",
+  "@tabMenu": {
+    "description": "Bottom bar label for the menu that replaced the navigation drawer"
+  },
+  "watching": "Watching",
+  "@watching": {
+    "description": "Title of the screen listing signals the user follows"
+  },
+  "menu": "Menu",
+  "@menu": {
+    "description": "Title of the menu screen"
+  },
+  "follow": "Follow",
+  "@follow": {
+    "description": "Button that subscribes the user to a signal's notifications"
+  },
+  "following": "Following",
+  "@following": {
+    "description": "State of the follow button once the user is subscribed"
+  },
+  "unfollow": "Unfollow",
+  "@unfollow": {
+    "description": "Action that unsubscribes the user from a signal's notifications"
+  },
+  "followSignalHint": "Get notified when this signal changes",
+  "@followSignalHint": {
+    "description": "Explains what following a signal actually does — it is a notification subscription, not a bookmark"
+  },
+  "nowFollowingSignal": "You're now following this signal",
+  "@nowFollowingSignal": {
+    "description": "Shown after commenting, which subscribes the user automatically. Carries an Undo so the subscription is never silent."
+  },
+  "unfollowedSignal": "Unfollowed",
+  "@unfollowedSignal": {
+    "description": "Confirmation after unfollowing, shown with an Undo action"
+  },
+  "followFailed": "Could not change this. Please try again.",
+  "@followFailed": {
+    "description": "Shown when the follow/unfollow write fails and the button reverts"
+  },
+  "noWatchedSignals": "You're not following any signals",
+  "@noWatchedSignals": {
+    "description": "Empty state of the Watching tab"
+  },
+  "watchedSignalsHint": "Signals you follow appear here. Open a signal and tap Follow to keep an eye on it.",
+  "@watchedSignalsHint": {
+    "description": "Empty-state hint of the Watching tab, naming the exact action that fills it"
+  },
+  "couldNotLoadWatched": "Could not load the signals you follow",
+  "@couldNotLoadWatched": {
+    "description": "Error state of the Watching tab"
+  },
+  "loadMore": "Load more",
+  "@loadMore": {
+    "description": "Loads the next page of older followed signals"
+  },
+  "ownedByYou": "You hold this",
+  "@ownedByYou": {
+    "description": "Chip on a My Signals row that the user holds but did not report, answering 'why is this in my list'"
+  },
+  "unreadNotificationsCount": "{count, plural, =1{1 unread} other{{count} unread}}",
+  "@unreadNotificationsCount": {
+    "description": "Accessibility label for the inbox tab's unread badge",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   }
 }

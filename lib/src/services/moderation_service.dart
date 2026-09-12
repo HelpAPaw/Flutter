@@ -8,6 +8,7 @@ import '../models/report_reason.dart';
 import '../models/quarantined_signal.dart';
 import '../models/report_status.dart';
 import '../models/signal_event.dart';
+import '../utils/cached_user_doc_stream.dart';
 import 'app_preferences_service.dart';
 import 'callable_client.dart';
 
@@ -43,21 +44,6 @@ class ModerationService {
 
   FirebaseFirestore get _db => FirebaseFirestore.instance;
 
-  /// Last known role, replayed to each new subscriber so nothing re-reads.
-  bool _isModerator = false;
-
-  /// Fans the single upstream listener out to however many widgets want it.
-  final StreamController<bool> _roleController =
-      StreamController<bool>.broadcast();
-
-  /// The auth watch, created on first use and never cancelled — this is a
-  /// singleton that lives as long as the app.
-  StreamSubscription<User?>? _authSubscription;
-
-  /// The `moderators/{uid}` watch for [_watchedUid], replaced on account change.
-  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _roleSubscription;
-  String? _watchedUid;
-
   /// Whether the signed-in user holds the moderator role, live.
   ///
   /// Listens to `moderators/{uid}`, which the rules let a user `get` only for
@@ -69,70 +55,28 @@ class ModerationService {
   /// inside the `moderateAction` callable and in `firestore.rules`, so a stale
   /// `true` costs nothing worse than a button that returns `permission-denied`.
   ///
-  /// **Cached here rather than by the caller.** The obvious place looked like
-  /// the widget — memoize the stream in State — and for `ModerationQueuePage`
-  /// that works. For the drawer it does not: `DrawerController` does not build
-  /// its child while dismissed, so `HomeRouteDrawer`'s State is created on open
-  /// and disposed on close, and a State-held memo survives exactly one open.
-  /// Every drawer open by every user, anonymous included, was costing a fresh
-  /// billed read of a document that exists for a handful of accounts. One
-  /// process-lifetime listener replaces all of them: new subscribers get
-  /// [_isModerator] immediately and then share the same upstream.
+  /// **Cached here rather than by the caller**, and now by the shared
+  /// [CachedUserDocStream]. The obvious place looked like the widget — memoize
+  /// the stream in State — and it was not enough: this was written for the
+  /// navigation drawer, whose State was created on open and disposed on close,
+  /// so a State-held memo survived exactly one open and every drawer open by
+  /// every user, anonymous included, cost a fresh billed read of a document that
+  /// exists for a handful of accounts. The drawer is now `MenuPage`, a tab that
+  /// is never disposed, but this listener is still what keeps the other callers
+  /// — `ModerationQueuePage`, the signal-details shield, every comment row —
+  /// sharing one read.
   ///
   /// Errors are swallowed to `false`: offline, the right answer to "should I
-  /// draw the moderation entry point" is no.
-  Stream<bool> watchIsModerator() async* {
-    _ensureRoleSubscription();
-    yield _isModerator;
-    yield* _roleController.stream;
-  }
+  /// draw the moderation entry point" is no. That, the replay, and the
+  /// re-point on account change are all the primitive's doing now.
+  final CachedUserDocStream<bool> _role = CachedUserDocStream<bool>(
+    collection: _moderatorsCollection,
+    empty: false,
+    debugLabel: 'Moderator role',
+    project: (doc) => doc.exists,
+  );
 
-  /// Starts the auth watch and the per-uid role watch, once.
-  ///
-  /// Two explicit subscriptions rather than `authStateChanges().asyncExpand(…)`,
-  /// which looks like the idiomatic spelling and is wrong here: `asyncExpand`
-  /// waits for each inner stream to **end** before handling the next outer
-  /// event, and `snapshots()` never ends. The first uid would have latched
-  /// forever — signing out, or switching accounts, would never have updated the
-  /// role. Managing the inner subscription by hand is what makes the switch
-  /// actually happen.
-  ///
-  /// `authStateChanges`, not `userChanges`: the latter also fires on the hourly
-  /// ID-token refresh and on any profile update, and each emission would
-  /// re-attach the snapshot listener for a uid that never changed.
-  void _ensureRoleSubscription() {
-    if (_authSubscription != null) return;
-    _authSubscription =
-        FirebaseAuth.instance.authStateChanges().listen((user) {
-      final uid = user?.uid;
-      if (uid == _watchedUid) return;
-      _watchedUid = uid;
-
-      _roleSubscription?.cancel();
-      _roleSubscription = null;
-
-      if (uid == null) {
-        _emitRole(false);
-        return;
-      }
-      _roleSubscription = _db
-          .collection(_moderatorsCollection)
-          .doc(uid)
-          .snapshots()
-          .listen(
-        (doc) => _emitRole(doc.exists),
-        onError: (Object e) {
-          debugPrint('Moderator role stream failed: $e');
-          _emitRole(false);
-        },
-      );
-    });
-  }
-
-  void _emitRole(bool isModerator) {
-    _isModerator = isModerator;
-    _roleController.add(isModerator);
-  }
+  Stream<bool> watchIsModerator() => _role.watch();
 
   /// Files a report (spec 18.1).
   ///
