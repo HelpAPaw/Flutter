@@ -7,6 +7,20 @@ import 'package:help_a_paw/src/services/signal_navigator.dart';
 /// `SignalNavigator.open` moves the tab shell to the map before pushing, so
 /// backing out of a notification lands on a map focused on that pin.
 ///
+/// **These tests cover the FCM-tap and deferred-install paths, not shared
+/// links.** They drive `SignalNavigator.open` directly, and on device a tapped
+/// link never reaches it: `flutter_deeplinking_enabled` and
+/// `FlutterDeepLinkingEnabled` are both on, so Flutter's built-in handling gets
+/// the link first and treats it as a new *location* — a `go`, which replaces the
+/// configuration — after which `open` dedupes and does nothing. Device-verified
+/// on SM-X205 2026-09-12: a link fired at the New Signal wizard destroys that
+/// route, which is exactly what the wizard case below asserts cannot happen.
+///
+/// So a green run here is evidence about notifications, and none at all about
+/// links. Check link behaviour on a device. (It is survivable: the wizard keeps
+/// its draft *and* its step in `mapViewModelProvider`, so re-entry resumes where
+/// the reporter was — see the class doc on `NewSignalWizardPage`.)
+///
 /// The guard around it is the part worth pinning: `goBranch` restores a branch's
 /// saved match list, and go_router scopes that list by discarding everything
 /// pushed *over* the shell. Calling it at the wrong moment silently destroys the
@@ -86,6 +100,9 @@ void main() {
       (tester) async {
     // The regression this guard exists for: `goBranch` would discard the
     // wizard route — and the half-filled report in it — before pushing details.
+    //
+    // True for a notification tap, which is what this drives. A *link* destroys
+    // the wizard regardless, one layer above this code — see the file header.
     final router = await pump(tester);
     router.push(Routes.newSignal);
     await tester.pumpAndSettle();
