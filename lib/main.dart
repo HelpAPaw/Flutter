@@ -244,14 +244,24 @@ Future<void> _bootstrapServices() async {
   DeepLinkService.instance.initialize();
 
   // One-shot: if this launch is the first after an install that a shared link
-  // sent the user to the store for, open that signal. Deferred to after the
-  // first frame because it needs to know whether a link already took the user
-  // somewhere, and the router has no location to report until the Router widget
-  // has built.
+  // sent the user to the store for, open that signal.
+  //
+  // Still after the first frame, so navigation has somewhere to go — but the
+  // "did a link already bring us here" question is now asked of the plugin
+  // rather than of the router. Reading the router here was only reliable while
+  // Flutter's built-in deep linking installs the route before that frame; see
+  // `DeepLinkService.wasLaunchedFromSignalLink`.
   WidgetsBinding.instance.addPostFrameCallback((_) {
-    unawaited(DeferredDeepLinkService.instance
-        .resolve(launchedFromLink: SignalNavigator.instance.isShowingSignal)
-        .catchError((e) => debugPrint('Deferred deep link failed: $e')));
+    unawaited(() async {
+      try {
+        final launchedFromLink =
+            await DeepLinkService.instance.wasLaunchedFromSignalLink();
+        await DeferredDeepLinkService.instance
+            .resolve(launchedFromLink: launchedFromLink);
+      } catch (e) {
+        debugPrint('Deferred deep link failed: $e');
+      }
+    }());
   });
 
   // Warm up google_sign_in so the button is responsive on first tap. Not
