@@ -31,7 +31,7 @@
 > | **Signal removal replaces deletion** | Delete is gone. **Remove** moves the signal server-side to `removedSignals`, keeps its comments/events/photos, and is restorable for **30 days** from a new **Removed** tab in My Signals. An *open* signal is asked "Is this signal resolved?" first. Removal is **refused while an open report names the signal**. | **§3.7 (rewritten), §3.5b NEW** |
 > | **Contribution stats** | The profile's signal count is now a server-written `publicProfiles.signalsPosted` that **never decrements**, with a live-`count()` fallback for accounts that predate it. Test-mode signals do not count. | §1.6 |
 > | **Signal ownership** | New `signalOwner` axis. Status/urgency/tags become **reporter-or-owner**; a non-owner gets **claim-to-act**. Three escapes from a silent owner: offer, released signal, stale signal (14 days). Transfers go through the `signalOwnership` callable, which **rejects anonymous callers**. | **§3.9 NEW** |
-> | **Moderation & reporting** | Report any signal or comment (12 reasons, one report per user per target). A `moderators/{uid}` **document** grants a drawer entry, a Reports queue, a **Hidden** tab, and eight actions behind one `moderateAction` callable — reachable both from the queue and **in-context** from the signal app bar / comment long-press. A moderator **cannot act on their own content**. | **§16 NEW** |
+> | **Moderation & reporting** | Report any signal or comment (12 reasons, one report per user per target). A `moderators/{uid}` **document** grants a drawer entry, a Reports queue, a **Hidden** tab, and eight actions behind one `moderateAction` callable — reachable both from the queue and **in-context** from the signal app bar / the comment row's `⋮` menu (it was a long-press until §3.4c moved it). A moderator **cannot act on their own content**. | **§16 NEW** |
 > | **Test mode on the account (#72)** | `users/{uid}.testMode` gets a single writer (`AuthService.syncTestMode`) that runs at launch, on a new anonymous session, on sign-in and on the toggle — **independently of notification preferences**. An unrecorded mode used to cost the account its inbox entry as well as its push. | §12.1 |
 >
 > **And one more merge after those — the design review.** This one changes **how every
@@ -45,7 +45,7 @@
 > |---|---|---|
 > | **Dark mode is ON** | `darkTheme` + `themeMode` are wired up for the first time. Every screen, dialog, sheet and the **map tiles** now have a night appearance nobody outside this repo has seen. Previously the app rendered light regardless. | **§14.1 (rewritten)** |
 > | **M3 purple is gone** | The app was `primarySwatch: orange` + `useMaterial3: true`, which M3 **ignores** — so all 45 dialog Cancels, switches, sliders, checkboxes, both TabBars, focus rings, most spinners and the whole sign-in screen were rendering **purple on lavender**. A real `ColorScheme` replaces ~294 colour literals. | §14.1 |
-> | **Status lost its colour** | Status and urgency were both red/amber/green running in **opposite directions**. Status is now a **glyph + neutral outlined chip**; urgency keeps the traffic light. Both scales were **relabelled**: *Low / Medium / Critical* and *Waiting for help / Someone is helping*. FAQ copy moved with them. | §2.2, §3.2, §3.3, §3.3b, §9 |
+> | **Status lost its colour** | Status and urgency were both red/amber/green running in **opposite directions**. Status is now a **glyph + neutral outlined chip**; urgency keeps the traffic light. Both scales were **relabelled**: *Low / Medium / Critical* and *Waiting for help / In progress*. FAQ copy moved with them. | §2.2, §3.2, §3.3, §3.3b, §9 |
 > | **Cluster bubbles carry urgency** | Clustering is now done in Dart. A bubble is the colour of its **most urgent member** (one red signal inside makes it red), and a cluster too tight to split by zooming opens a **sheet** listing what is in it. The **map legend** explains the colours and the bubble. | §2.2 |
 > | **Signal details restructured** | Eight peer blocks became **one `SignalStateCard`** (urgency / status / responsible / tags, with an urgency rail) plus a **Manage sheet** that owns every control that changes the signal — drawn only for someone who may coordinate. Timeline is one rail row per entry. | §3.2, §3.3, §3.3b |
 > | **Users never see an exception** | 14 `catch` blocks used to print `[firebase_storage/unauthorized] …` on screen and log **nothing**. `reportAndDescribe` now shows a sentence and records the real error to Crashlytics; the ARB strings lost their `{error}` placeholders; every empty/failed screen has one shape with a **working** retry. | **§11.3 (rewritten)**, §14.3 |
@@ -53,11 +53,60 @@
 > | **Tablets** | Six screens took a 600dp content cap so a phone layout is no longer stretched across 800dp. Not a tablet *layout* — a centred column. | **§14.7 NEW** |
 > | **Four controls made live** | Filter sheet **Cancel now restores** what you opened with (it used to apply-and-keep even on a back gesture); the feedback contact button opens mail; a drawer `FutureBuilder` that was never mounted is gone; the comment composer no longer covers the last ~90px of the page. | §4.1, §8.1, §8.3, §3.2 |
 
-> ## 🚀 Deploy gates — ⚠️ NOT CLEAR. One must be done before the device pass
+> ## 🆕 Added since QA Round 11 (`v7.0.0+132`, run 2026-08-30)
 >
-> `help-a-paw-dev` is **production**. Everything below was verified for build 126 and
-> is assumed to still hold, **except the version bump**, which is new for this release.
-> The rules blocker cleared on 2026-08-18 — the `events` block is deployed again.
+> **Round 11 tested build 132 and found no blocker.** Everything in this block landed
+> *after* that run and has **never been in a QA round**. It is 77 commits, 161 files and
+> ~18k insertions — larger than the design review, and unlike the design review it is
+> mostly **new surface**, not restyled surface. Four of these shipped their backend half
+> ahead of the app and are already live in production.
+>
+> | Area | What changed | Where |
+> |---|---|---|
+> | 🔴 **The drawer is GONE** | Replaced by a **five-tab bottom bar** (Map / My signals / Watching / Inbox / Menu). `home_route_drawer.dart` is deleted; its remaining tiles are a **Menu** tab. The four screens that became tabs are now *permanent* — they used to be pushed and popped, which had been silently repairing the test-mode and account re-reads. | **§8.0, §8.1 REWRITTEN** |
+> | **Watching** | New tab, and the app's **first reader** of the `signalSubscriptions` array that has been accumulating since the inbox shipped. Following is explicit in both directions now: a Follow button on details, unfollow-with-undo on the rows. | **§8.0b, §8.0c NEW** |
+> | **My signals means reported OR held** | Two queries merged client-side; the owner half degrades to *empty* on error, so a bad index costs rows, not a screen. New `signalOwner`+`createdAt` index on **both** collections. | §3.5, §8.0 |
+> | **Public profiles** | `/user/:uid` with avatar and three stats. **Every** other-user name in the app — reporter, owner, comment author, timeline actor, @-mention — is now a link. Avatars become visible to other people for the first time (`publicProfiles.photoUrl`, host-restricted). | **§1.6b NEW**, §11.6 |
+> | **@-mentions** | Typing `@` offers the signal's participants; a mention **re-words a notification the person was already getting** rather than sending a new one. | **§3.4b NEW** |
+> | **Tag changes on the timeline** | `helpNeededTags` was the last owner-editable field that could change with nothing recording it. Now a `tags_change` event behind the same mandatory note. **Rules-first rollout** — without the rules, the tag change itself fails. | §3.4 (#80) |
+> | **Selectable text, tappable links** | All user-written text on details is selectable; URLs and phones are tappable (only `http`/`https` launched). **Comment actions moved from an undiscoverable long-press to a visible `⋮`** — which is what freed the gesture. | **§3.4c NEW** |
+> | 🔴 **Bulgarian was not being delivered** | A user whose phone was in Bulgarian saw the **English** app. Play's language splits, not the translations. Fixed by disabling the language split + shipping app-owned `values-bg`. Per-app Language pickers on both platforms; the map re-languages with no restart. | **§9 REWRITTEN** |
+> | **Map bubbles are ours** | The platform InfoWindow is gone for signals *and* clinics — one Flutter bubble with photo and needs pills, edge-clamped and flip-below, tracking the pin per frame. | §2.2 |
+> | **Permission refusals** | Three location situations that shared one sentence now get three messages and the right settings page each; a notification refusal said nothing at all. One tap can no longer raise two dialogs. **Returning from Settings finishes the toggle.** | **§7.1, §14.2 REWRITTEN** |
+> | **M-1 closed (#67)** | `isSignalCreate`/`isCommentCreate` now require `email_verified`. **Deployed 2026-09-10.** This is the clause rolled back in July — the in-place-upgrade case is the one to re-test. | §11.5 |
+> | **Anonymous sign-in fix (#79)** | Signing in from an anonymous session left the user **on the sign-in screen**, losing that session's preferences and subscriptions. | §1.4 |
+> | **Moderator revoke on delete** | Deleting a moderator's account left an **unreachable** orphan grant on the roster. Production carried one for 24 days. | §1.8 |
+> | **Deep links replace the stack** | Recorded, not fixed: a link arriving over the wizard destroys that route. The wizard keeps its draft *and* step, so re-entry resumes. **Do not re-file.** | §15.2 |
+> | Smaller | Launcher icons regenerated from the master; the update-note helper sentence wraps instead of clipping; the Follow button's first-frame replay race. | §3.3, §8.0c |
+
+> ## 🚀 Deploy gates
+>
+> `help-a-paw-dev` is **production**.
+>
+> **Status as of 2026-09-12 (updated after QA Round 11).** Round 11 verified on 2026-08-30
+> that the live ruleset was **byte-identical** to the branch and that all 20 functions were
+> deployed from it on `nodejs24`, with nothing deleted. **Four further rules deploys and
+> two functions deploys have landed since**, from four different branches — so re-read and
+> diff the live ruleset before the device pass, do not assume Round 11's result still holds:
+>
+> - [x] ✅ **Version bumped — `pubspec.yaml` reads `7.0.0+133`.**
+> - [x] ✅ **M-1 (#67) deployed 2026-09-10** — `isVerifiedCaller()` on signal and comment
+>       creation. Device-verified including the July rollback scenario. Merged into `dev`,
+>       so dev's rules match production byte-for-byte.
+> - [x] ✅ **Tag-change events (#80) rules deployed 2026-09-11** and Android-verified.
+> - [x] ✅ **`publicProfiles.photoUrl` rules deployed** with the public-profile merge.
+> - [x] ✅ **Mention functions deployed 2026-09-10**, ahead of the app — safe, because a
+>       comment with no `mentions` takes exactly the old path.
+> - [x] ✅ **`signalOwner` + `createdAt` indexes deployed 2026-09-11** on `signals` **and**
+>       `signals_test`, Android-verified. These are what My Signals' new owner half needs;
+>       a missing one shows as *missing rows*, not as an error (§8.0).
+> - [ ] 🔴 **#68 step 2 — `backfill_signals_posted.js` has STILL not run** (see the blocker
+>       list below). Unchanged since Round 8.
+> - [ ] **Re-read the live ruleset and diff it against `dev` on the day you ship.** Rules
+>       deploys replace the whole ruleset, and this arrangement silently reverted the
+>       `events` block once already.
+>
+> **Historical gate detail, retained for context:**
 >
 > - [x] ✅ **Firestore rules: the `events` block is live again** — re-checked against the
 >       deployed ruleset **2026-08-18**. It was deployed 2026-08-15 and silently reverted
@@ -125,8 +174,37 @@
 
 > ## ⚠️ Pre-Release Blockers & Open Items (resolve before shipping)
 >
-> - [ ] 🔴 **The `events` rules revert (above) is the one true blocker.** Nothing in §3.3, §3.3b or §3.4 can pass without it.
-> - [ ] **Version bump outstanding** (`6.0.2+129` → next).
+> **Updated 2026-09-12 after QA Round 11.** Three items on this list have since closed;
+> they are struck through rather than deleted so nobody re-files them.
+>
+> - [x] ~~🔴 **The `events` rules revert is the one true blocker.**~~ **CLEARED.** Round 11
+>       fetched and diffed the live ruleset on 2026-08-30: byte-identical, the revert has not
+>       recurred, and §3.3/§3.3b/§3.4 were then exercised end-to-end on-device.
+> - [x] ~~**Version bump outstanding.**~~ **DONE** — `7.0.0+133`.
+> - [x] ~~**M-1 is only half done.**~~ **CLOSED (#67), deployed 2026-09-10** and
+>       device-verified including the rollback scenario. What is left is the *re-test*
+>       (§11.5), not the work.
+>
+> **New since Round 11:**
+>
+> - [ ] 🔴 **Nothing in the "Added since QA Round 11" table above has ever been in a QA
+>       round.** It is larger than the design review and mostly *new surface*. The bottom
+>       bar in particular changes the shape of every navigation path in this checklist.
+> - [ ] 🔴 **Four screens became permanent tabs and stopped being disposed.** Being pushed
+>       and popped had been silently repairing the test-mode and account re-reads. The
+>       seven-tap gesture and a sign-in/sign-out must re-point My Signals (both sub-tabs),
+>       Watching, the inbox stream and the unread badge **while they are open** (§8.0).
+> - [ ] 🔴 **The Bulgarian delivery fix can only be tested from Play**, on a device that
+>       installed while its system language was English. `flutter run` and a universal APK
+>       both carry every language and cannot reproduce it either way (§9).
+> - [ ] **A deep link replaces the navigation stack rather than pushing onto it**, on both
+>       platforms. Recorded, deliberate for now, and mitigated by the wizard keeping its
+>       draft *and* step. **Do not re-file it** (§15.2).
+> - [ ] **`test/signal_navigator_branch_test.dart`'s wizard-preservation case asserts a
+>       guarantee the app does not deliver on Android.** A green test there is not evidence.
+> - [ ] **Mixed-version testing changed shape**: 133 onwards has **no language splits**, so a
+>       132-or-earlier archive carries a `split_config.bg.apk` that later builds do not — and
+>       that difference is itself one of this release's fixes (§9, §17.4).
 > - [ ] **The gate reaches every existing user, not just new installs.** §6.8 is the highest-traffic new surface in this release: it stands between the whole installed base and the map on first launch after upgrading. Test it hostile — offline, denied writes, mid-anonymous-sign-in.
 > - [ ] **Legacy signals are a live path, not a migration.** Builds in the field keep writing `signalType` with no tags for months. §3.8 covers what they must look like; one known gap is recorded there.
 > - [ ] **iOS background relaunch is UNVERIFIED.** The whole premise of §7.2 — iOS waking a *terminated* app on a significant location change — has never been observed on a device. It cannot be tested on a debug build. See §7.2 and `BACKGROUND_LOCATION_PENDING_TESTS.md` §1.
@@ -138,7 +216,7 @@
 > - [ ] **Contribution stats under-report, permanently, for accounts that already deleted signals.** The backfill counts the live collection, so anything erased under the old hard-delete path is not there to count. Not fixable; do not file it again (§1.6).
 > - [ ] 🔴 **Dark mode is on for the first time and has never had a full device QA pass.** `themeMode` follows the OS, so on the day this ships every user who has had their phone in dark mode all along gets a version of this app nobody has looked at. The map style was verified on the Android 14 tablet and `test/theme_contrast_test.dart` covers the surface/ink relationships, but a contrast test cannot see a layout that only reads wrong. **Walk the whole checklist once with the OS dark.** See §14.1.
 > - [ ] **White on the brand orange is 2.16:1 and is staying that way.** Every app bar title and filled button. It predates this work, it is a brand decision, and `theme_contrast_test` asserts it at its *measured* value rather than skipping it — so a failure there means somebody changed the orange, not that the test is stale. Do not file it again; the dark theme puts black on the same orange for 9.74:1.
-> - [ ] **The two relabelled scales are user-visible copy changes, not code changes.** *Needs help → Waiting for help*, *In progress → Someone is helping*, *Green/Amber/Red → Low/Medium/Critical*. The FAQ answers and the map legend carry the same words. Anyone testing from memory of `129` will read the new wording as a regression; confirm the copy is what the owner wants **before** the build goes out, because changing it afterwards is another release.
+> - [ ] **The two relabelled scales are user-visible copy changes, not code changes.** *Needs help → Waiting for help*, *Green/Amber/Red → Low/Medium/Critical*. Status 1 stays **In progress** ("В процес") — it was briefly "Someone is helping", reverted because that read as "no more help needed". The FAQ answers and the map legend carry the same words. Anyone testing from memory of `129` will read the new wording as a regression; confirm the copy is what the owner wants **before** the build goes out, because changing it afterwards is another release.
 > - [ ] **Debug assetlinks fingerprint is still published.** `hosting/public/.well-known/assetlinks.json` lists a machine-local debug keystore alongside the release one. Decide whether to strip it before the release deploy (§15.1).
 
 ## 1. Authentication & Account Management
@@ -186,6 +264,18 @@
 - [ ] Live location is **not** transferred (it lives in `userLocations/{uid}` and self-heals on the next GPS update); the anonymous account's `userLocations` doc is cleaned up
 - [ ] In-app inbox entries written while anonymous stay with the same UID after an in-place link (§6.6)
 
+**🔴 Signing in from an anonymous session — fixed, and the fix is invisible when it works (#79, NEW)**
+> The merge paths opened by reading `users/{anonymousUid}` — but by then `request.auth.uid`
+> is the **new** account, so the rules denied it, the `permission-denied` escaped a
+> `try`/`finally` with no `catch`, and the navigation below it never ran. The user was
+> left **sitting on the sign-in screen** having apparently signed in, and the anonymous
+> session's notification preferences and subscriptions were lost with it.
+- [ ] 🔴 From a **fresh anonymous session**, set a notification preference and follow a signal, then sign in to an **existing** account. You land on the map, not on the sign-in screen.
+- [ ] Do the same into a **brand-new** account (the transfer path, not the merge path) — same result
+- [ ] The preferences and subscriptions from the anonymous session are present on the account afterwards
+- [ ] No `permission-denied` in the log during either sign-in
+- [ ] The abandoned anonymous `users`/`userLocations` documents are gone, or left for `cleanupAnonymousUsers` (best-effort in both paths now — a leftover is not a blocker, a failed sign-in is)
+
 ### 1.5 Profile Completion
 - [ ] After first sign-in, user sees Profile Completion screen
 - [ ] Full Name field is required (min 2 characters)
@@ -232,15 +322,49 @@
 - [ ] **Name field capped at 100 chars, single-line** (same as §1.5)
 - [ ] **Avatar upload actually succeeds** — this was previously denied by default-deny in `storage.rules` for *every* user, with an opaque error. Upload from camera **and** from gallery, on a fresh account and an existing one.
 - [ ] Photo resized to 512x512 at 80% quality, uploaded with an explicit `image/jpeg` content type, stored at `profile_photos/{uid}.jpg`
-- [ ] Uploaded avatar renders immediately, survives an app restart, and appears in the drawer header
+- [ ] Uploaded avatar renders immediately, survives an app restart, and appears in the Menu tab's header — **and on other people's devices** (§1.6b)
 - [ ] Re-uploading replaces the previous avatar (same path)
 - [ ] Unauthenticated user sees "Please sign in" message with Sign In button
 
+### 1.6b Public profile — `/user/:uid` (NEW — master spec §3.5.1)
+> Names of other volunteers were everywhere in the app and **inert**: the reporter, the
+> owner, every comment author, every timeline actor. Every one of them is now a link.
+
+**Reaching it**
+- [ ] Tapping the **reporter's** name on signal details opens their profile
+- [ ] So does the **signal owner's** name, a **comment author's** name, and a **timeline actor's** name — all four go through one funnel, so a miss on any one of them is a real finding
+- [ ] An **@-mention** in a comment is tappable through to the same profile (§3.4b), and is **underlined** in the rendered comment
+- [ ] A mention highlighted in the **composer** (a draft you are still typing) is **not** underlined and opens nothing — underline is this screen's "this opens something"
+- [ ] 🔴 **Tapping your own name goes to the editable profile (§1.6), not to `/user/:yourUid`.** The redirect is in the router, so it must behave the same however you got there — including from a pasted URL.
+- [ ] Inside a **moderation Hidden-tab row**, tapping the wide part of the row opens the **restore dialog**, not a profile — only the name run itself is the link there (a moderator reaching for the row was getting their own profile)
+
+**What it shows**
+- [ ] Avatar, display name, and three numbers: **signals reported**, **comments posted**, **signals held right now**
+- [ ] The three stat cards **render at all** — they share the width equally and must not be missing. (They painted *nothing* on a device, with the exception only in the log; this is a real past defect, and it is invisible unless you look for the cards.)
+- [ ] The three cards fit a **411dp phone in Bulgarian** without overflow
+- [ ] "Signals held right now" **falls to zero** when those signals resolve — it is a live query, not a counter
+- [ ] "Signals reported" matches the number on the account's own profile (§1.6) — the two screens share one service precisely so they cannot disagree
+- [ ] **"Signals resolved" is deliberately absent.** Do not file it.
+- [ ] A deleted account's profile reads **"Deleted user"** rather than a blank or a raw uid
+- [ ] An account with **no `publicProfiles` document** (legacy / older Google users) degrades to the known "Unknown" fallback rather than an error — see the standing `publicProfiles` gap
+
+**Avatars are visible to other people for the first time (NEW `publicProfiles.photoUrl`)**
+> Firebase Auth's `photoURL` is readable only by its owner, so an uploaded avatar existed
+> that nobody else could see.
+- [ ] Upload an avatar on account A (§1.6); on account B, A's avatar appears **on the signal, on the comment rows and on the profile** — not a person glyph
+- [ ] 🔴 **Upload an avatar and check `publicProfiles/{uid}.photoUrl` in Firestore immediately.** It must be there. (`updatePhotoURL` does not refresh the in-memory `User`, so the mirror used to publish "this account has no avatar" **and cache that verdict**, which made the bug permanent per device.)
+- [ ] **Remove** the avatar — the public copy goes too, on every other viewer's screen
+- [ ] A **Google** account's provider photo is mirrored on sign-in and at launch (hosts `lh3`–`lh6` all accepted; older accounts carry the earlier ones)
+- [ ] The client **cannot** write an arbitrary URL: attempt a client write of `publicProfiles/{uid}.photoUrl` pointing at `https://example.com/x.jpg` and confirm `PERMISSION_DENIED` (§11.6). This value is handed to an image loader on every other viewer's device.
+- [ ] The client still cannot write `signalsPosted` (widening the photo allow-list is the change that could have let it through)
+- [ ] An avatar URL that fails to load renders the **same** fallback everywhere — not a person icon on one screen and a blank grey disc on another
+- [ ] `backfill_public_photo_urls.js` dry-run, then `--apply`, fills in existing accounts; it **skips anonymous and tombstoned accounts** and re-checks the allowed hosts (the Admin SDK bypasses the rule)
+
 ### 1.7 Sign Out
-- [ ] Sign Out button visible in drawer for authenticated users
+- [ ] Sign Out button visible in the **Menu tab** for authenticated users (§8.1)
 - [ ] Sign out removes device FCM token from Firestore
 - [ ] User returns to home screen as anonymous after sign-out
-- [ ] Drawer updates to show "Sign In" instead of profile info
+- [ ] The Menu tab updates to show "Sign In" instead of profile info, **without a restart**
 
 ### 1.8 Account Deletion
 - [ ] "Delete Account" action present in Profile (Danger Zone, red), authenticated users only
@@ -253,6 +377,10 @@
 - [ ] Comments by the user resolve to "Deleted user"
 - [ ] `users/{uid}/notifications` subcollection removed; profile photo deleted from Storage
 - [ ] `userCounters/{uid}` (the unread/badge counter) is removed
+- [ ] 🔴 **`moderators/{uid}` is deleted when a MODERATOR's account is deleted (NEW).** It used to be left behind, putting a grant on the roster with no account attached — and the orphan was **unreachable**, because `grant_moderator.js` resolves its subject through Firebase Auth, so the one tool that manages the roster could not remove it. Production carried such an orphan from 2026-08-17 to 2026-09-10. Grant the role to a throwaway account, delete the account, and confirm the document is gone.
+- [ ] The delete happens **before** the Auth user is deleted (step 2c, not after step 5) — otherwise the subject no longer exists to be resolved
+- [ ] `scripts/grant_moderator.js --revoke` can now remove a grant whose **Auth account is already gone** (the Auth lookup is skipped on revoke)
+- [ ] **`moderationActions` is deliberately NOT swept.** Every action is audit-logged with the actor's uid, and that history is a different fact from "who holds the role". Its survival is correct; do not file it.
 - [ ] **`removedSignals` for that uid are PURGED outright, not anonymized** (NEW) — a removal holds a whole copy of the signal under `data`, contact phone included, so anonymizing it would leave a fourth place a phone number survives. Remove a signal, then delete the account, then check the collection: nothing for that uid.
 - [ ] Any `takeoverRequests` the account filed are cleaned up, and a signal it held is left in a state someone else can take on
 - [ ] `publicProfiles/{uid}` is tombstoned so the name resolves to "Deleted user" everywhere, and the tombstone **cannot be cleared by a client** (rules restrict client writes to `name`)
@@ -456,6 +584,9 @@
 - [ ] **Navigate button**: opens external navigation app (geo: URI or Google Maps fallback)
 - [ ] **Call button**: initiates phone call to signal's contact phone
 - [ ] **Share button**: shares the signal's **headline need** ("Rescue needed"), description, a `https://link.helpapaw.org/signal/<id>` link and the location via the native share sheet
+- [ ] **Follow / Following button** (NEW — §8.0c). It reads **Following** on the very first frame for a signal you already follow; a "Follow" that corrects itself a moment later is a real defect, not a render delay
+- [ ] Unfollowing here removes the signal from the Watching tab and stops its notifications
+- [ ] The reporter's name, the owner's name, every comment author and every timeline actor are **links to a profile** (§1.6b)
 - [ ] The **signal link comes before** the Google Maps link in the shared text — link-preview scrapers unfurl the *first* URL, and putting maps first made shares preview as a map pin instead of the animal's photo (§15.3)
 - [ ] Sharing works for a signal with no coordinates (the location line is simply omitted)
 - [ ] The shared link round-trips: sending it to another device opens that signal (§15.2)
@@ -473,8 +604,8 @@
 > you see only `errorUpdatingStatus`. A whole-section failure here means the rules
 > reverted again; check the live ruleset before filing anything.
 - [ ] Status dropdown lives **in the Manage sheet** (§3.2), not on the page — reachable by any authenticated user who taps Manage
-- [ ] 3 options, each with its **glyph**: Waiting for help (hourglass), Someone is helping (sync), Resolved (check) — **no red/amber/green icons any more** (§2.2)
-- [ ] ⚠️ **The labels changed**: "Needs help" → **Waiting for help**, "In progress" → **Someone is helping**. Verify in both languages, and in the FAQ answer, the map legend and the filter sheet, which all carry the same words.
+- [ ] 3 options, each with its **glyph**: Waiting for help (hourglass), In progress (sync), Resolved (check) — **no red/amber/green icons any more** (§2.2)
+- [ ] ⚠️ **The labels changed**: "Needs help" → **Waiting for help**. Status 1 is **In progress** / **В процес** (never "Someone is helping" — that wording was reverted). Verify in both languages, and in the FAQ answer, the map legend and the filter sheet, which all carry the same words.
 - [ ] **Choosing a status opens the mandatory update-note dialog first** — nothing is written before it is confirmed
 - [ ] The dialog shows **the same badge the resulting history row will show** ("Changing to: Resolved")
 - [ ] **Confirm stays disabled while the note is empty or whitespace-only** (it is trimmed)
@@ -536,9 +667,64 @@
 - [ ] Leading/trailing whitespace is trimmed before the write
 - [ ] Posting a comment does **not** count as a status change on the profile screen's statistics (mixing the two was one reason events moved out of `comments`)
 
+**Tag changes on the timeline (NEW — #80)**
+> What a signal needs was the only owner-editable coordination field that could change
+> with **nothing recording it** — no actor, no note, no row. Since array order is priority
+> (§3.1c), a **reordering counts as a change**.
+- [ ] Changing the help tags from the **manage sheet** asks for the same mandatory update note a status change does, and writes a `tags_change` row
+- [ ] Changing them from the **edit screen** (§3.6) produces the **same** row — the two writers must not differ
+- [ ] The row names **what changed**, old tags → new tags, with the actor and the note
+- [ ] **Reordering the same three tags is a change** and writes a row
+- [ ] A confirmation that changed **nothing** writes **nothing** — no event, no note prompt
+- [ ] One save on the edit screen that moves **urgency and tags together** asks for **one** note and writes **two** events under it
+- [ ] The field write and the event land in **one batch**: neither appears without the other. 🔴 **If the rules are not deployed, the tag change itself stops working** — this is the rollout order (rules first, then the app), and a `permission-denied` here means the rules half did not go out.
+- [ ] A signal created **before** the tag vocabulary (no tags at all) can still have its first tag change recorded — `oldTags` is allowed to be empty, `newTags` is 1–3
+- [ ] The opening **"reported this signal"** row names the needs originally reported
+- [ ] **No notification is sent for a tag change** — it is purely additive, and a push here would be a finding
+- [ ] The row renders in **Bulgarian** without overflow at 411dp
+
+### 3.4b @-mentions in comments (NEW)
+> Typing `@` offers the people who have **already interacted with this signal** —
+> reporter, current owner, every past owner, every commenter. The roster is derived from
+> what the screen already holds; there is no stored participant list, and `publicProfiles`
+> denies `list` on purpose, so **nothing can search the user base by name**.
+- [ ] Typing `@` in the comment composer opens a suggestion list
+- [ ] The list contains **exactly** the signal's participants — reporter, current owner, past owners, commenters — and **excludes you**
+- [ ] Typing more characters narrows it (`@vol` → one row)
+- [ ] Rows carry up to **two initials**, whitespace-separated, with dots as a fallback — an email-local-part name must not collapse every row to one letter
+- [ ] Picking one inserts `@Name` and **highlights it in the composer**
+- [ ] Editing the inserted text so it no longer reads as it was inserted **stops being a mention** — check the stored document has no orphaned offset
+- [ ] The posted comment renders the mention **styled and underlined**, and tapping it opens that person's profile (§1.6b)
+- [ ] The stored document carries a `mentions` array of `{uid, start, end}` **beside** the text, and the text itself is exactly what the author typed (no inline markup)
+- [ ] 🔴 **A mention re-words a notification rather than sending one.** The mentioned person gets a *differently worded* push and inbox row (`type: mention`, naming who mentioned them) **only if they were already subscribed**. A participant who unsubscribed **cannot** be reached by naming them — that is the accepted limit, not a bug.
+- [ ] Mentioning someone already subscribed produces **one** push, not two, and **one** inbox document sharing the `cmt_{id}` id with the plain-comment path
+- [ ] A plain comment with no mentions takes exactly the old path (function logs `N subscriber(s), 0 mentioned`)
+- [ ] The mention **cap** is enforced in three places — the composer, the rules and the function. Try to exceed it and confirm the client stops you and a hand-written over-cap write is denied.
+- [ ] The suggestion list **fits a short viewport with the keyboard up** — it caps against the window height. Check on the 411dp phone at font scale 1.3.
+- [ ] Already-released builds render the comment as plain `@Ivan Petrov` — nothing is backfilled, so this must stay readable on an old build (check on the 129/131 device)
+
+### 3.4c Selectable text and tappable links (NEW)
+> Every piece of user-written text on the details screen was a plain `Text`: nothing could
+> be copied, and a URL or phone number somebody pasted was dead characters a volunteer had
+> to retype by hand — on the one screen whose job is passing information between strangers.
+- [ ] Title, description, comments, status and ownership notes and a takeover request's note are all **selectable**
+- [ ] 🔴 **"Select all" selects only what somebody typed** — not the labels, headings, chips or card furniture around it. A selection that swallows the page's furniture is the bug this shape exists to avoid.
+- [ ] A URL in a description or comment is **coloured and underlined**, and tapping it opens the browser
+- [ ] A bare domain (`www.helpapaw.org`) is recognised too
+- [ ] A phone number (`0888 123 456`) opens the dialer with the separators stripped
+- [ ] 🔴 **Only `http`/`https` are ever launched.** `intent://evil.example/x` and `javascript://evil.example/y` must render as **plain text** — not as links, and not with their host mined out into a link
+- [ ] `mill.She`, `version 1.2.3` and a bare `2026` are **not** links
+- [ ] Links wrap across lines inside a comment row with the timeline rail intact
+- [ ] In **dark mode** the link ink is legible (brand orange on black) and still underlined
+- [ ] 🔴 **Comment actions moved from long-press to a visible `⋮`.** The long-press was the only route to reporting a comment, advertised nowhere — and Flutter's selection claims that gesture, so leaving it there would have silently killed reporting.
+- [ ] The `⋮` rides on the existing name-and-date line and appears **only on rows that have something to offer** — never on a status or ownership event row, never on your own comment
+- [ ] Tapping it opens the report dialog (§16.2), and the `canReport` gate behaves for a real signed-in session
+- [ ] Long-pressing a comment now **selects text**, and does not open the report dialog
+
 ### 3.5 My Signals Page — now TWO tabs (**Active** / **Removed**)
-- [ ] Lists all signals created by current user
-- [ ] Ordered by creation date (newest first)
+- [ ] 🔴 **"My signals" now means reported OR held** (CHANGED) — a signal somebody handed to you appears here even though you did not report it. Two queries merged client-side; the owner half **degrades to empty on error**, so a still-building index costs missing rows rather than a dead screen (check the log if rows look short).
+- [ ] Ordered by creation date (newest first), with the two halves interleaved correctly and **no duplicate** for a signal you both reported and hold
+- [ ] It is a **tab now, not a pushed screen** (§8.0) — the test-mode gesture must re-point **both** sub-tabs while it is open
 - [ ] Card-based layout with **the primary help tag's icon** (no signal-type icon any more)
 - [ ] 🔴 **A row carries at most one traffic light.** Urgency is a **filled** coloured chip; status is a **neutral outlined** chip with a glyph. Two coloured chips side by side — which is what `129` showed, running in opposite directions — is the bug this replaced.
 - [ ] 🔴 **In Bulgarian, the urgency chip fits the row at 411dp.** It used to render the whole sentence ("Оранжево — нужна е помощ скоро", 403px on a 411dp phone) and overflowed **every** row by 161px. The label ellipsises if it ever cannot fit.
@@ -752,7 +938,7 @@
 
 ### 4.3 Status Filter
 - [ ] Toggle: **Waiting for help** (status 0)
-- [ ] Toggle: **Someone is helping** (status 1)
+- [ ] Toggle: **In progress** (status 1)
 - [ ] Toggle: Resolved (status 2)
 - [ ] All enabled by default
 - [ ] Status rows carry **glyphs, not colours** — and the wording matches §3.3 exactly
@@ -909,7 +1095,7 @@
 > **iOS badge sends a real count** (`badge: N` from `userCounters`). ⚠️ Accepted consequence: iOS badges are sticky, so on builds predating this release the number climbs and never clears. Expect that when testing against an older build.
 
 **Entry point & list**
-- [ ] Drawer shows a "Notifications" item (bell icon, between "My Signals" and "Notification Settings") — visible to **anonymous users too**
+- [ ] The inbox is the **Inbox tab** on the bottom bar (§8.0), not a drawer item — visible to **anonymous users too**
 - [ ] The icon carries an unread count badge that clears as items are read
 - [ ] List shows newest-first, max 50, with icon/color per type
 - [ ] Unread items are bold with an orange dot; tapping marks read and deep-links to the signal
@@ -1033,6 +1219,23 @@
 - [ ] **Startup NEVER prompts for location permission.** With tracking enabled but permission revoked in OS Settings, a cold launch logs `Location tracking is enabled but permission is …; not restoring` and shows **no dialog**.
 - [ ] Denying location still leaves the map usable (falls back to Sofia — §2.1)
 
+**🔴 Three refusals, three different answers (REWRITTEN)**
+> One sentence — *"Location permission is required for this feature"* — used to answer all
+> three situations, and a notification refusal was answered with **nothing at all**: the
+> switch just flicked back. Each of these needs a separate device run; they are not
+> variations of one check.
+- [ ] **Refused once** (deny the dialog, OS will ask again): the message says tapping the switch again is the way back, and tapping it **does** re-raise the OS dialog
+- [ ] **Refused permanently** ("Don't allow" twice on Android, or "Never" on iOS): the message says only the app's settings page can grant it, and offers an **Open settings** action that lands on the app's page. 🔴 **This state was unreachable on Android** — `checkPermission` can never report it there — so a permanently-blocked user used to be told to try again on a dialog the OS will never show. Verify the *permanent* message actually appears.
+- [ ] **Location off device-wide** (turn Location off in quick settings, with the app's permission intact): a **different** message, and on **Android only** a shortcut to the **device** location page — not the app page
+- [ ] The device-location shortcut is **absent on iOS** by design (`geolocator_apple` routes it to the same page as the app settings, which has no Location Services switch). Its presence on iOS is a finding.
+- [ ] **Notification refusal** now says something, with a settings shortcut that works for either kind of refusal (FCM cannot tell them apart)
+- [ ] 🔴 **One tap raises exactly ONE permission dialog.** Tap the location toggle and count: two identical dialogs is the old defect, and on Android the *second* refusal is what blocks the permission for good — so this check protects the test device as well as the user.
+- [ ] 🔴 **Coming back from Settings finishes the job.** Tap the toggle → refuse → Open settings → grant it there → return to the app: the toggle you tapped **turns itself on** and the preference is stored. No second tap.
+- [ ] Returning from Settings having **still** refused leaves the toggle off and the marker set — going out and granting on the *next* attempt still works
+- [ ] The resume path **never prompts** (no tap is behind it)
+- [ ] 🔴 **The onboarding sheet stores what actually started, not what was granted.** Enable notifications+location from onboarding with **location off device-wide**: `locationTrackingEnabled` must **not** be written `true` for an account whose position is never written — the fan-out drops such an account while the preference reads on.
+- [ ] A platform-call exception on either toggle **says so** rather than being swallowed
+
 ### 7.2 Background Location Tracking (native, NEW)
 > `geolocator` cannot do background significant-change on either platform, so the background path is native and runs *alongside* the foreground stream. **iOS**: `CLLocationManager.startMonitoringSignificantLocationChanges`, and the Firestore write happens in **Dart** (a native `Firestore.firestore()` call aborts the app at launch). **Android**: `FusedLocationProviderClient` → `PendingIntent` → `LocationUpdateReceiver`, which writes Firestore **natively** (no Flutter engine in that process) and deliberately runs with **no foreground service**.
 
@@ -1113,14 +1316,49 @@
 
 ---
 
-## 8. Navigation Drawer & Info Screens
+## 8. Bottom Bar, Menu & Info Screens (REWRITTEN — the drawer is gone)
 
-### 8.1 Drawer Menu Items
-> Actual order in `home_route_drawer.dart`: header logo → Profile/Sign In → **Sign Out (immediately under Profile, authenticated only)** → My Signals → **Notifications** → Notification Settings → FAQs → Feedback → Privacy Policy → Our Site → About → Share App.
-- [ ] **Profile** (authenticated) / **Sign In** (anonymous)
-- [ ] **Sign Out** (authenticated only) — appears directly beneath the Profile tile at the top, not at the bottom
-- [ ] **My Signals** — user's created signals
-- [ ] **Notifications** — in-app inbox, with an unread count badge on the icon (§6.6)
+> **`home_route_drawer.dart` is deleted.** Every destination but the map used to live
+> behind a hamburger on the map's app bar, which made the map the only screen most
+> people ever found. The drawer is replaced by a five-tab bottom bar, and its remaining
+> tiles became a **Menu** tab. Anyone testing from memory of `132` will reach for a
+> hamburger that no longer exists.
+
+### 8.0 The five-tab bottom bar (NEW — `home_shell.dart`, `home_bottom_bar.dart`)
+- [ ] The bar shows, in order: **Map / My signals / Watching / Inbox / Menu**
+- [ ] The **Inbox** tab carries the unread-count badge that used to sit on a drawer icon (§6.6), and its accessibility label reads the count
+- [ ] Every tab is reachable and returns to where you left it — the shell is a `StatefulShellRoute.indexedStack`, so **switching tabs does not rebuild the map**. Pan and zoom the map, visit three tabs, come back: same camera, no re-load, no flash of the Sofia fallback.
+- [ ] **The bar hides entirely while a signal is being placed** (the location step of the wizard, and the map's placement mode)
+- [ ] Every non-tab screen (signal details, the wizard, profile, settings, FAQ…) **renders over the bar**, not inside it
+- [ ] The map's own chrome is unmoved: the filter/legend/locate controls, the centre FAB and Google's own controls all sit where they did, and a bubble still lands on its pin (`extendBody` is false, which is the only reason none of those needed new coordinates)
+- [ ] 🔴 **The seven-tap test-mode gesture re-points every tab.** In test mode, My Signals (**both** sub-tabs), Watching, the inbox stream and the unread badge must all switch collections — these four screens used to be *pushed and popped*, so each re-read the collection on open; as permanent tabs they outlive the gesture. Toggle test mode with the tabs already visited and confirm all four change, and the badge clears.
+- [ ] Signing in or out likewise re-points the badge and the moderator stream without a restart
+- [ ] 🔴 **A notification tap still lands on a focused pin, and one back press returns to the map.** `SignalNavigator` moves the branch underneath to the map before pushing, so backing out of a notification does not strand you on whatever tab you happened to be on.
+- [ ] **The same link fired twice pushes one page**, and a single back returns to a focused map (the re-tap dedupe; verified on both platforms 2026-09-11/12)
+- [ ] **Inbox rows push directly and return you to the inbox** — deliberately, not to the map
+- [ ] Bar labels are **abbreviated in Bulgarian** with the full names as tooltips and screen titles; the bar clamps its own text scaling to 1.2. Check at font scale 1.0, 1.3 and 2.0 on a 411dp `bg` device: five labels, none clipped, none wrapped to two lines.
+
+### 8.0b Watching tab (NEW — `watching_page.dart`, `watching_service.dart`)
+> The first screen in the app to read `signalSubscriptions`, which has been accumulating silently since the inbox shipped.
+- [ ] Lists the signals you follow, **newest-followed first**
+- [ ] **Your own signals are excluded** (compared on reporter *and* signal owner)
+- [ ] Commenting on a signal subscribes you, and it appears here
+- [ ] Each row has an **unfollow with undo**; undo restores it
+- [ ] The list pages — 60 per page, ids fetched in chunks of 30 — and **Load More** appears only when there is genuinely more. A window that is entirely your own signals must page on by itself rather than making you tap Load More once per empty page.
+- [ ] A followed signal that has since been removed or hidden simply **drops out**, rather than rendering a broken row
+- [ ] In **test mode** the tab shows only `signals_test` subscriptions, and only prod ones outside it
+- [ ] Empty state renders when you follow nothing
+
+### 8.0c Following is explicit now (NEW)
+- [ ] Signal details carries a **Follow / Following** button (§3.2)
+- [ ] It reads **Following** on entry for a signal you already follow — do not accept a "Follow" that corrects itself a moment later; that was a real replay-race defect fixed on 2026-09-12, and it is only visible on the *first* frame
+- [ ] Unfollowing from the button removes the signal from Watching, and stops its notifications
+- [ ] Commenting re-subscribes you — this is intended, but it must now be visible in the button's state rather than silent
+
+### 8.1 Menu tab (`menu_page.dart` — what the drawer used to hold)
+> Order: header → Sign In / Profile (with the account's name or email) → **Sign Out** (authenticated only) → **Moderation** (moderators only) → Notification Settings → FAQs → Feedback → Privacy Policy → Our Site → About → Share App.
+- [ ] **Profile** (authenticated, showing the display name or email) / **Sign In** (anonymous)
+- [ ] **Sign Out** (authenticated only) — directly beneath Profile
 - [ ] **Notification Settings** — full notification configuration
 - [ ] **FAQs** — 5 sections, 17 questions with answers
 - [ ] **Feedback** — type dropdown, message, optional email, optional device info
@@ -1128,16 +1366,13 @@
 - [ ] **Our Site** — opens website (shows a launch status message)
 - [ ] **About** — version, build, logo, description, links (Website, Facebook, GitHub), Open Source Licenses
 - [ ] **Share App** — shares iOS App Store + Android Play Store links + website
-- [ ] **Moderation** (NEW) — a **Reports** entry appears in the drawer **only** for an account holding a `moderators/{uid}` document (§16)
-- [ ] **Granting or revoking the role takes effect without a restart.** The entry is fed by a live stream, not a token claim: write the `moderators/{uid}` document while the app is open and the entry appears; delete it and the entry disappears. (This is exactly why the role is a document — a custom claim would leave a revoked moderator with every power until their ID token expired, up to an hour.)
-- [ ] **The drawer must be opened at least once for this to be observable** — a closed drawer does not build its child, so a role change while it has never been opened is not a bug
+- [ ] **My Signals and Notifications are NOT here** — they are tabs now. A duplicate entry is a finding.
+- [ ] **Moderation** — a **Reports** entry appears **only** for an account holding a `moderators/{uid}` document (§16)
+- [ ] **Granting or revoking the role takes effect without a restart.** The entry is fed by a live stream, not a token claim: write the `moderators/{uid}` document while the app is open and the entry appears; delete it and it disappears. (This is why the role is a document — a custom claim would leave a revoked moderator with every power until their ID token expired, up to an hour.)
+- [ ] **The old "the drawer must be opened once" caveat is gone** — the Menu tab is a real route, so a role change is observable as soon as you open the tab. Do not re-file the drawer-child-not-built behaviour.
 - [ ] For a non-moderator the entry is absent, and navigating to `/moderation` directly shows "You do not have moderator access." rather than a queue
-
-**Drawer changes this release**
-- [ ] **No tile is drawn as "selected".** This drawer pushes routes *on top of itself*, so there is no current tile to mark; a persistent highlight pointing at a screen you have left is the bug that was removed.
-- [ ] **Notifications and Notification Settings use related icons** (they used to be `notifications_active` and `notifications`, which read as two unrelated features one above the other)
-- [ ] 🔴 **A failed Sign Out now tells the user.** Force a failure (airplane mode mid-sign-out) — you must get an error, not silence. It used to be a `debugPrint`, leaving the user looking at an account they believed they had left.
-- [ ] No stale status widget under the header (a `FutureBuilder` was constructed and never mounted, so it could never render — it and its field are gone)
+- [ ] 🔴 **A failed Sign Out tells the user.** Force a failure (airplane mode mid-sign-out) — you must get an error, not silence.
+- [ ] On a **tablet** the menu is a centred ~600dp column
 
 ### 8.2 About Screen
 - [ ] Shows app version and build number (from `package_info_plus`)
@@ -1177,6 +1412,48 @@
 
 ## 9. Localization
 
+> ## 🔴 Language **delivery** — the thing that was actually broken
+>
+> A user whose phone was in Bulgarian saw the app in **English**, and nothing was wrong
+> with the translations. Play splits an app bundle by language and installs only the
+> splits matching the device's locales **at install time**; it cannot see Dart-side ARBs,
+> so it decided from Android resources, of which the app shipped none in Bulgarian.
+> Anyone who installed while their phone was in English never got `split_config.bg.apk`.
+> **Map labels are not evidence of app locale** — they come from the Maps SDK, not the
+> ARBs, and they were Bulgarian throughout the bug.
+>
+> - [ ] 🔴 **Install the build on a phone whose system language is English, then switch
+>       the system language to Bulgarian.** The app must be fully Bulgarian on the next
+>       launch. This is the exact reported failure and the only way to see it.
+> - [ ] 🔴 **Install from Play (not `flutter run`, not a universal APK).** The bug lives in
+>       Play's split delivery; a locally built APK carries every language and cannot
+>       reproduce it either way.
+> - [ ] The delivered split set has **no `split_config.bg.apk` and no
+>       `split_config.en.apk`** — `bundle { language { enableSplit = false } }` folds them
+>       into the base. `adb shell pm path org.helpapaw.helpapaw` lists what is installed.
+>       ABI and density splits must still be there.
+> - [ ] An **upgrade** from 132 (which had the language splits) to this build is fully
+>       Bulgarian on a `bg` device — including an install that never received the bg split
+> - [ ] **Android 13+ per-app picker**: Settings → Apps → Help a Paw → **Language** lists
+>       English and Български, and choosing one switches the app **without a reinstall**
+> - [ ] **iOS per-app picker**: Settings → Help a Paw → **Language** lists English
+>       (Default) and Български, and choosing Български renders the app fully in Bulgarian
+> - [ ] **Do NOT verify the iOS side with `-AppleLanguages "(bg)"`.** It writes the app's
+>       `NSUserDefaults` directly, bypasses the filtering under test, passes whether or not
+>       the fix is present, and leaves a per-app override that outranks the system language
+>       and then looks like a bug of its own. Change the system language, or use the picker.
+> - [ ] 🔴 **The map re-languages itself when the language changes, with no restart** —
+>       change the app locale on the *running* app: labels flip, and the **camera, zoom and
+>       clusters are unchanged** (the view is recreated, and a wrong camera source would
+>       teleport anyone who had panned). Change it back.
+> - [ ] Changing the language on the running app does **not** re-run first-launch work —
+>       it must not fly you to your location again, or re-open a deep-linked signal
+> - [ ] No `MissingPluginException` in the log after a language change (the open bubble's
+>       tap target used to outlive the disposed controller)
+> - [ ] `test/localization_config_guard_test.dart` passes — it fails the build when the
+>       four declarations (ARBs, `values-<lang>/`, `locales_config.xml`,
+>       `CFBundleLocalizations`) drift apart, every one of which fails silently
+
 - [ ] English (en) fully translated
 - [ ] Bulgarian (bg) fully translated (key parity with `en` confirmed; remaining diffs are ICU placeholder names, not missing strings)
 - [ ] All UI strings use `AppLocalizations` (no hardcoded strings)
@@ -1185,7 +1462,7 @@
 
 **Relabelled this release — existing keys, new values. Check every surface that carries them**
 > The ARB **keys** did not change, so nothing in the code moved; the words a user reads did. Anyone testing from memory of `129` will read these as regressions.
-- [ ] **Status**: "Needs help" → **Waiting for help**, "In progress" → **Someone is helping**. Surfaces: the manage sheet's dropdown (§3.3), the state card's status track (§3.2), My Signals rows, the filter sheet (§4.3), `faqWhatStatusesMeanAnswer`.
+- [ ] **Status**: "Needs help" → **Waiting for help**; status 1 is **In progress** / **В процес**. Surfaces: the manage sheet's dropdown (§3.3), the state card's status track (§3.2), My Signals rows, the filter sheet (§4.3), `faqWhatStatusesMeanAnswer`.
 - [ ] **Urgency**: "Green — under control" / "Amber — support needed ASAP" / "Red — immediate critical help" → **Low / Medium / Critical**. Surfaces: the urgency picker, the state card, My Signals, the filter sheet (§4.4), the **map legend** (§2.2b), `faqWhatUrgencyMeansAnswer`.
 - [ ] The two scales no longer share vocabulary in Bulgarian. `urgencyAmber` used to be "Оранжево — нужна е помощ скоро" against `statusNeedsHelp` "Нужна е помощ" — three shared words on two axes that answer different questions.
 - [ ] "**Red Alert**" is *not* renamed (§3.3b)
@@ -1227,7 +1504,13 @@
 - [ ] **Discard-changes dialog** (§1.6): `discardChanges`, `discardChangesHint`, `discard`, `keepEditing`
 - [ ] **Inbox undo** (§6.6): `notificationDeleted`, `undo`
 - [ ] **Feedback** (§8.3): `couldNotOpenEmail` (which interpolates the address), `feedbackEmailSubject`
-- [ ] **Drawer** (§8.1): `signOutFailed`
+- [ ] **Menu** (§8.1): `signOutFailed`, `menu`
+- [ ] **Bottom bar** (§8.0): `tabMap`, `tabMySignals`, `tabWatching`, `tabInbox`, `tabMenu` — the abbreviated Bulgarian forms — plus `watching` and `myNotifications` as the full names used for tooltips and screen titles
+- [ ] **Watching** (§8.0b): the empty state, the unfollow snackbar and its `undo`
+- [ ] **Public profile** (§1.6b): the three stat labels, and the "Deleted user" fallback
+- [ ] **@-mentions** (§3.4b): the mention-notification wording (`mentionedByName`), which is a *different sentence* from the plain new-comment one
+- [ ] **Tag-change timeline rows** (§3.4): the `tags_change` sentence and the opening row's "reported needs" list
+- [ ] **Permission refusals** (§7.1, §14.2): the three location messages (asked-again / permanently blocked / location off device-wide), the notification refusal message, and both settings-shortcut action labels
 - [ ] **Tooltips** (§14.5): `close`, `editProfile`, `changeProfilePhoto`, `deletePhoto`, `done`
 - [ ] The **privacy policy screen title** is localized (§8.4)
 - [ ] The **push body** for a new signal reads "urgency · primary tag needed — title" in Bulgarian too, and the inbox row for the same event says the same thing (§3.8)
@@ -1322,8 +1605,20 @@
 > ruleset, so an older checkout deploying `--only firestore:rules` drops newer blocks
 > with no warning.
 
+**🔴 M-1 is CLOSED — creation now requires a verified caller (#67, DEPLOYED 2026-09-10)**
+> `isSignalCreate` and `isCommentCreate` require `isVerifiedCaller()` — an authenticated
+> caller whose token says `email_verified`. The anonymous session the app opens for every
+> visitor can no longer write either collection. This is the clause that was **rolled back
+> in July**; the client force-refresh that made it safe shipped in `6.0.2+126`.
+- [ ] An **anonymous** session cannot create a signal or a comment — `PERMISSION_DENIED` server-side, on top of the client-side guard that has been there since April
+- [ ] An **unverified** email/password account cannot create either (it is held on `/verify_email` anyway — §1.2)
+- [ ] 🔴 **The rollback scenario**: an account upgraded in place via `linkWithCredential` still reads `sign_in_provider: 'anonymous'` in its token for the rest of the session. It **must be allowed** to create. Sign up from an anonymous session, verify the email, and post a signal and a comment **without restarting the app** — a denial here is the July rollback repeating.
+- [ ] A verified Google account creates normally (Google users skip verification)
+- [ ] No released build in the field loses a capability — every version Crashlytics has seen (120–132) already refuses to create from an anonymous session; confirm the **129/131 device** still behaves the same
+
 **Signal events (`signals/{id}/events/{eventId}`) — NEW**
 - [ ] Create requires a signed-in caller with `actor == self`; a forged actor is denied
+- [ ] **`tags_change` is accepted** (#80, NEW): `newTags` is 1–3, `oldTags` is **0–3** — a signal created before the tag vocabulary has none, and requiring one there would make the first tag change on a legacy signal the one change nobody could record
 - [ ] `type` must be in the closed vocabulary — an invented type is denied
 - [ ] **`note` is required, 1–500 chars** — a note-less event is denied, which is why the client cannot write one without the dialog
 - [ ] Level fields are bounded 0–2
@@ -1359,7 +1654,11 @@
 - [ ] **Enumeration is blocked**: a `list`/collection query on `publicProfiles` is **denied** (only single-document `get` is allowed). This is the fix — do not widen `get` back to `read`.
 - [ ] Single-document `get` still works for any signed-in user (incl. anonymous), so reporter and comment-author names resolve
 - [ ] Name validation: >100 chars denied; empty or whitespace-only denied; control characters (newline, NUL) denied
-- [ ] A user can only write **their own** profile, and only the `name` field
+- [ ] A user can only write **their own** profile, and only the `name` and `photoUrl` fields
+- [ ] 🔴 **`photoUrl` is host-restricted (NEW).** A client write pointing at `https://example.com/x.jpg` is **denied**; one pointing at the app's own Storage bucket **under the caller's own uid**, or at a Google account photo host (`lh[0-9]+`), is accepted. This value is handed to an image loader on every other viewer's device, so an unrestricted URL would let one user aim every viewer's phone at a resource of their choosing.
+- [ ] A `photoUrl` under **another** uid's Storage prefix is denied
+- [ ] Over 500 characters is denied
+- [ ] 🔴 **`signalsPosted` is still unwritable by a client** — widening the write allow-list for `photoUrl` is exactly the change that could have let it through. `test/public_photo_url_guard_test.dart` pins both the host list and `maxNameLength` against the rules; the **backfill script's third copy** is the one that matters, because the Admin SDK bypasses rules entirely.
 - [ ] A client **cannot** clear the `deleted`/`deletedAt` tombstone written by `deleteAccount` (§1.8)
 - [ ] Client-side caps mean users never actually hit these denials in normal use (§1.5, §1.6)
 - [ ] **Names still render everywhere** after the tightening: signal details reporter, comment authors, My Signals
@@ -1545,8 +1844,8 @@
 - [ ] **Camera** denied → photo capture (signal & profile) degrades gracefully with a message
 - [ ] **Photo library** denied → gallery picker degrades gracefully
 - [ ] **Notifications** denied (after onboarding) → app remains usable; settings reflect disabled state
-- [ ] **Location** denied / permanently denied → falls back to Sofia, prompts handled (see §7.1)
-- [ ] Permission re-request routes user to OS settings where appropriate
+- [ ] **Location** denied / permanently denied / off device-wide → three **different** messages, each with the settings page that can fix it (see §7.1 — this is a full sub-pass, not one line)
+- [ ] Permission re-request routes user to OS settings where appropriate, and **returning from Settings completes the toggle** (§7.1)
 
 ### 14.3 Offline & Network Resilience
 - [ ] Cold launch with **no network**: map, cached signals, and UI don't crash
@@ -1634,6 +1933,15 @@
 - [ ] iOS: a Universal Link tapped in Messages/Mail/Safari opens the app (not Safari)
 - [ ] The `helpapaw:///signal/<id>` custom scheme also opens the app (note the **triple slash** — `helpapaw://signal/<id>` would parse `signal` as the host and not match)
 
+**🔴 A link REPLACES the navigation stack — known, recorded, do not re-file (NEW 2026-09-12)**
+> Both platforms enable Flutter's built-in deep linking **and** run an `app_links`
+> listener — two handlers for one link. The built-in one wins and treats the link as a new
+> *location*, so it **replaces** the configuration rather than pushing onto it.
+- [ ] A link arriving **over the New Signal wizard destroys that route** — expected. The wizard keeps its draft **and its step** in the view model, so tapping Continue on the map returns you to exactly the step you were on, with the draft intact. **That recovery is the thing to verify**; the route loss itself is recorded behaviour.
+- [ ] Two links in a row leave only the **second** signal on screen — expected
+- [ ] The re-tap dedupe still works from a **non-map tab**: firing the same link twice from the Menu tab pushes **one** page, and a single back lands on the map with the pin focused (§8.0)
+- [ ] `test/signal_navigator_branch_test.dart`'s wizard-preservation case asserts a guarantee the app does **not** deliver on Android (it drives the seam directly). A green test there is not evidence; the device is.
+
 ### 15.3 Hosted fallback page (app not installed / desktop)
 - [ ] Desktop browser: page renders the signal's **title, description, type name and photo**
 - [ ] A **QR code** is shown; scanning it on a phone opens the same link (and thus the app or store)
@@ -1655,7 +1963,7 @@
 - [ ] It runs **at most once per install**: force-quit and relaunch does **not** re-open the signal
 - [ ] It is marked spent even if the referrer lookup fails, so a failure never becomes a retry that re-opens a stale signal later
 - [ ] An **organic** install (referrer is `utm_source=google-play&utm_medium=organic`) is the normal case and produces no navigation and no error
-- [ ] A launch that came from an actual link does **not** also fire the hand-off (it only marks it spent)
+- [ ] 🔴 **A launch that came from an actual link does NOT also fire the hand-off** (it only marks it spent). This is now asked of `AppLinks.getInitialLink()` directly rather than inferred from a post-frame check on the router — the old form read false under any asynchronous delivery and then opened a **stale stored signal instead of the one the user tapped**. Test it: with a deferred link already stored, launch the app by tapping a link for a *different* signal, and confirm you land on the **tapped** one.
 - [ ] A malformed/oversized id in the referrer is ignored
 - [ ] **iOS is deliberately not covered** — confirm no "Allow Paste" prompt appears for a new user on first launch
 
@@ -1682,7 +1990,7 @@
 > can act on — M **cannot** act on their own).
 
 ### 16.1 The role
-- [ ] The role is a **`moderators/{uid}` document, not an auth claim** — grant it and the drawer entry appears without a restart; revoke it and the entry disappears (§8.1). A claim would leave a revoked moderator with every power until their token expired, up to an hour.
+- [ ] The role is a **`moderators/{uid}` document, not an auth claim** — grant it and the **Menu tab's** Moderation entry appears without a restart; revoke it and the entry disappears (§8.1). A claim would leave a revoked moderator with every power until their token expired, up to an hour.
 - [ ] A **Moderator** badge is shown where the app draws one
 - [ ] A revoked moderator's next action fails with "You no longer have moderator access." rather than silently doing nothing
 - [ ] The role is **purely additive** — a moderator's own signals, comments, status changes and signal ownership behave exactly as any other user's
@@ -1700,7 +2008,7 @@
 - [ ] All 12 reasons and the dialog copy render in **Bulgarian**
 
 ### 16.3 The Reports queue
-- [ ] Drawer → **Reports** opens the queue for a moderator; a non-moderator sees "You do not have moderator access."
+- [ ] **Menu → Reports** opens the queue for a moderator; a non-moderator sees "You do not have moderator access."
 - [ ] Open reports are listed; **"Reported {count} times"** aggregates multiple reporters of the same target
 - [ ] Empty state reads "No open reports."
 - [ ] **Open** on a tile navigates to the reported content
@@ -1845,7 +2153,17 @@
 - [ ] `cd firestore-tests && npm ci && npm test` — Firestore **and** Storage rules suites pass, **including the new `events` cases**. Required before **every** rules deploy; device testing cannot validate undeployed rules because `help-a-paw-dev` is production.
 - [ ] `cd functions && npm ci && npm test` — covers `recipientSelection` tier ranking and the floor, the legacy headline shims (`displayTagsOf` / `signalHeadline`), the `events` encoder parity, and now `moderation`, `signalOwnership` and `removeSignal`. Every failure mode here is silent in production.
 - [ ] **The self-moderation guard coverage test passes.** It *reads the source* of `functions/src/moderation.ts` — a new moderator action that skipped `requireNotOwnContent` would compile perfectly and fail silently, so this is the only thing that catches it (§16.7).
-- [ ] Expected suite sizes on this branch: **258 rules tests, 293 Dart tests, 112 functions tests** (verified 2026-08-30). A sharp drop means a suite stopped being discovered, not that it got faster.
+- [ ] Expected suite sizes on this branch: **286 rules tests (28 suites), 551 Dart tests, 122 functions tests (7 suites)** (re-counted 2026-09-12 on `dev`). A sharp drop means a suite stopped being discovered, not that it got faster. *(Round 11 ran against 258 / 293 / 112.)*
+- [ ] **Guard suites added since Round 11 — each covers a silent ×2 copy:**
+  - `test/localization_config_guard_test.dart` — the four locale declarations (ARBs, `values-<lang>/`, `locales_config.xml`, `CFBundleLocalizations`). A missing `values-bg` is precisely how a fully translated app shipped an English UI with nothing logged (§9).
+  - `test/public_photo_url_guard_test.dart` — the `publicProfiles.photoUrl` host allow-list in **three** places (rules, Dart, and the backfill script, which is the one that matters because the Admin SDK bypasses rules), plus `maxNameLength` (§1.6b, §11.6)
+  - `test/notification_type_vocabulary_guard_test.dart` — the inbox `type` vocabulary against the TypeScript union; this closes a documented silent failure that had been waiting for a fourth type to arrive (§6.6)
+  - the **mention cap** guard — ×3, Dart / rules / TypeScript (§3.4b)
+  - `test/signal_index_guard_test.dart` — fails the build if `signals` and `signals_test` ever get different indexes (§8.0)
+  - `test/signal_navigator_branch_test.dart`, `test/last_tab_restore_test.dart`, `test/widgets/home_shell_test.dart` — the bottom-bar shell (§8.0). **Read the caveat in §15.2**: the wizard-preservation case asserts something the app does not deliver on Android.
+  - `test/cached_user_doc_stream_test.dart` — the subscribe-then-replay ordering behind the Follow button (§8.0c)
+  - `test/models/signal_event_test.dart` — now includes `tags_change` (§3.4)
+  - `test/link_parser_test.dart` / `test/widgets/linkified_text_test.dart` — the scheme allow-list, adversarial 2000-char inputs, and recognizer ownership (§3.4c)
 - [ ] Kotlin: `android/app/src/test/.../GeohashTest.kt` passes (guards the Dart↔Kotlin geohash parity the fan-out depends on)
 - [ ] Swift: `ios/RunnerTests/GeohashTest.swift` passes — and afterwards, restore/verify `build/native_assets/ios/objective_c.framework` before any device build
 - [ ] `cd functions && npm run build` — TypeScript compiles
@@ -1874,6 +2192,15 @@
 - [ ] The `removedSignals` indexes and the `reports` index are **READY**, and the `notifications` TTL policy survived the deploy (a deploy can report an unmanaged field override; without `--force` it leaves it alone)
 - [ ] No new unhandled errors in the functions log after 24 h of live traffic
 
+**Deployed since Round 11 — confirm each is still live**
+- [ ] 🔴 **The `signalOwner` + `createdAt` composite index is READY on BOTH `signals` and `signals_test`** (deployed 2026-09-11). My Signals now merges reported-or-held, and the owner half **degrades to empty on error** — so a missing or still-building index shows up as *missing rows*, not as a failure. `test/signal_index_guard_test.dart` fails the build if the two collections diverge.
+- [ ] 🔴 **The live ruleset carries `isVerifiedCaller()` on `isSignalCreate` and `isCommentCreate`** (#67, deployed 2026-09-10) — and the in-place-upgrade case still works (§11.5)
+- [ ] **The live ruleset accepts `tags_change` events** (#80, deployed 2026-09-11) — with `oldTags` allowed to be empty (§3.4)
+- [ ] **The live ruleset accepts `publicProfiles.photoUrl` and still refuses `signalsPosted`** (§11.6)
+- [ ] **The mention functions are deployed** (2026-09-10, ahead of the app — safe, because a comment with no `mentions` takes exactly the old path): `onCommentCreated` / `onTestCommentCreated` log `N subscriber(s), M mentioned` (§3.4b)
+- [ ] `deleteAccount` removes `moderators/{uid}` (§1.8)
+- [ ] Re-read the **whole** live ruleset and diff it against this branch. Four separate rules deploys have landed since Round 11, from four branches; rules deploys replace the whole ruleset, and this is exactly the arrangement that silently reverted the `events` block once already.
+
 ### 17.3 Scheduled jobs
 - [ ] `cleanupAnonymousUsers` is deployed and scheduled (Sun 03:00 UTC), and `ANON_CLEANUP_DRY_RUN` is **false** for the real run
 - [ ] Trigger it manually once and read the summary log: `scanned N, found M stale anonymous (> 90d inactive), deleted K`
@@ -1892,6 +2219,15 @@
 
 ### 17.4 Upgrade path `6.0.2+129` → this build — OBSERVED PROCEDURE (dedicated device)
 
+> **🆕 Since Round 11 the split set changed.** Builds **133 and later have no
+> `split_config.<lang>.apk`** — the language dimension is disabled (§9). An archive of 130,
+> 131 or 132 therefore carries a bg split that the new build does not, and that difference
+> is itself one of this release's fixes. Two consequences: (a) archive each build's splits
+> *before* updating past it, as always, but note the file list is not comparable across the
+> 132/133 boundary; (b) the most valuable upgrade case in this round is a device that
+> installed an older build **while its system language was English** and therefore never
+> received the bg split — after the update it must be fully Bulgarian.
+>
 > **Most of this release's risk lives here, and more of it than last time.** An existing
 > install carries an account with **no helper tags**, signals with **no urgency, tags or
 > species**, a status history stored as **comments**, and preferences containing a
@@ -1993,6 +2329,6 @@
 - [ ] **`users/{uid}.testMode` is written on the first launch of the new build** even though this account never toggled anything on it (#72 backfills at launch — §12.1)
 - [ ] **Remove a legacy signal** (created on 129, with its status history stored as *comments*): it moves to the Removed tab, restores losslessly, and its old comment-shaped history still renders afterwards (§3.4)
 - [ ] **The 129 device's Delete still works** while the new build's Remove does too — the three subcollection delete rules stay permissive until deploy-gates step 5, and this mixed state is the entire reason that step waits
-- [ ] **Report something from the 129 device.** Reporting did not exist there, so the flag/long-press is absent — confirm the old build degrades by simply not offering it, rather than erroring
+- [ ] **Report something from the 129 device.** Reporting did not exist there, so the flag/comment menu is absent — confirm the old build degrades by simply not offering it, rather than erroring
 - [ ] A signal **hidden** by a moderator disappears from the 129 device's map too (it is a document move, so no client support is needed)
 - [ ] A signal whose **comments are locked** blocks a comment from the 129 device as well — the lock is enforced in the rules, not only in the new UI (§11.11)
