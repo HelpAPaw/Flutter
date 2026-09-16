@@ -80,10 +80,11 @@ class MapMarkerBuilder {
   /// Clustering is the app's own ([clusterPoints]) rather than the SDK's,
   /// because the SDK's bubble could not be restyled and so could not say
   /// anything about urgency. Here a bubble takes the colour of its **most
-  /// urgent member**: a cluster holding one critical signal is red at every
-  /// zoom, exactly as its pin would be.
+  /// urgent member** and wears a ring split between the urgencies inside it —
+  /// see [signalBubbleKey].
   Set<Marker> buildSignalMarkers({
     required ClusterResult<SignalWithId> clustered,
+    required Map<MapCluster<SignalWithId>, ClusterBubbleKey> bubbleKeys,
     required Map<ClusterBubbleKey, BitmapDescriptor> bubbleIcons,
     required void Function(SignalWithId signal) onMarkerTap,
     required void Function(MapCluster<SignalWithId> cluster) onClusterTap,
@@ -100,7 +101,7 @@ class MapMarkerBuilder {
         clustered.clusters,
         idPrefix: 'signal-cluster:',
         idOf: (signal) => signal.id,
-        keyOf: signalBubbleKey,
+        keys: bubbleKeys,
         icons: bubbleIcons,
         onTap: onClusterTap,
       ),
@@ -117,6 +118,7 @@ class MapMarkerBuilder {
   /// two lines of platform-styled text.
   Set<Marker> buildClinicMarkers({
     required ClusterResult<VetClinic> clustered,
+    required Map<MapCluster<VetClinic>, ClusterBubbleKey> bubbleKeys,
     required Map<ClusterBubbleKey, BitmapDescriptor> bubbleIcons,
     required void Function(VetClinic clinic) onMarkerTap,
     required void Function(MapCluster<VetClinic> cluster) onClusterTap,
@@ -134,7 +136,7 @@ class MapMarkerBuilder {
         clustered.clusters,
         idPrefix: 'clinic-cluster:',
         idOf: (clinic) => clinic.id,
-        keyOf: clinicBubbleKey,
+        keys: bubbleKeys,
         icons: bubbleIcons,
         onTap: onClusterTap,
       ),
@@ -150,7 +152,7 @@ class MapMarkerBuilder {
     List<MapCluster<T>> clusters, {
     required String idPrefix,
     required String Function(T member) idOf,
-    required ClusterBubbleKey Function(MapCluster<T> cluster) keyOf,
+    required Map<MapCluster<T>, ClusterBubbleKey> keys,
     required Map<ClusterBubbleKey, BitmapDescriptor> icons,
     required void Function(MapCluster<T> cluster) onTap,
   }) sync* {
@@ -158,9 +160,11 @@ class MapMarkerBuilder {
       yield Marker(
         markerId: MarkerId('$idPrefix${clusterMarkerId(cluster, idOf)}'),
         position: cluster.position,
-        // `icons` came from `ensure` for exactly these clusters, so the lookup
-        // is total by construction.
-        icon: icons[keyOf(cluster)]!,
+        // `keys` was built for exactly these clusters and `icons` came from
+        // `ensure` for exactly those keys, so both lookups are total by
+        // construction — and the key is computed once per recluster, not again
+        // here for every cluster on screen.
+        icon: icons[keys[cluster]!]!,
         // A bubble is centred on its centroid; a pin's tip is its point.
         anchor: const Offset(0.5, 0.5),
         // The SDK recentres the camera on any marker it handles the tap for.
@@ -196,16 +200,36 @@ class MapMarkerBuilder {
   /// clinic bubble must not be readable as "several signals".
   static const clinicBlue = Color(0xFF2854C5); // theme-independent: over the map
 
+  /// A clinic bubble has nothing to say about composition — every clinic is the
+  /// same kind of thing — so it is one part, and draws as a plain blue ring.
   static ClusterBubbleKey clinicBubbleKey(MapCluster<VetClinic> cluster) =>
-      clusterBubbleKey(fill: clinicBlue, count: cluster.count);
+      clusterBubbleKey(parts: [(clinicBlue, cluster.count)]);
 
-  /// The bubble a signal cluster is drawn with: the colour of its most urgent
-  /// member, and its count.
-  static ClusterBubbleKey signalBubbleKey(MapCluster<SignalWithId> cluster) =>
-      clusterBubbleKey(
-        fill: SignalUrgency.highest(cluster.members.map((s) => s.urgency)).color,
-        count: cluster.count,
-      );
+  /// The bubble a signal cluster is drawn with: a ring split between the
+  /// urgencies its members are at, most urgent first, and its total count.
+  ///
+  /// Most urgent first is load-bearing twice over. It puts the worst of what is
+  /// inside at the top of the ring, where the legend says to look; and the first
+  /// part is what the disc is filled with, so the bubble is still the colour of
+  /// its most urgent member — a cluster holding one critical signal is red at
+  /// every zoom, exactly as its pin would be, and now the ring says whether that
+  /// is one of twelve or twelve of twelve.
+  ///
+  /// The ordering is [SignalUrgency]'s own declaration order, the same one
+  /// [SignalUrgency.highest] ranks by, rather than a second severity ordering
+  /// written out here.
+  static ClusterBubbleKey signalBubbleKey(MapCluster<SignalWithId> cluster) {
+    // Indexed by `SignalUrgency.index`, not a map: this runs for every cluster
+    // on screen on every recluster, and there are three slots.
+    final counts = List<int>.filled(SignalUrgency.values.length, 0);
+    for (final signal in cluster.members) {
+      counts[SignalUrgency.fromCode(signal.urgency).index]++;
+    }
+    return clusterBubbleKey(parts: [
+      for (final urgency in SignalUrgency.values.reversed)
+        if (counts[urgency.index] > 0) (urgency.color, counts[urgency.index]),
+    ]);
+  }
 
   static LatLng _latLngOf(GeoPoint point) =>
       LatLng(point.latitude, point.longitude);

@@ -1910,10 +1910,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get mapLegendUrgencyNote =>
-      'Pin colour shows urgency — how serious it gets if nobody acts. Signals close together are grouped into a bubble, which takes the colour of the most urgent one inside it. Tap a bubble to zoom in, or to list what is in it when they are too close to separate.';
+      'Pin colour shows urgency — how serious it gets if nobody acts. Signals close together are grouped into a bubble, which takes the colour of the most urgent one inside it, and the ring around it shows how many are at each urgency. Tap a bubble to zoom in, or to list what is in it when they are too close to separate.';
 
   @override
-  String get mapLegendCluster => 'Several signals; the number is how many';
+  String get mapLegendCluster =>
+      'Several signals; the number is how many, and the ring shows how they split by urgency';
 
   @override
   String get mapLegendClinicCluster =>

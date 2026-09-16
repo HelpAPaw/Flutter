@@ -278,11 +278,19 @@ class _MapScreenState extends ConsumerState<MapScreen>
       keepSeparate: (c) => c.id == selectedClinicId,
     );
 
+    // Keyed once, here, and handed to the marker builders — computing a key
+    // walks every member of the cluster, so letting the builders re-derive it
+    // would be a second pass over every signal on screen per recluster.
+    final signalKeys = {
+      for (final cluster in clusteredSignals.clusters)
+        cluster: MapMarkerBuilder.signalBubbleKey(cluster),
+    };
+    final clinicKeys = {
+      for (final cluster in clusteredClinics.clusters)
+        cluster: MapMarkerBuilder.clinicBubbleKey(cluster),
+    };
     final icons = await _bubbleIcons.ensure(
-      [
-        ...clusteredSignals.clusters.map(MapMarkerBuilder.signalBubbleKey),
-        ...clusteredClinics.clusters.map(MapMarkerBuilder.clinicBubbleKey),
-      ],
+      [...signalKeys.values, ...clinicKeys.values],
       devicePixelRatio: _devicePixelRatio,
     );
     if (!mounted || token != _reclusterToken) return;
@@ -293,6 +301,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
       _markers = {
         ..._markerBuilder.buildSignalMarkers(
           clustered: clusteredSignals,
+          bubbleKeys: signalKeys,
           bubbleIcons: icons,
           onMarkerTap: _showSignalBubble,
           onClusterTap: (cluster) => _onClusterTap<SignalWithId>(
@@ -307,6 +316,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
         ),
         ..._markerBuilder.buildClinicMarkers(
           clustered: clusteredClinics,
+          bubbleKeys: clinicKeys,
           bubbleIcons: icons,
           onMarkerTap: _showClinicBubble,
           onClusterTap: (cluster) => _onClusterTap<VetClinic>(

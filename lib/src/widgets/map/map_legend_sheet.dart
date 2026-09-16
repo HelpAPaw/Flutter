@@ -72,7 +72,13 @@ class _MapLegendSheet extends StatelessWidget {
             // as the urgency an unknown signal defaults to and the middle of
             // the scale.
             _LegendRow(
-              icon: _LegendBubble(count: 3, color: SignalUrgency.amber.color),
+              icon: _LegendBubble(parts: [
+                // Most urgent first, from the same ordering
+                // `MapMarkerBuilder.signalBubbleKey` builds the real ring with,
+                // so adding a level cannot leave the legend disagreeing.
+                for (final urgency in SignalUrgency.values.reversed)
+                  (urgency.color, _exampleCounts[urgency]!),
+              ]),
               label: l10n.mapLegendCluster,
             ),
             const SizedBox(height: 8),
@@ -93,8 +99,7 @@ class _MapLegendSheet extends StatelessWidget {
             ),
             _LegendRow(
               icon: const _LegendBubble(
-                count: 2,
-                color: MapMarkerBuilder.clinicBlue,
+                parts: [(MapMarkerBuilder.clinicBlue, 2)],
               ),
               label: l10n.mapLegendClinicCluster,
             ),
@@ -105,6 +110,14 @@ class _MapLegendSheet extends StatelessWidget {
     );
   }
 }
+
+/// The cluster the legend's example bubble stands for. One red among seven is
+/// the case worth teaching: the disc is red for a cluster that is mostly not.
+const _exampleCounts = {
+  SignalUrgency.red: 1,
+  SignalUrgency.amber: 4,
+  SignalUrgency.green: 2,
+};
 
 class _LegendRow extends StatelessWidget {
   const _LegendRow({
@@ -149,51 +162,67 @@ class _LegendRow extends StatelessWidget {
   }
 }
 
-/// A cluster bubble as the legend shows it: the marker bitmap's shape redrawn
-/// at the legend's 28px icon column, with the bitmap's own halo alpha and label
-/// weight, and with widgets so it follows text scaling like its row.
+/// A cluster bubble as the legend shows it: painted by the marker bitmap's own
+/// routine at the legend's 28px icon column, so it cannot drift from what the
+/// map draws whatever style is in force. Only the count is a widget, so it
+/// still follows text scaling like the row it sits in.
 class _LegendBubble extends StatelessWidget {
-  const _LegendBubble({required this.count, required this.color});
+  /// [parts] is (colour, member count), most urgent first — the order
+  /// [MapMarkerBuilder.signalBubbleKey] builds. One part is a clinic cluster.
+  const _LegendBubble({required this.parts});
 
-  final int count;
-  final Color color;
+  final List<(Color, int)> parts;
+
+  /// Diameter of the disc inside the 28px icon box, leaving room for whatever
+  /// the style puts around it.
+  static const double _disc = 22;
 
   @override
   Widget build(BuildContext context) {
+    final key = clusterBubbleKey(parts: parts);
     return SizedBox(
       width: 28,
       height: 28,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: color.withAlpha(ClusterBubbleIcons.haloAlpha),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(3),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: color,
-              border: Border.all(
-                color: Colors.white, // theme-independent: as on the map
-                width: 1.5,
-              ),
-            ),
-            child: Center(
-              child: Text(
-                '$count',
-                style: const TextStyle(
-                  // As on the map: white on a saturated fill reads in both
-                  // modes.
-                  color: Colors.white, // theme-independent
-                  fontSize: 11,
-                  fontWeight: ClusterBubbleIcons.labelWeight,
-                ),
-              ),
+      child: CustomPaint(
+        painter: _LegendBubblePainter(key),
+        child: Center(
+          child: Text(
+            key.label,
+            style: TextStyle(
+              // As on the map, from the map's own rule.
+              color: ClusterBubbleIcons.inkFor(key.ring.first.$1),
+              fontSize: 11,
+              fontWeight: ClusterBubbleIcons.labelWeight,
             ),
           ),
         ),
       ),
     );
   }
+}
+
+/// The legend's bubble, minus its count — the marker bitmap's own painter, at
+/// the legend's scale.
+class _LegendBubblePainter extends CustomPainter {
+  const _LegendBubblePainter(this.key);
+
+  final ClusterBubbleKey key;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    ClusterBubbleIcons.paintBubble(
+      canvas,
+      key,
+      centre: size.center(Offset.zero),
+      discDiameter: _LegendBubble._disc,
+      // The legend's bubble is smaller than the map's, so anything around the
+      // disc is scaled to it rather than borrowing the map's absolute width.
+      ringWidthOverride: (size.shortestSide - _LegendBubble._disc) / 2,
+      drawLabel: false,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_LegendBubblePainter oldDelegate) =>
+      oldDelegate.key != key;
 }
