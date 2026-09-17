@@ -1742,6 +1742,14 @@ class AppLocalizationsBg extends AppLocalizations {
   String get reportDetailsLabel => 'Друго, което трябва да знаем? (по желание)';
 
   @override
+  String get reportDetailsLabelRequired =>
+      'Опишете какъв е проблемът (задължително)';
+
+  @override
+  String get reportDetailsRequired =>
+      'Без това модераторът няма как да разбере какво да провери.';
+
+  @override
   String get reportSubmit => 'Изпращане';
 
   @override

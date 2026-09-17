@@ -1718,6 +1718,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get reportDetailsLabel => 'Anything else we should know? (optional)';
 
   @override
+  String get reportDetailsLabelRequired => 'Tell us what is wrong (required)';
+
+  @override
+  String get reportDetailsRequired =>
+      'Without this a moderator has no clue what to look at.';
+
+  @override
   String get reportSubmit => 'Send report';
 
   @override

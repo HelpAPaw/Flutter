@@ -31,6 +31,19 @@ void main() {
 
   });
 
+  group('ReportReason.requiresDetails', () {
+    test('only "other" demands the free text', () {
+      // The asymmetry the report dialog is built on: every other code names a
+      // category a moderator can triage on its own, so demanding prose there is
+      // what stops people reporting at all.
+      expect(ReportReason.other.requiresDetails, isTrue);
+      expect(
+        ReportReason.values.where((r) => r.requiresDetails),
+        [ReportReason.other],
+      );
+    });
+  });
+
   group('ReportTarget', () {
     const collection = 'signals';
 

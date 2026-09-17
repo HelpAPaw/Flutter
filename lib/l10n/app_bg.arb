@@ -653,6 +653,8 @@
   "reportTitle": "Докладване",
   "reportReasonPrompt": "Какъв е проблемът?",
   "reportDetailsLabel": "Друго, което трябва да знаем? (по желание)",
+  "reportDetailsLabelRequired": "Опишете какъв е проблемът (задължително)",
+  "reportDetailsRequired": "Без това модераторът няма как да разбере какво да провери.",
   "reportSubmit": "Изпращане",
   "reportSubmitted": "Благодарим. Модератор ще прегледа сигнала.",
   "reportAlreadySubmitted": "Вече сте докладвали това.",

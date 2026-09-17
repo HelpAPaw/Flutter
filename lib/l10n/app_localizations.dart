@@ -3128,6 +3128,18 @@ abstract class AppLocalizations {
   /// **'Anything else we should know? (optional)'**
   String get reportDetailsLabel;
 
+  /// No description provided for @reportDetailsLabelRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Tell us what is wrong (required)'**
+  String get reportDetailsLabelRequired;
+
+  /// No description provided for @reportDetailsRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Without this a moderator has no clue what to look at.'**
+  String get reportDetailsRequired;
+
   /// No description provided for @reportSubmit.
   ///
   /// In en, this message translates to:

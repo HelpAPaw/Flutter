@@ -59,6 +59,37 @@ enum ReportReason {
     return null;
   }
 
+  /// Whether the free-text details box is mandatory for this reason.
+  ///
+  /// True for [other] alone: every other code names a category a moderator can
+  /// triage on its own, where "something else" with an empty box says only that
+  /// somebody objected to something. Exhaustive for the same reason [label] is
+  /// — a new reason should not be able to inherit "details optional" by
+  /// default; whoever adds it has to decide.
+  ///
+  /// Enforced by the report dialog, deliberately **not** by `firestore.rules`.
+  /// A min-length clause there would reject reports from every already-released
+  /// build — the mirror image of the staleness the missing `reason` allow-list
+  /// above exists to avoid.
+  bool get requiresDetails {
+    switch (this) {
+      case ReportReason.other:
+        return true;
+      case ReportReason.fraud:
+      case ReportReason.abuse:
+      case ReportReason.harassment:
+      case ReportReason.falseInformation:
+      case ReportReason.dangerousAdvice:
+      case ReportReason.animalEndangerment:
+      case ReportReason.graphicContent:
+      case ReportReason.spam:
+      case ReportReason.doxxing:
+      case ReportReason.defamationRisk:
+      case ReportReason.duplicateSignal:
+        return false;
+    }
+  }
+
   /// Localized display label. Exhaustive switch so adding a reason is a compile
   /// error until its label is provided here.
   String label(AppLocalizations l10n) {

@@ -850,6 +850,8 @@
   "reportTitle": "Report",
   "reportReasonPrompt": "What is wrong with this?",
   "reportDetailsLabel": "Anything else we should know? (optional)",
+  "reportDetailsLabelRequired": "Tell us what is wrong (required)",
+  "reportDetailsRequired": "Without this a moderator has no clue what to look at.",
   "reportSubmit": "Send report",
   "reportSubmitted": "Thank you. A moderator will review this.",
   "reportAlreadySubmitted": "You have already reported this.",
