@@ -708,7 +708,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get signalOwnerOffers => 'Offers to take over';
 
   @override
-  String get signalOwnerStale => 'Nobody has updated this signal in a while.';
+  String signalOwnerStaleSince(String when) {
+    return 'Hasn\'t been active since $when. Anyone with an account can take this signal on.';
+  }
+
+  @override
+  String signalOwnerStaleYours(String when) {
+    return 'You haven\'t updated this signal since $when. Anyone with an account can take it on — post an update to keep it.';
+  }
 
   @override
   String get takeoverConfirmTitle => 'Take responsibility for this signal?';

@@ -45,6 +45,10 @@ typedef GuardedRunner = Future<void> Function(Future<void> Function() body);
 /// | the reporter, not holding | who holds it, and any offers — read-only |
 /// | anyone else, signal held | Offer to take over (or their pending offer) |
 /// | anyone else, released or stale | Take responsibility |
+///
+/// Across all four, a **held but stale** signal also carries the note from
+/// [_buildStaleNote] — worded for the owner or for everyone else, since the
+/// owner's copy has an action in it that nobody else's does.
 class SignalOwnerBlock extends StatelessWidget {
   const SignalOwnerBlock({
     super.key,
@@ -110,6 +114,19 @@ class SignalOwnerBlock extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final owner = signal.signalOwner;
 
+    // Named once, because it is one three-way split — *released* / *held but
+    // stale* / *held and active* — read in two places. Evaluating it twice let
+    // the note and the button below it consult two different `DateTime.now()`
+    // readings, and made the staleness gate grep as one call site when it is
+    // two.
+    final stale = SignalOwnershipService.isOwnerStale(signal);
+
+    // Non-null exactly when the note should be drawn, which keeps the whole
+    // decision here rather than half here and half in an unreachable guard
+    // inside the builder: `isOwnerStale` is false without a date, so a stale
+    // signal always has one.
+    final inactiveSince = owner != null && stale ? signal.ownerLastActiveAt : null;
+
     // No heading of its own any more. This block is one row inside
     // [SignalStateCard], which is what now says "these facts belong together" —
     // the old `Text(' ${l10n.signalOwner}')`, indented with a literal leading
@@ -147,7 +164,8 @@ class SignalOwnerBlock extends StatelessWidget {
             ],
           ),
         ),
-        _buildActions(context),
+        if (inactiveSince != null) _buildStaleNote(context, inactiveSince),
+        _buildActions(context, stale: stale),
         // The owner and the reporter both see the offers; only the owner can
         // answer them.
         //
@@ -175,8 +193,59 @@ class SignalOwnerBlock extends StatelessWidget {
     minimumSize: const Size(0, 40),
   );
 
+  /// A date in the reader's own language.
+  ///
+  /// Shared by the two dates this block renders so neither can quietly go back
+  /// to the bare constructor, which resolves the *system* locale and hands a
+  /// Bulgarian reader English months. Not memoized per locale the way
+  /// `SignalListTile` and `ModerationHiddenTab` do it: those sit inside list
+  /// builders and pay the construction once per row per build, while this block
+  /// renders once, on one screen.
+  static DateFormat _dayFormat(BuildContext context) =>
+      DateFormat.yMMMd(Localizations.localeOf(context).languageCode);
+
+  /// The gutter that lines text up under the name on the row above: the person
+  /// icon's 18px plus the 8px beside it.
+  static const double _nameIndent = 26;
+
+  /// Says out loud what the *Take responsibility* button below only implies:
+  /// the person responsible has gone quiet, and the signal is claimable.
+  ///
+  /// Shown to **everyone**, and worded twice. Staleness is the one state in
+  /// this block a viewer cannot otherwise infer — a signal held by someone who
+  /// stopped answering renders exactly like one held by someone active, so
+  /// without this the only evidence is which of two buttons was drawn, and the
+  /// owner (who is offered neither) has no evidence at all.
+  ///
+  /// The owner gets their **own** string rather than overhearing everyone
+  /// else's, because the shared one could not carry the only thing worth
+  /// telling them: posting an update keeps the signal. It would also have been
+  /// third-person prose sitting directly under "You are responsible for this
+  /// signal". Audience, not state, is how the rest of this block splits, and
+  /// this is the one element that was ignoring that.
+  ///
+  /// [since] is [Signal.ownerLastActiveAt], resolved by the caller, which falls
+  /// back to `createdAt` for a signal whose owner has never acted — the same
+  /// fallback `isOwnerStale` judges staleness on, so the note cannot name a
+  /// date the gate did not see.
+  Widget _buildStaleNote(BuildContext context, DateTime since) {
+    final l10n = AppLocalizations.of(context);
+    final when = _dayFormat(context).format(since);
+
+    return Padding(
+      padding: const EdgeInsets.only(left: _nameIndent, top: 2, right: 8),
+      child: Text(
+        _isOwner ? l10n.signalOwnerStaleYours(when) : l10n.signalOwnerStaleSince(when),
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+    );
+  }
+
   /// The one action this viewer is offered, if any.
-  Widget _buildActions(BuildContext context) {
+  ///
+  /// [stale] is resolved by [build] so the note above and the button here
+  /// cannot disagree about it.
+  Widget _buildActions(BuildContext context, {required bool stale}) {
     final l10n = AppLocalizations.of(context);
 
     if (_isOwner) {
@@ -197,7 +266,7 @@ class SignalOwnerBlock extends StatelessWidget {
     // The staleness half matters: without it the escape hatch the whole design
     // is shaped around is reachable only as a side effect of using the status
     // dropdown, and somebody who just wants to take the signal on has no button.
-    if (signal.isReleased || SignalOwnershipService.isOwnerStale(signal)) {
+    if (signal.isReleased || stale) {
       return Align(
         alignment: Alignment.centerLeft,
         child: FilledButton.tonalIcon(
@@ -245,7 +314,7 @@ class SignalOwnerBlock extends StatelessWidget {
                   LinkifiedText(why),
                 Text(
                   l10n.takeoverAskAgainAfter(
-                    DateFormat.yMMMd().add_jm().format(until),
+                    _dayFormat(context).add_jm().format(until),
                   ),
                   style: Theme.of(context).textTheme.bodySmall,
                 ),

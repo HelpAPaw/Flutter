@@ -312,7 +312,24 @@
   "signalOwnerHandOver": "Hand over",
   "signalOwnerDecline": "Decline",
   "signalOwnerOffers": "Offers to take over",
-  "signalOwnerStale": "Nobody has updated this signal in a while.",
+  "signalOwnerStaleSince": "Hasn't been active since {when}. Anyone with an account can take this signal on.",
+  "@signalOwnerStaleSince": {
+    "description": "Shown to everyone except the owner under an inactive signal owner, inviting anyone to take the signal on",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "signalOwnerStaleYours": "You haven't updated this signal since {when}. Anyone with an account can take it on — post an update to keep it.",
+  "@signalOwnerStaleYours": {
+    "description": "The owner's own version of the inactivity note, which names the action that keeps the signal",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
   "takeoverConfirmTitle": "Take responsibility for this signal?",
   "takeoverConfirmBody": "You become the person coordinating this signal. You can change its status and urgency, and hand it on or step down at any time.",
   "takeoverConfirmAction": "Take it on",

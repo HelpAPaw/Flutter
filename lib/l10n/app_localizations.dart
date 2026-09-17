@@ -1364,11 +1364,17 @@ abstract class AppLocalizations {
   /// **'Offers to take over'**
   String get signalOwnerOffers;
 
-  /// No description provided for @signalOwnerStale.
+  /// Shown to everyone except the owner under an inactive signal owner, inviting anyone to take the signal on
   ///
   /// In en, this message translates to:
-  /// **'Nobody has updated this signal in a while.'**
-  String get signalOwnerStale;
+  /// **'Hasn\'t been active since {when}. Anyone with an account can take this signal on.'**
+  String signalOwnerStaleSince(String when);
+
+  /// The owner's own version of the inactivity note, which names the action that keeps the signal
+  ///
+  /// In en, this message translates to:
+  /// **'You haven\'t updated this signal since {when}. Anyone with an account can take it on — post an update to keep it.'**
+  String signalOwnerStaleYours(String when);
 
   /// No description provided for @takeoverConfirmTitle.
   ///

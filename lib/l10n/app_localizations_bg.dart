@@ -716,8 +716,14 @@ class AppLocalizationsBg extends AppLocalizations {
   String get signalOwnerOffers => 'Предложения за поемане';
 
   @override
-  String get signalOwnerStale =>
-      'От известно време никой не е обновявал този сигнал.';
+  String signalOwnerStaleSince(String when) {
+    return 'От $when няма активност по сигнала. Всеки с регистрация може да го поеме.';
+  }
+
+  @override
+  String signalOwnerStaleYours(String when) {
+    return 'От $when не сте обновявали този сигнал. Всеки с регистрация може да го поеме — публикувайте обновление, за да го запазите.';
+  }
 
   @override
   String get takeoverConfirmTitle =>
