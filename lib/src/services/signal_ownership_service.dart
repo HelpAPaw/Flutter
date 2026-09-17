@@ -380,7 +380,15 @@ class TakeoverRequest {
   DateTime? autoApprovesAt(Signal signal) {
     if (!isPending || createdAt == null) return null;
     if (!SignalOwnershipService.isOwnerStale(signal)) return null;
-    return createdAt!.add(SignalOwnershipService.autoApproveAfter);
+    final at = createdAt!.add(SignalOwnershipService.autoApproveAfter);
+    // Null once the deadline has passed, the same shape [reaskableAt] uses for
+    // its cooldown — and for a sharper reason. `autoApproveStaleTakeovers`
+    // sweeps DAILY, so between the deadline and the run there is a window of up
+    // to 24 hours where the offer is due but has not moved. Returning the date
+    // anyway makes the screen say the signal passes on a day that has already
+    // gone by, which is the one reading that makes a user doubt the promise.
+    // Falling back to the plain pending wording says less and nothing false.
+    return at.isAfter(DateTime.now()) ? at : null;
   }
 
   DateTime? get reaskableAt {

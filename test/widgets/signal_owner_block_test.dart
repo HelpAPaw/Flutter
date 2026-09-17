@@ -230,6 +230,38 @@ void main() {
     expect(find.text(l10n.signalOwnerRequestPending), findsNothing);
   });
 
+  // Found on device: the sweep is DAILY, so between a deadline passing and the
+  // run there is a window of up to 24 hours where the offer is due but has not
+  // moved. The screen showed "it passes to you on <a date last week>", which is
+  // the one reading that makes a user doubt the promise.
+  testWidgets('never names a handover date that has already passed',
+      (tester) async {
+    await tester.pumpWidget(host(
+      signalWith(
+        ownerActiveAt:
+            daysAgo(SignalOwnershipService.staleOwnerAfter.inDays + 1),
+      ),
+      myRequest: TakeoverRequest(
+        requesterId: 'stranger-uid',
+        status: 'pending',
+        note: 'Still waiting.',
+        createdAt: DateTime.now()
+            .subtract(SignalOwnershipService.autoApproveAfter)
+            .subtract(const Duration(days: 1)),
+        resolvedAt: null,
+        resolvedNote: null,
+      ),
+    ));
+    await tester.pump();
+
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    expect(find.text(l10n.signalOwnerRequestPending), findsOneWidget);
+    expect(
+      find.textContaining(prefixOf(l10n.signalOwnerRequestPassesAt('@@when@@'))),
+      findsNothing,
+    );
+  });
+
   // The mirror of the above: an active owner's pending offer must NOT promise a
   // handover, because `autoApproveStaleTakeovers` re-checks staleness and would
   // never approve it.
