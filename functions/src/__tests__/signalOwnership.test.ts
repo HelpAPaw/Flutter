@@ -27,6 +27,8 @@ import {
   optionalStatus,
   requireCurrentOwner,
   requireRealAccount,
+  isRequestRipe,
+  AUTO_APPROVE_DAYS,
   STALE_OWNER_DAYS,
 } from "../signalOwnership";
 import { buildOwnershipEventData, SIGNAL_EVENT_KEYS } from "../events";
@@ -108,6 +110,45 @@ describe("isOwnerStale", () => {
   it("defaults to NOT stale when there is no usable timestamp", () => {
     expect(isOwnerStale({})).toBe(false);
     expect(isOwnerStale(undefined)).toBe(false);
+  });
+});
+
+describe("isRequestRipe", () => {
+  it("is false for an offer filed just now", () => {
+    expect(isRequestRipe({ createdAt: daysAgo(1) })).toBe(false);
+  });
+
+  it(`is true past ${AUTO_APPROVE_DAYS} days unanswered`, () => {
+    expect(isRequestRipe({ createdAt: daysAgo(AUTO_APPROVE_DAYS + 1) })).toBe(
+      true
+    );
+  });
+
+  it("does not fire exactly on the boundary", () => {
+    expect(isRequestRipe({ createdAt: daysAgo(AUTO_APPROVE_DAYS - 1) })).toBe(
+      false
+    );
+  });
+
+  // Same safe direction as isOwnerStale, and for a sharper reason: this one is
+  // the last check before a signal changes hands with nobody having agreed to
+  // it. A missing `createdAt` — the brief window where the local echo of a
+  // server sentinel is still null — must never read as "waited long enough".
+  it("defaults to NOT ripe when there is no usable timestamp", () => {
+    expect(isRequestRipe({})).toBe(false);
+    expect(isRequestRipe(undefined)).toBe(false);
+    expect(isRequestRipe({ createdAt: "2026-01-01" })).toBe(false);
+  });
+
+  // The two clocks are independent and BOTH must be satisfied, which is the
+  // whole guarantee: 14 days of owner silence AND 7 days to answer a request
+  // they were told about. An offer can be ripe against an owner who is not
+  // stale, and the sweep drops it — asserted here because the two constants are
+  // easy to conflate into one.
+  it("is about the offer's age alone, not the owner's silence", () => {
+    const filed = daysAgo(AUTO_APPROVE_DAYS + 1);
+    expect(isRequestRipe({ createdAt: filed })).toBe(true);
+    expect(isOwnerStale({ ownerActiveAt: daysAgo(1) })).toBe(false);
   });
 });
 

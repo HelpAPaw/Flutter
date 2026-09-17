@@ -24,6 +24,7 @@ import {
 import { isRestoredSignal } from "./events";
 import { mentionedUids, splitCommentRecipients } from "./mentions";
 import { signalOwnerOf } from "./signalRefs";
+import { AUTO_APPROVE_DAYS, isOwnerStale } from "./signalOwnership";
 import {
   displayTagsOf,
   effectiveHelperTags,
@@ -50,7 +51,7 @@ export { moderateAction, listQuarantined } from "./moderation";
 
 // Signal ownership (master spec 4.5), re-exported for the same reasons and with
 // the same initializeApp() ordering constraint.
-export { signalOwnership } from "./signalOwnership";
+export { signalOwnership, autoApproveStaleTakeovers } from "./signalOwnership";
 
 // Removing a signal (HelpAPaw/Flutter#68) — the reporter's own delete, made
 // recoverable. Same module-per-privileged-surface reasoning and the same
@@ -1581,6 +1582,14 @@ async function handleTakeoverRequested(
   const signalTitle = (signalData.title as string) ?? "";
   const name = requesterName ?? "A volunteer";
 
+  // A request against a signal that is ALREADY stale is the one that will be
+  // approved for them if they say nothing (`autoApproveStaleTakeovers`), so it
+  // has to say so. An owner who is told only "someone asked" and then loses the
+  // signal a week later was, as far as they experienced it, not warned — which
+  // is the failure the auto-approval window exists to prevent, and it would be
+  // reintroduced here by wording alone.
+  const willAutoApprove = isOwnerStale(signalData);
+
   await notifyOneUser(
     owner.id,
     isTestMode,
@@ -1588,7 +1597,10 @@ async function handleTakeoverRequested(
       docId: `req_${signalId}_${requesterId}`,
       type: "takeover_request",
       title: "Someone offered to take over",
-      body: `${signalTitle}: ${name} asked to take responsibility`,
+      body: willAutoApprove
+        ? `${signalTitle}: ${name} asked to take responsibility. ` +
+          `It passes to them in ${AUTO_APPROVE_DAYS} days unless you reply.`
+        : `${signalTitle}: ${name} asked to take responsibility`,
       signalId,
       signalTitle,
       newOwnerId: requesterId,

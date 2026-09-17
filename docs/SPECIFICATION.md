@@ -880,21 +880,54 @@ escalate:
 1. **Ask.** `takeoverRequests/{uid}` is a plain client write; `onTakeoverRequested`
    tells the owner; the owner approves or declines.
 2. **Take a released signal.** `release` writes an explicit null; anyone may `claim`.
-3. **Take a stale signal.** `ownerActiveAt` older than `STALE_OWNER_DAYS = 14`
-   makes a held signal claimable, and the displaced owner is told.
+   The only instant path, because there is nobody to ask.
+3. **Ask a stale owner, and let their silence answer.** `ownerActiveAt` older than
+   `STALE_OWNER_DAYS = 14` does not make a signal claimable; it makes an
+   *unanswered offer* on it self-approving after `AUTO_APPROVE_DAYS = 7`
+   (`autoApproveStaleTakeovers`). So an abandoned signal moves 21 days after its
+   owner last did anything, having been asked for first.
 
 None of these needs a moderator, which is the point: moderators are scarce and a
-stray dog is not. A signal with no usable timestamp reads as **not** stale: the safe
-direction is "you have to ask", never "anyone may take this".
+stray dog is not. A signal with no usable timestamp reads as **not** stale, and a
+request with no usable `createdAt` is **never** ripe: the safe direction is "nothing
+happens", never "hand the animal to a stranger".
 
-**The server decides staleness, but the client has to be able to draw the button.**
-`STALE_OWNER_DAYS` is the enforcement, and a claim it disagrees with comes back as
-`failed-precondition`; `SignalOwnershipService.staleOwnerAfter` mirrors it purely so the
-UI knows to offer *Take responsibility* rather than *Offer to take over*. Without that
-copy the escape hatch is **unreachable** — a signal held by someone who stopped answering
-looks exactly like one held by someone active, so the only affordance shown is an offer
-sent to a person who by definition is not reading it. Drift there mis-draws a button
-and grants nothing; guarded by `test/takeover_cooldown_guard_test.dart` (§12.5e).
+**Route 3 used to be instant, and that was the defect.** Fourteen days of silence
+made a signal claimable in one tap by anyone who happened to open it, and the first
+its owner heard was the notification saying it was gone — a dispossession decided
+entirely by a clock they could not see. The escalation now has a rung in it: the
+volunteer asks, `onTakeoverRequested` tells the owner *in those words* that silence
+will hand the signal over and when, and only then does the server act for them.
+
+**Two clocks, independent, and both must be satisfied.** That is what makes the
+guarantee statable: the owner has been silent for fourteen days *and* has had a
+week to answer an offer they were notified about. Neither alone moves a signal, and
+`isRequestRipe` is deliberately about the offer's age alone so the two cannot be
+conflated into one. **Staleness is re-checked when the sweep fires, not when the
+offer was filed** — so anything that refreshes `ownerActiveAt` stops the clock, and
+coming back is a response exactly as answering is. A decline is a response too, and
+costs the volunteer the unchanged one-day re-ask cooldown.
+
+`STALE_OWNER_DAYS` and `AUTO_APPROVE_DAYS` are both enforcement;
+`SignalOwnershipService.staleOwnerAfter` and `.autoApproveAfter` mirror them so the
+UI can name a **date** rather than say "eventually" — to the owner in the stale note,
+and to the volunteer in the pending-offer line. Drift there is a deadline the app
+invents; guarded by `test/takeover_cooldown_guard_test.dart` (§12.5e).
+
+**The sweep is daily, and that is a decision.** The project's other two schedules
+are weekly cleanups where a late run costs nothing; this one decides when a
+volunteer may start helping an animal, and a weekly sweep would turn "seven days"
+into "somewhere between seven and fourteen". One `collectionGroup` query covers
+**both** signal collections, so test-mode offers auto-approve exactly as production
+ones do rather than silently never firing. Each approval is its own transaction, for
+the reason the callable is one: the decision is made from a read of who currently
+holds the signal, and everything is re-checked inside it — the signal may have been
+deleted, the owner may have come back, the offer may have been answered or
+withdrawn, the requester may already hold it by another route. The write is
+`pending` → `approved`, which is what `handleTakeoverWritten` already fires on, so
+the volunteer's "you are now responsible" notification comes from the same trigger
+an owner's own approval uses; `autoApproved: true` marks the row for anyone reading
+it later.
 
 **And staleness is said out loud, not left to be inferred from a button.**
 `SignalOwnerBlock._buildStaleNote` puts a note under the owner's name whenever the
@@ -905,15 +938,15 @@ grabs.
 
 **Two wordings, split by audience** — which is how everything else in that block splits,
 and gating the note on state alone made it the one element that ignored the split.
-Bystanders get *"Hasn't been active since {date}. Anyone with an account can take this
-signal on."*, which explains the claim button beneath it. The owner gets *"You haven't
-updated this signal since {date}. Anyone with an account can take it on — post an update
-to keep it."* The shared string could not have said that last clause, and as
-third-person prose sitting directly under *"You are responsible for this signal"* it
-read as being about somebody else — in English; Bulgarian's subject-neutral phrasing hid
-the defect rather than avoiding it. **"With an account" is not padding**: `claim` runs
-`requireRealAccount`, and by the anonymous-session invariant (§7.2) a signed-out reader
-*is* anonymous, so the unqualified sentence was false for them.
+Bystanders get *"Hasn't been active since {date}. Offer to take over and the signal
+passes to you in {days} days unless they reply."*; the owner gets *"You haven't updated
+this signal since {date}. If someone offers to take it over, it passes to them in {days}
+days unless you reply — post an update to keep it."* The shared string could not have
+said that last clause, and as third-person prose sitting directly under *"You are
+responsible for this signal"* it read as being about somebody else — in English;
+Bulgarian's subject-neutral phrasing hid the defect rather than avoiding it. The window
+is **interpolated, never spelled into the sentence**, so copy cannot promise a week
+while the server enforces something else.
 
 The date is `Signal.ownerLastActiveAt` — the `ownerActiveAt`-then-`createdAt` fallback,
 and the very value `SignalOwnershipService.isOwnerStale` judges staleness on, so the
@@ -923,12 +956,15 @@ guard, and §12.5e's tolerance for that pair is unchanged — drift mis-draws a 
 grants nothing. A released signal gets no note, because nobody is there to be inactive.
 Covered by `test/widgets/signal_owner_block_test.dart`.
 
-**What the note cannot do is reach an owner who has stopped opening the app** — which is
-most of the population it describes. Staleness has no outbound event: it is a pure
-function of a timestamp, evaluated only when someone renders the screen or calls
-`claim`, so the owner learns of it on return, or at displacement, never while they could
-still act. A scheduled day-12 warning down the existing inbox/push fan-out is the other
-half and is **not built**.
+**The note alone could not reach an owner who has stopped opening the app** — which is
+most of the population it describes — and that gap is what the auto-approval window
+closed. Staleness still has no outbound event of its own: it is a pure function of a
+timestamp, evaluated when someone renders the screen or when the sweep fires. But an
+*offer* does have one, so the moment a volunteer asks for a stale signal, its owner is
+pushed a message naming the deadline. The note is now the explanation a returning owner
+reads; the notification is what reaches one who has not returned. A warning that fires
+on staleness alone, with nobody asking, is still **not built** — and is worth much less
+now that no signal moves without an ask.
 
 **A decline is not permanent.** An answered request may be filed again after
 `isAfterReaskCooldown()` — **one day** — because a signal looks very different two weeks
@@ -3690,6 +3726,7 @@ silently breaks Auth/Firestore/FCM in release builds only.
 
 | Date | Change |
 |---|---|
+| 2026-09-17 | **A stale signal is now asked for, not taken** (§4.8). Staleness was an *instant* dispossession: fourteen days of silence made a signal claimable in one tap by anyone who happened to open it, and the first its owner heard of it was the notification saying it was gone — decided entirely by a clock they could not see. Route 3 of the escape hatch now goes through the request path like every other held signal, and what staleness changes is what an offer *means*: `autoApproveStaleTakeovers` approves an unanswered one after **`AUTO_APPROVE_DAYS = 7`**, so an abandoned signal moves 21 days after its owner last did anything, having been asked for first. **Two clocks, independent, both required** — fourteen days of silence *and* a week to answer an offer they were pushed a notification about, which names the deadline in those words. `isRequestRipe` is about the offer's age alone so the two cannot be conflated, and **staleness is re-checked when the sweep fires, not when the offer was filed**, which is what makes posting an update the way an owner keeps a signal somebody has asked for. `claim` now refuses every held signal, stale or not; **released** keeps the instant path, because there is nobody to ask. The sweep is **daily**, not weekly like the project's two cleanup schedules: it decides when a volunteer may start helping an animal, and weekly would turn "seven days" into "somewhere between seven and fourteen". One `collectionGroup` query covers **both** collections, so test-mode offers auto-approve rather than silently never firing — the failure QA would have taken longest to notice — behind a new `takeoverRequests` COLLECTION_GROUP index on `status, createdAt`. Each approval is its own transaction re-reading everything (signal deleted, owner returned, offer already answered, requester already holding it), and writes `pending` → `approved`, which `handleTakeoverWritten` already fires on, so the volunteer's "you are now responsible" push comes from the same trigger an owner's own approval uses; `autoApproved: true` marks the row. The UI follows: a stale signal draws **Offer to take over**, the stale note and the pending-offer line both name a **date** rather than saying "eventually", and the day count is interpolated from the mirrored constant so copy cannot promise a week the server does not keep (third guard in `takeover_cooldown_guard_test.dart`). **`SignalOwnerBlock` now takes its `SignalOwnershipService` as a parameter**, null meaning the singleton so no call site changed: the two request streams were the only collaborators it reached for globally, which cost nothing while a stale signal short-circuited to a button and became the *entire* testable surface the moment staleness routed through the offer path. 595 Dart tests, 127 functions tests, 286 rules tests (rules unchanged — the request path already existed, so this needed no new grant). **Deployed to help-a-paw-dev 2026-09-17, index first, then the four functions** (`autoApproveStaleTakeovers` created; `signalOwnership`, `onTakeoverWritten`, `onTestTakeoverWritten` updated) — targeted rather than a blanket functions deploy, which is what once deleted `listQuarantined`; 20 live functions before, 21 after, none lost. The index set was diffed both ways beforehand (17 live, 18 in file, **0 deletions**) and re-read after; rules compiled but were **not** deployed, since the request path needed no new grant. `npm audit signatures` verified 575 registry signatures with no malware advisory and the lockfile untouched. **The database held zero `takeoverRequests` documents at deploy time**, prod and test alike — the feature has never reached a released build — so the first sweep can approve nothing that exists today and the change is inert until the app ships. Cloud Scheduler registered at `0 3 * * *` UTC. **The app half is NOT released**, so #71's regression window stays open, and nothing is device-verified. |
 | 2026-09-17 | **A stale owner now says so, instead of being inferred from which button appeared** (§4.8). Staleness was visible only as a swap — a viewer got *Take responsibility* instead of *Offer to take over* — which is a state you can read only if you know both buttons exist, and the **owner** is offered neither of them. So the one person able to end the staleness by posting an update was the one person with no way to learn their signal had become claimable. `SignalOwnerBlock._buildStaleNote` now says it under the owner's name, in **two wordings split by audience** — which is how every other element in that block splits, and gating the note on state alone had made it the one that ignored the split. Bystanders get *"Hasn't been active since {date}. Anyone with an account can take this signal on."*, explaining the button beneath it; the owner gets *"You haven't updated this signal since {date}. Anyone with an account can take it on — post an update to keep it."* A single shared string could not carry that last clause, and as third-person prose under *"You are responsible for this signal"* it read as being about somebody else — in English only, since Bulgarian's subject-neutral phrasing hid the defect rather than avoiding it. **"With an account" is not padding**: `claim` runs `requireRealAccount`, and by the anonymous-session invariant a signed-out reader *is* anonymous, so the unqualified sentence was false for them. The date is `Signal.ownerLastActiveAt`, the `ownerActiveAt`-then-`createdAt` fallback that `isOwnerStale` itself judges on, so the note and the gate that drew it cannot disagree — deliberately a narrower claim than "matches the server", since `ownerActiveAtOf` is a separate implementation with no cross-language guard and §12.5e's tolerance for that pair is unchanged. A **released** signal gets no note, since nobody is there to be inactive. The unused `signalOwnerStale` string — shipped in both locales, referenced by no widget — became the two placeholder-carrying keys. Found alongside it and fixed: the re-ask cooldown line built its date with a bare `DateFormat.yMMMd()`, giving a Bulgarian reader an English date, which is that sentence's whole content; both dates now go through one `_dayFormat` helper. **Deliberately not built: the outbound half.** Staleness has no event — it is a pure function of a timestamp, evaluated only when someone renders the screen or calls `claim` — so this note reaches an owner who comes back, which is the very thing their being stale says they have not done. A scheduled day-12 warning down the existing inbox/push fan-out is the other half and is not in this change. Tests build the block for a viewer who is neither owner nor reporter, the one path that touches no Firestore stream; the *active*-owner gate is pinned against `SignalOwnershipService.isOwnerStale` and the owner's wording against the strings in both locales, because an owner also sees the offers list and that subscribes through `SignalOwnershipService.instance`, which this project has no fake for. **Bulgarian phrasing is load-bearing here and the device pass proved it**: `DateFormat.yMMMd('bg')` ends the date with `г.`, so a sentence that closed on the placeholder rendered *"от 20.08.2026 г.."* — a double period, invisible in English and in every unit test, since the year is all they assert. Both bg strings now open with the date instead of ending on it. 590 Dart tests. Client-only — no rules, functions or deploy. **Device-verified on SM-X205 2026-09-17** (debug, test mode, Bulgarian), all three states against back-dated `ownerActiveAt` values in `signals_test`: the **owner** of a stale signal read *"От 20.08.2026 г. не сте обновявали този сигнал. Всеки с регистрация може да го поеме — публикувайте обновление, за да го запазите."* under *"Вие отговаряте за този сигнал"*; a **bystander** on a signal held by someone else read the *"няма активност по сигнала"* wording with **Поеми отговорност** beneath it; and restoring the real timestamp made the note disappear and the button revert to **Предложи да поемеш сигнала** live on the open screen, through the snapshot stream. All three documents were restored afterwards, including deleting the `ownerActiveAt` that one of them had never had. |
 | 2026-09-17 | **"Something else" now has to say what else** (§5.1, §7.16). The report dialog required a reason and left the free text optional for all twelve reasons, including `other` — so a report could reach the queue saying only that somebody objected to something, with no category to triage it by and no prose to read. The text is now mandatory for `other` alone: Send stays disabled until `details.trim()` is non-empty, the label switches to a "(required)" variant and a helper line says why, and both revert the moment another reason is picked. **Which reasons need text is the enum's business** — `ReportReason.requiresDetails`, exhaustive like `label()`, so a reason added later cannot inherit "optional" by saying nothing — and the dialog only asks. Deliberately **not** a rules clause: the absence of a server-side allow-list on `reason` exists so an older deployed ruleset can never reject a newer client, and a min-length-on-`other` rule would do the mirror-image damage, failing reports from every already-released build. The helper line is a `helper` **widget**, not `helperText`, for the reason `update_note_dialog` documents at length — `helperText` is clipped to one line with a hardcoded ellipsis, which would have eaten the end of the Bulgarian sentence at any font scale; unlike that dialog's copy this one is conditional, which is safe only because it appears on a *radio tap*, never on a keystroke, so it cannot shift the field under a typing finger. Guard tests pin the asymmetry at both levels: `report_reason_test` that `other` is the only reason demanding text, and `report_dialog_test` that a named reason still submits with an empty box, that whitespace is not an explanation, and that switching away drops the requirement. 584 Dart tests. Client-only — no rules, functions or deploy. **Device-verified on SM-X205 2026-09-17** (debug, test mode, Bulgarian): the dialog opened from the signal-details flag on a signal this account did not report; "Спам" enabled Send with the box empty; switching to "Друго" re-greyed it, swapped the label to "Опишете какъв е проблемът (задължително)" and rendered the helper sentence in full, unclipped; three typed spaces left Send disabled; real text enabled it, and the report landed as `reason: "other"` with its `details` intact. The QA report was deleted afterwards so it does not sit in the moderator queue. |
 | 2026-09-12 | **Deep links replace the navigation stack, and that is survivable — the install hand-off's launch check was not** (§6, §7.18). Investigating how the bottom bar behaves when a link arrives over a screen hierarchy turned up that **both** platforms enable Flutter's built-in deep linking (`flutter_deeplinking_enabled`, `FlutterDeepLinkingEnabled`) **and** run an app_links listener — two handlers for one link. The built-in one wins and treats the link as a new *location*, so it replaces the configuration rather than pushing: device-verified on SM-X205, a link arriving over the New Signal wizard destroys that route, and two links in a row leave only the second. `SignalNavigator.open`'s `_shellIsOnTop` guard therefore protects the FCM-tap and deferred-install paths, which really do call `open()`, but not the link path — which also means `signal_navigator_branch_test`'s wizard-preservation case asserts a guarantee the app does not deliver on Android, because it drives the seam directly. **The damage is bounded and the cheap mitigation is the right one:** the wizard keeps its draft *and its step* in `mapViewModelProvider` by design (see the class doc on `NewSignalWizardPage`), so re-entry resumes exactly where the reporter was — verified: a link fired at step 3 of 7 destroyed the route, and tapping Continue on the map returned to step 3 with the draft intact. Turning the flag off would restore push semantics but is a bigger change than it looks, so it stays open. What *was* fixed is the real hazard behind it: `DeferredDeepLinkService.resolve` took `launchedFromLink` from `SignalNavigator.isShowingSignal` in a post-frame callback, which is only reliable while the built-in path installs the route before that frame. Any asynchronous delivery makes it read false on a genuine link launch, and the hand-off then opens a **stale stored signal instead of the one the user tapped**. It now asks `AppLinks.getInitialLink()` — a direct question with no ordering dependency, correct under either arrangement. Also fixed, and found the same way: `CachedUserDocStream.watch` was `async*`, so `yield*` subscribed a turn after `yield _latest` and a broadcast controller dropped anything landing in between; the follow button offered "Follow" for a signal Firestore said was followed. Subscribe-then-replay closes it (device-verified: the button now reads "Следвате" on entry). 551 Dart tests. |

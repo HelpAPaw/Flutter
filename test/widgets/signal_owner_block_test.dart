@@ -5,6 +5,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/intl.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:help_a_paw/src/models/signal.dart';
 import 'package:help_a_paw/src/services/signal_ownership_service.dart';
@@ -49,7 +50,11 @@ void main() {
   Timestamp daysAgo(int days) =>
       Timestamp.fromDate(DateTime.now().subtract(Duration(days: days)));
 
-  Widget host(Signal signal, {Locale locale = const Locale('en')}) =>
+  Widget host(
+    Signal signal, {
+    Locale locale = const Locale('en'),
+    TakeoverRequest? myRequest,
+  }) =>
       MaterialApp(
         locale: locale,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -64,16 +69,31 @@ void main() {
             nameOf: (uid, {required fallback, style, maxLines}) => Text(fallback),
             onClaim: () async {},
             onSignInRequired: () {},
+            service: _FakeOwnershipService(myRequest),
           ),
         ),
       );
 
-  /// The note's opening words, locale-resolved rather than restated, so a copy
+  /// The days count the copy interpolates, as the widget renders it.
+  final days = '${SignalOwnershipService.autoApproveAfter.inDays}';
+
+  /// A note's opening words, locale-resolved rather than restated, so a copy
   /// edit does not have to be made twice.
+  ///
+  /// Both strings now open with the date in Bulgarian (a `yMMMd('bg')` value
+  /// ends in `г.`, so a sentence closing on one renders a double period), which
+  /// leaves nothing before the placeholder to slice in that locale — so the
+  /// prefix is taken from what follows it instead when the leading part is
+  /// empty.
+  String prefixOf(String rendered) {
+    final at = rendered.indexOf('@@when@@');
+    if (at > 0) return rendered.substring(0, at);
+    return rendered.substring(at + '@@when@@'.length);
+  }
+
   Future<String> notePrefix(Locale locale) async {
     final l10n = await AppLocalizations.delegate.load(locale);
-    final rendered = l10n.signalOwnerStaleSince('@@when@@');
-    return rendered.substring(0, rendered.indexOf('@@when@@'));
+    return prefixOf(l10n.signalOwnerStaleSince('@@when@@', days));
   }
 
   testWidgets('names the date an owner past the stale window went quiet',
@@ -147,6 +167,94 @@ void main() {
     );
   });
 
+  // The heart of the rule change. A stale signal used to put "Take
+  // responsibility" in front of a stranger, and one tap moved it — the owner's
+  // first news of it being the notification saying it was gone. It now takes
+  // the same offer path as any other held signal.
+  testWidgets('offers a stale signal for the asking, not for the taking',
+      (tester) async {
+    await tester.pumpWidget(host(signalWith(
+      ownerActiveAt: daysAgo(SignalOwnershipService.staleOwnerAfter.inDays + 1),
+    )));
+    await tester.pump();
+
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    expect(find.text(l10n.signalOwnerRequestTakeover), findsOneWidget);
+    expect(find.text(l10n.signalOwnerTakeResponsibility), findsNothing);
+  });
+
+  // A released signal has nobody to ask, so it keeps the instant path — the one
+  // place the old button survives, and the distinction the change turns on.
+  testWidgets('still claims a released signal outright', (tester) async {
+    await tester.pumpWidget(host(signalWith(signalOwner: null)));
+    await tester.pump();
+
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    expect(find.text(l10n.signalOwnerTakeResponsibility), findsOneWidget);
+    expect(find.text(l10n.signalOwnerRequestTakeover), findsNothing);
+  });
+
+  // "Sent, now wait" is the deadlock this whole escalation exists to break —
+  // waiting on somebody who by definition is not reading it. The pending state
+  // has to name the date the server will answer for them.
+  testWidgets('a pending offer on a stale signal names the handover date',
+      (tester) async {
+    final filed = DateTime.now().subtract(const Duration(days: 2));
+    await tester.pumpWidget(host(
+      signalWith(
+        ownerActiveAt:
+            daysAgo(SignalOwnershipService.staleOwnerAfter.inDays + 1),
+      ),
+      myRequest: TakeoverRequest(
+        requesterId: 'stranger-uid',
+        status: 'pending',
+        note: 'I can collect him tonight.',
+        createdAt: filed,
+        resolvedAt: null,
+        resolvedNote: null,
+      ),
+    ));
+    await tester.pump();
+
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    final passesAt = filed.add(SignalOwnershipService.autoApproveAfter);
+    // The whole sentence, date included: a deadline is the one thing here that
+    // is useless if it is approximately right.
+    expect(
+      find.text(l10n.signalOwnerRequestPassesAt(
+          DateFormat.yMMMd('en').format(passesAt))),
+      findsOneWidget,
+    );
+    // The plain "you have offered" wording belongs to an ACTIVE owner, whose
+    // offer nobody will answer on their behalf.
+    expect(find.text(l10n.signalOwnerRequestPending), findsNothing);
+  });
+
+  // The mirror of the above: an active owner's pending offer must NOT promise a
+  // handover, because `autoApproveStaleTakeovers` re-checks staleness and would
+  // never approve it.
+  testWidgets('a pending offer on an active signal promises no handover',
+      (tester) async {
+    await tester.pumpWidget(host(
+      signalWith(
+        ownerActiveAt:
+            daysAgo(SignalOwnershipService.staleOwnerAfter.inDays - 1),
+      ),
+      myRequest: TakeoverRequest(
+        requesterId: 'stranger-uid',
+        status: 'pending',
+        note: 'I can help.',
+        createdAt: DateTime.now().subtract(const Duration(days: 30)),
+        resolvedAt: null,
+        resolvedNote: null,
+      ),
+    ));
+    await tester.pump();
+
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    expect(find.text(l10n.signalOwnerRequestPending), findsOneWidget);
+  });
+
   // The owner's own wording is asserted on the strings, not the rendered
   // widget: an owner also sees the offers list, which subscribes to Firestore
   // through `SignalOwnershipService.instance`, so that branch cannot be pumped
@@ -160,14 +268,41 @@ void main() {
       final l10n = await AppLocalizations.delegate.load(locale);
 
       expect(
-        l10n.signalOwnerStaleYours('@@when@@'),
-        isNot(l10n.signalOwnerStaleSince('@@when@@')),
+        l10n.signalOwnerStaleYours('@@when@@', days),
+        isNot(l10n.signalOwnerStaleSince('@@when@@', days)),
         reason: 'the owner would be reading third-person prose about '
             'themselves in ${locale.languageCode}',
       );
-      expect(l10n.signalOwnerStaleYours('@@when@@'), contains('@@when@@'));
+      expect(l10n.signalOwnerStaleYours('@@when@@', days),
+          contains('@@when@@'));
+      // The window is interpolated, never spelled into the sentence: copy that
+      // promises a week while the server enforces something else is the drift
+      // this and `takeover_cooldown_guard_test.dart` exist to stop.
+      expect(l10n.signalOwnerStaleYours('@@when@@', days), contains(days));
     }
   });
+}
+
+/// Stands in for the takeover-request streams so the offer path can be pumped.
+///
+/// The real ones reach Firestore, and since a stale signal now renders the
+/// offer path rather than a claim button, without this there is no branch of
+/// this widget a test can build at all.
+class _FakeOwnershipService implements SignalOwnershipService {
+  _FakeOwnershipService(this.mine);
+
+  final TakeoverRequest? mine;
+
+  @override
+  Stream<TakeoverRequest?> watchMyRequest(String signalId, String uid) =>
+      Stream.value(mine);
+
+  @override
+  Stream<List<TakeoverRequest>> watchPendingRequests(String signalId) =>
+      Stream.value(const []);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 /// Sentinel for "no `signalOwner` argument given", distinct from an explicit

@@ -1364,17 +1364,23 @@ abstract class AppLocalizations {
   /// **'Offers to take over'**
   String get signalOwnerOffers;
 
-  /// Shown to everyone except the owner under an inactive signal owner, inviting anyone to take the signal on
+  /// Shown to everyone except the owner under an inactive signal owner, explaining that an offer auto-approves
   ///
   /// In en, this message translates to:
-  /// **'Hasn\'t been active since {when}. Anyone with an account can take this signal on.'**
-  String signalOwnerStaleSince(String when);
+  /// **'Hasn\'t been active since {when}. Offer to take over and the signal passes to you in {days} days unless they reply.'**
+  String signalOwnerStaleSince(String when, String days);
 
   /// The owner's own version of the inactivity note, which names the action that keeps the signal
   ///
   /// In en, this message translates to:
-  /// **'You haven\'t updated this signal since {when}. Anyone with an account can take it on — post an update to keep it.'**
-  String signalOwnerStaleYours(String when);
+  /// **'You haven\'t updated this signal since {when}. If someone offers to take it over, it passes to them in {days} days unless you reply — post an update to keep it.'**
+  String signalOwnerStaleYours(String when, String days);
+
+  /// Pending-offer state on a stale signal, naming the date the offer auto-approves
+  ///
+  /// In en, this message translates to:
+  /// **'You have offered to take this over. It passes to you on {when} unless the current owner replies.'**
+  String signalOwnerRequestPassesAt(String when);
 
   /// No description provided for @takeoverConfirmTitle.
   ///

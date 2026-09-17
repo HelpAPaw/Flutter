@@ -54,15 +54,29 @@ class SignalOwnershipService {
   /// disagrees with by throwing `failed-precondition`.
   ///
   /// This copy exists because without it the staleness escape hatch is
-  /// *unreachable from the UI*: a signal held by someone who stopped answering
-  /// looks identical to one held by someone active, so the only affordance
-  /// offered is "Offer to take over" — an offer sent to a person who by
-  /// definition is not reading it. The whole design is shaped around not
-  /// deadlocking there, so the button has to be drawable.
+  /// *invisible from the UI*: a signal held by someone who stopped answering
+  /// looks identical to one held by someone active, so a volunteer has no way
+  /// to tell that the offer they are about to send will be answered by the
+  /// server if the owner never does. The whole design is shaped around not
+  /// deadlocking there, so the difference has to be sayable.
   ///
   /// Guarded by `test/takeover_cooldown_guard_test.dart`, which parses the
-  /// TypeScript. Drift only mis-draws a button; it cannot grant anything.
+  /// TypeScript. Drift only mis-words a screen; it cannot grant anything.
   static const Duration staleOwnerAfter = Duration(days: 14);
+
+  /// How long an unanswered offer on a *stale* signal waits before the server
+  /// approves it for the owner.
+  ///
+  /// **Mirrored by `AUTO_APPROVE_DAYS` in `functions/src/signalOwnership.ts`,
+  /// which is the enforcement** — `autoApproveStaleTakeovers` sweeps daily and
+  /// re-checks staleness at approval time, so an owner who comes back keeps the
+  /// signal even with an offer outstanding.
+  ///
+  /// Runs *after* [staleOwnerAfter] rather than instead of it: 14 days of
+  /// silence, then 7 more with an offer they were told about. Both copies exist
+  /// here only so the UI can name the date instead of saying "eventually", and
+  /// both are pinned by `test/takeover_cooldown_guard_test.dart`.
+  static const Duration autoApproveAfter = Duration(days: 7);
 
   /// Whether this signal's owner has been silent long enough to be displaced.
   ///
@@ -355,6 +369,20 @@ class TakeoverRequest {
   /// answered one whose cooldown has passed. Mirrors `isAfterReaskCooldown()` in
   /// the rules, which is the enforcement — this only decides what the button
   /// says.
+  /// When this offer passes to the requester without an answer, or null if it
+  /// never will.
+  ///
+  /// Only meaningful for a **pending** offer on a signal whose owner is stale,
+  /// which is why the signal is a parameter: the request document alone cannot
+  /// know, and a deadline shown against an active owner would be a promise the
+  /// server will not keep — `autoApproveStaleTakeovers` re-checks staleness
+  /// when it fires, so an owner who posts an update stops this clock.
+  DateTime? autoApprovesAt(Signal signal) {
+    if (!isPending || createdAt == null) return null;
+    if (!SignalOwnershipService.isOwnerStale(signal)) return null;
+    return createdAt!.add(SignalOwnershipService.autoApproveAfter);
+  }
+
   DateTime? get reaskableAt {
     if (isPending || resolvedAt == null) return null;
     final at = resolvedAt!.add(SignalOwnershipService.reaskCooldown);

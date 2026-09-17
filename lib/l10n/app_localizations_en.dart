@@ -708,13 +708,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get signalOwnerOffers => 'Offers to take over';
 
   @override
-  String signalOwnerStaleSince(String when) {
-    return 'Hasn\'t been active since $when. Anyone with an account can take this signal on.';
+  String signalOwnerStaleSince(String when, String days) {
+    return 'Hasn\'t been active since $when. Offer to take over and the signal passes to you in $days days unless they reply.';
   }
 
   @override
-  String signalOwnerStaleYours(String when) {
-    return 'You haven\'t updated this signal since $when. Anyone with an account can take it on — post an update to keep it.';
+  String signalOwnerStaleYours(String when, String days) {
+    return 'You haven\'t updated this signal since $when. If someone offers to take it over, it passes to them in $days days unless you reply — post an update to keep it.';
+  }
+
+  @override
+  String signalOwnerRequestPassesAt(String when) {
+    return 'You have offered to take this over. It passes to you on $when unless the current owner replies.';
   }
 
   @override

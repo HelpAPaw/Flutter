@@ -44,9 +44,16 @@ typedef GuardedRunner = Future<void> Function(Future<void> Function() body);
 /// | the owner | who they are, plus Release and any offers to answer |
 /// | the reporter, not holding | who holds it, and any offers — read-only |
 /// | anyone else, signal held | Offer to take over (or their pending offer) |
-/// | anyone else, released or stale | Take responsibility |
+/// | anyone else, signal released | Take responsibility |
 ///
-/// Across all four, a **held but stale** signal also carries the note from
+/// **Stale is not a fifth row.** A stale signal is a held one and takes the
+/// held row's offer path; what staleness changes is what the offer *means* —
+/// `autoApproveStaleTakeovers` approves it after
+/// [SignalOwnershipService.autoApproveAfter] if the owner never answers, so the
+/// pending state names the date it will pass rather than leaving the volunteer
+/// waiting on someone who has stopped reading.
+///
+/// Across all four, a stale signal also carries the note from
 /// [_buildStaleNote] — worded for the owner or for everyone else, since the
 /// owner's copy has an action in it that nobody else's does.
 class SignalOwnerBlock extends StatelessWidget {
@@ -60,6 +67,7 @@ class SignalOwnerBlock extends StatelessWidget {
     required this.nameOf,
     required this.onClaim,
     required this.onSignInRequired,
+    this.service,
   });
 
   final Signal signal;
@@ -85,6 +93,20 @@ class SignalOwnerBlock extends StatelessWidget {
   /// Shown when an anonymous session tries to act.
   final VoidCallback onSignInRequired;
 
+  /// The takeover-request streams, injectable for tests.
+  ///
+  /// The block's other four collaborators are already parameters; these two
+  /// were the exception, reaching for `SignalOwnershipService.instance`
+  /// directly — and they are the *only* reason this widget could not be pumped,
+  /// because both branches that render an offer subscribe to Firestore. That
+  /// cost nothing while a stale signal short-circuited to a button, and became
+  /// the whole surface the moment staleness started routing through the offer
+  /// path. Null means the singleton, so no call site changed.
+  final SignalOwnershipService? service;
+
+  SignalOwnershipService get _service =>
+      service ?? SignalOwnershipService.instance;
+
   bool get _isOwner => signal.isHeldBy(uid);
 
   /// The person who filed the report, whether or not they still hold the signal.
@@ -104,10 +126,10 @@ class SignalOwnerBlock extends StatelessWidget {
   /// **pending** ones, which is a server-side filter. One unfiltered listener
   /// made both pay a read per person who had ever asked.
   Stream<TakeoverRequest?> get _myRequest =>
-      SignalOwnershipService.instance.watchMyRequest(signalId, uid!);
+      _service.watchMyRequest(signalId, uid!);
 
   Stream<List<TakeoverRequest>> get _pendingRequests =>
-      SignalOwnershipService.instance.watchPendingRequests(signalId);
+      _service.watchPendingRequests(signalId);
 
   @override
   Widget build(BuildContext context) {
@@ -231,11 +253,17 @@ class SignalOwnerBlock extends StatelessWidget {
   Widget _buildStaleNote(BuildContext context, DateTime since) {
     final l10n = AppLocalizations.of(context);
     final when = _dayFormat(context).format(since);
+    // Interpolated rather than written into the sentence, so the copy cannot
+    // promise a week while the server enforces something else — the two are
+    // pinned together by `takeover_cooldown_guard_test.dart`.
+    final days = '${SignalOwnershipService.autoApproveAfter.inDays}';
 
     return Padding(
       padding: const EdgeInsets.only(left: _nameIndent, top: 2, right: 8),
       child: Text(
-        _isOwner ? l10n.signalOwnerStaleYours(when) : l10n.signalOwnerStaleSince(when),
+        _isOwner
+            ? l10n.signalOwnerStaleYours(when, days)
+            : l10n.signalOwnerStaleSince(when, days),
         style: Theme.of(context).textTheme.bodySmall,
       ),
     );
@@ -260,13 +288,17 @@ class SignalOwnerBlock extends StatelessWidget {
       );
     }
 
-    // Nobody holds it, or whoever does has stopped answering — either way there
-    // is no permission to ask for, and the server will say so if it disagrees.
+    // Nobody holds it, so there is no permission to ask for and nobody whose
+    // silence could be read as consent. The server will say so if it disagrees.
     //
-    // The staleness half matters: without it the escape hatch the whole design
-    // is shaped around is reachable only as a side effect of using the status
-    // dropdown, and somebody who just wants to take the signal on has no button.
-    if (signal.isReleased || stale) {
+    // **Stale is deliberately NOT here any more.** It used to be: fourteen days
+    // of silence put this button in front of a stranger and one tap took the
+    // signal, with the first its owner heard of it being the notification
+    // saying it was gone. A stale signal now takes the offer path below like
+    // any other held signal — the difference is that the offer answers itself
+    // after `autoApproveAfter` if the owner stays silent, which is what the
+    // copy there says and `autoApproveStaleTakeovers` is what does it.
+    if (signal.isReleased) {
       return Align(
         alignment: Alignment.centerLeft,
         child: FilledButton.tonalIcon(
@@ -324,13 +356,23 @@ class SignalOwnerBlock extends StatelessWidget {
         }
 
         if (mine != null && mine.isPending) {
+          // On a stale signal the offer answers itself, so say when. Without the
+          // date this reads as "sent, now wait" — waiting on somebody who by
+          // definition is not reading it, which is the deadlock the whole
+          // escalation exists to break, restored by silence in the UI.
+          final passesAt = mine.autoApprovesAt(signal);
+
           return Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Row(
               children: [
                 Expanded(
                   child: Text(
-                    l10n.signalOwnerRequestPending,
+                    passesAt == null
+                        ? l10n.signalOwnerRequestPending
+                        : l10n.signalOwnerRequestPassesAt(
+                            _dayFormat(context).format(passesAt),
+                          ),
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),
@@ -449,7 +491,7 @@ class SignalOwnerBlock extends StatelessWidget {
     await runOwnershipChange(
       context,
       runGuarded,
-      () => SignalOwnershipService.instance
+      () => _service
           .release(signalId: signalId, note: note),
     );
   }
@@ -477,7 +519,7 @@ class SignalOwnerBlock extends StatelessWidget {
     );
     if (note == null || !context.mounted) return;
 
-    final service = SignalOwnershipService.instance;
+    final service = _service;
     await runOwnershipChange(
       context,
       runGuarded,
@@ -511,7 +553,7 @@ class SignalOwnerBlock extends StatelessWidget {
     if (note == null) return;
 
     await runGuarded(() async {
-      final outcome = await SignalOwnershipService.instance.requestTakeover(
+      final outcome = await _service.requestTakeover(
         signalId: signalId,
         note: note,
       );
@@ -529,7 +571,7 @@ class SignalOwnerBlock extends StatelessWidget {
   }
 
   Future<void> _withdraw() => runGuarded(
-      () => SignalOwnershipService.instance.withdrawRequest(signalId));
+      () => _service.withdrawRequest(signalId));
 }
 
 /// Confirm the intent, then ask for the note that explains it.

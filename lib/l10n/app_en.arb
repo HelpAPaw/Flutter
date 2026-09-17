@@ -312,18 +312,33 @@
   "signalOwnerHandOver": "Hand over",
   "signalOwnerDecline": "Decline",
   "signalOwnerOffers": "Offers to take over",
-  "signalOwnerStaleSince": "Hasn't been active since {when}. Anyone with an account can take this signal on.",
+  "signalOwnerStaleSince": "Hasn't been active since {when}. Offer to take over and the signal passes to you in {days} days unless they reply.",
   "@signalOwnerStaleSince": {
-    "description": "Shown to everyone except the owner under an inactive signal owner, inviting anyone to take the signal on",
+    "description": "Shown to everyone except the owner under an inactive signal owner, explaining that an offer auto-approves",
     "placeholders": {
       "when": {
+        "type": "String"
+      },
+      "days": {
         "type": "String"
       }
     }
   },
-  "signalOwnerStaleYours": "You haven't updated this signal since {when}. Anyone with an account can take it on — post an update to keep it.",
+  "signalOwnerStaleYours": "You haven't updated this signal since {when}. If someone offers to take it over, it passes to them in {days} days unless you reply — post an update to keep it.",
   "@signalOwnerStaleYours": {
     "description": "The owner's own version of the inactivity note, which names the action that keeps the signal",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      },
+      "days": {
+        "type": "String"
+      }
+    }
+  },
+  "signalOwnerRequestPassesAt": "You have offered to take this over. It passes to you on {when} unless the current owner replies.",
+  "@signalOwnerRequestPassesAt": {
+    "description": "Pending-offer state on a stale signal, naming the date the offer auto-approves",
     "placeholders": {
       "when": {
         "type": "String"

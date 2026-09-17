@@ -79,9 +79,33 @@ void main() {
       Duration(days: int.parse(match!.group(1)!)),
       SignalOwnershipService.staleOwnerAfter,
       reason: 'SignalOwnershipService.staleOwnerAfter has drifted from '
-          'STALE_OWNER_DAYS. Too short and Take responsibility is offered on a '
-          'signal the server will refuse; too long and a genuinely abandoned signal '
-          'shows no way to take it on.',
+          'STALE_OWNER_DAYS. Too short and the app promises a handover the server '
+          'will not perform; too long and a genuinely abandoned signal shows no '
+          'sign that offering for it will ever be answered.',
+    );
+  });
+
+  // The third pair, and the one a user is quoted directly: the note and the
+  // pending-offer line both name this number of days, and the server is what
+  // actually waits it out. Copy that promises a week while
+  // `autoApproveStaleTakeovers` enforces something else is a deadline the app
+  // invents.
+  test('both sides describe the same auto-approval window', () {
+    final source = File('functions/src/signalOwnership.ts').readAsStringSync();
+    final match = RegExp(r'AUTO_APPROVE_DAYS\s*=\s*(\d+)').firstMatch(source);
+
+    expect(match, isNotNull,
+        reason: 'AUTO_APPROVE_DAYS is gone from functions/src/signalOwnership.ts '
+            '— if auto-approval was removed on purpose, this test goes with it, '
+            'and so does the copy that names a date');
+
+    expect(
+      Duration(days: int.parse(match!.group(1)!)),
+      SignalOwnershipService.autoApproveAfter,
+      reason: 'SignalOwnershipService.autoApproveAfter has drifted from '
+          'AUTO_APPROVE_DAYS. The app tells both the owner and the volunteer, in '
+          'words and with a date, when an unanswered offer passes; this is the '
+          'only thing keeping that promise true.',
     );
   });
 }

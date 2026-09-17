@@ -38,6 +38,7 @@
 
 import * as admin from "firebase-admin";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 
 import { buildEventData, buildOwnershipEventData } from "./events";
 import {
@@ -68,6 +69,48 @@ import {
  * `test/takeover_cooldown_guard_test.dart` parses this line to catch it.
  */
 export const STALE_OWNER_DAYS = 14;
+
+/**
+ * How long a takeover request sits unanswered before the server approves it on
+ * the owner's behalf.
+ *
+ * Seven days, and it runs **after** {@link STALE_OWNER_DAYS} rather than
+ * instead of it, so an abandoned signal moves 21 days after its owner last did
+ * anything. That is the price of the thing this window buys: staleness used to
+ * be an *instant* dispossession, decided entirely by a clock the owner could
+ * not see and delivered with no warning. Now the volunteer asks, the owner is
+ * told that silence will hand the signal over and when, and only then does it
+ * move.
+ *
+ * **The two clocks are independent and both must be satisfied**, which is what
+ * makes the guarantee statable: the owner has been silent for fourteen days
+ * *and* has had a week to answer a request they were notified about. Neither
+ * alone can move a signal.
+ *
+ * Anything that refreshes `ownerActiveAt` — a status change, an urgency change,
+ * a tag edit, a transfer — un-stales the signal and the auto-approval stops,
+ * because {@link isOwnerStale} is re-checked at approval time and not at
+ * request time. Coming back is a response. So is answering: an approve or a
+ * decline ends the request, and a decline costs the volunteer the one-day
+ * re-ask cooldown, which is unchanged.
+ */
+export const AUTO_APPROVE_DAYS = 7;
+
+/**
+ * Whether a pending request has waited out {@link AUTO_APPROVE_DAYS}.
+ *
+ * A request with no usable `createdAt` is **never** ripe, the same direction
+ * {@link isOwnerStale} takes for a missing timestamp: the failure of a missing
+ * field must be "nothing happens", never "hand the animal to a stranger".
+ */
+export function isRequestRipe(
+  data: Record<string, unknown> | undefined,
+  now: number = Date.now()
+): boolean {
+  const created = data?.createdAt;
+  if (!(created instanceof admin.firestore.Timestamp)) return false;
+  return now - created.toMillis() > AUTO_APPROVE_DAYS * 24 * 60 * 60 * 1000;
+}
 
 /** Every action name. Stable strings — they land in the audit-shaped result. */
 const ACTIONS = [
@@ -309,10 +352,20 @@ function subscribe(ctx: ActionContext, uid: string): void {
 /**
  * Take responsibility for a signal (master spec §4.5).
  *
- * Allowed when the signal is unheld, when the owner has gone stale, or when the
- * caller already holds it (a no-op transfer that still refreshes the stamp — the
- * "I am still on this" case, which is what keeps an active owner from being
- * displaced by {@link isOwnerStale}).
+ * Allowed when the signal is **unheld** — released, or written before signal
+ * ownership and derived to a reporter who is the caller — or when the caller
+ * already holds it (a no-op transfer that still refreshes the stamp: the "I am
+ * still on this" case, which is what keeps an active owner from being displaced).
+ *
+ * **A held signal is never claimed outright, stale or not.** It used to be:
+ * fourteen days of silence made the signal claimable by anyone, in one tap,
+ * with the first its owner heard of it being the notification saying it was
+ * gone. Now staleness opens the *request* path instead — file a request, the
+ * owner is told silence will hand it over, and `autoApproveStaleTakeovers`
+ * approves it {@link AUTO_APPROVE_DAYS} later if they never answer. Nobody
+ * loses a signal without having been asked for it first.
+ *
+ * A released signal keeps the instant path, because there is nobody to ask.
  *
  * **The optional `status` is what makes claim-to-act one action instead of two.**
  * A volunteer who opens a signal and moves it to "In progress" is doing one thing
@@ -324,10 +377,11 @@ function subscribe(ctx: ActionContext, uid: string): void {
 function claim(ctx: ActionContext): OwnershipResult {
   const { currentOwner, uid } = ctx;
 
-  if (currentOwner != null && currentOwner.id !== uid && !isOwnerStale(ctx.signal)) {
+  if (currentOwner != null && currentOwner.id !== uid) {
     // `failed-precondition` rather than `permission-denied`: the caller is not
     // forbidden, the signal is simply already taken, and the app turns this into
-    // an offer to request a takeover instead.
+    // an offer to request a takeover instead — which is now the only route to a
+    // held signal, including a stale one.
     throw new HttpsError(
       "failed-precondition",
       "Someone else is responsible for this signal. Ask them to hand it over."
@@ -488,4 +542,168 @@ export function optionalStatus(raw: unknown): number | null {
     );
   }
   return raw;
+}
+
+/** How many ripe requests one scheduled run will look at. */
+const AUTO_APPROVE_BATCH_SIZE = 200;
+
+/**
+ * Hand over signals whose owner never answered (see {@link AUTO_APPROVE_DAYS}).
+ *
+ * **Daily, because the promise is a deadline.** The other two schedules in this
+ * project are weekly cleanups where a late run costs nothing; this one decides
+ * when a volunteer may start helping an animal, so a weekly sweep would turn
+ * "seven days" into "somewhere between seven and fourteen".
+ *
+ * One `collectionGroup` query covers **both** signal collections — the parent
+ * of a request's parent is the signal, whose own parent names the collection —
+ * so test-mode requests auto-approve exactly as production ones do rather than
+ * silently never firing, which is the failure QA would have taken longest to
+ * notice.
+ *
+ * Every approval is its own transaction, for the reason the callable is one:
+ * the decision is made from a read of who currently holds the signal, and that
+ * read has to hold a lock. Per-request rather than per-run, so one signal that
+ * was claimed a second ago cannot roll back the other 199.
+ *
+ * `retryCount: 0`: a partial run is safe to leave to tomorrow, because nothing
+ * here is cumulative — a request that stays pending is simply picked up by the
+ * next sweep, and one that was approved no longer matches the query.
+ */
+export const autoApproveStaleTakeovers = onSchedule(
+  {
+    schedule: "0 3 * * *",
+    timeZone: "Etc/UTC",
+    timeoutSeconds: 540,
+    memory: "256MiB",
+    retryCount: 0,
+  },
+  async () => {
+    const cutoff = admin.firestore.Timestamp.fromMillis(
+      Date.now() - AUTO_APPROVE_DAYS * 24 * 60 * 60 * 1000
+    );
+
+    const ripe = await db()
+      .collectionGroup("takeoverRequests")
+      .where("status", "==", "pending")
+      .where("createdAt", "<", cutoff)
+      .limit(AUTO_APPROVE_BATCH_SIZE)
+      .get();
+
+    if (ripe.empty) {
+      console.log("Auto-approve: no requests past the window.");
+      return;
+    }
+
+    let approved = 0;
+    let skipped = 0;
+    for (const doc of ripe.docs) {
+      try {
+        if (await autoApproveOne(doc)) approved += 1;
+        else skipped += 1;
+      } catch (error) {
+        // One bad request must not cost the rest of the batch. It stays pending
+        // and the next run tries again.
+        console.error(`Auto-approve failed for ${doc.ref.path}:`, error);
+        skipped += 1;
+      }
+    }
+
+    console.log(
+      `Auto-approve: ${approved} handed over, ${skipped} left pending, ` +
+        `of ${ripe.size} past the window.`
+    );
+  }
+);
+
+/**
+ * Approve one ripe request, if it still deserves approving.
+ *
+ * Returns whether ownership actually moved. **Everything is re-checked inside
+ * the transaction**, because the query result is a snapshot of the past and all
+ * four of these change without warning:
+ *
+ *  * the signal may have been deleted;
+ *  * the owner may have come back — `isOwnerStale` is evaluated *here*, not when
+ *    the request was filed, so posting an update is how an owner keeps a signal
+ *    somebody has asked for;
+ *  * the request may have been answered or withdrawn;
+ *  * the requester may already hold the signal, having been handed it by
+ *    another route, in which case there is nothing to transfer.
+ */
+async function autoApproveOne(
+  doc: FirebaseFirestore.QueryDocumentSnapshot
+): Promise<boolean> {
+  const signalRef = doc.ref.parent.parent;
+  // A request whose signal is gone. The delete cascade should have taken it;
+  // this is the belt to that braces.
+  if (!signalRef) return false;
+
+  const collection = signalRef.parent.id as SignalCollection;
+  const requesterId = doc.id;
+
+  return db().runTransaction(async (tx) => {
+    const [signalSnapshot, requestSnapshot] = await Promise.all([
+      tx.get(signalRef),
+      tx.get(doc.ref),
+    ]);
+
+    if (!signalSnapshot.exists) return false;
+
+    const request = requestSnapshot.data();
+    if (!request || request.status !== "pending") return false;
+    if (!isRequestRipe(request)) return false;
+
+    const signal = signalSnapshot.data() as Record<string, unknown> | undefined;
+    const currentOwner = signalOwnerOf(signal);
+
+    // Nobody to displace, or the requester already has it. A released signal is
+    // claimed outright, so there is no owner here whose silence could be read as
+    // consent.
+    if (!currentOwner || currentOwner.id === requesterId) return false;
+
+    // The owner came back. The request stays pending and stays answerable — this
+    // is the whole point of re-checking here rather than at request time.
+    if (!isOwnerStale(signal)) return false;
+
+    const now = admin.firestore.Timestamp.now();
+    const newOwner = db().collection("users").doc(requesterId);
+
+    // The requester is the actor. Not a service identity: they are the person
+    // taking this on, the note on the timeline is theirs, and `lastUpdatedBy`
+    // decides whom `handleSignalUpdated` does NOT notify — which should be them,
+    // since `handleTakeoverResolved` is already telling them directly.
+    const ctx: ActionContext = {
+      action: "approveRequest",
+      uid: requesterId,
+      // Their own words from the request, which is exactly what an
+      // `ownership_transfer` event wants: what the new owner said they would do.
+      note: typeof request.note === "string" ? request.note : "",
+      data: {},
+      signal,
+      currentOwner,
+      collection,
+      signalId: signalRef.id,
+      ref: signalRef,
+      actor: newOwner,
+      now,
+      tx,
+    };
+
+    // `pending` → `approved` is what `handleTakeoverWritten` fires on, so the
+    // requester's "you are now responsible" notification comes from the same
+    // trigger an owner's own approval uses. `resolvedBy` is the requester too:
+    // the field records who the write is attributable to, and inventing a fake
+    // owner uid there would be a lie on an audit trail.
+    tx.update(doc.ref, {
+      status: "approved",
+      resolvedBy: newOwner,
+      resolvedAt: now,
+      autoApproved: true,
+    });
+
+    writeTransfer(ctx, newOwner);
+    subscribe(ctx, requesterId);
+    return true;
+  });
 }
