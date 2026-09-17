@@ -155,6 +155,19 @@ service cloud.firestore {
              == userDoc();
     }
 
+    // Shared title/description bounds for both create and update. Applying it
+    // to update too closes a gap where only create was checked: the edit
+    // screen writes both fields on every save, so an update with no
+    // client-side cap could otherwise persist an unbounded title or
+    // description.
+    function isValidSignalContentBounds() {
+      return request.resource.data.title is string
+             && request.resource.data.title.size() > 0
+             && request.resource.data.title.size() <= 300
+             && request.resource.data.description is string
+             && request.resource.data.description.size() <= 10000;
+    }
+
     // Validates a signal create (M-1): a verified, non-anonymous caller, with
     // `reporter` pinned to them (no impersonation), plus basic type/size bounds
     // on the content fields to curb content abuse and read/storage-cost
@@ -162,11 +175,7 @@ service cloud.firestore {
     function isSignalCreate() {
       return isVerifiedCaller()
              && request.resource.data.reporter == userDoc()
-             && request.resource.data.title is string
-             && request.resource.data.title.size() > 0
-             && request.resource.data.title.size() <= 300
-             && request.resource.data.description is string
-             && request.resource.data.description.size() <= 10000
+             && isValidSignalContentBounds()
              // `signalType` is deliberately NOT required, and not bounded
              // either. Signal types were folded into the help-tag vocabulary
              // and nothing writes the field any more, but builds released
@@ -754,6 +763,7 @@ service cloud.firestore {
                     && isValidUrgency()
                     && isValidHelpNeededTags()
                     && isValidAnimalType()
+                    && isValidSignalContentBounds()
                     && isNotTouchingModeration()
                     && isNotTouchingOwnership()
                     && isValidOwnerStamp()
@@ -866,6 +876,7 @@ service cloud.firestore {
                     && isValidUrgency()
                     && isValidHelpNeededTags()
                     && isValidAnimalType()
+                    && isValidSignalContentBounds()
                     && isNotTouchingModeration()
                     && isNotTouchingOwnership()
                     && isValidOwnerStamp()

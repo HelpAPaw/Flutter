@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:help_a_paw/src/models/signal_event.dart';
@@ -309,6 +310,12 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
                         border: const OutlineInputBorder(),
                       ),
                       textCapitalization: TextCapitalization.sentences,
+                      // Mirrors the Firestore rules' bounds, so an over-long
+                      // title is capped as it's typed instead of failing the
+                      // write with an opaque PERMISSION_DENIED.
+                      inputFormatters: [
+                        LengthLimitingTextInputFormatter(Signal.maxTitleLength),
+                      ],
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
                           return l10n.pleaseEnterTitle;
@@ -325,6 +332,11 @@ class _EditSignalScreenState extends State<EditSignalScreen> {
                       ),
                       textCapitalization: TextCapitalization.sentences,
                       maxLines: 4,
+                      inputFormatters: [
+                        LengthLimitingTextInputFormatter(
+                          Signal.maxDescriptionLength,
+                        ),
+                      ],
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
                           return l10n.pleaseEnterDescription;

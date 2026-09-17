@@ -9,6 +9,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../models/animal_type.dart';
 import '../../models/help_tag.dart';
 import '../../models/new_signal_step.dart';
+import '../../models/signal.dart';
 import '../../models/signal_urgency.dart';
 import '../../viewmodels/map_view_model.dart';
 import '../help_tag_selector.dart';
@@ -290,7 +291,9 @@ class _NewSignalDetailsStepState extends ConsumerState<NewSignalDetailsStep> {
                 // Mirrors the Firestore rules' create bounds, so an over-long
                 // title is capped as it's typed instead of failing the write
                 // with an opaque PERMISSION_DENIED.
-                inputFormatters: [LengthLimitingTextInputFormatter(300)],
+                inputFormatters: [
+                  LengthLimitingTextInputFormatter(Signal.maxTitleLength),
+                ],
                 validator: (value) => (value == null || value.trim().isEmpty)
                     ? l10n.pleaseEnterTitle
                     : null,
@@ -309,7 +312,11 @@ class _NewSignalDetailsStepState extends ConsumerState<NewSignalDetailsStep> {
                 ),
                 textCapitalization: TextCapitalization.sentences,
                 maxLines: 4,
-                inputFormatters: [LengthLimitingTextInputFormatter(10000)],
+                inputFormatters: [
+                  LengthLimitingTextInputFormatter(
+                    Signal.maxDescriptionLength,
+                  ),
+                ],
                 validator: (value) => (value == null || value.trim().isEmpty)
                     ? l10n.pleaseEnterDescription
                     : null,

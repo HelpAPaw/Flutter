@@ -7,6 +7,11 @@ import 'signal_event.dart';
 import 'signal_urgency.dart';
 
 class Signal {
+  // Mirrors the Firestore rules' bounds (isValidSignalContentBounds), applied
+  // to both signal create and update.
+  static const int maxTitleLength = 300;
+  static const int maxDescriptionLength = 10000;
+
   final String title;
   final String description;
   final String phoneNumber;
