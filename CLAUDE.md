@@ -204,7 +204,9 @@ client with, so they compare equal. **Assigning any custom Firestore `Settings`
 in Dart breaks that**, and the resulting failures are *silent*: the headless
 isolate's geo query fails and `NearbySignalChecker` reports it as "no signals
 nearby". `test/firestore_settings_guard_test.dart` fails the build if any Dart
-code assigns `.settings`. If you ever genuinely need custom settings, move the
+code assigns `.settings`, and `ios/RunnerTests/NativeFirestoreGuardTest.swift`
+fails it if any hand-written source under `ios/Runner/` names `Firestore` at all
+outside a comment. If you ever genuinely need custom settings, move the
 Android native write into the headless isolate first, as iOS did.
 
 The geohash therefore has two *production* encoders — Dart
