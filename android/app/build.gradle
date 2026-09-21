@@ -116,6 +116,14 @@ dependencies {
     implementation "com.google.firebase:firebase-firestore"
     implementation "com.google.firebase:firebase-auth"
 
-    // Guards Geohash against silently drifting from geoflutterfire_plus.
+    // Already in the APK via the firebase_crashlytics plugin, but that declares
+    // it `implementation`, so it is on the runtime classpath and invisible at
+    // compile time. Declared here because the native background path is the one
+    // place Dart's error handlers cannot reach: it runs in a process where the
+    // Dart isolate does not exist yet and, when it fails, never will.
+    implementation "com.google.firebase:firebase-crashlytics"
+
+    // Guards Geohash against silently drifting from geoflutterfire_plus, and
+    // the headless Dart entrypoints against losing their FlutterLoader init.
     testImplementation "junit:junit:4.13.2"
 }

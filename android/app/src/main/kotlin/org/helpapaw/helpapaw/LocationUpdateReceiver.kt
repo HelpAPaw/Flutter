@@ -72,16 +72,25 @@ class LocationUpdateReceiver : BroadcastReceiver() {
             release()
         }, WRITE_ACK_TIMEOUT_MILLIS)
 
-        // Started independently of the write: offline the write may never be
-        // acknowledged, but the catch-up check can still run against Firestore's
-        // local cache, so it must not be chained to that completion.
+        // Issued first, and independent of the check in both directions.
+        // set() returns once the write is durable locally, while the check can
+        // block the main thread loading libflutter.so the first time a process
+        // boots an engine — so going first lets Firestore work through that
+        // block. Equally it must not be chained to the check: offline the write
+        // may never be acknowledged, but the check can still run against the
+        // local cache.
+        writeLocation(context, location) { release() }
+
+        // Throwable, not Exception: the synchronous part of run() loads
+        // libflutter.so and resolves the Dart entrypoint, so its realistic
+        // failure is an Error — UnsatisfiedLinkError — which Exception would
+        // let kill the process. The engine boot itself is posted to the looper
+        // and runs past this frame; startEngine guards that one separately.
         try {
             maybeRunNearbyCheck(context, location)
-        } catch (e: Exception) {
-            Log.e(TAG, "nearby check failed to start", e)
+        } catch (e: Throwable) {
+            NativeCrashReporter.report(TAG, "nearby check failed to start", e)
         }
-
-        writeLocation(context, location) { release() }
     }
 
     /**
@@ -119,7 +128,9 @@ class LocationUpdateReceiver : BroadcastReceiver() {
             .document(uid)
             .set(data, SetOptions.merge())
             .addOnSuccessListener { Log.i(TAG, "wrote location (geohash $geohash)") }
-            .addOnFailureListener { e -> Log.e(TAG, "location write failed", e) }
+            .addOnFailureListener { e ->
+                NativeCrashReporter.report(TAG, "location write failed", e)
+            }
             .addOnCompleteListener { onComplete() }
     }
 

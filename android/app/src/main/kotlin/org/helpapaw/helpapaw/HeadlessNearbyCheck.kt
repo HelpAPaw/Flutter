@@ -81,9 +81,26 @@ object HeadlessNearbyCheck {
             return false
         }
 
+        // Loads libflutter.so; in this process nothing else has. Without it
+        // the lookup below is an UnsatisfiedLinkError rather than a null
+        // result, and it kills the process.
+        //
+        // Not extra work: FlutterEngine's constructor makes these same two
+        // calls, so startEngine would do it anyway — they only have to happen
+        // here as well because the lookup needs the library and runs first.
+        // Both are idempotent, and both require the main thread onReceive
+        // already runs on.
+        val loader = FlutterInjector.instance().flutterLoader()
+        loader.startInitialization(context.applicationContext)
+        loader.ensureInitializationComplete(context.applicationContext, null)
+
         val callbackInfo = FlutterCallbackInformation.lookupCallbackInformation(handle)
         if (callbackInfo == null) {
-            Log.e(TAG, "callback handle $handle no longer resolves")
+            // Distinct from the handle == 0L bailout above, which is the benign
+            // "app has not run yet" case. A handle that is present but does not
+            // resolve means the catch-up is permanently dead until the app is
+            // opened again, with nothing else to show for it.
+            NativeCrashReporter.report(TAG, "callback handle $handle no longer resolves")
             return false
         }
 
@@ -102,10 +119,14 @@ object HeadlessNearbyCheck {
         latitude: Double,
         longitude: Double,
     ) {
+        // Throwable for the same reason as the loader calls in run(): engine
+        // creation reaches native code, and an Error escaping here would run
+        // past this frame's reset and leave `running` stuck true, silently
+        // disabling the check for the life of the process.
         val engine = try {
             FlutterEngine(context.applicationContext)
-        } catch (e: Exception) {
-            Log.e(TAG, "failed to create Flutter engine", e)
+        } catch (e: Throwable) {
+            NativeCrashReporter.report(TAG, "failed to create Flutter engine", e)
             running = false
             return
         }
@@ -123,8 +144,8 @@ object HeadlessNearbyCheck {
                 handler.removeCallbacksAndMessages(null)
                 try {
                     engine.destroy()
-                } catch (e: Exception) {
-                    Log.e(TAG, "error destroying engine", e)
+                } catch (e: Throwable) {
+                    NativeCrashReporter.report(TAG, "error destroying engine", e)
                 }
                 running = false
             }
@@ -148,7 +169,11 @@ object HeadlessNearbyCheck {
 
         handler.postDelayed({
             if (!finished) {
-                Log.w(TAG, "nearby check timed out, tearing down engine")
+                // The engine booted but Dart never called "done", so the
+                // check did not complete. Reported for the same reason as the
+                // bailouts: nothing else distinguishes it from a check that
+                // ran and found nothing nearby.
+                NativeCrashReporter.report(TAG, "nearby check timed out after ${TIMEOUT_MILLIS}ms")
                 shutdown()
             }
         }, TIMEOUT_MILLIS)
