@@ -36,6 +36,10 @@ final class BackgroundLocationManager: NSObject {
   /// before, and whose breakage would be silent.
   private static let enabledKey = "org.helpapaw.backgroundLocationEnabled"
 
+  /// Prefix for both the NSLogs and the Crashlytics breadcrumbs, so a report
+  /// and the device log read the same way.
+  private static let logTag = "BackgroundLocation"
+
   private let locationManager = CLLocationManager()
   private var isMonitoring = false
 
@@ -97,12 +101,23 @@ final class BackgroundLocationManager: NSObject {
   @discardableResult
   func start() -> Bool {
     guard CLLocationManager.significantLocationChangeMonitoringAvailable() else {
-      NSLog("BackgroundLocation: significant-change monitoring unavailable")
+      NativeCrashReporter.report(
+        Self.logTag, "significant-change monitoring unavailable",
+        reason: .significantChangeUnavailable)
       return false
     }
 
     guard authorizationStatus == .authorizedAlways else {
-      NSLog("BackgroundLocation: needs Always authorization, has \(authorizationStatus.rawValue)")
+      // `previously enabled` separates the two cases that land here. False is
+      // a user who only ever granted "While Using" — expected, and the Dart
+      // layer explains it with a snackbar. True is a silent regression: this
+      // worked once, authorization was downgraded in Settings since, and
+      // nothing else in the system would ever say so.
+      NativeCrashReporter.report(
+        Self.logTag,
+        "needs Always authorization, has \(authorizationStatus.rawValue) "
+          + "(previously enabled: \(isEnabledInPreferences))",
+        reason: .missingAlwaysAuthorization)
       return false
     }
 
@@ -115,7 +130,7 @@ final class BackgroundLocationManager: NSObject {
     locationManager.allowsBackgroundLocationUpdates = true
     locationManager.startMonitoringSignificantLocationChanges()
     isMonitoring = true
-    NSLog("BackgroundLocation: monitoring started")
+    NativeCrashReporter.breadcrumb(Self.logTag, "monitoring started")
     return true
   }
 
@@ -128,7 +143,7 @@ final class BackgroundLocationManager: NSObject {
     locationManager.stopMonitoringSignificantLocationChanges()
     locationManager.allowsBackgroundLocationUpdates = false
     isMonitoring = false
-    NSLog("BackgroundLocation: monitoring stopped")
+    NativeCrashReporter.breadcrumb(Self.logTag, "monitoring stopped")
   }
 
   /// Re-arms monitoring if the user has the feature enabled.
@@ -154,7 +169,8 @@ final class BackgroundLocationManager: NSObject {
 
     guard let handler = onLocationUpdate, let update = pendingUpdate else { return }
     pendingUpdate = nil
-    NSLog("BackgroundLocation: replaying update buffered before Dart was ready")
+    NativeCrashReporter.breadcrumb(
+      Self.logTag, "replaying update buffered before Dart was ready")
     handler(update.latitude, update.longitude)
   }
 
@@ -188,20 +204,24 @@ extension BackgroundLocationManager: CLLocationManagerDelegate {
     } else {
       // A single slot on purpose: only the newest fix is worth acting on, and
       // replaying superseded positions would just burn the check's gate.
-      NSLog("BackgroundLocation: buffering update until Dart is ready")
+      NativeCrashReporter.breadcrumb(
+        Self.logTag, "buffering update until Dart is ready")
       pendingUpdate = (latitude: latitude, longitude: longitude)
     }
   }
 
   func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-    NSLog("BackgroundLocation: location error: \(error.localizedDescription)")
+    NativeCrashReporter.report(
+      Self.logTag, "location error: \(error.localizedDescription)", error: error)
   }
 
   /// Stops monitoring if the user revokes Always authorization from Settings,
   /// rather than leaving a monitor registered that can never deliver.
   func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
     if authorizationStatus != .authorizedAlways && isMonitoring {
-      NSLog("BackgroundLocation: lost Always authorization, stopping")
+      NativeCrashReporter.report(
+        Self.logTag, "lost Always authorization, stopping",
+        reason: .lostAlwaysAuthorization)
       stop()
     }
   }
