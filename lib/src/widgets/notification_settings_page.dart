@@ -171,6 +171,9 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage>
     // Preferences hang off a uid, so an anonymous session will do — but there
     // has to be one.
     final user = await AuthService().ensureAnonymousSession();
+    // Sign-in can take seconds and can fail; the screen may be gone by then,
+    // and setState on a disposed State is fatal in release.
+    if (!mounted) return;
     if (user == null) {
       // Not loaded: a session appearing later must not let the defaults on
       // screen be written over real stored preferences.
@@ -192,6 +195,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage>
           // rules, and those rules are documented on the model. Parsing them
           // again here is how the two copies drift.
           final typed = NotificationPreferences.fromMap(prefs);
+          if (!mounted) return;
           setState(() {
             _notificationsEnabled = typed.enabled;
             _locationTrackingEnabled = typed.locationTrackingEnabled;
@@ -208,6 +212,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage>
       // Left false: see [_loaded].
     }
 
+    if (!mounted) return;
     setState(() => _isLoading = false);
 
     // Only now that the stored wish is known: the check is what tells the user
@@ -617,6 +622,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage>
           onTap: _notificationsEnabled
               ? () async {
                   final result = await context.push<Map<String, dynamic>>(Routes.selectRegion);
+                  if (!mounted) return;
                   if (result != null) {
                     setState(() => _regionOfInterest = result);
                     await _savePreferences();
