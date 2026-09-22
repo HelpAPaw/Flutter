@@ -79,17 +79,49 @@
 > | **Deep links replace the stack** | Recorded, not fixed: a link arriving over the wizard destroys that route. The wizard keeps its draft *and* step, so re-entry resumes. **Do not re-file.** | §15.2 |
 > | Smaller | Launcher icons regenerated from the master; the update-note helper sentence wraps instead of clipping; the Follow button's first-frame replay race. | §3.3, §8.0c |
 
+> ## 🆕 Added since this checklist's last update (2026-09-12) — `7.0.0+135`
+>
+> **Ten commits, none of them in any QA round.** Two change *deployed backend behaviour*
+> (a new daily scheduled function and a tightened rules clause, both already live on
+> production), one changes how every cluster on the map is drawn, and one changes a flow
+> this checklist previously described the opposite way.
+>
+> | Area | What changed | Where |
+> |---|---|---|
+> | 🔴 **A stale signal is asked for, not taken** | The 14-day escape hatch was an *instant* one-tap claim by whoever opened the signal; the owner's first news was the notification saying it was gone. It now goes through the **offer** path, and `autoApproveStaleTakeovers` (**daily**, new) approves an unanswered offer after **7 days** — so an abandoned signal moves **21 days** after its owner last acted, having been asked first. `claim` refuses every held signal now; *released* keeps the instant path. **Deployed 2026-09-17** with a new COLLECTION_GROUP index; the app half is not released. | **§3.9 REWRITTEN**, §11.12, §17.3 |
+> | **Staleness is said, not implied** | It used to be visible only as a *button swap* — which the owner, offered neither button, could not see at all. `SignalOwnerBlock` now prints it under the owner's name in **two wordings split by audience**, the owner's one naming the way out ("post an update to keep it"). Both carry a date, through one shared Bulgarian-safe formatter. | §3.9 |
+> | **No deadline in the past** | The sweep is daily, so for up to 24h an offer can be due but unmoved. The pending line named a date already gone by; past the deadline it now falls back to plain wording and names none. | §3.9 |
+> | 🔴 **Cluster bubbles carry the split** | The disc's colour and its count described different things — a red "12" was between one red signal and twelve. The disc keeps its most-urgent fill; the halo becomes a **ring of arcs proportional to the members at each urgency**, with a 15° floor so one red among forty is visible. The **legend** now paints through the marker's own routine. | **§2.2, §2.2b** |
+> | **"Something else" must say what else** | A report could reach the queue with no category to triage by and no prose to read. Free text is now **mandatory for `other` alone** — Send disabled, "(required)" label, helper line, all reverting on another reason. Deliberately **no** rules clause: that would reject reports from every already-released build. | §16.2 |
+> | **Title/description bounded on update** | Only `create` checked the lengths, while the edit screen writes both fields on every save with no client cap — so a reporter could edit a signal to an arbitrarily long title. Bounds now apply to the update rules of both collections, and the edit screen got the wizard's formatter. **Rules deployed.** | §3.6, §11.5 |
+> | 🔴 **A cold background delivery killed the app (Android)** | `HeadlessNearbyCheck` looked a Dart callback up before anything had loaded `libflutter.so`, which in a **receiver-only process** is an `UnsatisfiedLinkError`, not a null — **16 fatals in a day** on one test device, and the gate never advanced so it retried forever. Only reproducible with **no Activity**, which is what every test environment provides. New `FlutterBootstrapGuardTest.kt`. | **§7.2** |
+> | **Native failures are reported now** | The whole native background path was invisible to Crashlytics (its handlers are isolate-level). `NativeCrashReporter` on **both** platforms records six Android and four iOS failure paths as non-fatals, iOS with a distinct `NSError` code each. Five of the six Android ones were already silent — a dead catch-up that looks perfectly healthy. | **§11.4**, §7.2 |
+> | **iOS "no native Firestore" guarded by a test** | The launch-crash rule (§7.2) was prose until now; `NativeFirestoreGuardTest.swift` fails the build on any mention of `Firestore` in hand-written `ios/Runner/` source. | §17.1 |
+> | Smaller | Three `mounted` guards on the notification settings screen, where an `await` could `setState` after the user had left. | §6.4 |
+
 > ## 🚀 Deploy gates
 >
 > `help-a-paw-dev` is **production**.
 >
-> **Status as of 2026-09-12 (updated after QA Round 11).** Round 11 verified on 2026-08-30
+> **Status as of 2026-09-19** (previously 2026-09-12, after QA Round 11; **two further
+> deploys have landed since — see the two 2026-09-17 entries below**). Round 11 verified on 2026-08-30
 > that the live ruleset was **byte-identical** to the branch and that all 20 functions were
-> deployed from it on `nodejs24`, with nothing deleted. **Four further rules deploys and
+> deployed from it on `nodejs24`, with nothing deleted — the count is **21** now that
+> `autoApproveStaleTakeovers` exists. **Four further rules deploys and
 > two functions deploys have landed since**, from four different branches — so re-read and
 > diff the live ruleset before the device pass, do not assume Round 11's result still holds:
 >
-> - [x] ✅ **Version bumped — `pubspec.yaml` reads `7.0.0+133`.**
+> - [x] ✅ **Version bumped — `pubspec.yaml` reads `7.0.0+135`** (committed, `0109572`).
+> - [x] ✅ **Auto-approval deployed 2026-09-17** — `autoApproveStaleTakeovers` plus three
+>       changed functions, deployed **targeted, not blanket** (a blanket functions deploy
+>       has deleted a function here before), with the `takeoverRequests` COLLECTION_GROUP
+>       index going out **first** and verified in both directions (0 deletions). The
+>       database held **zero** `takeoverRequests` documents at deploy time, so the change
+>       is inert until the app ships. **Rules unchanged by it** — the offer path already
+>       existed (§3.9, §17.3).
+> - [x] ✅ **Signal content bounds on update deployed 2026-09-17** — checked first that no
+>       existing signal document exceeds 300/10 000, because a tightening that fails on
+>       existing data locks reporters out of editing rather than failing loudly (§11.5).
 > - [x] ✅ **M-1 (#67) deployed 2026-09-10** — `isVerifiedCaller()` on signal and comment
 >       creation. Device-verified including the July rollback scenario. Merged into `dev`,
 >       so dev's rules match production byte-for-byte.
@@ -174,7 +206,7 @@
 
 > ## ⚠️ Pre-Release Blockers & Open Items (resolve before shipping)
 >
-> **Updated 2026-09-12 after QA Round 11.** Three items on this list have since closed;
+> **Updated 2026-09-19** (previously 2026-09-12, after QA Round 11). Three items on this list have since closed;
 > they are struck through rather than deleted so nobody re-files them.
 >
 > - [x] ~~🔴 **The `events` rules revert is the one true blocker.**~~ **CLEARED.** Round 11
@@ -186,6 +218,24 @@
 >       (§11.5), not the work.
 >
 > **New since Round 11:**
+>
+> - [ ] 🆕 🔴 **The stale-owner escape hatch changed shape after this checklist's last
+>       update.** §3.9's one-tap "Take responsibility" on a 14-day-stale signal is **gone** —
+>       it is an offer plus a 7-day auto-approval now. Anyone testing from the previous
+>       revision will file the missing button as a regression. The **failure mode to hunt
+>       for is the opposite one**: an owner who comes back must keep their signal, and that
+>       is decided when the daily sweep fires, not when the offer was filed.
+> - [ ] 🆕 🔴 **`autoApproveStaleTakeovers` fails silently if its index is missing.** The
+>       sweep's only query is a COLLECTION_GROUP one; without the index it throws and
+>       nothing auto-approves, with **no user-visible symptom at all** — the offer simply
+>       sits pending forever. Confirm the index is READY *and* read a real run's summary log
+>       (§17.3). The same query is what makes test-mode offers auto-approve at all.
+> - [ ] 🆕 **Three new user-facing deadlines are stated in prose, in two languages.** "14
+>       days", "7 days" and the two dates in the stale note are now *promises the app makes
+>       in sentences*. `takeover_cooldown_guard_test.dart` pins the numbers to the
+>       TypeScript, but nothing pins the **Bulgarian date rendering** — which already
+>       produced "20.08.2026 г.." once, and an English date inside a Bulgarian sentence
+>       once. Read both notes on a bg device, do not infer them from a passing test.
 >
 > - [ ] 🔴 **Nothing in the "Added since QA Round 11" table above has ever been in a QA
 >       round.** It is larger than the design review and mostly *new surface*. The bottom
@@ -407,8 +457,14 @@
 - [ ] Signal markers appear on the map based on geo-query (100km radius from center)
 - [ ] ⚠️ **Marker colour is now URGENCY, not status** — Red / Orange (amber) / Green pin assets follow `SignalUrgency`. A signal that is *resolved* but was reported Red still shows a **red** pin; status appears only as a text chip on details and in My Signals. Anyone testing from memory of the last release will read this as a bug.
 - [ ] A signal created **before** the urgency system (no `urgency` field) renders as **amber** — unless its status is Solved, which renders green. Nothing legacy is ever derived as red.
-- [ ] Nearby signals collapse into a **bubble** with a count; the bubble is a filled disc with a translucent halo and white number — **never Google's navy**
+- [ ] Nearby signals collapse into a **bubble** with a count; the bubble is a filled disc with a white number and a **ring of coloured arcs** around it — **never Google's navy**
 - [ ] 🔴 **A bubble is the colour of its most urgent member.** With one red signal among greens, the bubble is **red**; amber among greens → amber; all green → green. Verify on a device with ≥3 signals close together, changing one's urgency. Guarded by `test/map_marker_builder_test.dart`
+- [ ] 🆕 🔴 **The ring shows how the members split by urgency.** The disc is still the most urgent member's colour, but the halo around it is now arcs in proportion to how many members sit at each level, **most urgent first, starting at the top**. With 1 red + 4 amber + 2 green close together, the disc is red and the ring is roughly one-seventh red, four-sevenths amber, two-sevenths green — not a uniform halo. Guarded by `test/cluster_bubble_style_test.dart`, `test/map_marker_builder_test.dart`
+- [ ] 🆕 **One red among many is still visible.** Cluster ~15+ signals with exactly one red: its arc is lifted to a **15° minimum** (about a 24th of the ring), a clearly readable slice rather than a hairline. The other arcs shrink to pay for it, proportionally — they do not all become equal
+- [ ] 🆕 **A single-urgency cluster is one solid ring.** All-green cluster → green disc, ring entirely green, no seams or slivers of another colour
+- [ ] 🆕 **The count and the ring agree.** Change one member's urgency (or add a signal to the cluster) and the ring re-proportions at the next camera idle while the number changes to match; no stale bitmap survives the change
+- [ ] 🆕 **A clinic bubble's ring is one whole blue arc** — clinics take the same drawing path with a single part, so there must be no urgency colour anywhere on it (§5.1)
+- [ ] 🆕 **Performance/caching:** pan and zoom repeatedly around a dense area for a minute. No progressive slow-down and no memory growth from bubble bitmaps — sweeps are quantised to 5° before the cache key so look-alike bubbles share one bitmap, and the cache is capped at 512
 - [ ] Bubbles re-form when a zoom or pan **ends** (camera idle), not during the gesture; at the moment they snap there is no leftover pin or stale bubble
 - [ ] A signal with an **unrecognised** urgency code tints its bubble amber at most (it falls back to amber, deliberately) — never green
 - [ ] **Cluster tap zooms to its bounds** when the members spread out; the bubble splits into pins or smaller bubbles
@@ -457,7 +513,10 @@
 > Nothing anywhere in the app had ever said what the pin colours meant. Opened from the map's own app bar.
 - [ ] The legend opens from the map app bar and lists **most urgent first**: Critical, Medium, Low, then the signal bubble, then the vet clinic pin and the clinic bubble
 - [ ] Each row shows the **real pin asset** — compare against the pins on the map behind it; they must be the same images
-- [ ] A **bubble row** ("Several signals; the number is how many") sits after the three pins, and the note explains that a bubble takes the colour of its most urgent signal and that tapping one zooms or lists (§2.2)
+- [ ] A **bubble row** ("Several signals; the number is how many, and the ring shows how they split by urgency") sits after the three pins, and the note explains that a bubble takes the colour of its most urgent signal, that the ring shows how many are at each urgency, and that tapping one zooms or lists (§2.2)
+- [ ] 🆕 🔴 **The legend's example bubble is painted by the same routine as the real marker.** Its example is deliberately **1 red / 4 amber / 2 green** — a red disc on a cluster that mostly is not — so the ring must show a small red arc at the top, a large amber one and a medium green one. Compare it side by side against a real mixed cluster on the map behind the sheet: same shape, same arc order, same proportions for the same split
+- [ ] 🆕 The **clinic cluster row** shows a solid blue ring, distinguishable at a glance from the signal cluster row above it
+- [ ] 🆕 The legend's bubble scales with the **OS font size** (its count is a widget) while the ring around it stays circular and uncropped at font scale 1.3
 - [ ] 🔴 **In Bulgarian at font scale 1.3, the last row (vet clinic) is fully visible.** This sheet overflowed by 43px and lost that row entirely at 411dp — the exact bug that reached `131`. Test on the smallest device available (SM J610FN, 411dp), not the tablet.
 - [ ] The sheet's title is not under the status bar, and the sheet scrolls rather than clipping when it cannot fit
 - [ ] Renders correctly in dark mode
@@ -766,6 +825,9 @@
 - [ ] Tapping it opens the Edit Signal screen (`/edit_signal/:signalId`)
 - [ ] Editable fields: **Title** (required), **Description** (required), **Urgency**, **Help tags** (1–3, required), **Animal type** (required), **Contact Phone** (optional, phone keyboard) — the Signal Type dropdown is **gone**
 - [ ] Title/Description validation prevents saving when empty; saving with **zero tags** or **no animal type** is refused with a message
+- [ ] 🆕 🔴 **Length caps apply here too, not just in the wizard.** The Title field stops accepting input at **300** characters and Description at **10 000** (paste a longer string — it is truncated, not rejected on save). Until this release the edit screen had no formatter *and* the update rule had no bound, so an edit could persist an unbounded title
+- [ ] 🆕 **The server refuses an over-long edit even if the client lets one through.** Write an update with a >300-character title directly (rules test or console) against **`signals` and `signals_test`** — both must deny (`isValidSignalContentBounds`, §11.5)
+- [ ] 🆕 **An existing signal at exactly the limits still saves.** Edit a signal whose title is already 300 characters and change something else — the tightened update rule must not lock its own reporter out of editing
 - [ ] **Changing urgency here asks for an update note** and writes an `urgency_change` event, exactly as the details screen does (§3.3b) — the two ways to escalate must produce the same history
 - [ ] Saving **without** touching urgency writes **no** event and sends no notification
 - [ ] The urgency change and its event land in **one batch** — neither appears without the other
@@ -901,10 +963,22 @@
 **Release, and the three escapes from a silent owner**
 - [ ] Owner taps **I can no longer do this** → the signal is **released** (explicit `null`, not absent — check the document), everyone following is told ("This signal needs someone" / "Nobody is responsible for this signal now"), and anyone may now take it
 - [ ] A released signal does **not** hand itself back to the reporter automatically
-- [ ] **Stale takeover**: on a signal whose `ownerActiveAt` is older than **14 days**, the button reads **Take responsibility**, not *Offer to take over* — and the claim succeeds. Without this the only affordance is an offer sent to somebody who by definition is not reading it, and the escape hatch is unreachable.
-- [ ] The displaced owner is told when a stale signal is taken from them
-- [ ] The banner "Nobody has updated this signal in a while." appears on a stale signal
-- [ ] **A signal with no usable owner timestamp reads as NOT stale** — the safe direction is "you have to ask", never "anyone may take this". Write one by hand with no `ownerActiveAt` and confirm only *Offer to take over* is shown.
+- [ ] 🆕 🔴 **CHANGED THIS RELEASE — a stale signal is ASKED FOR, not taken.** It used to be an instant one-tap claim after 14 days. Now route 3 goes through the **offer** path like every other held signal, and what staleness changes is what an unanswered offer *means*: `autoApproveStaleTakeovers` approves it after **7 more days** (`AUTO_APPROVE_DAYS`). An abandoned signal therefore moves **21 days** after its owner last did anything, having been asked for first. **Anyone testing from the previous checklist will read the missing one-tap claim as a regression.**
+- [ ] 🆕 On a signal whose owner has been silent **>14 days**, a non-owner is offered **Offer to take over** — *not* "Take responsibility". `claim` now refuses **every** held signal, stale or not; attempt it directly and confirm it is rejected
+- [ ] 🆕 **Released is still instant.** On a *released* signal (explicit `null`) the button is still **Take responsibility** and still claims in one tap — there is nobody there to ask
+- [ ] 🆕 **Two clocks, independent, both required.** Back-date `ownerActiveAt` past 14 days but file a **fresh** offer: nothing moves. Back-date the *offer's* `createdAt` past 7 days on a signal whose owner is **not** stale: also nothing moves. Only both together hand the signal over
+- [ ] 🆕 🔴 **Posting an update keeps the signal.** File an offer on a stale signal, then have the owner post any update (status, urgency, tags, comment) so `ownerActiveAt` refreshes, then back-date the offer past 7 days and run the sweep: the request stays **pending and answerable**, and the signal does **not** move. Staleness is re-checked **when the sweep fires**, not when the offer was filed — this is the whole point
+- [ ] 🆕 **The owner is told, with the deadline in words.** When an offer arrives on their stale signal the owner's push/inbox entry names the 7-day window ("It passes to them in 7 days unless you reply") — not a bare "someone offered"
+- [ ] 🆕 **The requester sees a date, and never a date in the past.** While the offer is pending they see "It passes to you on {date} unless the current owner replies." Once that date is past but the daily sweep has not yet run (a window of up to 24h), the line falls back to the **plain** pending wording and names **no** date. A named date already gone by is the one reading that makes a user doubt the promise — check this window explicitly by back-dating `createdAt` to 8 days
+- [ ] 🆕 **The stale note says so in prose, under the owner's name — split by audience.** A bystander reads "Hasn't been active since {date}. Offer to take over and the signal passes to you in 7 days unless they reply."; the **owner** reads "You haven't updated this signal since {date}. If someone offers to take it over, it passes to them in 7 days unless you reply — post an update to keep it." The owner must get the second, never the third-person one. Previously staleness was visible only as a *button swap*, which the owner — who is offered neither button — could not see at all
+- [ ] 🆕 **The date in both notes is the same one the gate judges on** (`ownerLastActiveAt`: `ownerActiveAt`, else `createdAt`), and in **Bulgarian** it renders through the shared day format — no English date in a Bulgarian sentence, and no doubled full stop after "г." (a bg string ending on the placeholder produced "…20.08.2026 г..")
+- [ ] 🆕 A **released** signal gets **no** stale note — there is nobody there to be inactive
+- [ ] 🆕 **The sweep covers test mode too.** With `signals_test` offers back-dated, the run hands those over as well — one `collectionGroup` query covers both collections. A sweep that silently skipped test mode is the failure a QA round would take longest to notice
+- [ ] 🆕 **The sweep is idempotent and defensive.** Run it twice: the second run moves nothing. Confirm it skips a request whose signal was deleted, whose owner has returned, that was already answered, or whose requester already holds the signal
+- [ ] 🆕 **An auto-approved transfer is indistinguishable from a manual one downstream** — the request goes `pending` → `approved` with `autoApproved: true`, the requester gets the same "you are now responsible" notification (same trigger), and the timeline `ownership_transfer` row carries **the requester's own note from their offer**
+- [ ] 🆕 **An open screen updates live** when the sweep approves an offer underneath it
+- [ ] The displaced owner is told when a stale signal passes out of their hands
+- [ ] **A signal with no usable owner timestamp reads as NOT stale** — the safe direction is "you have to ask", never "anyone may take this". Write one by hand with no `ownerActiveAt` and confirm no stale note is shown.
 - [ ] `ownerActiveAt` cannot be set by a client — attempt a direct write and confirm it is denied
 
 **Anonymous users**
@@ -1072,6 +1146,7 @@
 - [ ] Granting "Always" **out-of-band** (OS Settings, app never re-toggled) and relaunching: tracking restores to full background mode, not foreground-only
 - [ ] The permission dialog appears **only** from this user-initiated toggle — never during app startup (§7.1)
 - [ ] Turning the toggle **off** stops both foreground and background tracking, clears the native enabled flag, and deletes `userLocations/{uid}` (§7.2)
+- [ ] 🆕 **Leaving the screen mid-load, or mid-region-pick, does not crash.** Open Notification settings and navigate away immediately (back, or a bottom-bar tab) while it is still loading; then repeat by opening **Select region** and leaving without choosing. Three `await`s here could `setState` on a screen the user had already left — the same shape as the still-open `a8072678` forgot-password crash (§11.4)
 
 ### 6.5 FCM Token Management
 - [ ] Token saved to Firestore on registration (`arrayUnion` for multi-device)
@@ -1250,6 +1325,9 @@
 
 **Android specifics**
 - [ ] **No persistent notification** in the shade while tracking is on
+- [ ] 🆕 🔴 **A delivery into a COLD, Activity-less process must not kill it.** This is the one condition every previous QA pass hid: `flutter run`, a tap on the icon and an instrumentation run all build an Activity, and the bug only exists without one. Force-stop the app (or reboot and do not open it), then trigger a location delivery that passes the 3 km / 30 min gate. Expect the headless check to run to completion; a **FATAL `UnsatisfiedLinkError` under `HeadlessNearbyCheck.run`** is the regression — it killed the process on *every* qualifying delivery, 16 times in a day on one device
+- [ ] 🆕 **And the gate must advance afterwards.** The old failure never reached `recordCheck`, so the anchor stayed frozen and each delivery retried and died again — a single crash is not the whole symptom, a **repeating** one is. Confirm the stored anchor moves
+- [ ] 🆕 **The `userLocations` write is issued BEFORE the catch-up check**, so a cold engine boot cannot delay the write the fan-out depends on. Check the ordering in logcat, not just that both happened
 - [ ] Location is written with the app **force-stopped/swiped away** (native write, no Dart engine in the process)
 - [ ] **Re-arm after app update**: `adb install -r` → logcat shows `re-armed location updates after android.intent.action.MY_PACKAGE_REPLACED`
 - [ ] **Re-arm after a real reboot** ⚠️ *not yet verified*: power-cycle the phone, do **not** open the app, confirm `re-armed location updates after android.intent.action.BOOT_COMPLETED`
@@ -1269,6 +1347,8 @@
 **Geohash parity (silent-failure guard)**
 - [ ] Dart (`geoflutterfire_plus`) and Kotlin encoders produce **byte-identical** base32 precision-9 hashes — a drift silently stops the fan-out's range query from matching users, with no error anywhere
 - [ ] `android/app/src/test/.../GeohashTest.kt` passes
+- [ ] 🆕 `android/app/src/test/.../FlutterBootstrapGuardTest.kt` passes — it fails if a file calling into `FlutterJNI` omits the `FlutterLoader` init, or if the init moves below the callback lookup. It replaces a symptom that is otherwise invisible to every test environment; a failure here is a release blocker, not a flake
+- [ ] 🆕 `ios/RunnerTests/NativeFirestoreGuardTest.swift` passes — no hand-written source under `ios/Runner/` may so much as name `Firestore` (comments and string literals are stripped first, so the doc comment stating the rule does not trip it). This is the launch-crash guard, §7.2
 - [ ] `ios/RunnerTests/GeohashTest.swift` passes (or `Geohash.swift` + its test are deleted together — the Swift encoder is no longer used in production)
 - [ ] ⚠️ Running the Swift tests poisons `build/native_assets/ios/objective_c.framework` for device builds — check with `vtool -show-build-version …` (`platform IOS`, not `IOSSIMULATOR`) or budget a full `flutter clean`
 
@@ -1596,6 +1676,13 @@
 - [ ] Async errors captured via `PlatformDispatcher.instance.onError`
 - [ ] User identifier set (UID only, no PII)
 - [ ] Manual logging throughout codebase for key events
+- [ ] 🆕 🔴 **Native (non-Dart) failures now arrive as non-fatals.** `FlutterError.onError` and `PlatformDispatcher.onError` are **isolate-level** and cannot see the background location path — it runs in a process with no Dart isolate, and when that path is what failed there never will be one. Force each reachable failure and confirm it lands in Crashlytics, not only in the device log
+- [ ] 🆕 **Android (6 paths, `NativeCrashReporter.kt`):** an unresolvable callback handle, a failed engine creation, an engine-boot **timeout**, an engine-destroy failure. Five of the six were silent before this release, and a handle that does not resolve or a boot that times out means the catch-up is **dead until somebody opens the app** — a report is the only way anyone learns that
+- [ ] 🆕 **iOS (4 paths, `NativeCrashReporter.swift`), each with its OWN `NSError` code** under `org.helpapaw.helpapaw.native`: significant-change unavailable (1), missing **Always** authorization (2), a failed location update (3), Always **revoked in Settings** (4). Verify in the console that they do not collapse into one issue — Crashlytics clusters by domain+code, and a chronic *While Using* population would bury the rare ones. Codes 2 and 4 were device-verified 2026-09-21
+- [ ] 🆕 The authorization report carries **whether the feature was previously enabled**, which is what separates an expected *While Using* grant from a silent downgrade of one that had been working
+- [ ] 🆕 The four iOS informational logs appear as **breadcrumbs** on a later report, not as separate issues
+- [ ] 🆕 **Reporting can never be the thing that breaks location.** With Firebase unconfigured (or Crashlytics unavailable), the background path still completes: Kotlin catches its own failure, Swift **guards** on `FirebaseApp.app()` first because an unconfigured Firebase raises an `NSException` Swift cannot catch
+- [ ] 🆕 Occurrences are **not** deduplicated or rate-limited, deliberately — how *often* one fires is the diagnosis (16/day was what identified the Android bug). Do not file the repetition as noise
 - [ ] **Regression watch on the new build** — confirm these known issues do not recur: `add2187e` (`SignInHubActivity` NPE, §1.3), `d98a1898` / `6fb193a6` ("Bad state: No element" at bootstrap, fixed by `71a45ae`), `a8072678` (forgot-password `setState` after dispose — **still open**, `firebase_ui_auth` 3.0.1)
 
 ### 11.5 Firestore Rules — Signals, Events & Comments (NEW)
@@ -1622,6 +1709,11 @@
 - [ ] `type` must be in the closed vocabulary — an invented type is denied
 - [ ] **`note` is required, 1–500 chars** — a note-less event is denied, which is why the client cannot write one without the dialog
 - [ ] Level fields are bounded 0–2
+
+**Signal title/description bounds — now on UPDATE as well as create (🆕 this release)**
+- [ ] 🆕 An **update** with a title >300 chars, an empty title, or a description >10 000 chars is **denied** on `signals` **and** `signals_test` (`isValidSignalContentBounds()`). Only create used to check this, while the edit screen writes both fields on every save (§3.6)
+- [ ] 🆕 An ordinary edit within the bounds still succeeds, as does an edit to a signal already sitting **at** 300 characters — a tightening that fails on existing data locks reporters out of their own signals rather than failing loudly
+- [ ] 🆕 A non-string title or description is denied (the bound is a type check too)
 - [ ] **Updates are denied outright** — a delivered event cannot be rewritten
 - [ ] The parent signal's **reporter** can still delete events — **deliberately, and only until the release ships**. Removal moved server-side (§3.7), so the *new* client never deletes a subcollection document, but every already-released build still runs the old cascade and denying it would break their Delete button. Flipping these three to `if false` is **step 5 of the deploy gates**.
 - [ ] ⚠️ Recorded, not a finding: until that flip, the history stays tamper-**evident**, not tamper-proof (`HelpAPaw/Flutter#68`)
@@ -1727,6 +1819,8 @@
 - [ ] Only the **owner** may approve or decline; the reporter (when not holding) cannot — verify by calling `signalOwnership` directly as the reporter, not just by the absent buttons. The app now shows them the offer list, so this is the only thing separating seeing from answering.
 - [ ] `ownerActiveAt` cannot be written by a client — staleness needs a server clock
 - [ ] The reporter's delete on the subcollection stays unconditional **until deploy-gates step 5**, because the old client's delete cascade has to be able to empty it
+- [ ] 🆕 **The rules did not change for auto-approval** — the offer path already existed, so the 7-day sweep grants nothing new. Confirm the `takeoverRequests` block is unchanged from the last deploy, and that the **client** still cannot write `status: 'approved'` itself (§3.9)
+- [ ] 🆕 **The `takeoverRequests` COLLECTION_GROUP index on `status, createdAt` is deployed and READY.** The daily sweep's only query needs it; without it the sweep throws and **nothing auto-approves**, silently — no user-visible symptom at all until somebody notices a signal that should have moved and did not (§17.3)
 
 ---
 
@@ -1997,9 +2091,15 @@
 
 ### 16.2 Reporting (any user)
 - [ ] A **flag** appears in the signal details app bar for **non-authors**; the author does not see it on their own signal
-- [ ] **Long-press a comment** offers Report (and, for a moderator, a Report / Delete comment chooser — §16.5)
+- [ ] **A comment's `⋮` menu** offers Report (and, for a moderator, a Report / Delete comment chooser — §16.5). It was a long-press until §3.4c made it a visible affordance
 - [ ] The report dialog asks *"What is wrong with this?"* with **12 reasons**: fraud/scam, animal abuse or neglect, harassment, false information, dangerous advice, puts an animal in danger, graphic content, spam, shares private details, public accusation about a person, duplicate of another signal, something else
-- [ ] **A reason is required**; free-text detail is **optional** (demanding an explanation is what stops people reporting at all)
+- [ ] **A reason is required**; free-text detail is **optional** for eleven of the twelve (demanding an explanation is what stops people reporting at all)
+- [ ] 🆕 🔴 **"Something else" must say what else.** Pick *something else*: **Send stays disabled** until the details field holds something after trimming (three spaces is not enough), the field's label switches to the **"(required)"** variant, and a helper line explains why ("Without this a moderator has no clue what to look at.")
+- [ ] 🆕 **Picking any other reason reverts all three immediately** — Send re-enables with the box empty, the label goes back, the helper line disappears. Toggle back and forth between *spam* and *something else* and confirm it tracks every time
+- [ ] 🆕 **In Bulgarian the helper sentence renders in full**, wrapping to a second line rather than being clipped with an ellipsis, at font scale 1.0 **and** 1.3 on the 411dp phone. It is a `helper` widget, not `helperText`, precisely because `helperText` clips to one line
+- [ ] 🆕 The helper line appears on a **radio tap** and never on a keystroke, so the field does not shift under a typing finger
+- [ ] 🆕 **A report with reason `other` lands with its details intact**, and reaches the moderator queue readable (§16.3)
+- [ ] 🆕 **This is deliberately client-only — no rules clause.** An *older released build* can still file an `other` report with empty details and must **not** be rejected; a server-side min-length on `other` would break reports from every build already in the field. Confirm nothing in `firestore.rules` constrains `reason`/`details` length beyond the existing bounds
 - [ ] On submit: "Thank you. A moderator will review this."
 - [ ] **Reporting the same target twice** shows "You have already reported this." and writes **no** second document — the deterministic id *is* the rate limit (§11.11)
 - [ ] Reporting while signed out prompts to sign in ("Please sign in to report content.")
@@ -2139,7 +2239,7 @@
   - `test/firestore_settings_guard_test.dart` — assigning custom Firestore `Settings` in Dart silently breaks the Android headless isolate's geo query, and reports as "no signals nearby"
   - `test/report_status_vocabulary_guard_test.dart` — the report status is a **query filter** (`where('status', isEqualTo: 'open')`), so a drift means handled reports never leave the queue or filed reports never enter it, with no error on either side (§16.3)
   - `test/moderation_label_vocabulary_guard_test.dart` — a label only the server knows is stored, renders nothing, and the moderator believes the signal is annotated (§16.6)
-  - `test/takeover_cooldown_guard_test.dart` — the re-ask cooldown **and** `STALE_OWNER_DAYS`. The staleness half is the one that matters: the button it draws is the only way a signal escapes an owner who stopped answering (§3.9)
+  - `test/takeover_cooldown_guard_test.dart` — the re-ask cooldown, `STALE_OWNER_DAYS` **and now `AUTO_APPROVE_DAYS`** (🆕), each parsed out of the TypeScript rather than restated. These three numbers are the whole escape hatch from an owner who stopped answering, and the app *names them to the user in sentences* — a drift makes the app promise a deadline the server does not keep (§3.9)
   - `test/removal_retention_guard_test.dart` — the 30-day window in two languages. Dart *longer* than the server is the worse direction: the app promises time the user does not have, and a bin that empties early is a delete with extra steps (§3.5b)
   - `test/signal_event_vocabulary_guard_test.dart` also asserts that **`ownership_transfer` is ABSENT from the rules** — do not "fix" a failure there by adding it, which would make a timeline entry claiming responsibility forgeable (§11.5)
 - [ ] **New unit suites pass**: `test/models/signal_owner_test.dart` (the absent / ref / null derivation — §11.12), `test/models/moderation_target_test.dart` (never defaults `collection` to `signals`; narrows on an unknown `targetType` — §16.3), `test/signal_doc_state_test.dart` (the details-screen state machine; R5-004/R6-001/R6-002 each broke in a shipped build), `test/test_mode_sync_cache_test.dart` (the write-avoidance cache **fails towards writing** — §12.1)
@@ -2149,11 +2249,14 @@
   - `test/error_text_test.dart` — fails if an ARB string regains an `{error}` placeholder (a slot for an exception is an invitation to pass one), and covers the fall-through for a Firebase `unknown` wrapping a `SocketException`
   - `test/widgets/bulgarian_layout_test.dart` — pumps at **411dp in `bg`** and fails on an overflow, a chip wider than the screen, an off-screen "Clear all", or an app-bar title that truncates rather than scales
 - [ ] `test/map_clusterer_test.dart` and `test/map_marker_builder_test.dart` pass — the clusterer (identical points are one cluster, closeness is by distance not cell, exclusion, stable ids) and **a bubble with a red member is red** (§2.2)
+- [ ] 🆕 `test/cluster_bubble_style_test.dart` passes — the bubble ring: arcs proportional to the members at each urgency, the 15° minimum slice and where it takes the deficit from, 5° quantisation ahead of the cache key, and **every one of the six `ClusterBubbleStyle` values renders**, including the five production does not select (they are kept reachable so the design choice can be revisited; without this suite they would be unrunnable code quietly rotting) (§2.2)
+- [ ] 🆕 `test/widgets/report_dialog_test.dart` and `test/models/report_reason_test.dart` pass — `ReportReason.requiresDetails` is exhaustive like `label()`, so a reason added later cannot inherit "optional" by saying nothing (§16.2)
+- [ ] 🆕 `test/widgets/signal_owner_block_test.dart` passes — the stale note's two audience wordings, the offer/claim affordance per state, and the pending line that must not name a date already past (§3.9)
 - [ ] `test/profile_validators_test.dart` passes — the name/phone rules the editor and the completion screen now share (§1.6)
 - [ ] `cd firestore-tests && npm ci && npm test` — Firestore **and** Storage rules suites pass, **including the new `events` cases**. Required before **every** rules deploy; device testing cannot validate undeployed rules because `help-a-paw-dev` is production.
 - [ ] `cd functions && npm ci && npm test` — covers `recipientSelection` tier ranking and the floor, the legacy headline shims (`displayTagsOf` / `signalHeadline`), the `events` encoder parity, and now `moderation`, `signalOwnership` and `removeSignal`. Every failure mode here is silent in production.
 - [ ] **The self-moderation guard coverage test passes.** It *reads the source* of `functions/src/moderation.ts` — a new moderator action that skipped `requireNotOwnContent` would compile perfectly and fail silently, so this is the only thing that catches it (§16.7).
-- [ ] Expected suite sizes on this branch: **286 rules tests (28 suites), 551 Dart tests, 122 functions tests (7 suites)** (re-counted 2026-09-12 on `dev`). A sharp drop means a suite stopped being discovered, not that it got faster. *(Round 11 ran against 258 / 293 / 112.)*
+- [ ] Expected suite sizes on this branch: **286 rules tests (28 suites), 596 Dart tests, 127 functions tests (7 suites)** (all three re-run green 2026-09-22 on `dev`; the Kotlin and Swift native suites are counted separately). A sharp drop means a suite stopped being discovered, not that it got faster. *(Round 11 ran against 258 / 293 / 112; the 2026-09-12 update of this checklist read 286 / 551 / 122.)*
 - [ ] **Guard suites added since Round 11 — each covers a silent ×2 copy:**
   - `test/localization_config_guard_test.dart` — the four locale declarations (ARBs, `values-<lang>/`, `locales_config.xml`, `CFBundleLocalizations`). A missing `values-bg` is precisely how a fully translated app shipped an English UI with nothing logged (§9).
   - `test/public_photo_url_guard_test.dart` — the `publicProfiles.photoUrl` host allow-list in **three** places (rules, Dart, and the backfill script, which is the one that matters because the Admin SDK bypasses rules), plus `maxNameLength` (§1.6b, §11.6)
@@ -2165,6 +2268,8 @@
   - `test/models/signal_event_test.dart` — now includes `tags_change` (§3.4)
   - `test/link_parser_test.dart` / `test/widgets/linkified_text_test.dart` — the scheme allow-list, adversarial 2000-char inputs, and recognizer ownership (§3.4c)
 - [ ] Kotlin: `android/app/src/test/.../GeohashTest.kt` passes (guards the Dart↔Kotlin geohash parity the fan-out depends on)
+- [ ] 🆕 Kotlin: `android/app/src/test/.../FlutterBootstrapGuardTest.kt` passes — the `FlutterLoader` init before the callback lookup (§7.2). It was written to fail on **both** regressions (init missing, init below the lookup), not merely to pass on green
+- [ ] 🆕 Swift: `ios/RunnerTests/NativeFirestoreGuardTest.swift` passes — no `Firestore` reference in hand-written `ios/Runner/` source (§7.2)
 - [ ] Swift: `ios/RunnerTests/GeohashTest.swift` passes — and afterwards, restore/verify `build/native_assets/ios/objective_c.framework` before any device build
 - [ ] `cd functions && npm run build` — TypeScript compiles
 - [ ] **`npm ci`, never `npm install`** in either node tree, and confirm `ignore-scripts=true` is still present in `functions/.npmrc` and `firestore-tests/.npmrc`
@@ -2216,6 +2321,16 @@
 - [ ] A removal **inside** the window is left alone
 - [ ] It reaches for `signals/{id}/…`, never for anything under `removedSignals` — only the document moved, so anything cleaning up after a removal that looks in the wrong place silently erases nothing
 - [ ] Read the summary log for a real run and confirm the counts match what was actually there
+
+**`autoApproveStaleTakeovers` (🆕 NEW — `0 3 * * *` UTC, DAILY)**
+- [ ] It is deployed and scheduled, and the schedule is **daily**, not weekly like the other two. The promise it keeps is a deadline in days: a weekly sweep turns "seven days" into "somewhere between seven and fourteen"
+- [ ] Its **COLLECTION_GROUP index** (`takeoverRequests`: `status` ASC, `createdAt` ASC) is READY. Without it the sweep fails with no user-visible symptom (§11.12)
+- [ ] Trigger it manually against a back-dated pending offer on a stale signal and read the summary log: `Auto-approve: N handed over, M left pending, of K past the window.`
+- [ ] It moves offers in **`signals_test`** too — one `collectionGroup` query covers both collections
+- [ ] It **skips** a ripe offer whose owner has since been active, whose signal is gone, that was already answered, or whose requester already holds the signal — and each skip leaves the request **pending and answerable**, not resolved
+- [ ] Running it twice moves nothing the second time; `retryCount` is 0 and a partial run is safe to leave to the next day
+- [ ] An approval writes `status: approved`, `autoApproved: true`, the ownership transfer, the timeline event carrying **the requester's own note**, the subscription and the requester's notification — the same trigger an owner's manual approval fires
+- [ ] Batch cap is **200 per run**; with more than that ripe, the rest are simply picked up tomorrow
 
 ### 17.4 Upgrade path `6.0.2+129` → this build — OBSERVED PROCEDURE (dedicated device)
 
