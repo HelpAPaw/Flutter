@@ -476,7 +476,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           // showing one we do not have yet is a lie about this
                           // person's contribution.
                           if (_stats case final stats?)
-                            UserStatsRow(stats: stats),
+                            UserStatsRow(stats: stats, uid: user.uid),
                           const SizedBox(height: 32),
                           const Divider(),
                           ListTile(

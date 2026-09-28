@@ -164,7 +164,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
               ?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 32),
-        if (stats != null) UserStatsRow(stats: stats),
+        if (stats != null) UserStatsRow(stats: stats, uid: widget.uid),
       ],
     );
   }

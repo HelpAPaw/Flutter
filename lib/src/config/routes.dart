@@ -1,3 +1,5 @@
+import '../services/user_activity_service.dart';
+
 class Routes {
   Routes._();
 
@@ -58,6 +60,14 @@ class Routes {
   /// so a link to yourself behaves the same wherever it came from.
   static const userProfilePath = '/user/:uid';
 
+  /// The list behind one of a profile's stats — `signals`, `helping` or
+  /// `comments` (`UserActivityKind`).
+  ///
+  /// A top-level route, **not** nested under [userProfilePath]: that route
+  /// redirects your own uid to [profile], and a nested route would inherit the
+  /// redirect — so your own lists would bounce back to your profile.
+  static const userActivityPath = '/user/:uid/activity/:kind';
+
   static const signalDetailsPath = '/signal_details/:signalId';
   static const editSignalPath = '/edit_signal/:signalId';
   static const clinicDetailsPath = '/clinic_details/:clinicId';
@@ -81,6 +91,9 @@ class Routes {
   static const signalDetailsPrefix = '/signal_details/';
 
   static String userProfile(String uid) => '/user/$uid';
+
+  static String userActivity(String uid, UserActivityKind kind) =>
+      '/user/$uid/activity/${kind.name}';
 
   static String signalDetails(String signalId) => '$signalDetailsPrefix$signalId';
   static String editSignal(String signalId) => '/edit_signal/$signalId';

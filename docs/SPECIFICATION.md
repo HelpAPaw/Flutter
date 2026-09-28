@@ -1546,7 +1546,7 @@ disagree). Three, and each one is a different kind of number:
 |---|---|---|
 | Signals reported | `publicProfiles.signalsPosted`, live `count()` fallback | see above |
 | Helping now | `count()` on `signalOwner == user && status in openCodes` | under-counts signals created before ownership existed, whose `signalOwner` is *absent* and means the reporter — Firestore cannot query for an absent field, and the gap only shrinks |
-| Comments posted | `collectionGroup('comments').where('author')` `count()` | over-counts accounts old enough to have written `status_change` system comments before events were split out of `comments` (§4.6) |
+| Comments posted | `collectionGroup('comments').where('author')` `count()`, narrowed to the current mode's collection by document name | over-counts accounts old enough to have written `status_change` system comments before events were split out of `comments` (§4.6) |
 
 **Each number fails on its own.** `UserStats`' fields are nullable and a failed query
 leaves its field null, rendered as a dash — never as `0`, which is a real answer here.
@@ -1561,6 +1561,27 @@ four decrement paths (resolve, removal, moderator hide, the §4.10 archive) agai
 increment, and drifting upward would claim somebody was sitting on nine open cases when
 they had none. It needs a `signalOwner ASC, status ASC` composite index on both signal
 collections.
+
+**Each stat opens its list** (`user_activity_page.dart`, route
+`/user/:uid/activity/:kind`, `kind` ∈ `signals | helping | comments`), on both profile
+screens. A top-level route rather than a child of `/user/:uid`, whose own-uid redirect
+a child would inherit. An unknown `kind` redirects to the profile. Queries live in
+`UserActivityService`, every one of them already open to any signed-in session:
+
+| List | Query | Relation to the number |
+|---|---|---|
+| Signals | `reporter == user`, `createdAt desc`, paged by 20 | **shorter**: the counter keeps signals since removed, hidden or archived; the list can only show what is still in the collection, and says so in a footer note |
+| Helping now | same query as the count, sorted client-side | identical |
+| Comments | `collectionGroup('comments')` `author == user`, `createdAt desc` (composite `COLLECTION_GROUP` index), filtered client-side to the current mode's collection, to rows with `text` (dropping legacy status comments), and to signals that still exist | **shorter**, for the same reason as Signals and with the same note |
+
+**Comments are mode-scoped on the server for the count** and on the client for the list.
+The list cannot do the server trick without a second composite index, so it reads in
+date order and filters, stopping after four raw pages per tap (`maxCommentScans`) so a QA
+account in production mode cannot walk its whole test history in one go. The count uses a
+document-name range: names order segment by segment, so everything under `signals/…`
+sorts before `signals_test/!`, and the existing single-field `author` collection-group
+index serves an equality plus a `__name__` range with no composite index. Before this the
+number mixed both collections.
 
 **Account deletion:** `AuthService.deleteAccount()` calls the `deleteAccount` callable
 over plain HTTPS (see §7.14 for why), then signs out. Server-side (§9) it strips phone
@@ -3851,6 +3872,7 @@ silently breaks Auth/Firestore/FCM in release builds only.
 
 | Date | Change |
 |---|---|
+| 2026-09-28 | **Profile stats open their lists** (§5.1; master spec §3.5.1). The three numbers on both profile screens were inert; each now opens `/user/:uid/activity/:kind` — the signals reported, the ones held right now, and the comments written, each row opening its signal. Signals and Comments are **shorter than their numbers by design** — the counts are contributions that outlive a removed or archived signal, the lists can only show what can still be opened — and a footer note says so rather than letting the gap read as a bug. The comments count is now **scoped to the current mode** by a document-name range on the collection-group query (verified against the emulator: `signals` sorts before `signals_test` segment-wise, so `signals_test/!` is the boundary); it previously mixed production and test comments. New composite index: `comments` `COLLECTION_GROUP` (`author`, `createdAt desc`). |
 | 2026-09-21 | **Made the native background path report its own failures** (§7.7, §13.2; issues #82, #83). Everything below the Dart isolate was invisible to Crashlytics: `main.dart`'s two handlers are isolate-level, and this path runs in a process where the isolate does not exist yet — and when this path is what failed, never will. Android's `HeadlessNearbyCheck` also went straight to `FlutterCallbackInformation.lookupCallbackInformation` in a **receiver-only process** where nothing had loaded `libflutter.so`, so that JNI call raised `UnsatisfiedLinkError` instead of returning null and **killed the process on every delivery that passed the gate** — 16 fatals in a day on one test device, and because `recordCheck` runs only on a successful return, the gate never advanced and each delivery retried and died again. `FlutterLoader` is now initialised before the lookup (the same two calls `FlutterEngine`'s constructor already makes, both idempotent), the catches are widened from `Exception` to **`Throwable`** (an `Error` escaping `startEngine` leaves `running` stuck true, silently disabling the check for the life of the process), and the **location write moved ahead of the check**, so a cold engine boot cannot delay the thing the fan-out depends on. `NativeCrashReporter` on both platforms records the six Android and four iOS failure paths as non-fatals — five of the six Android ones were already silent, and an unresolvable callback handle or an engine-boot timeout means the catch-up is **dead until the app is opened again**. iOS gives each path its own `NSError` code, because Crashlytics clusters by domain+code and a chronic *While Using* population would otherwise bury the rarer ones. Neither reporter can become the failure: Kotlin catches its own throw, Swift **guards** on `FirebaseApp.app()` first, since an unconfigured Firebase raises an `NSException` Swift cannot catch. `FlutterBootstrapGuardTest.kt` replaces the loud symptom — the condition exists only in a process with no Activity, which is exactly what `flutter run` and every QA pass hide — and `NativeFirestoreGuardTest.swift` fails the build if any hand-written source under `ios/Runner/` so much as names `Firestore` (§12.13). |
 | 2026-09-17 | **Bounded a signal's title and description on update, not just on create** (§4.1, §5.1, §12.5). `isSignalCreate()` checked the lengths; the update rule did not — and the edit screen writes both fields on every save, with no client-side cap of its own, so a reporter could edit any signal of theirs to an arbitrarily long title or description and the only ceiling was Firestore's 1 MiB document limit. The bounds moved into `isValidSignalContentBounds()` and are now applied to the update rules of **both** `signals` and `signals_test`, the wizard's `LengthLimitingTextInputFormatter` was added to the edit screen's fields, and both Dart writers read `Signal.maxTitleLength` / `Signal.maxDescriptionLength` instead of repeating the literals. No existing signal document exceeded the bounds — checked before deploying, because a rules tightening that fails on existing data locks its owner out of editing rather than failing loudly. Device-verified: the edit screen's title field hard-caps at 300. |
 | 2026-09-17 | **A cluster bubble's ring now splits between the urgencies inside it** (§7.3, §7.8). The disc's colour and the printed count described different things: a red "12" was anywhere between one red signal and twelve, and at the zoom the map opens at — where most signals sit in one or two bubbles — amber and green were invisible whenever a red was anywhere near. The disc keeps its most-urgent fill, so the across-the-screen "worst thing here" read is untouched, and the halo becomes a ring of arcs in proportion to the members at each urgency: a bubble now says both *the worst thing here is critical* and *it is two of twelve*. **Clustering per urgency instead was rejected** — the merge rule only separates within one clustering run, so three runs would stack three bubbles on near-identical centroids and, since bubble markers consume taps, make the lower-urgency one unreachable, which is the defect the cluster sheet exists to prevent. A slice under 15° is lifted to that floor (one red among forty must be visible, not a scratch) and sweeps are quantised to 5° *before* the cache key, so identical-looking bubbles share a bitmap and the cache grows with the data, not the palette. `ClusterBubbleStyle` keeps the five alternatives reachable and test-covered rather than deleted, and the legend now paints through the marker bitmap's own routine. |

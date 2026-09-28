@@ -4,6 +4,7 @@ import '../models/signal_status.dart';
 import '../utils/error_text.dart';
 import 'app_preferences_service.dart';
 import 'public_profile_service.dart';
+import 'user_activity_service.dart';
 
 /// One account's contribution statistics (master spec §3.5.1).
 ///
@@ -73,7 +74,11 @@ class UserStatsService {
     final results = await Future.wait([
       _orNull(() => _signalsPosted(uid, userRef, profile), 'signalsPosted'),
       _orNull(() => _signalsOwned(userRef), 'signalsOwned'),
-      _orNull(() => _commentsPosted(userRef), 'commentsPosted'),
+      _orNull(
+        () => _commentsPosted(
+            userRef, AppPreferencesService().signalsCollectionName),
+        'commentsPosted',
+      ),
     ]);
 
     return UserStats(
@@ -163,11 +168,14 @@ class UserStatsService {
     return snapshot.count ?? 0;
   }
 
-  /// How many comments this account has written.
+  /// How many comments this account has written in the current mode.
   ///
-  /// A collection-group query, so it spans both `signals` and `signals_test`
-  /// and every signal in them — including signals since removed, which is the
-  /// right answer for a contribution stat.
+  /// A collection-group query, narrowed to [collection] by document name
+  /// ([UserActivityService.scopeCommentsTo]) so it agrees with the comment list
+  /// the number opens. It used to span `signals` and `signals_test` together,
+  /// which let a QA account's test comments inflate its production figure. It
+  /// still counts comments on signals since removed — the right answer for a
+  /// contribution stat, and the one gap the list has to explain.
   ///
   /// **Over-counts on accounts old enough to predate the timeline split.**
   /// Status and urgency changes used to be written into `comments` with an
@@ -177,12 +185,14 @@ class UserStatsService {
   /// there is no field on them to exclude without also excluding real comments.
   static Future<int> _commentsPosted(
     DocumentReference<Map<String, dynamic>> userRef,
+    String collection,
   ) async {
-    final snapshot = await FirebaseFirestore.instance
-        .collectionGroup('comments')
-        .where('author', isEqualTo: userRef)
-        .count()
-        .get();
+    final snapshot = await UserActivityService.scopeCommentsTo(
+      FirebaseFirestore.instance
+          .collectionGroup('comments')
+          .where('author', isEqualTo: userRef),
+      collection,
+    ).count().get();
     return snapshot.count ?? 0;
   }
 }

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
+import 'package:go_router/go_router.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 
+import '../config/routes.dart';
+import '../services/user_activity_service.dart';
 import '../services/user_stats_service.dart';
 
 /// One contribution statistic: a glyph, a number and a label.
@@ -18,9 +21,13 @@ class StatCard extends StatelessWidget {
     required this.icon,
     required this.value,
     required this.label,
+    this.onTap,
   });
 
   final IconData icon;
+
+  /// Opens the list behind the number. Null leaves the card inert.
+  final VoidCallback? onTap;
 
   /// The number, or null when the query behind it failed.
   ///
@@ -34,35 +41,40 @@ class StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      child: Padding(
-        // Horizontal padding is small because [StatCardRow] gives every card an
-        // equal share of the row. It used to be 32, which sized the card to its
-        // content — fine for the two cards this started with, and an overflow
-        // as soon as there were three with a two-word label between them.
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
-        child: Column(
-          children: [
-            Icon(icon, size: 32, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(height: 8),
-            Text(
-              value?.toString() ?? '—',
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineSmall
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              // Two lines, so a long Bulgarian label wraps instead of being
-              // clipped: the number above it is meaningless without it.
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-            ),
-          ],
+      // Clipped so the ink splash follows the rounded corners.
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          // Horizontal padding is small because [StatCardRow] gives every card an
+          // equal share of the row. It used to be 32, which sized the card to its
+          // content — fine for the two cards this started with, and an overflow
+          // as soon as there were three with a two-word label between them.
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+          child: Column(
+            children: [
+              Icon(icon, size: 32, color: Theme.of(context).colorScheme.primary),
+              const SizedBox(height: 8),
+              Text(
+                value?.toString() ?? '—',
+                style: Theme.of(context)
+                    .textTheme
+                    .headlineSmall
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                // Two lines, so a long Bulgarian label wraps instead of being
+                // clipped: the number above it is meaningless without it.
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -82,28 +94,41 @@ class StatCard extends StatelessWidget {
 /// sizes to content is one long Bulgarian translation away from overflowing a
 /// 411dp phone — see `test/widgets/bulgarian_layout_test.dart`.
 class UserStatsRow extends StatelessWidget {
-  const UserStatsRow({super.key, required this.stats});
+  const UserStatsRow({super.key, required this.stats, this.uid});
 
   final UserStats stats;
+
+  /// Whose stats these are. When given, each card opens the list behind its
+  /// number (`Routes.userActivity`); without it the row is display-only.
+  final String? uid;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final uid = this.uid;
+    VoidCallback? open(UserActivityKind kind) => uid == null
+        ? null
+        // `push`: the list is a detour from the profile, and back returns to it.
+        : () => context.push(Routes.userActivity(uid, kind));
+
     final cards = [
       StatCard(
         icon: Icons.pin_drop,
         value: stats.signalsPosted,
         label: l10n.signals,
+        onTap: open(UserActivityKind.signals),
       ),
       StatCard(
         icon: Icons.volunteer_activism,
         value: stats.signalsOwned,
         label: l10n.helpingNow,
+        onTap: open(UserActivityKind.helping),
       ),
       StatCard(
         icon: Icons.comment,
         value: stats.commentsPosted,
         label: l10n.comments,
+        onTap: open(UserActivityKind.comments),
       ),
     ];
 

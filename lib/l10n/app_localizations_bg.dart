@@ -2111,4 +2111,22 @@ class AppLocalizationsBg extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get activityRemovedSignalsNote =>
+      'Сигналите, които по-късно са премахнати или архивирани, не са показани тук.';
+
+  @override
+  String get activityRemovedCommentsNote =>
+      'Коментарите към сигнали, които по-късно са премахнати или архивирани, не са показани тук.';
+
+  @override
+  String get activityNothingHelpingNow =>
+      'В момента няма отворени сигнали, по които да се помага';
+
+  @override
+  String get activityNoCommentsYet => 'Все още няма коментари';
+
+  @override
+  String get activityCouldNotLoad => 'Списъкът не можа да се зареди';
 }

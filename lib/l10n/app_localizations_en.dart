@@ -2079,4 +2079,22 @@ class AppLocalizationsEn extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get activityRemovedSignalsNote =>
+      'Signals that were later removed or archived aren\'t listed here.';
+
+  @override
+  String get activityRemovedCommentsNote =>
+      'Comments on signals that were later removed or archived aren\'t listed here.';
+
+  @override
+  String get activityNothingHelpingNow =>
+      'No open signals being helped with right now';
+
+  @override
+  String get activityNoCommentsYet => 'No comments yet';
+
+  @override
+  String get activityCouldNotLoad => 'Couldn\'t load this list';
 }
