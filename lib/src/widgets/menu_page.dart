@@ -28,28 +28,14 @@ class MenuPage extends StatefulWidget {
 }
 
 class _MenuPageState extends State<MenuPage> {
-  /// Cached so a rebuild — the auth `StreamBuilder` rebuilds the whole list —
-  /// does not restart the moderator read. Without the cache a fresh stream falls
-  /// back to `initialData: false` and the moderator entry blinks out and back.
-  ///
-  /// Keyed on uid, which the drawer this replaces did **not** need: it was
-  /// disposed every time it closed, so a stale uid repaired itself. A tab is
-  /// never disposed, so without the key an account switch would keep showing the
-  /// previous account's moderator state for the rest of the session.
-  Stream<bool>? _moderatorStream;
-  String? _moderatorUid;
+  /// Held so a rebuild — the auth `StreamBuilder` rebuilds the whole list —
+  /// does not restart the moderator read. No need to re-create it on an account
+  /// switch: the stream follows `authStateChanges` itself.
+  late final Stream<bool> _moderatorStream =
+      ModerationService.instance.watchIsModerator();
 
-  /// Held for the same reason the moderator stream is cached: `userChanges()`
-  /// returns a new object per call.
+  /// Held for the same reason: `userChanges()` returns a new object per call.
   late final Stream<User?> _userChanges = FirebaseAuth.instance.userChanges();
-
-  Stream<bool> _moderatorStreamFor(String? uid) {
-    if (_moderatorStream == null || _moderatorUid != uid) {
-      _moderatorUid = uid;
-      _moderatorStream = ModerationService.instance.watchIsModerator();
-    }
-    return _moderatorStream!;
-  }
 
   Future<void> _signOut() async {
     try {
@@ -171,7 +157,7 @@ class _MenuPageState extends State<MenuPage> {
                 // A live stream rather than a one-shot read so a revoked
                 // moderator loses the entry without restarting the app.
                 StreamBuilder<bool>(
-                  stream: _moderatorStreamFor(user?.uid),
+                  stream: _moderatorStream,
                   initialData: false,
                   builder: (context, snapshot) {
                     if (snapshot.data != true) return const SizedBox.shrink();
