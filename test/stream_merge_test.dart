@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:help_a_paw/src/utils/cached_user_doc_stream.dart';
 import 'package:help_a_paw/src/utils/stream_merge.dart';
 
 /// Hand-rolled because neither rxdart nor package:async is a declared
@@ -119,37 +118,10 @@ void main() {
   });
 
   group('switchLatest', () {
-    test('handles a new outer event while the inner stream is still open',
-        () async {
-      // #86: the Watching tab used `asyncExpand`, which waits for the inner
-      // stream to finish. A Firestore query never does, so every follow-list
-      // change after the first was queued forever.
-      final follows = StreamController<Set<String>>.broadcast();
-      var latest = <String>{'a'};
-      final seen = <String>[];
-
-      final sub = switchLatest(
-        replayThenFollow(follows.stream, () => latest),
-        (Set<String> ids) => Stream<String>.multi((out) {
-          out.add(ids.join());
-          // Never closes, like `snapshots()`.
-        }),
-      ).listen(seen.add);
-
-      await pumpEventQueue();
-      follows.add(latest = {'a', 'b'});
-      await pumpEventQueue();
-      follows.add(latest = {'b'});
-      await pumpEventQueue();
-
-      expect(seen, ['a', 'ab', 'b']);
-
-      await sub.cancel();
-      await follows.close();
-    });
-
     test('cancels the previous inner stream and drops its later events',
         () async {
+      // #86: `asyncExpand` would never reach the second inner stream, because
+      // the first one never completes.
       final outer = StreamController<int>();
       final first = StreamController<String>();
       final second = StreamController<String>();
@@ -170,6 +142,7 @@ void main() {
       expect(first.hasListener, isFalse);
       expect(second.hasListener, isTrue);
 
+      first.add('stale');
       second.add('second');
       await pumpEventQueue();
       expect(seen, ['first', 'second']);
@@ -224,27 +197,52 @@ void main() {
     test('while paused, switches once to the newest source value on resume',
         () async {
       // Riverpod pauses a provider's subscription while nothing watches it.
+      // The fake has the shape of FlutterFire's `snapshots()`: the native
+      // listener is registered after an `await` in `onListen`, and `onCancel`
+      // only removes one that is already registered (see switchLatest's doc).
+      final built = <int>[];
+      final live = <int>{};
+      var leaked = 0;
+      Stream<int> snapshots(int value) {
+        built.add(value);
+        var cancelled = false;
+        return StreamController<int>.broadcast(
+          onListen: () async {
+            await Future<void>.delayed(Duration.zero);
+            if (cancelled) leaked++;
+            live.add(value);
+          },
+          onCancel: () {
+            cancelled = true;
+            live.remove(value);
+          },
+        ).stream;
+      }
+
       final outer = StreamController<int>();
-      final inners = <int, StreamController<int>>{};
-
-      final sub = switchLatest(outer.stream, (int i) {
-        return (inners[i] = StreamController<int>()).stream;
-      }).listen((_) {});
-
+      final sub = switchLatest(outer.stream, snapshots).listen((_) {});
       outer.add(1);
       await pumpEventQueue();
+
       sub.pause();
-      outer.add(2);
-      outer.add(3);
+      outer
+        ..add(2)
+        ..add(3)
+        ..add(4);
       await pumpEventQueue();
-      expect(inners.keys, [1], reason: 'nothing switches while paused');
+      expect(built, [1], reason: 'nothing is switched to while paused');
+      expect(live, isEmpty, reason: 'the stale query goes at once');
 
       sub.resume();
       await pumpEventQueue();
-      expect(inners.keys, [1, 3], reason: '2 was superseded before resume');
-      expect(inners[1]!.hasListener, isFalse);
+      expect(built, [1, 4], reason: '2 and 3 were superseded before resume');
+      expect(live, {4});
 
       await sub.cancel();
+      await pumpEventQueue();
+      expect(live, isEmpty);
+      expect(leaked, 0);
+
       await outer.close();
     });
 
@@ -276,51 +274,6 @@ void main() {
       await sub.cancel();
       await outer.close();
       await inner.close();
-    });
-
-    test('changes made while paused leave no query listening after cancel',
-        () async {
-      // The shape of FlutterFire's `snapshots()`: the native listener is
-      // registered after an `await` in `onListen`, and `onCancel` only removes
-      // one that is already registered. A query cancelled sooner than that
-      // listens forever — which is what switching through a burst of buffered
-      // values, a microtask apart, used to do.
-      var registered = 0;
-      var removed = 0;
-      Stream<int> snapshots() {
-        var live = false;
-        return StreamController<int>.broadcast(
-          onListen: () async {
-            await Future<void>.delayed(Duration.zero);
-            registered++;
-            live = true;
-          },
-          onCancel: () {
-            if (live) removed++;
-          },
-        ).stream;
-      }
-
-      final outer = StreamController<int>();
-      final sub = switchLatest(outer.stream, (_) => snapshots()).listen((_) {});
-      outer.add(1);
-      await pumpEventQueue();
-
-      sub.pause();
-      outer
-        ..add(2)
-        ..add(3)
-        ..add(4);
-      await pumpEventQueue();
-      sub.resume();
-      await pumpEventQueue();
-
-      await sub.cancel();
-      await pumpEventQueue();
-      expect(registered, 2);
-      expect(registered - removed, 0, reason: 'a native listener leaked');
-
-      await outer.close();
     });
 
     test('closes once the source and the current inner stream are done',

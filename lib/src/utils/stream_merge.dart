@@ -81,25 +81,24 @@ Stream<List<T>> mergeLatestList<T>(List<Stream<T>> sources) {
 /// each new event cancels the previous inner stream and listens to the next —
 /// what `rxdart` and `stream_transform` call `switchMap`.
 ///
-/// Exists because `asyncExpand` is the tempting spelling and is wrong whenever
-/// the inner stream never completes (#86). It **pauses the outer stream until
-/// the inner one is done**, and a Firestore `snapshots()` stream is never done,
-/// so the Watching tab read the follow list once and then queued every later
-/// follow or unfollow behind a query that would not end.
+/// Not `asyncExpand`, which **pauses the outer stream until the inner one is
+/// done**: a Firestore `snapshots()` stream never is, so every source event
+/// after the first would queue forever (#86).
 ///
-/// **While paused, only the newest value of each side is kept**, and a source
-/// value that arrived meanwhile is switched to once, on resume. Riverpod pauses
-/// a provider's subscription while nothing watches it, and both library
-/// versions (each already in `pubspec.lock` transitively) buffer instead. That
-/// is worse here for two reasons:
+/// **While paused, only the newest value of each side is kept.** Riverpod
+/// pauses a provider's subscription while nothing watches it, and both library
+/// versions (each already in `pubspec.lock` transitively) buffer instead:
 ///
-/// * A paused Firestore query does not stop listening natively, so buffering
-///   it only replays stale pages on resume, one rebuild each.
-/// * Buffered source values are delivered a microtask apart, so each one would
-///   start a query and cancel it before its `onListen` had finished. FlutterFire
-///   registers the native listener *after* an `await`, and its `onCancel` only
-///   cancels what is already registered — so a query cancelled that early keeps
-///   listening, and billing, for the life of the process.
+/// * A paused Firestore query keeps listening natively, so buffering it only
+///   replays stale pages on resume, one rebuild each. Here a source value that
+///   arrives while paused cancels the now-stale inner stream at once, and is
+///   switched to on resume.
+/// * Switching through buffered source values a microtask apart would cancel
+///   each query before FlutterFire's `onListen` has finished its `await` — and
+///   its `onCancel` only removes a listener that is already registered, so a
+///   query cancelled that early keeps listening for the life of the process.
+///   This closes that path only; any `snapshots()` listener in the app that is
+///   cancelled within a platform round-trip of `listen` has the same exposure.
 ///
 /// The result closes once [source] and the current inner stream have both
 /// closed and nothing is held back.
@@ -124,17 +123,19 @@ Stream<R> switchLatest<T, R>(
       }
     }
 
-    void switchTo(T value) {
+    void dropInner() {
       final previous = inner;
       inner = null;
       heldValue = null;
       if (previous != null) {
         unawaited(previous.cancel().then((_) {}, onError: out.addError));
       }
+    }
 
+    void switchTo(T value) {
+      dropInner();
       try {
-        late final StreamSubscription<R> sub;
-        sub = convert(value).listen(
+        inner = convert(value).listen(
           (event) {
             if (out.isPaused) {
               heldValue = (event,);
@@ -144,12 +145,10 @@ Stream<R> switchLatest<T, R>(
           },
           onError: out.addError,
           onDone: () {
-            if (!identical(inner, sub)) return;
             inner = null;
             closeIfDone();
           },
         );
-        inner = sub;
       } catch (error, stack) {
         out.addError(error, stack);
       }
@@ -158,6 +157,7 @@ Stream<R> switchLatest<T, R>(
     final outer = source.listen(
       (value) {
         if (out.isPaused) {
+          dropInner();
           heldSource = (value,);
         } else {
           switchTo(value);
@@ -172,20 +172,16 @@ Stream<R> switchLatest<T, R>(
 
     out
       ..onResume = () {
-        final pendingSource = heldSource;
-        final pendingValue = heldValue;
-        heldSource = null;
-        heldValue = null;
-        // A newer source value makes the held inner value stale.
-        if (pendingSource != null) {
-          switchTo(pendingSource.$1);
-        } else if (pendingValue != null) {
-          out.add(pendingValue.$1);
+        if (heldSource case (final value,)) {
+          heldSource = null;
+          switchTo(value);
+        } else if (heldValue case (final value,)) {
+          heldValue = null;
+          out.add(value);
         }
         closeIfDone();
       }
-      ..onCancel = () async {
-        await Future.wait([outer.cancel(), if (inner != null) inner!.cancel()]);
-      };
+      ..onCancel = () =>
+          Future.wait([outer.cancel(), if (inner != null) inner!.cancel()]);
   });
 }

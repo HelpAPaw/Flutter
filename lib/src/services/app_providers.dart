@@ -101,8 +101,20 @@ final watchingProvider = StreamProvider<WatchedPage>((ref) {
   // The follow list drives the query, so a follow or unfollow re-pages without
   // the screen having to ask. Switched rather than expanded: the query never
   // completes, and `asyncExpand` would wait on it forever (#86).
+  //
+  // An unfollowed row leaves at once, from the last page shown, rather than
+  // when the fresh query answers — which can be after the write's own
+  // acknowledgement, and the screen would show it again in between.
+  WatchedPage? shown;
   return switchLatest(
     SignalSubscriptionService.instance.watchSubscriptions(),
-    (Set<String> ids) => service.watch(ids.toList(), limit: limit),
-  );
+    (Set<String> ids) async* {
+      final previous = shown;
+      if (previous != null) {
+        final kept = previous.retainOnly(ids);
+        if (kept.signals.length < previous.signals.length) yield kept;
+      }
+      yield* service.watch(ids.toList(), limit: limit);
+    },
+  ).map((page) => shown = page);
 });
