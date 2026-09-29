@@ -117,6 +117,185 @@ void main() {
     });
   });
 
+  group('switchLatest', () {
+    test('cancels the previous inner stream and drops its later events',
+        () async {
+      // #86: `asyncExpand` would never reach the second inner stream, because
+      // the first one never completes.
+      final outer = StreamController<int>();
+      final first = StreamController<String>();
+      final second = StreamController<String>();
+      final seen = <String>[];
+
+      final sub = switchLatest(
+        outer.stream,
+        (int i) => i == 1 ? first.stream : second.stream,
+      ).listen(seen.add);
+
+      outer.add(1);
+      await pumpEventQueue();
+      first.add('first');
+      await pumpEventQueue();
+
+      outer.add(2);
+      await pumpEventQueue();
+      expect(first.hasListener, isFalse);
+      expect(second.hasListener, isTrue);
+
+      first.add('stale');
+      second.add('second');
+      await pumpEventQueue();
+      expect(seen, ['first', 'second']);
+
+      await sub.cancel();
+      await outer.close();
+      await first.close();
+      await second.close();
+    });
+
+    test('cancelling releases the outer and the current inner stream',
+        () async {
+      final outer = StreamController<int>();
+      final inner = StreamController<int>();
+
+      final sub =
+          switchLatest(outer.stream, (_) => inner.stream).listen((_) {});
+      outer.add(1);
+      await pumpEventQueue();
+      expect(outer.hasListener, isTrue);
+      expect(inner.hasListener, isTrue);
+
+      await sub.cancel();
+      expect(outer.hasListener, isFalse);
+      expect(inner.hasListener, isFalse);
+
+      await outer.close();
+      await inner.close();
+    });
+
+    test('forwards errors from both sides', () async {
+      final outer = StreamController<int>();
+      final inner = StreamController<int>();
+      final caught = <Object>[];
+
+      final sub = switchLatest(outer.stream, (_) => inner.stream)
+          .listen((_) {}, onError: caught.add);
+
+      outer.addError(StateError('outer'));
+      outer.add(1);
+      await pumpEventQueue();
+      inner.addError(ArgumentError('inner'));
+      await pumpEventQueue();
+
+      expect(caught, [isStateError, isArgumentError]);
+
+      await sub.cancel();
+      await outer.close();
+      await inner.close();
+    });
+
+    test('while paused, switches once to the newest source value on resume',
+        () async {
+      // Riverpod pauses a provider's subscription while nothing watches it.
+      // The fake has the shape of FlutterFire's `snapshots()`: the native
+      // listener is registered after an `await` in `onListen`, and `onCancel`
+      // only removes one that is already registered (see switchLatest's doc).
+      final built = <int>[];
+      final live = <int>{};
+      var leaked = 0;
+      Stream<int> snapshots(int value) {
+        built.add(value);
+        var cancelled = false;
+        return StreamController<int>.broadcast(
+          onListen: () async {
+            await Future<void>.delayed(Duration.zero);
+            if (cancelled) leaked++;
+            live.add(value);
+          },
+          onCancel: () {
+            cancelled = true;
+            live.remove(value);
+          },
+        ).stream;
+      }
+
+      final outer = StreamController<int>();
+      final sub = switchLatest(outer.stream, snapshots).listen((_) {});
+      outer.add(1);
+      await pumpEventQueue();
+
+      sub.pause();
+      outer
+        ..add(2)
+        ..add(3)
+        ..add(4);
+      await pumpEventQueue();
+      expect(built, [1], reason: 'nothing is switched to while paused');
+      expect(live, isEmpty, reason: 'the stale query goes at once');
+
+      sub.resume();
+      await pumpEventQueue();
+      expect(built, [1, 4], reason: '2 and 3 were superseded before resume');
+      expect(live, {4});
+
+      await sub.cancel();
+      await pumpEventQueue();
+      expect(live, isEmpty);
+      expect(leaked, 0);
+
+      await outer.close();
+    });
+
+    test('while paused, delivers only the newest inner value on resume',
+        () async {
+      final outer = StreamController<int>();
+      final inner = StreamController<int>();
+      final seen = <int>[];
+
+      final sub =
+          switchLatest(outer.stream, (_) => inner.stream).listen(seen.add);
+      outer.add(1);
+      await pumpEventQueue();
+
+      sub.pause();
+      inner
+        ..add(7)
+        ..add(8)
+        ..add(9);
+      await pumpEventQueue();
+      expect(seen, isEmpty);
+
+      sub.resume();
+      await pumpEventQueue();
+      inner.add(10);
+      await pumpEventQueue();
+      expect(seen, [9, 10], reason: 'stale pages are dropped, not replayed');
+
+      await sub.cancel();
+      await outer.close();
+      await inner.close();
+    });
+
+    test('closes once the source and the current inner stream are done',
+        () async {
+      final outer = StreamController<int>();
+      final inner = StreamController<int>();
+      var done = false;
+
+      switchLatest(outer.stream, (_) => inner.stream)
+          .listen((_) {}, onDone: () => done = true);
+
+      outer.add(1);
+      await outer.close();
+      await pumpEventQueue();
+      expect(done, isFalse, reason: 'the inner stream is still open');
+
+      await inner.close();
+      await pumpEventQueue();
+      expect(done, isTrue);
+    });
+  });
+
   group('onErrorEmitPartial', () {
     test('substitutes the fallback so a merge can still complete', () async {
       // The real case: the signalOwner query throws FAILED_PRECONDITION because

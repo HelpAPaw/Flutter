@@ -21,6 +21,14 @@ class WatchedPage {
   final bool hasMore;
 
   static const empty = WatchedPage(signals: [], hasMore: false);
+
+  /// This page without the rows whose ids are not in [followedIds] — what to
+  /// show while the query for a changed follow list is still on its way.
+  WatchedPage retainOnly(Set<String> followedIds) => WatchedPage(
+        signals:
+            signals.where((entry) => followedIds.contains(entry.id)).toList(),
+        hasMore: hasMore,
+      );
 }
 
 /// The signals a user follows, minus the ones they are responsible for.

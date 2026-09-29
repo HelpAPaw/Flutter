@@ -56,8 +56,9 @@ class _WatchedList extends ConsumerStatefulWidget {
 }
 
 class _WatchedListState extends ConsumerState<_WatchedList> {
-  /// Ids whose unfollow is in flight, so the row does not linger while the
-  /// write lands.
+  /// Ids whose unfollow is in flight, so the row goes on the tap rather than
+  /// when the write's local snapshot reaches `watchingProvider`, which drops
+  /// the row itself from then on.
   final Set<String> _pendingUnfollow = <String>{};
 
   Future<void> _unfollow(String signalId) async {

@@ -1,4 +1,7 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:help_a_paw/src/models/signal.dart';
+import 'package:help_a_paw/src/repositories/signal_repository.dart';
 import 'package:help_a_paw/src/utils/chunk.dart';
 import 'package:help_a_paw/src/services/watching_service.dart';
 
@@ -28,5 +31,39 @@ void main() {
       expect(stillPaging.signals, isEmpty);
       expect(stillPaging.hasMore, isTrue);
     });
+
+    test('retainOnly drops unfollowed rows and keeps the rest in order', () {
+      // What the Watching tab shows between an unfollow and the fresh query's
+      // answer, so the row goes at once and cannot come back meanwhile (#86).
+      final page = WatchedPage(
+        signals: [signalWith('a'), signalWith('b'), signalWith('c')],
+        hasMore: true,
+      );
+
+      final kept = page.retainOnly({'a', 'c', 'not-on-this-page'});
+
+      expect(kept.signals.map((entry) => entry.id), ['a', 'c']);
+      expect(kept.hasMore, isTrue);
+    });
   });
+}
+
+SignalWithId signalWith(String id) => SignalWithId(
+      id: id,
+      signal: Signal(
+        title: id,
+        description: '',
+        phoneNumber: '',
+        location: const {},
+        reporter: _FakeDocumentReference(),
+        contactPhone: '',
+        createdAt: null,
+        urgency: 0,
+      ),
+      rawData: const {},
+    );
+
+class _FakeDocumentReference implements DocumentReference<Map<String, dynamic>> {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

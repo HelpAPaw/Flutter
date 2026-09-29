@@ -15,7 +15,7 @@ import 'package:flutter/foundation.dart';
 /// other only when somebody next asked, so the two gave different answers to
 /// "what happens on sign-out". Now there is one answer.
 ///
-/// Three properties the callers depend on, each of which was a bug in one copy
+/// Four properties the callers depend on, each of which was a bug in one copy
 /// or the other before it was written down:
 ///
 /// * **Late subscribers get the current value.** A plain `asBroadcastStream()`
@@ -30,6 +30,10 @@ import 'package:flutter/foundation.dart';
 ///   that have nothing to do with any one projection — an FCM token save, a
 ///   test-mode sync — and every duplicate emission costs whatever the
 ///   subscribers do in response.
+/// * **A value belongs to one account.** An account switch emits [empty] before
+///   the next account's document arrives, so a subscriber is never handed the
+///   previous account's answer — signing straight into another account, with
+///   no sign-out between, used to replay it (#86).
 class CachedUserDocStream<T> {
   CachedUserDocStream({
     required this.collection,
@@ -92,10 +96,9 @@ class CachedUserDocStream<T> {
       unawaited(_docSubscription?.cancel());
       _docSubscription = null;
 
-      if (uid == null) {
-        _emit(empty);
-        return;
-      }
+      // Not the previous account's answer — see the class doc.
+      _emit(empty);
+      if (uid == null) return;
 
       _docSubscription = FirebaseFirestore.instance
           .collection(collection)
