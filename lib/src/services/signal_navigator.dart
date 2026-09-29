@@ -36,6 +36,18 @@ class SignalNavigator {
   /// `MapPage.build`.
   String? pendingFocusSignalId;
 
+  /// A comment to scroll to on a signal that is **already on screen**.
+  ///
+  /// Opening a signal with a comment puts the comment in the route, which the
+  /// new screen reads. But [open] deliberately does not stack a second copy of
+  /// the signal the user is already looking at — the common case for a push
+  /// about a new comment on the thread they have open — so there is no new
+  /// route to carry it. The open screen listens here instead, and sets this
+  /// back to null once it has taken the request, so the same comment can be
+  /// asked for twice.
+  final ValueNotifier<({String signalId, String commentId})?> commentFocus =
+      ValueNotifier(null);
+
   /// Pass to `GoRouter(observers: [...])` so this class can see the root
   /// navigator's stack.
   final SignalNavigatorObserver observer = SignalNavigatorObserver();
@@ -69,12 +81,6 @@ class SignalNavigator {
     if (_showMapBranch == showMapBranch) _showMapBranch = null;
   }
 
-  /// The signal currently pushed on top, if any.
-  ///
-  /// Kept here because the observer can only report the route *pattern*. Set
-  /// when [open] pushes, cleared as soon as the details route leaves the stack.
-  String? _openSignalId;
-
   /// The router's own location — correct for a `go()` and for the cold-launch
   /// initial route, and the only thing available before the first frame, when
   /// the observer has seen nothing yet. Blind to imperative pushes, which is
@@ -87,43 +93,55 @@ class SignalNavigator {
 
   /// Whether a signal is already on screen — by deep link, notification tap, or
   /// an ordinary push from inside the app.
-  bool get isShowingSignal {
-    if (observer.topRoutePattern == Routes.signalDetailsPath) return true;
+  bool get isShowingSignal => _signalOnTop != null;
+
+  /// The id of the signal on top — however it got there, which is the point:
+  /// an inbox row, a list, the map and a notification all open it differently.
+  String? get _signalOnTop {
+    if (observer.topIsSignal) return observer.topSignalId;
     // A cold launch straight onto a signal is a `go`, not a push, so the
     // observer has nothing over the shell and the URI is the answer.
-    return observer.topRoutePattern == null &&
-        (_routerLocation?.startsWith(Routes.signalDetailsPrefix) ?? false);
+    final location = _routerLocation;
+    if (observer.topRouteName == null &&
+        location != null &&
+        location.startsWith(Routes.signalDetailsPrefix)) {
+      return location.substring(Routes.signalDetailsPrefix.length);
+    }
+    return null;
   }
 
   /// Whether a tab is showing, with nothing pushed over it.
-  bool get _shellIsOnTop => observer.topRoutePattern == null;
+  bool get _shellIsOnTop => observer.topRouteName == null;
 
-  /// Shows [signalId], unless it is already on screen.
+  /// Shows [signalId], unless it is already on screen, scrolled to
+  /// [commentId] when one is given.
   ///
   /// Uses `push` so backing out returns wherever the user came from (normally
   /// the map, which then focuses the pin) rather than replacing that history.
-  void open(String signalId) {
+  void open(String signalId, {String? commentId}) {
     final router = _router;
     if (router == null) {
       debugPrint('SignalNavigator: no router attached, dropped $signalId');
       return;
     }
 
-    final location = Routes.signalDetails(signalId);
     // Re-tapping the same link or notification while already on that signal
     // should do nothing rather than stack a duplicate page. This also absorbs
     // the launch link that app_links replays on a cold start, which the
-    // platform's built-in handling has already applied as the initial route —
-    // hence both arms: a pushed signal is tracked by id, a cold-launched one
-    // shows up in the router's location.
-    if (isShowingSignal &&
-        (_openSignalId == signalId || _routerLocation == location)) {
+    // platform's built-in handling has already applied as the initial route.
+    if (_signalOnTop == signalId) {
+      // Still worth something when it names a comment: the screen that is
+      // already open scrolls to it instead.
+      if (commentId != null) {
+        // Through null first: a record compares by value, so asking for the
+        // same comment twice would otherwise not notify at all.
+        commentFocus.value = null;
+        commentFocus.value = (signalId: signalId, commentId: commentId);
+      }
       return;
     }
 
     pendingFocusSignalId = signalId;
-    _openSignalId = signalId;
-    observer.onDetailsGone = () => _openSignalId = null;
 
     // Put the map under the page we are about to push. `pendingFocusSignalId` is
     // consumed by `MapScreen.build`, and backing out of a notification is
@@ -146,7 +164,7 @@ class SignalNavigator {
       _showMapBranch?.call();
     }
 
-    router.push(location);
+    router.push(Routes.signalDetails(signalId, commentId: commentId));
   }
 }
 
@@ -154,67 +172,75 @@ class SignalNavigator {
 ///
 /// The observer is handed every page-based route go_router builds, including the
 /// tab branches' own — verified on device and in `signal_navigator_branch_test`:
-/// a cold start reports `null` (the shell's own page) then `/home`, and
-/// switching tabs reports `/menu` with no matching pop, because each branch owns
-/// its own stack. So a naive push/pop list is not a stack of anything useful.
+/// a cold start reports an unnamed page (the shell's own) and then the first
+/// tab, and switching tabs reports the new tab with no matching pop, because
+/// each branch owns its own stack. So a naive push/pop list is not a stack of
+/// anything useful.
 ///
-/// The discriminator is the destination list: a route whose name is one of
-/// [Routes.shellBranchPaths] *is* the shell, and everything else named is on top
+/// The discriminator is the destination list: a route named in
+/// [Routes.shellBranchNames] *is* the shell, and everything else named is on top
 /// of it. Unnamed routes — dialogs, bottom sheets, the modal barrier — are
 /// ignored, so opening the filter sheet does not read as "a screen is open".
+///
+/// **Names, not paths.** go_router names a page after its route's `name:`,
+/// falling back to the path only for an unnamed route. This compared against
+/// paths until 2026-09-29 and so never matched on device — see
+/// [Routes.shellBranchNames]. The paths are still accepted, for unnamed routes.
 class SignalNavigatorObserver extends NavigatorObserver {
-  final List<String> _overShell = <String>[];
+  /// The routes over the shell, oldest first. Routes rather than names, so a
+  /// pop removes the page that left rather than the first one with its name.
+  final List<Route<dynamic>> _overShell = <Route<dynamic>>[];
 
-  /// Called when the signal-details route leaves the stack, so the navigator can
-  /// forget which signal was open.
-  VoidCallback? onDetailsGone;
-
-  /// The topmost route **pattern** pushed over the shell, or null when a tab is
+  /// The name of the topmost route pushed over the shell, or null when a tab is
   /// showing.
-  ///
-  /// A pattern, not a location: go_router names a page after its declared path,
-  /// so a pushed signal reports `/signal_details/:signalId` and not the id. That
-  /// is enough to answer "what kind of screen is on top"; anything needing
-  /// *which* signal has to track it separately — see
-  /// [SignalNavigator._openSignalId].
-  String? get topRoutePattern => _overShell.isEmpty ? null : _overShell.last;
+  String? get topRouteName =>
+      _overShell.isEmpty ? null : _overShell.last.settings.name;
 
-  /// Null for routes that are the shell itself, or that carry no name.
-  String? _overShellName(Route<dynamic> route) {
+  /// Whether the route on top is a signal's screen.
+  bool get topIsSignal => _overShell.isNotEmpty && _isSignal(_overShell.last);
+
+  /// Which signal is on top, read from the page itself.
+  ///
+  /// go_router hands every page its path and query parameters as `arguments`,
+  /// so this knows the id however the screen was opened — which the navigator,
+  /// when it tracked only the ids it pushed itself, did not: a notification
+  /// about the thread already open from the inbox stacked a second copy.
+  String? get topSignalId {
+    if (!topIsSignal) return null;
+    final arguments = _overShell.last.settings.arguments;
+    return arguments is Map ? arguments['signalId'] as String? : null;
+  }
+
+  static bool _isSignal(Route<dynamic> route) {
     final name = route.settings.name;
-    if (name == null) return null;
-    if (Routes.shellBranchPaths.contains(name)) return null;
-    return name;
+    return name == Routes.signalDetailsName || name == Routes.signalDetailsPath;
+  }
+
+  /// Whether [route] is pushed over the shell — named, and not a tab.
+  static bool _isOverShell(Route<dynamic> route) {
+    final name = route.settings.name;
+    if (name == null) return false;
+    return !Routes.shellBranchNames.contains(name) &&
+        !Routes.shellBranchPaths.contains(name);
   }
 
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    final name = _overShellName(route);
-    if (name != null) _overShell.add(name);
+    if (_isOverShell(route)) _overShell.add(route);
   }
 
   @override
-  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) => _gone(route);
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) =>
+      _overShell.remove(route);
 
   @override
   void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) =>
-      _gone(route);
-
-  void _gone(Route<dynamic> route) {
-    final name = _overShellName(route);
-    if (name == null) return;
-    _overShell.remove(name);
-    if (name == Routes.signalDetailsPath && !_overShell.contains(name)) {
-      onDetailsGone?.call();
-    }
-  }
+      _overShell.remove(route);
 
   @override
   void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
-    final oldName = oldRoute == null ? null : _overShellName(oldRoute);
-    final newName = newRoute == null ? null : _overShellName(newRoute);
-    if (oldName != null) _overShell.remove(oldName);
-    if (newName != null) _overShell.add(newName);
+    if (oldRoute != null) _overShell.remove(oldRoute);
+    if (newRoute != null && _isOverShell(newRoute)) _overShell.add(newRoute);
   }
 
   @visibleForTesting

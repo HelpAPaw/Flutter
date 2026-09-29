@@ -38,21 +38,38 @@ void main() {
           StatefulShellRoute.indexedStack(
             builder: (c, s, shell) => Scaffold(body: shell),
             branches: [
-              for (final path in Routes.shellBranchPaths)
+              // Named exactly as `main.dart` names them. The observer sees the
+              // route's NAME, and falls back to the path only when there is
+              // none — so unnamed routes here once hid that it had never
+              // matched on device (see `Routes.shellBranchNames`).
+              for (var i = 0; i < Routes.shellBranchPaths.length; i++)
                 StatefulShellBranch(
                   routes: [
-                    GoRoute(path: path, builder: (c, s) => Text('at $path')),
+                    GoRoute(
+                      name: Routes.shellBranchNames[i],
+                      path: Routes.shellBranchPaths[i],
+                      builder: (c, s) =>
+                          Text('at ${Routes.shellBranchPaths[i]}'),
+                    ),
                   ],
                 ),
             ],
           ),
           GoRoute(
+            name: 'new_signal',
             path: Routes.newSignal,
             builder: (c, s) => const Text('wizard'),
           ),
           GoRoute(
+            name: Routes.signalDetailsName,
             path: Routes.signalDetailsPath,
-            builder: (c, s) => const Text('details'),
+            builder: (c, s) {
+              final comment = s.uri.queryParameters[Routes.commentQueryParam];
+              return Column(children: [
+                const Text('details'),
+                if (comment != null) Text('comment $comment'),
+              ]);
+            },
           ),
         ],
       );
@@ -186,5 +203,95 @@ void main() {
     SignalNavigator.instance.open('def456');
     await tester.pumpAndSettle();
     expect(branchSwitches, ['map']);
+  });
+
+  testWidgets('a comment rides along in the pushed route', (tester) async {
+    await pump(tester);
+
+    SignalNavigator.instance.open('abc123', commentId: 'c1');
+    await tester.pumpAndSettle();
+
+    expect(find.text('details'), findsOneWidget);
+    expect(find.text('comment c1'), findsOneWidget);
+  });
+
+  testWidgets(
+      'a comment on the signal already open is handed to that screen, '
+      'not pushed as a second copy', (tester) async {
+    // The usual shape of a push about a new comment: the reader is on the
+    // thread already. The dedupe must still hold, but the comment must not be
+    // lost with it.
+    final router = await pump(tester);
+    SignalNavigator.instance.open('abc123');
+    await tester.pumpAndSettle();
+
+    final requests = <({String signalId, String commentId})?>[];
+    void record() => requests.add(SignalNavigator.instance.commentFocus.value);
+    SignalNavigator.instance.commentFocus.addListener(record);
+    addTearDown(() {
+      SignalNavigator.instance.commentFocus.removeListener(record);
+      SignalNavigator.instance.commentFocus.value = null;
+    });
+
+    SignalNavigator.instance.open('abc123', commentId: 'c1');
+    // The same comment again must notify again — a record compares by value.
+    SignalNavigator.instance.open('abc123', commentId: 'c1');
+    await tester.pumpAndSettle();
+
+    expect(requests.whereType<({String signalId, String commentId})>(), [
+      (signalId: 'abc123', commentId: 'c1'),
+      (signalId: 'abc123', commentId: 'c1'),
+    ]);
+    expect(find.text('details'), findsOneWidget);
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(find.text('details'), findsNothing, reason: 'nothing was stacked');
+  });
+
+  testWidgets(
+      'a signal opened some other way — an inbox row, a list — is still '
+      'recognised, so a notification about it scrolls instead of stacking',
+      (tester) async {
+    // The inbox and the lists push details themselves rather than through
+    // SignalNavigator. When the navigator only knew the ids it had pushed, a
+    // push about the thread the reader already had open from the inbox
+    // stacked a second copy of it — found on device.
+    final router = await pump(tester);
+    router.push(Routes.signalDetails('abc123'));
+    await tester.pumpAndSettle();
+    expect(SignalNavigator.instance.isShowingSignal, isTrue);
+
+    final requests = <({String signalId, String commentId})?>[];
+    void record() => requests.add(SignalNavigator.instance.commentFocus.value);
+    SignalNavigator.instance.commentFocus.addListener(record);
+    addTearDown(() {
+      SignalNavigator.instance.commentFocus.removeListener(record);
+      SignalNavigator.instance.commentFocus.value = null;
+    });
+
+    SignalNavigator.instance.open('abc123', commentId: 'c1');
+    await tester.pumpAndSettle();
+
+    expect(requests.whereType<({String signalId, String commentId})>(),
+        [(signalId: 'abc123', commentId: 'c1')]);
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(find.text('details'), findsNothing, reason: 'nothing was stacked');
+  });
+
+  testWidgets('a different signal over the one on top is still pushed',
+      (tester) async {
+    final router = await pump(tester);
+    router.push(Routes.signalDetails('abc123'));
+    await tester.pumpAndSettle();
+
+    SignalNavigator.instance.open('def456', commentId: 'c1');
+    await tester.pumpAndSettle();
+
+    expect(find.text('comment c1'), findsOneWidget);
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(find.text('details'), findsOneWidget,
+        reason: 'the first signal is still underneath');
   });
 }

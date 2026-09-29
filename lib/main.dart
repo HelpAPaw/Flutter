@@ -37,6 +37,7 @@ import 'package:help_a_paw/src/widgets/privacy_policy_page.dart';
 import 'package:help_a_paw/src/widgets/profile_completion_page.dart';
 import 'package:help_a_paw/src/widgets/profile_page.dart';
 import 'src/widgets/user_profile_page.dart';
+import 'src/widgets/user_activity_page.dart';
 import 'package:help_a_paw/src/widgets/sign_in_page.dart';
 import 'package:help_a_paw/src/widgets/edit_signal_screen.dart';
 import 'package:help_a_paw/src/widgets/signal_details_screen.dart';
@@ -51,6 +52,7 @@ import 'package:help_a_paw/src/services/deep_link_service.dart';
 import 'package:help_a_paw/src/services/signal_navigator.dart';
 import 'package:help_a_paw/src/services/deferred_deep_link_service.dart';
 import 'package:help_a_paw/src/services/app_preferences_service.dart';
+import 'package:help_a_paw/src/services/user_activity_service.dart';
 import 'package:help_a_paw/src/services/location_service.dart';
 import 'package:help_a_paw/src/services/nearby_signal_checker.dart';
 
@@ -394,7 +396,7 @@ final GoRouter _router = GoRouter(
           preload: true,
           routes: [
             GoRoute(
-              name: 'initial_route',
+              name: Routes.shellBranchNames[0],
               path: Routes.home,
               builder: (BuildContext context, GoRouterState state) =>
                   const HomeRoute(),
@@ -404,7 +406,7 @@ final GoRouter _router = GoRouter(
         StatefulShellBranch(
           routes: [
             GoRoute(
-              name: 'my_signals',
+              name: Routes.shellBranchNames[1],
               path: Routes.mySignals,
               builder: (BuildContext context, GoRouterState state) =>
                   const MySignalsPage(),
@@ -414,7 +416,7 @@ final GoRouter _router = GoRouter(
         StatefulShellBranch(
           routes: [
             GoRoute(
-              name: 'watching',
+              name: Routes.shellBranchNames[2],
               path: Routes.watching,
               builder: (BuildContext context, GoRouterState state) =>
                   const WatchingPage(),
@@ -424,7 +426,7 @@ final GoRouter _router = GoRouter(
         StatefulShellBranch(
           routes: [
             GoRoute(
-              name: 'my_notifications',
+              name: Routes.shellBranchNames[3],
               path: Routes.myNotifications,
               builder: (BuildContext context, GoRouterState state) =>
                   const MyNotificationsPage(),
@@ -434,7 +436,7 @@ final GoRouter _router = GoRouter(
         StatefulShellBranch(
           routes: [
             GoRoute(
-              name: 'menu',
+              name: Routes.shellBranchNames[4],
               path: Routes.menu,
               builder: (BuildContext context, GoRouterState state) =>
                   const MenuPage(),
@@ -452,7 +454,7 @@ final GoRouter _router = GoRouter(
       ),
     ),
     GoRoute(
-      name: 'signal_details',
+      name: Routes.signalDetailsName,
       path: Routes.signalDetailsPath,
       // A cold launch hands the OS's URL straight to the router, so the id
       // arrives unvalidated — DeepLinkService only guards links that arrive
@@ -470,6 +472,11 @@ final GoRouter _router = GoRouter(
       builder: (BuildContext context, GoRouterState state) => SignalDetailsScreen(
         key: ValueKey(state.pathParameters['signalId']),
         signalId: state.pathParameters['signalId']!,
+        // Validated like the signal id, and for the same reason: this route is
+        // reachable from outside. A malformed one is dropped, not an error —
+        // it only ever decided where to scroll.
+        focusCommentId: DeepLinkService.validSignalId(
+            state.uri.queryParameters[Routes.commentQueryParam] ?? ''),
       ),
     ),
     // Public shareable deep link (App Links / Universal Links). Reuses the
@@ -534,6 +541,21 @@ final GoRouter _router = GoRouter(
         // the screen loads for its uid once, in initState.
         key: ValueKey(state.pathParameters['uid']),
         uid: state.pathParameters['uid']!,
+      ),
+    ),
+    GoRoute(
+      name: 'user_activity',
+      path: Routes.userActivityPath,
+      // An unknown kind is a mistyped or future link: show the profile it was
+      // pointing into rather than an error page.
+      redirect: (BuildContext context, GoRouterState state) =>
+          UserActivityKind.fromName(state.pathParameters['kind']) == null
+              ? Routes.userProfile(state.pathParameters['uid']!)
+              : null,
+      builder: (BuildContext context, GoRouterState state) => UserActivityPage(
+        key: ValueKey(state.uri.path),
+        uid: state.pathParameters['uid']!,
+        kind: UserActivityKind.fromName(state.pathParameters['kind'])!,
       ),
     ),
     // Moderator report queue (master spec §18). No role redirect — see the doc

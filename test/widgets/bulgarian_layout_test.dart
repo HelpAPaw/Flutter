@@ -234,6 +234,7 @@ void main() {
             child: Column(
               children: [
                 UserStatsRow(
+                  uid: 'u1',
                   stats: UserStats(
                     signalsPosted: 128,
                     signalsOwned: 12,
@@ -248,6 +249,10 @@ void main() {
 
       expectNoOverflow(tester);
       expect(find.byType(StatCard), findsNWidgets(3));
+      // Every card opens its list once the row knows whose stats they are.
+      for (final card in tester.widgetList<StatCard>(find.byType(StatCard))) {
+        expect(card.onTap, isNotNull);
+      }
     });
   });
 

@@ -780,5 +780,10 @@
   "couldNotLoadWatched": "Следените сигнали не се заредиха",
   "loadMore": "Покажи още",
   "ownedByYou": "Вие го поехте",
-  "unreadNotificationsCount": "{count, plural, one{1 непрочетено} other{{count} непрочетени}}"
+  "unreadNotificationsCount": "{count, plural, one{1 непрочетено} other{{count} непрочетени}}",
+  "activityRemovedSignalsNote": "Сигналите, които по-късно са премахнати или архивирани, не са показани тук.",
+  "activityRemovedCommentsNote": "Коментарите към сигнали, които по-късно са премахнати или архивирани, не са показани тук.",
+  "activityNothingHelpingNow": "В момента няма отворени сигнали, по които да се помага",
+  "activityNoCommentsYet": "Все още няма коментари",
+  "activityCouldNotLoad": "Списъкът не можа да се зареди"
 }

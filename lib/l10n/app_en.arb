@@ -1095,5 +1095,10 @@
         "type": "int"
       }
     }
-  }
+  },
+  "activityRemovedSignalsNote": "Signals that were later removed or archived aren't listed here.",
+  "activityRemovedCommentsNote": "Comments on signals that were later removed or archived aren't listed here.",
+  "activityNothingHelpingNow": "No open signals being helped with right now",
+  "activityNoCommentsYet": "No comments yet",
+  "activityCouldNotLoad": "Couldn't load this list"
 }

@@ -1450,6 +1450,9 @@ async function handleCommentCreated(
         { title: announcement.title, body: truncatedComment },
         {
           signalId,
+          // Lets a tap open the thread scrolled to this comment. Older app
+          // builds ignore keys they do not read, so this is additive.
+          commentId: event.params.commentId,
           type: announcement.type,
           signalTitle: truncateForPayload(signalTitle),
         },

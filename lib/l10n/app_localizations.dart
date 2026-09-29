@@ -3757,6 +3757,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count, plural, =1{1 unread} other{{count} unread}}'**
   String unreadNotificationsCount(int count);
+
+  /// No description provided for @activityRemovedSignalsNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Signals that were later removed or archived aren\'t listed here.'**
+  String get activityRemovedSignalsNote;
+
+  /// No description provided for @activityRemovedCommentsNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Comments on signals that were later removed or archived aren\'t listed here.'**
+  String get activityRemovedCommentsNote;
+
+  /// No description provided for @activityNothingHelpingNow.
+  ///
+  /// In en, this message translates to:
+  /// **'No open signals being helped with right now'**
+  String get activityNothingHelpingNow;
+
+  /// No description provided for @activityNoCommentsYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No comments yet'**
+  String get activityNoCommentsYet;
+
+  /// No description provided for @activityCouldNotLoad.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load this list'**
+  String get activityCouldNotLoad;
 }
 
 class _AppLocalizationsDelegate

@@ -1,3 +1,5 @@
+import '../services/user_activity_service.dart';
+
 class Routes {
   Routes._();
 
@@ -36,6 +38,26 @@ class Routes {
     menu,
   ];
 
+  /// The `name:` of each bar destination's `GoRoute`, in bar order.
+  ///
+  /// **What a `NavigatorObserver` actually sees.** go_router names a page after
+  /// its route's `name` and falls back to the path only for an unnamed route —
+  /// and every route in `main.dart` is named. `SignalNavigatorObserver` compared
+  /// against the *paths* for its whole life, so on device a tab read as a screen
+  /// pushed over the tabs and a signal never read as showing; its tests used
+  /// unnamed routes, where the fallback made the paths match. `main.dart` uses
+  /// these constants, so the two cannot drift again.
+  static const shellBranchNames = <String>[
+    'initial_route',
+    'my_signals',
+    'watching',
+    'my_notifications',
+    'menu',
+  ];
+
+  /// The `name:` of the [signalDetailsPath] route. See [shellBranchNames].
+  static const signalDetailsName = 'signal_details';
+
   /// The moderator report queue (master spec §18).
   ///
   /// Not gated by the router's `redirect`: the role check is a Firestore read
@@ -57,6 +79,14 @@ class Routes {
   /// [profile], the editable version. Done there rather than at each tap site
   /// so a link to yourself behaves the same wherever it came from.
   static const userProfilePath = '/user/:uid';
+
+  /// The list behind one of a profile's stats — `signals`, `helping` or
+  /// `comments` (`UserActivityKind`).
+  ///
+  /// A top-level route, **not** nested under [userProfilePath]: that route
+  /// redirects your own uid to [profile], and a nested route would inherit the
+  /// redirect — so your own lists would bounce back to your profile.
+  static const userActivityPath = '/user/:uid/activity/:kind';
 
   static const signalDetailsPath = '/signal_details/:signalId';
   static const editSignalPath = '/edit_signal/:signalId';
@@ -82,7 +112,22 @@ class Routes {
 
   static String userProfile(String uid) => '/user/$uid';
 
-  static String signalDetails(String signalId) => '$signalDetailsPrefix$signalId';
+  static String userActivity(String uid, UserActivityKind kind) =>
+      '/user/$uid/activity/${kind.name}';
+
+  /// A signal's screen, optionally scrolled to one of its comments.
+  ///
+  /// The comment rides as a **query parameter**, not a path segment, so the
+  /// route pattern — and every check on it, like
+  /// `SignalNavigator.isShowingSignal` — is the same with or without it. It is
+  /// a hint: a comment that no longer exists just opens the signal.
+  static String signalDetails(String signalId, {String? commentId}) =>
+      commentId == null
+          ? '$signalDetailsPrefix$signalId'
+          : '$signalDetailsPrefix$signalId?$commentQueryParam=${Uri.encodeQueryComponent(commentId)}';
+
+  /// The query parameter [signalDetails] puts a comment id in.
+  static const commentQueryParam = 'comment';
   static String editSignal(String signalId) => '/edit_signal/$signalId';
   static String clinicDetails(String clinicId) => '/clinic_details/$clinicId';
 
