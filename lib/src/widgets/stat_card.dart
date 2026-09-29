@@ -94,13 +94,26 @@ class StatCard extends StatelessWidget {
 /// sizes to content is one long Bulgarian translation away from overflowing a
 /// 411dp phone — see `test/widgets/bulgarian_layout_test.dart`.
 class UserStatsRow extends StatelessWidget {
-  const UserStatsRow({super.key, required this.stats, this.uid});
+  const UserStatsRow({
+    super.key,
+    required this.stats,
+    this.uid,
+    this.onReturn,
+  });
 
   final UserStats stats;
 
   /// Whose stats these are. When given, each card opens the list behind its
   /// number (`Routes.userActivity`); without it the row is display-only.
   final String? uid;
+
+  /// Called when the reader comes back from a list, so the screen can re-read
+  /// the numbers.
+  ///
+  /// The profiles load their stats once, and a list is where people go on to
+  /// do things — open a signal from it, comment, take one on — so without this
+  /// the number they return to disagrees with the list they have just seen.
+  final VoidCallback? onReturn;
 
   @override
   Widget build(BuildContext context) {
@@ -109,7 +122,12 @@ class UserStatsRow extends StatelessWidget {
     VoidCallback? open(UserActivityKind kind) => uid == null
         ? null
         // `push`: the list is a detour from the profile, and back returns to it.
-        : () => context.push(Routes.userActivity(uid, kind));
+        : () async {
+            await context.push(Routes.userActivity(uid, kind));
+            // Not if the profile itself has gone — a deep link can replace the
+            // whole stack while the list is open.
+            if (context.mounted) onReturn?.call();
+          };
 
     final cards = [
       StatCard(

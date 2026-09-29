@@ -1565,8 +1565,11 @@ collections.
 **Each stat opens its list** (`user_activity_page.dart`, route
 `/user/:uid/activity/:kind`, `kind` ∈ `signals | helping | comments`), on both profile
 screens. A top-level route rather than a child of `/user/:uid`, whose own-uid redirect
-a child would inherit. An unknown `kind` redirects to the profile. Queries live in
-`UserActivityService`, every one of them already open to any signed-in session:
+a child would inherit. An unknown `kind` redirects to the profile. **Coming back from a
+list re-reads the numbers** (`UserStatsRow.onReturn`): both profiles load their stats
+once, and a list is where people go on to comment or take a signal on, so without it the
+number disagreed with the list just seen. Queries live in `UserActivityService`, every one
+of them already open to any signed-in session:
 
 | List | Query | Relation to the number |
 |---|---|---|
