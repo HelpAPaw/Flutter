@@ -78,9 +78,8 @@ Stream<List<T>> mergeLatestList<T>(List<Stream<T>> sources) {
 }
 
 /// Maps every event of [source] to a stream and follows only the newest one:
-/// each new event cancels the previous inner stream before listening to the
-/// next. The same thing `rxdart` calls `switchMap`, hand-rolled for the reason
-/// given on [mergeLatestList].
+/// each new event cancels the previous inner stream and listens to the next —
+/// what `rxdart` and `stream_transform` call `switchMap`.
 ///
 /// Exists because `asyncExpand` is the tempting spelling and is wrong whenever
 /// the inner stream never completes (#86). It **pauses the outer stream until
@@ -88,10 +87,22 @@ Stream<List<T>> mergeLatestList<T>(List<Stream<T>> sources) {
 /// so the Watching tab read the follow list once and then queued every later
 /// follow or unfollow behind a query that would not end.
 ///
-/// Pausing is forwarded to the outer stream and to whichever inner stream is
-/// current, including one started while paused — Riverpod pauses a provider's
-/// subscription while nothing is watching it. The result closes once [source]
-/// and the current inner stream have both closed.
+/// **While paused, only the newest value of each side is kept**, and a source
+/// value that arrived meanwhile is switched to once, on resume. Riverpod pauses
+/// a provider's subscription while nothing watches it, and both library
+/// versions (each already in `pubspec.lock` transitively) buffer instead. That
+/// is worse here for two reasons:
+///
+/// * A paused Firestore query does not stop listening natively, so buffering
+///   it only replays stale pages on resume, one rebuild each.
+/// * Buffered source values are delivered a microtask apart, so each one would
+///   start a query and cancel it before its `onListen` had finished. FlutterFire
+///   registers the native listener *after* an `await`, and its `onCancel` only
+///   cancels what is already registered — so a query cancelled that early keeps
+///   listening, and billing, for the life of the process.
+///
+/// The result closes once [source] and the current inner stream have both
+/// closed and nothing is held back.
 Stream<R> switchLatest<T, R>(
   Stream<T> source,
   Stream<R> Function(T value) convert,
@@ -99,29 +110,38 @@ Stream<R> switchLatest<T, R>(
   return Stream<R>.multi((out) {
     StreamSubscription<R>? inner;
     var sourceDone = false;
+    // Held while paused: a source value not yet switched to, and an inner
+    // value not yet delivered. Records, so a null value still counts.
+    (T,)? heldSource;
+    (R,)? heldValue;
 
     void closeIfDone() {
-      if (sourceDone && inner == null) out.close();
+      if (sourceDone &&
+          inner == null &&
+          heldSource == null &&
+          heldValue == null) {
+        out.close();
+      }
     }
 
-    final outer = source.listen(
-      (value) {
-        // Cancelling stops delivery at once; awaiting it would only let the
-        // new stream's first event wait behind the old one's teardown.
-        unawaited(inner?.cancel());
-        inner = null;
+    void switchTo(T value) {
+      final previous = inner;
+      inner = null;
+      heldValue = null;
+      if (previous != null) {
+        unawaited(previous.cancel().then((_) {}, onError: out.addError));
+      }
 
-        final Stream<R> next;
-        try {
-          next = convert(value);
-        } catch (error, stack) {
-          out.addError(error, stack);
-          return;
-        }
-
+      try {
         late final StreamSubscription<R> sub;
-        sub = next.listen(
-          out.add,
+        sub = convert(value).listen(
+          (event) {
+            if (out.isPaused) {
+              heldValue = (event,);
+            } else {
+              out.add(event);
+            }
+          },
           onError: out.addError,
           onDone: () {
             if (!identical(inner, sub)) return;
@@ -129,8 +149,19 @@ Stream<R> switchLatest<T, R>(
             closeIfDone();
           },
         );
-        if (out.isPaused) sub.pause();
         inner = sub;
+      } catch (error, stack) {
+        out.addError(error, stack);
+      }
+    }
+
+    final outer = source.listen(
+      (value) {
+        if (out.isPaused) {
+          heldSource = (value,);
+        } else {
+          switchTo(value);
+        }
       },
       onError: out.addError,
       onDone: () {
@@ -140,13 +171,18 @@ Stream<R> switchLatest<T, R>(
     );
 
     out
-      ..onPause = () {
-        outer.pause();
-        inner?.pause();
-      }
       ..onResume = () {
-        outer.resume();
-        inner?.resume();
+        final pendingSource = heldSource;
+        final pendingValue = heldValue;
+        heldSource = null;
+        heldValue = null;
+        // A newer source value makes the held inner value stale.
+        if (pendingSource != null) {
+          switchTo(pendingSource.$1);
+        } else if (pendingValue != null) {
+          out.add(pendingValue.$1);
+        }
+        closeIfDone();
       }
       ..onCancel = () async {
         await Future.wait([outer.cancel(), if (inner != null) inner!.cancel()]);

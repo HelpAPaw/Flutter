@@ -221,41 +221,106 @@ void main() {
       await inner.close();
     });
 
-    test('a pause reaches an inner stream started while paused', () async {
+    test('while paused, switches once to the newest source value on resume',
+        () async {
       // Riverpod pauses a provider's subscription while nothing watches it.
       final outer = StreamController<int>();
-      final inners = <StreamController<int>>[];
-      final seen = <int>[];
+      final inners = <int, StreamController<int>>{};
 
-      final sub = switchLatest(outer.stream, (_) {
-        final inner = StreamController<int>();
-        inners.add(inner);
-        return inner.stream;
-      }).listen(seen.add);
+      final sub = switchLatest(outer.stream, (int i) {
+        return (inners[i] = StreamController<int>()).stream;
+      }).listen((_) {});
 
       outer.add(1);
       await pumpEventQueue();
       sub.pause();
-      expect(inners.single.isPaused, isTrue);
-
       outer.add(2);
+      outer.add(3);
       await pumpEventQueue();
-      expect(inners, hasLength(1), reason: 'the outer stream is paused too');
+      expect(inners.keys, [1], reason: 'nothing switches while paused');
 
       sub.resume();
       await pumpEventQueue();
-      expect(inners, hasLength(2));
-      expect(inners.last.isPaused, isFalse);
-
-      inners.last.add(7);
-      await pumpEventQueue();
-      expect(seen, [7]);
+      expect(inners.keys, [1, 3], reason: '2 was superseded before resume');
+      expect(inners[1]!.hasListener, isFalse);
 
       await sub.cancel();
       await outer.close();
-      for (final inner in inners) {
-        await inner.close();
+    });
+
+    test('while paused, delivers only the newest inner value on resume',
+        () async {
+      final outer = StreamController<int>();
+      final inner = StreamController<int>();
+      final seen = <int>[];
+
+      final sub =
+          switchLatest(outer.stream, (_) => inner.stream).listen(seen.add);
+      outer.add(1);
+      await pumpEventQueue();
+
+      sub.pause();
+      inner
+        ..add(7)
+        ..add(8)
+        ..add(9);
+      await pumpEventQueue();
+      expect(seen, isEmpty);
+
+      sub.resume();
+      await pumpEventQueue();
+      inner.add(10);
+      await pumpEventQueue();
+      expect(seen, [9, 10], reason: 'stale pages are dropped, not replayed');
+
+      await sub.cancel();
+      await outer.close();
+      await inner.close();
+    });
+
+    test('changes made while paused leave no query listening after cancel',
+        () async {
+      // The shape of FlutterFire's `snapshots()`: the native listener is
+      // registered after an `await` in `onListen`, and `onCancel` only removes
+      // one that is already registered. A query cancelled sooner than that
+      // listens forever — which is what switching through a burst of buffered
+      // values, a microtask apart, used to do.
+      var registered = 0;
+      var removed = 0;
+      Stream<int> snapshots() {
+        var live = false;
+        return StreamController<int>.broadcast(
+          onListen: () async {
+            await Future<void>.delayed(Duration.zero);
+            registered++;
+            live = true;
+          },
+          onCancel: () {
+            if (live) removed++;
+          },
+        ).stream;
       }
+
+      final outer = StreamController<int>();
+      final sub = switchLatest(outer.stream, (_) => snapshots()).listen((_) {});
+      outer.add(1);
+      await pumpEventQueue();
+
+      sub.pause();
+      outer
+        ..add(2)
+        ..add(3)
+        ..add(4);
+      await pumpEventQueue();
+      sub.resume();
+      await pumpEventQueue();
+
+      await sub.cancel();
+      await pumpEventQueue();
+      expect(registered, 2);
+      expect(registered - removed, 0, reason: 'a native listener leaked');
+
+      await outer.close();
     });
 
     test('closes once the source and the current inner stream are done',

@@ -101,8 +101,15 @@ class _WatchedListState extends ConsumerState<_WatchedList> {
             );
           },
           data: (page) {
+            // The follow list as well as the pending set: the page without an
+            // unfollowed row waits for a fresh query, which can lose the race
+            // with the write's acknowledgement — and the follow list already
+            // has the answer, from the write's local snapshot.
+            final subscriptions = SignalSubscriptionService.instance;
             final signals = page.signals
-                .where((entry) => !_pendingUnfollow.contains(entry.id))
+                .where((entry) =>
+                    !_pendingUnfollow.contains(entry.id) &&
+                    subscriptions.isFollowing(entry.id))
                 .toList();
 
             if (signals.isEmpty) {
