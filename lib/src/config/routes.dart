@@ -38,6 +38,26 @@ class Routes {
     menu,
   ];
 
+  /// The `name:` of each bar destination's `GoRoute`, in bar order.
+  ///
+  /// **What a `NavigatorObserver` actually sees.** go_router names a page after
+  /// its route's `name` and falls back to the path only for an unnamed route —
+  /// and every route in `main.dart` is named. `SignalNavigatorObserver` compared
+  /// against the *paths* for its whole life, so on device a tab read as a screen
+  /// pushed over the tabs and a signal never read as showing; its tests used
+  /// unnamed routes, where the fallback made the paths match. `main.dart` uses
+  /// these constants, so the two cannot drift again.
+  static const shellBranchNames = <String>[
+    'initial_route',
+    'my_signals',
+    'watching',
+    'my_notifications',
+    'menu',
+  ];
+
+  /// The `name:` of the [signalDetailsPath] route. See [shellBranchNames].
+  static const signalDetailsName = 'signal_details';
+
   /// The moderator report queue (master spec §18).
   ///
   /// Not gated by the router's `redirect`: the role check is a Firestore read

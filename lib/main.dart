@@ -396,7 +396,7 @@ final GoRouter _router = GoRouter(
           preload: true,
           routes: [
             GoRoute(
-              name: 'initial_route',
+              name: Routes.shellBranchNames[0],
               path: Routes.home,
               builder: (BuildContext context, GoRouterState state) =>
                   const HomeRoute(),
@@ -406,7 +406,7 @@ final GoRouter _router = GoRouter(
         StatefulShellBranch(
           routes: [
             GoRoute(
-              name: 'my_signals',
+              name: Routes.shellBranchNames[1],
               path: Routes.mySignals,
               builder: (BuildContext context, GoRouterState state) =>
                   const MySignalsPage(),
@@ -416,7 +416,7 @@ final GoRouter _router = GoRouter(
         StatefulShellBranch(
           routes: [
             GoRoute(
-              name: 'watching',
+              name: Routes.shellBranchNames[2],
               path: Routes.watching,
               builder: (BuildContext context, GoRouterState state) =>
                   const WatchingPage(),
@@ -426,7 +426,7 @@ final GoRouter _router = GoRouter(
         StatefulShellBranch(
           routes: [
             GoRoute(
-              name: 'my_notifications',
+              name: Routes.shellBranchNames[3],
               path: Routes.myNotifications,
               builder: (BuildContext context, GoRouterState state) =>
                   const MyNotificationsPage(),
@@ -436,7 +436,7 @@ final GoRouter _router = GoRouter(
         StatefulShellBranch(
           routes: [
             GoRoute(
-              name: 'menu',
+              name: Routes.shellBranchNames[4],
               path: Routes.menu,
               builder: (BuildContext context, GoRouterState state) =>
                   const MenuPage(),
@@ -454,7 +454,7 @@ final GoRouter _router = GoRouter(
       ),
     ),
     GoRoute(
-      name: 'signal_details',
+      name: Routes.signalDetailsName,
       path: Routes.signalDetailsPath,
       // A cold launch hands the OS's URL straight to the router, so the id
       // arrives unvalidated — DeepLinkService only guards links that arrive
