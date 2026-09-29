@@ -1,13 +1,15 @@
 import 'dart:async';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:help_a_paw/src/utils/cached_user_doc_stream.dart';
 
-/// The replay-vs-subscribe race that `CachedUserDocStream.watch` exists to
-/// avoid, reproduced against the two shapes so the wrong one cannot come back.
+/// The mechanism behind `CachedUserDocStream.watch`, driven through the real
+/// [replayThenFollow] rather than a copy of it.
 ///
-/// This models the primitive rather than importing it, because the real class
-/// opens a Firestore listener on construction. The mechanism under test is pure
-/// Dart: a broadcast controller plus a cached "latest" value.
+/// The class itself is not constructed here because it opens a FirebaseAuth
+/// listener on first `watch()`. Everything under test is pure Dart: a broadcast
+/// controller plus a cached "latest" value, which is all `watch()` hands over.
 class _Replayer<T> {
   _Replayer(this._latest);
 
@@ -19,20 +21,7 @@ class _Replayer<T> {
     controller.add(value);
   }
 
-  /// The fixed spelling: subscribe first, then replay. No `await` between them,
-  /// so `_latest` cannot move in the gap.
-  Stream<T> watchSubscribeFirst() {
-    late StreamController<T> out;
-    StreamSubscription<T>? sub;
-    out = StreamController<T>(
-      onListen: () {
-        sub = controller.stream.listen(out.add, onError: out.addError);
-        out.add(_latest);
-      },
-      onCancel: () async => sub?.cancel(),
-    );
-    return out.stream;
-  }
+  Stream<T> watch() => replayThenFollow(controller.stream, () => _latest);
 }
 
 void main() {
@@ -47,7 +36,7 @@ void main() {
   test('subscribe-first sees the update', () async {
     final r = _Replayer<int>(1);
     final seen = <int>[];
-    final sub = r.watchSubscribeFirst().listen(seen.add);
+    final sub = r.watch().listen(seen.add);
 
     r.emit(2);
     await pumpEventQueue();
@@ -65,12 +54,109 @@ void main() {
     await pumpEventQueue();
 
     final seen = <int>[];
-    final sub = r.watchSubscribeFirst().listen(seen.add);
+    final sub = r.watch().listen(seen.add);
     await pumpEventQueue();
 
     expect(seen, [7]);
 
     await sub.cancel();
+    await r.controller.close();
+  });
+
+  // #84. Callers memoize the returned stream so a rebuild does not restart the
+  // read, and Flutter is then free to hand that one object to two elements at
+  // once. Each listen must behave like a fresh `watch()`.
+  test('one returned stream can be listened to more than once', () async {
+    final r = _Replayer<int>(1);
+    final stream = r.watch();
+
+    final first = <int>[];
+    final second = <int>[];
+    final a = stream.listen(first.add);
+    final b = stream.listen(second.add);
+    await pumpEventQueue();
+
+    r.emit(2);
+    await pumpEventQueue();
+    await a.cancel();
+
+    r.emit(3);
+    await pumpEventQueue();
+
+    expect(first, [1, 2]);
+    expect(second, [1, 2, 3],
+        reason: 'cancelling one listener must not end the other');
+
+    final third = <int>[];
+    final c = stream.listen(third.add);
+    await pumpEventQueue();
+    expect(third, [3], reason: 'a re-listen replays like a fresh watch()');
+
+    await b.cancel();
+    await c.cancel();
+    await r.controller.close();
+  });
+
+  // #84 as it happened on device, minus Firebase. MenuPage's unkeyed moderator
+  // StreamBuilder moved from index 1 to 2 when an anonymous session registered
+  // in place (same uid, so the memo handed back the same stream). ListView
+  // matches children by position, so a new StreamBuilder element listened to
+  // the memoized stream a second time — which a single-subscription stream
+  // refuses whether or not the first listener has gone.
+  testWidgets(
+      'a memoized stream survives its StreamBuilder shifting in a '
+      'ListView', (tester) async {
+    final r = _Replayer<bool>(false);
+    final stream = r.watch();
+    final signedIn = ValueNotifier<bool>(false);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ValueListenableBuilder<bool>(
+            valueListenable: signedIn,
+            builder: (context, isSignedIn, _) => ListView(
+              children: [
+                if (!isSignedIn)
+                  const ListTile(title: Text('Sign in'))
+                else ...const [
+                  ListTile(title: Text('Profile')),
+                  ListTile(title: Text('Sign out')),
+                ],
+                StreamBuilder<bool>(
+                  stream: stream,
+                  initialData: false,
+                  builder: (context, snapshot) => snapshot.data == true
+                      ? const ListTile(title: Text('Moderation'))
+                      : const SizedBox.shrink(),
+                ),
+                const ListTile(title: Text('Settings')),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    signedIn.value = true;
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+
+    // And the survivor is still live.
+    r.emit(true);
+    await tester.pump();
+    expect(find.text('Moderation'), findsOneWidget);
+
+    // The other direction (sign-out). The recreated element starts from
+    // `initialData` and gets the replay a microtask later, hence the second pump.
+    signedIn.value = false;
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    await tester.pump();
+    expect(find.text('Moderation'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    signedIn.dispose();
     await r.controller.close();
   });
 }

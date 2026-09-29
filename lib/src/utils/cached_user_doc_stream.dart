@@ -75,24 +75,11 @@ class CachedUserDocStream<T> {
   /// follow button offered "Follow" for a signal the user was already following,
   /// while Firestore said otherwise.
   ///
-  /// Subscribing *before* replaying closes it. There is no `await` between the
-  /// two statements, so [_latest] cannot change in between — Dart runs them in
-  /// one turn.
+  /// Subscribing *before* replaying closes it; [replayThenFollow] does that, and
+  /// makes the result safe to listen to more than once.
   Stream<T> watch() {
     _ensureSubscription();
-
-    late StreamController<T> out;
-    StreamSubscription<T>? sub;
-    out = StreamController<T>(
-      onListen: () {
-        sub = _controller.stream.listen(out.add, onError: out.addError);
-        out.add(_latest);
-      },
-      onCancel: () async {
-        await sub?.cancel();
-      },
-    );
-    return out.stream;
+    return replayThenFollow(_controller.stream, () => _latest);
   }
 
   void _ensureSubscription() {
@@ -140,4 +127,21 @@ class CachedUserDocStream<T> {
     _watchedUid = null;
     _latest = empty;
   }
+}
+
+/// [latest] now, then every event on [source], subscribing before replaying
+/// (see [CachedUserDocStream.watch] for why the order matters).
+///
+/// Multi-listen: each `listen` gets its own subscription and replay, because
+/// callers memoize the result and a recreated `StreamBuilder` element listens
+/// to it again (#84). A single-subscription stream refuses a second listen even
+/// after the first has been cancelled. [source] must be broadcast.
+@visibleForTesting
+Stream<T> replayThenFollow<T>(Stream<T> source, T Function() latest) {
+  assert(source.isBroadcast, 'replayThenFollow needs a broadcast source');
+  return Stream<T>.multi((out) {
+    final sub = source.listen(out.add, onError: out.addError);
+    out.add(latest());
+    out.onCancel = sub.cancel;
+  });
 }
