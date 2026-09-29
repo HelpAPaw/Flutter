@@ -1925,17 +1925,24 @@ stream of its comments. Both streams are created **once** in `initState`.
 "is a signal showing" check, unchanged) scrolls to that comment a third of the way down and
 tints it for 2.5 s. Reached from a push or inbox row about a comment (§7.6) and from the
 profile's comment list (§5.1). A tap about a comment on the signal **already open** does not
-stack a second copy — `SignalNavigator.open` still dedupes — but hands the comment to the open
-screen through `SignalNavigator.commentFocus`. Three things found on device shape it:
-- **The request is held until the row exists.** Comments usually arrive before the signal
-  document, and the history renders inside the signal's `StreamBuilder`, whose rebuilds do not
-  run the State's `build` — so the attempt is queued from `_buildSignalHistory` too.
-- **It follows the row for 5 s.** Names render nothing until they resolve, one lookup per row,
-  so rows above the comment grow after the scroll and pushed it below the fold; any change in
-  the page's height re-scrolls while settling. The reader's own scroll ends that at once, and
-  also drops a request that has not landed yet.
-- **The key never comes off the row** while the screen lives (only the tint fades): removing a
-  key rebuilds the row from scratch, which blanked its name line and jumped the page.
+stack a second copy — `SignalNavigator.open` still dedupes — but `replace`s the page on top with
+the new `?comment=`: go_router keeps the page key, the screen is keyed by signal id, so the open
+State gets it through `didUpdateWidget`. (Asking again for the comment it was opened at changes
+nothing, and so does nothing.) What shapes the scroll, all found on device:
+- **The request is held until the row exists and both history sources have delivered** —
+  events landing after the scroll would push the comment down. Comments usually arrive before
+  the signal document, and the history renders inside the signal's `StreamBuilder`, whose
+  rebuilds do not run the State's `build`, so the attempt is queued from `_buildSignalHistory`
+  too.
+- **It gives up only on a server answer newer than the request.** On a thread already open the
+  comments listener answered long ago, and a push about a brand-new comment arrives before the
+  comment does; a latched "the server has answered" would drop the request at once. The reader's
+  own scroll also drops it.
+- **Names reserve their line while they resolve.** `UserNameLink` renders an invisible line of
+  the same height rather than nothing, so rows above the comment no longer grow after the
+  scroll. (This replaced a 5-second follow-the-row window that also fought the reader's reply.)
+- **The key never comes off the row** while the screen lives; only the tint fades, through a
+  notifier that repaints that one row.
 
 The offset is computed against the page's own scroll view rather than with
 `Scrollable.ensureVisible`, whose nearest scrollable is the shrink-wrapped history list. A
@@ -2359,11 +2366,17 @@ Other rules of the service:
 from a local notification posted by a headless isolate) funnels into
 `SignalNavigator.open(signalId, commentId:)`. A `new_comment`/`mention` push carries
 `commentId` in its data; the local notification the foreground path posts for it encodes
-the comment into its single-string payload as `signalId#commentId`
-(`SignalNotificationPayload` — `#` cannot occur in a document id, and a bare id from an
-older payload or the arrival catch-up still decodes). An inbox row reads the comment from
-its own document id, `cmt_{commentId}`, so rows written before the push carried it
-work too. See §7.5 for what the screen does with it.
+the comment into its single-string payload as `signalId/commentId`
+(`SignalNotificationPayload` — `/` is the one character a document id cannot contain, and a
+bare id from an older payload or the arrival catch-up still decodes). An inbox row reads the
+comment from its own document id, `cmt_{commentId}` (`NotificationInboxService.commentIdOf`,
+guarded against the TypeScript by `inbox_comment_id_guard_test.dart`), so rows written before
+the push carried it work too. See §7.5 for what the screen does with it.
+
+`SignalNavigatorObserver` counts as "over the tabs" every named go_router page that is not a
+tab, **and** any full screen pushed straight onto the Navigator — the signal's photo viewer —
+so a comment push about the signal beneath it opens a copy the reader can see. Dialogs and
+sheets are popup routes and do not count.
 
 **Server fan-out** — see §9. Four push types: `new_signal` (nearby users),
 `status_change`, `urgency_change` and `new_comment` (subscribers).
@@ -3902,6 +3915,7 @@ silently breaks Auth/Firestore/FCM in release builds only.
 
 | Date | Change |
 |---|---|
+| 2026-09-29 | **Review pass on the profile lists and comment focus** (§5.1, §7.5, §7.6). A comment push about a thread already open no longer loses its scroll to a latched "server has answered" (only a newer answer may declare the comment gone), and no longer scrolls a screen hidden under the photo viewer (the observer now counts pageless full screens). Same-signal focus goes through `router.replace` instead of a global notifier; names reserve their line while resolving, which removed the 5-second follow-scroll. The lists drop a "Load more" that lands after a refresh; coming back from a list re-reads only the numbers and keeps any it could not re-read. The payload separator is `/`, not `#` (which a document id can contain). The Helping-now list and count share one query; comments decode through `SignalHistoryEntry.fromDocument`. |
 | 2026-09-29 | **`SignalNavigator`'s route observer never matched on device — fixed** (§7.6). It compared the names go_router gives pages against route *paths*, but go_router names a page after the route's `name:` (falling back to the path only for an unnamed route) and every route in `main.dart` is named. So a tab read as a screen pushed over the tabs and a signal never read as showing: a re-tapped notification stacked a duplicate, a notification tap never put the map under the signal, and `isShowingSignal` was always false. Its tests used unnamed routes, where the fallback hid it. The observer now keys on `Routes.shellBranchNames`/`Routes.signalDetailsName` (which `main.dart` uses) and tracks route objects, reading the open signal's id from the page's `arguments` — so it knows which signal is on top however it was opened, which is what lets a comment push scroll the thread already open from the inbox instead of stacking it. The tests now name their routes as production does; against the old observer, 7 of them fail. |
 | 2026-09-29 | **Tapping a comment opens the thread at that comment** (§7.5, §7.6). From the profile's comment list, an inbox row, a push, or a foreground notification: the signal opens scrolled to the comment and briefly highlights it; on a signal already open, the open screen scrolls instead of a copy being stacked. `new_comment`/`mention` pushes now carry `commentId` (additive — older builds ignore it); inbox rows derive it from their `cmt_{commentId}` id. |
 | 2026-09-28 | **Profile stats open their lists** (§5.1; master spec §3.5.1). The three numbers on both profile screens were inert; each now opens `/user/:uid/activity/:kind` — the signals reported, the ones held right now, and the comments written, each row opening its signal. Signals and Comments are **shorter than their numbers by design** — the counts are contributions that outlive a removed or archived signal, the lists can only show what can still be opened — and a footer note says so rather than letting the gap read as a bug. The comments count is now **scoped to the current mode** by a document-name range on the collection-group query (verified against the emulator: `signals` sorts before `signals_test` segment-wise, so `signals_test/!` is the boundary); it previously mixed production and test comments. New composite index: `comments` `COLLECTION_GROUP` (`author`, `createdAt desc`). |

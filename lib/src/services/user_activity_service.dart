@@ -1,8 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../models/signal_status.dart';
+import '../models/signal_event.dart';
 import '../repositories/signal_repository.dart';
 import '../utils/chunk.dart';
+import '../utils/signal_merge.dart';
+import 'user_stats_service.dart';
 
 /// Which of a profile's statistics a list is drilling into (master spec
 /// §3.5.1). One per [UserStats] field, in the same order as `UserStatsRow`.
@@ -13,12 +15,7 @@ enum UserActivityKind {
 
   /// Parses a route segment, or null for anything this build does not know —
   /// a mistyped deep link should land on the profile, not on a crash.
-  static UserActivityKind? fromName(String? name) {
-    for (final kind in values) {
-      if (kind.name == name) return kind;
-    }
-    return null;
-  }
+  static UserActivityKind? fromName(String? name) => values.asNameMap()[name];
 }
 
 /// One comment somebody wrote, with the signal it was written on.
@@ -103,20 +100,20 @@ class UserActivityService {
     );
   }
 
-  /// Open signals this user holds, newest first — exactly the set the
-  /// "Helping now" number counts, so the two cannot disagree.
+  /// Open signals this user holds, newest first — the same query the
+  /// "Helping now" number counts ([UserStatsService.openSignalsHeldBy]).
   ///
   /// Unpaged: it is a present commitment, a handful of cases at most. Sorted
   /// here rather than by the query, which would need a third composite index
   /// (`signalOwner`, `status`, `createdAt`) for a list this short.
-  Future<List<SignalWithId>> helping() async {
-    final snapshot = await _signals
-        .where('signalOwner', isEqualTo: _userRef)
-        .where('status', whereIn: SignalStatus.openCodes)
-        .get();
-    final items = snapshot.docs.map(SignalWithId.fromDocument).toList();
-    items.sort((a, b) => _createdAtOf(b).compareTo(_createdAtOf(a)));
-    return items;
+  Future<ActivityPage<SignalWithId>> helping() async {
+    final snapshot =
+        await UserStatsService.openSignalsHeldBy(_userRef, collection).get();
+    return ActivityPage(
+      items: sortNewestFirst(snapshot.docs),
+      cursor: null,
+      hasMore: false,
+    );
   }
 
   /// Parent signals already read, by id — kept across pages so a user who
@@ -129,8 +126,9 @@ class UserActivityService {
   /// date without a second composite index, so it reads in date order and
   /// filters here — see [belongsTo]. Three kinds of row are dropped:
   ///   * comments in the other mode's collection;
-  ///   * legacy status-change comments, which carry an `author` but no `text`
-  ///     (they moved to `events` long ago, but the old documents remain);
+  ///   * legacy status-change entries, which carry an `author` but decode as
+  ///     events ([SignalHistoryEntry.fromDocument]) — they moved to `events`
+  ///     long ago, but the old documents remain;
   ///   * comments whose signal is gone — removed, hidden or archived.
   ///
   /// Keeps reading until it has [pageSize] rows or has read [maxCommentScans]
@@ -156,24 +154,28 @@ class UserActivityService {
       hasMore = snapshot.docs.length == pageSize;
       if (snapshot.docs.isNotEmpty) cursor = snapshot.docs.last;
 
-      final candidates = snapshot.docs.where((doc) {
-        final text = doc.data()['text'];
-        return belongsTo(doc.reference.path, collection) &&
-            text is String &&
-            text.isNotEmpty;
-      }).toList();
+      // Decoded exactly as the thread decodes them, so "what counts as a
+      // user comment" has one definition: a legacy status entry carries a
+      // `type`, and an empty text is not something anyone wrote.
+      final candidates = [
+        for (final doc in snapshot.docs)
+          if (belongsTo(doc.reference.path, collection))
+            if (SignalHistoryEntry.fromDocument(doc.id, doc.data())
+                case final entry?
+                when entry.kind == SignalHistoryKind.comment &&
+                    (entry.text?.isNotEmpty ?? false))
+              (signalId: doc.reference.parent.parent!.id, entry: entry),
+      ];
 
-      await _loadParents(
-          candidates.map((doc) => doc.reference.parent.parent!.id).toSet());
+      await _loadParents({for (final c in candidates) c.signalId});
 
-      for (final doc in candidates) {
-        final parent = _parents[doc.reference.parent.parent!.id];
+      for (final (:signalId, :entry) in candidates) {
+        final parent = _parents[signalId];
         if (parent == null) continue;
-        final data = doc.data();
         kept.add(AuthoredComment(
-          id: doc.id,
-          text: data['text'] as String,
-          createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
+          id: entry.id,
+          text: entry.text!,
+          createdAt: entry.createdAt,
           signal: parent,
         ));
       }
@@ -240,7 +242,4 @@ class UserActivityService {
     }
     return query.where(FieldPath.documentId, isLessThan: boundary);
   }
-
-  static int _createdAtOf(SignalWithId entry) =>
-      (entry.rawData['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
 }

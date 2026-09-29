@@ -138,7 +138,7 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       final stats = await UserStatsService.forUser(user.uid);
       if (!mounted) return;
-      setState(() => _stats = stats);
+      setState(() => _stats = stats.orElse(_stats));
     } catch (e, stack) {
       if (mounted) {
         final l10n = AppLocalizations.of(context);

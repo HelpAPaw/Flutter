@@ -481,12 +481,13 @@ class NotificationService {
 ///
 /// A plugin payload is a single string, and every notification posted before
 /// comments could be targeted — including the arrival catch-up, which never
-/// names one — holds a bare signal id. So the comment is appended after a `#`,
-/// which a Firestore document id cannot contain, and a bare id still decodes.
+/// names one — holds a bare signal id. So the comment is appended after a `/`,
+/// the one character a Firestore document id cannot contain, and a bare id
+/// still decodes.
 class SignalNotificationPayload {
   SignalNotificationPayload._();
 
-  static const _separator = '#';
+  static const _separator = '/';
 
   static String encode(String signalId, {String? commentId}) =>
       commentId == null || commentId.isEmpty

@@ -46,16 +46,26 @@ void main() {
     return text.data ?? text.textSpan!.toPlainText();
   }
 
-  testWidgets('renders nothing while the lookup is in flight', (tester) async {
+  testWidgets(
+      'shows nothing while the lookup is in flight, but keeps the line height',
+      (tester) async {
     // R4-OBS-01: rendering the fallback first and flipping to the real name
-    // made "Unknown reported this signal" flash on every signal open.
+    // made "Unknown reported this signal" flash on every signal open. And a
+    // zero-height placeholder grew every row as its name arrived, moving the
+    // comment the signal screen had just scrolled to.
     final pending = Completer<String?>();
-    addTearDown(() => pending.complete(null));
 
     await pump(tester, name: pending.future, onTap: (_) {});
 
-    expect(find.byType(Text), findsNothing);
-    expect(tester.widget<SizedBox>(find.byType(SizedBox)).width, 0);
+    expect(renderedText(tester).trim(), isEmpty);
+    expect(find.bySemanticsLabel(RegExp('.')), findsNothing);
+    final inFlight = tester.getSize(find.byType(UserNameLink)).height;
+
+    pending.complete('Ivan');
+    await tester.pumpAndSettle();
+
+    expect(renderedText(tester), 'Ivan · 12 August 2026');
+    expect(tester.getSize(find.byType(UserNameLink)).height, inFlight);
   });
 
   testWidgets('renders the sentence around the resolved name', (tester) async {

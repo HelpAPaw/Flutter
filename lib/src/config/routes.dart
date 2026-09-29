@@ -42,11 +42,11 @@ class Routes {
   ///
   /// **What a `NavigatorObserver` actually sees.** go_router names a page after
   /// its route's `name` and falls back to the path only for an unnamed route —
-  /// and every route in `main.dart` is named. `SignalNavigatorObserver` compared
-  /// against the *paths* for its whole life, so on device a tab read as a screen
-  /// pushed over the tabs and a signal never read as showing; its tests used
-  /// unnamed routes, where the fallback made the paths match. `main.dart` uses
-  /// these constants, so the two cannot drift again.
+  /// and every route in `main.dart` is named. `SignalNavigatorObserver` once
+  /// compared against the *paths*, so on device a tab read as a screen pushed
+  /// over the tabs and a signal never read as showing; its tests used unnamed
+  /// routes, where the fallback made the paths match. `main.dart` uses these
+  /// constants, so the two cannot drift again.
   static const shellBranchNames = <String>[
     'initial_route',
     'my_signals',

@@ -18,6 +18,20 @@ import 'app_preferences_service.dart';
 /// a Bulgarian user gets a Bulgarian inbox even though the Cloud Function has no
 /// i18n.
 class NotificationInboxService {
+  /// How the server names a comment's or a mention's inbox entry:
+  /// `cmt_{commentId}` (`handleCommentCreated` in functions/src/index.ts —
+  /// deterministic, because triggers are at-least-once). Guarded against the
+  /// TypeScript by `test/inbox_comment_id_guard_test.dart`.
+  static const commentEntryPrefix = 'cmt_';
+
+  /// The comment an inbox entry is about, read off its document id — so rows
+  /// written before the app scrolled to comments work too. Null for any other
+  /// kind of entry.
+  static String? commentIdOf(String entryId) =>
+      entryId.startsWith(commentEntryPrefix)
+          ? entryId.substring(commentEntryPrefix.length)
+          : null;
+
   static final NotificationInboxService _instance =
       NotificationInboxService._internal();
   factory NotificationInboxService() => _instance;

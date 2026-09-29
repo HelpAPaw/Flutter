@@ -141,14 +141,21 @@ class _UserNameLinkState extends State<UserNameLink> {
     return FutureBuilder<String?>(
       future: pending,
       builder: (context, snapshot) {
-        // Nothing while the lookup is in flight. `snapshot.data` is null until
-        // it completes, so rendering unconditionally paints the fallback first
-        // and then flips to the real name — and since the created row opens
-        // every signal, that made "Unknown reported this signal" flash on every
-        // open (R4-OBS-01). On completion it always renders, falling back to
-        // [UserNameLink.fallback].
+        // Nothing *visible* while the lookup is in flight. `snapshot.data` is
+        // null until it completes, so rendering unconditionally paints the
+        // fallback first and then flips to the real name — and since the
+        // created row opens every signal, that made "Unknown reported this
+        // signal" flash on every open (R4-OBS-01).
+        //
+        // But a line's worth of blank, not zero height: every name on the
+        // signal screen resolving one lookup at a time used to grow each row
+        // after it was laid out, which moved everything below — including a
+        // comment the screen had just scrolled to. A space in the same style
+        // is exactly one line tall for the usual `maxLines: 1` caller, and a
+        // lower bound for a sentence that wraps. On completion it always
+        // renders, falling back to [UserNameLink.fallback].
         if (snapshot.connectionState != ConnectionState.done) {
-          return const SizedBox.shrink();
+          return ExcludeSemantics(child: _text(const TextSpan(text: ' ')));
         }
         return _line(context, snapshot.data);
       },

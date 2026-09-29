@@ -32,6 +32,18 @@ class UserStats {
 
   /// Comments this account has written.
   final int? commentsPosted;
+
+  /// These numbers, keeping [previous]'s for any this read could not get.
+  ///
+  /// For a *re*-read — coming back from a list — where a number already on
+  /// screen is a better answer than a dash: `count()` is server-only, and a
+  /// connectivity blip on the way back should not blank figures the reader
+  /// was just looking at.
+  UserStats orElse(UserStats? previous) => UserStats(
+        signalsPosted: signalsPosted ?? previous?.signalsPosted,
+        signalsOwned: signalsOwned ?? previous?.signalsOwned,
+        commentsPosted: commentsPosted ?? previous?.commentsPosted,
+      );
 }
 
 /// Computes the numbers shown on a profile, for any uid.
@@ -159,14 +171,25 @@ class UserStatsService {
   static Future<int> _signalsOwned(
     DocumentReference<Map<String, dynamic>> userRef,
   ) async {
-    final snapshot = await FirebaseFirestore.instance
-        .collection(AppPreferencesService().signalsCollectionName)
-        .where('signalOwner', isEqualTo: userRef)
-        .where('status', whereIn: SignalStatus.openCodes)
-        .count()
-        .get();
+    final snapshot = await openSignalsHeldBy(
+      userRef,
+      AppPreferencesService().signalsCollectionName,
+    ).count().get();
     return snapshot.count ?? 0;
   }
+
+  /// The signals [userRef] holds that are still open — the "Helping now" set.
+  ///
+  /// One definition for the number and for the list it opens
+  /// (`UserActivityService.helping`), so the two cannot drift apart.
+  static Query<Map<String, dynamic>> openSignalsHeldBy(
+    DocumentReference<Map<String, dynamic>> userRef,
+    String collection,
+  ) =>
+      FirebaseFirestore.instance
+          .collection(collection)
+          .where('signalOwner', isEqualTo: userRef)
+          .where('status', whereIn: SignalStatus.openCodes);
 
   /// How many comments this account has written in the current mode.
   ///

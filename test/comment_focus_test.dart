@@ -22,8 +22,8 @@ void main() {
     test('empty and malformed payloads are ignored, not thrown on', () {
       expect(SignalNotificationPayload.decode(null), isNull);
       expect(SignalNotificationPayload.decode(''), isNull);
-      expect(SignalNotificationPayload.decode('#c1'), isNull);
-      expect(SignalNotificationPayload.decode('sig1#'),
+      expect(SignalNotificationPayload.decode('/c1'), isNull);
+      expect(SignalNotificationPayload.decode('sig1/'),
           (signalId: 'sig1', commentId: null));
     });
   });
@@ -38,5 +38,13 @@ void main() {
     test('no comment, no query', () {
       expect(Routes.signalDetails('sig1'), '/signal_details/sig1');
     });
+  });
+
+  test('the separator cannot occur in a document id', () {
+    // `#` was the first choice, and it CAN appear in a Firestore id; `/` is
+    // the one character that cannot. A signal id with a `#` must survive.
+    final payload = SignalNotificationPayload.encode('a#b', commentId: 'c1');
+    expect(SignalNotificationPayload.decode(payload),
+        (signalId: 'a#b', commentId: 'c1'));
   });
 }
