@@ -32,7 +32,8 @@ class UserActivityPage extends StatefulWidget {
 }
 
 class _UserActivityPageState extends State<UserActivityPage> {
-  late UserActivityService _service = _newService();
+  /// Replaced on every [_reload] — see there.
+  late UserActivityService _service;
 
   /// [SignalWithId] for the two signal lists, [AuthoredComment] for comments.
   List<Object> _items = const [];
@@ -44,10 +45,10 @@ class _UserActivityPageState extends State<UserActivityPage> {
   bool _loadingMore = false;
   bool _failed = false;
 
-  UserActivityService _newService() => UserActivityService(
-        collection: AppPreferencesService().signalsCollectionName,
-        uid: widget.uid,
-      );
+  /// Bumped by every [_reload], so a "Load more" still in flight when the
+  /// list is refreshed is dropped instead of appended to the new first page —
+  /// its cursor belongs to the list that was just thrown away.
+  int _generation = 0;
 
   @override
   void initState() {
@@ -55,37 +56,35 @@ class _UserActivityPageState extends State<UserActivityPage> {
     _reload();
   }
 
-  Future<({List<Object> items, DocumentSnapshot? cursor, bool hasMore})>
-      _fetch(DocumentSnapshot? after) async {
-    switch (widget.kind) {
-      case UserActivityKind.signals:
-        final page = await _service.signals(after: after);
-        return (items: page.items, cursor: page.cursor, hasMore: page.hasMore);
-      case UserActivityKind.helping:
-        return (items: await _service.helping(), cursor: null, hasMore: false);
-      case UserActivityKind.comments:
-        final page = await _service.comments(after: after);
-        return (items: page.items, cursor: page.cursor, hasMore: page.hasMore);
-    }
-  }
+  Future<ActivityPage<Object>> _fetch(DocumentSnapshot? after) =>
+      switch (widget.kind) {
+        UserActivityKind.signals => _service.signals(after: after),
+        UserActivityKind.helping => _service.helping(),
+        UserActivityKind.comments => _service.comments(after: after),
+      };
 
   Future<void> _reload() async {
+    final generation = ++_generation;
     // A fresh service, so a refresh re-reads the parent signals too rather
     // than trusting a cache that may still hold one since removed.
-    _service = _newService();
+    _service = UserActivityService(
+      collection: AppPreferencesService().signalsCollectionName,
+      uid: widget.uid,
+    );
     try {
       final page = await _fetch(null);
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       setState(() {
         _items = page.items;
         _cursor = page.cursor;
         _hasMore = page.hasMore;
         _failed = false;
         _loaded = true;
+        _loadingMore = false;
       });
     } catch (error, stack) {
       reportError(error, stack, where: 'userActivity.${widget.kind.name}');
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       setState(() {
         _failed = true;
         _loaded = true;
@@ -95,10 +94,11 @@ class _UserActivityPageState extends State<UserActivityPage> {
 
   Future<void> _loadMore() async {
     if (_loadingMore) return;
+    final generation = _generation;
     setState(() => _loadingMore = true);
     try {
       final page = await _fetch(_cursor);
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       setState(() {
         _items = [..._items, ...page.items];
         _cursor = page.cursor;
@@ -106,30 +106,44 @@ class _UserActivityPageState extends State<UserActivityPage> {
       });
     } catch (error, stack) {
       reportError(error, stack, where: 'userActivity.${widget.kind.name}.more');
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       // The rows already on screen are still good, so a failed page is a
       // message and a button that still works, not an error screen.
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(AppLocalizations.of(context).activityCouldNotLoad),
       ));
     } finally {
-      if (mounted) setState(() => _loadingMore = false);
+      if (mounted && generation == _generation) {
+        setState(() => _loadingMore = false);
+      }
     }
   }
 
-  String _title(AppLocalizations l10n) => switch (widget.kind) {
-        UserActivityKind.signals => l10n.signals,
-        UserActivityKind.helping => l10n.helpingNow,
-        UserActivityKind.comments => l10n.comments,
-      };
-
-  /// Why the list can be shorter than the number that opened it. None for
-  /// "Helping now": that list and its count are the same query.
-  String? _gapNote(AppLocalizations l10n) => switch (widget.kind) {
-        UserActivityKind.signals => l10n.activityRemovedSignalsNote,
-        UserActivityKind.helping => null,
-        UserActivityKind.comments => l10n.activityRemovedCommentsNote,
-      };
+  /// Everything about the screen that depends on which list it is.
+  ///
+  /// [note] is why the list can be shorter than the number that opened it —
+  /// none for "Helping now", whose list and count are the same query.
+  ({String title, IconData emptyIcon, String emptyTitle, String? note})
+      _copy(AppLocalizations l10n) => switch (widget.kind) {
+            UserActivityKind.signals => (
+                title: l10n.signals,
+                emptyIcon: Icons.pin_drop_outlined,
+                emptyTitle: l10n.noSignalsYet,
+                note: l10n.activityRemovedSignalsNote,
+              ),
+            UserActivityKind.helping => (
+                title: l10n.helpingNow,
+                emptyIcon: Icons.volunteer_activism_outlined,
+                emptyTitle: l10n.activityNothingHelpingNow,
+                note: null,
+              ),
+            UserActivityKind.comments => (
+                title: l10n.comments,
+                emptyIcon: Icons.comment_outlined,
+                emptyTitle: l10n.activityNoCommentsYet,
+                note: l10n.activityRemovedCommentsNote,
+              ),
+          };
 
   @override
   Widget build(BuildContext context) {
@@ -142,7 +156,7 @@ class _UserActivityPageState extends State<UserActivityPage> {
           label: l10n.back,
           onLeave: () => context.popOrHome(),
         ),
-        title: AppBarTitle(_title(l10n)),
+        title: AppBarTitle(_copy(l10n).title),
       ),
       body: PageWidth(
         child: RefreshIndicator(
@@ -180,25 +194,15 @@ class _UserActivityPageState extends State<UserActivityPage> {
       ));
     }
 
-    final note = _gapNote(l10n);
+    final copy = _copy(l10n);
+    final note = copy.note;
 
     if (_items.isEmpty && !_hasMore) {
-      return scrollable(switch (widget.kind) {
-        UserActivityKind.signals => StatusView.empty(
-            icon: Icons.pin_drop_outlined,
-            title: l10n.noSignalsYet,
-            hint: note,
-          ),
-        UserActivityKind.helping => StatusView.empty(
-            icon: Icons.volunteer_activism_outlined,
-            title: l10n.activityNothingHelpingNow,
-          ),
-        UserActivityKind.comments => StatusView.empty(
-            icon: Icons.comment_outlined,
-            title: l10n.activityNoCommentsYet,
-            hint: note,
-          ),
-      });
+      return scrollable(StatusView.empty(
+        icon: copy.emptyIcon,
+        title: copy.emptyTitle,
+        hint: note,
+      ));
     }
 
     // One trailing slot: "Load more" while there is more, the note once the

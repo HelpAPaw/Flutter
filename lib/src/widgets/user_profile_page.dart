@@ -100,6 +100,15 @@ class _UserProfilePageState extends State<UserProfilePage> {
     });
   }
 
+  /// Re-reads just the numbers — for coming back from one of the lists they
+  /// open, where the name and avatar have not changed and a failed re-read must
+  /// not swap a profile the reader was just looking at for an error screen.
+  Future<void> _refreshStats() async {
+    final stats = await UserStatsService.forUser(widget.uid);
+    if (!mounted) return;
+    setState(() => _stats = stats.orElse(_stats));
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -165,7 +174,11 @@ class _UserProfilePageState extends State<UserProfilePage> {
         ),
         const SizedBox(height: 32),
         if (stats != null)
-          UserStatsRow(stats: stats, uid: widget.uid, onReturn: _load),
+          UserStatsRow(
+            stats: stats,
+            uid: widget.uid,
+            onReturn: _refreshStats,
+          ),
       ],
     );
   }

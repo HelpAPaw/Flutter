@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:help_a_paw/src/config/routes.dart';
 import 'package:help_a_paw/src/services/user_activity_service.dart';
+import 'package:help_a_paw/src/services/user_stats_service.dart';
 
 /// The two pieces of the profile drill-down that decide *which* rows a list
 /// shows without touching Firestore.
@@ -54,5 +55,19 @@ void main() {
       expect(UserActivityKind.fromName('likes'), isNull);
       expect(UserActivityKind.fromName(null), isNull);
     });
+  });
+
+  test('a re-read keeps the numbers it could not get', () {
+    // Coming back from a list re-reads the stats; count() is server-only, and
+    // a blip on the way back must not turn figures on screen into dashes.
+    const before =
+        UserStats(signalsPosted: 3, signalsOwned: 1, commentsPosted: 7);
+    const reread =
+        UserStats(signalsPosted: 4, signalsOwned: null, commentsPosted: null);
+    final merged = reread.orElse(before);
+    expect(merged.signalsPosted, 4);
+    expect(merged.signalsOwned, 1);
+    expect(merged.commentsPosted, 7);
+    expect(reread.orElse(null).signalsOwned, isNull);
   });
 }

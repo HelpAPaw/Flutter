@@ -63,13 +63,12 @@ void main() {
           GoRoute(
             name: Routes.signalDetailsName,
             path: Routes.signalDetailsPath,
-            builder: (c, s) {
-              final comment = s.uri.queryParameters[Routes.commentQueryParam];
-              return Column(children: [
-                const Text('details'),
-                if (comment != null) Text('comment $comment'),
-              ]);
-            },
+            // Keyed by signal id, as in main.dart — which is what lets a
+            // `replace` with a new comment reach the SAME State.
+            builder: (c, s) => _DetailsProbe(
+              key: ValueKey(s.pathParameters['signalId']),
+              comment: s.uri.queryParameters[Routes.commentQueryParam],
+            ),
           ),
         ],
       );
@@ -216,33 +215,21 @@ void main() {
   });
 
   testWidgets(
-      'a comment on the signal already open is handed to that screen, '
-      'not pushed as a second copy', (tester) async {
+      'a comment on the signal already open reaches that screen, '
+      'not a second copy', (tester) async {
     // The usual shape of a push about a new comment: the reader is on the
     // thread already. The dedupe must still hold, but the comment must not be
-    // lost with it.
+    // lost with it — `replace` updates the page on top in place.
     final router = await pump(tester);
     SignalNavigator.instance.open('abc123');
     await tester.pumpAndSettle();
+    _DetailsProbe.created = 0;
 
-    final requests = <({String signalId, String commentId})?>[];
-    void record() => requests.add(SignalNavigator.instance.commentFocus.value);
-    SignalNavigator.instance.commentFocus.addListener(record);
-    addTearDown(() {
-      SignalNavigator.instance.commentFocus.removeListener(record);
-      SignalNavigator.instance.commentFocus.value = null;
-    });
-
-    SignalNavigator.instance.open('abc123', commentId: 'c1');
-    // The same comment again must notify again — a record compares by value.
     SignalNavigator.instance.open('abc123', commentId: 'c1');
     await tester.pumpAndSettle();
 
-    expect(requests.whereType<({String signalId, String commentId})>(), [
-      (signalId: 'abc123', commentId: 'c1'),
-      (signalId: 'abc123', commentId: 'c1'),
-    ]);
-    expect(find.text('details'), findsOneWidget);
+    expect(find.text('comment c1'), findsOneWidget);
+    expect(_DetailsProbe.created, 0, reason: 'the open screen was reused');
     router.pop();
     await tester.pumpAndSettle();
     expect(find.text('details'), findsNothing, reason: 'nothing was stacked');
@@ -260,23 +247,65 @@ void main() {
     router.push(Routes.signalDetails('abc123'));
     await tester.pumpAndSettle();
     expect(SignalNavigator.instance.isShowingSignal, isTrue);
-
-    final requests = <({String signalId, String commentId})?>[];
-    void record() => requests.add(SignalNavigator.instance.commentFocus.value);
-    SignalNavigator.instance.commentFocus.addListener(record);
-    addTearDown(() {
-      SignalNavigator.instance.commentFocus.removeListener(record);
-      SignalNavigator.instance.commentFocus.value = null;
-    });
+    _DetailsProbe.created = 0;
 
     SignalNavigator.instance.open('abc123', commentId: 'c1');
     await tester.pumpAndSettle();
 
-    expect(requests.whereType<({String signalId, String commentId})>(),
-        [(signalId: 'abc123', commentId: 'c1')]);
+    expect(find.text('comment c1'), findsOneWidget);
+    expect(_DetailsProbe.created, 0);
     router.pop();
     await tester.pumpAndSettle();
     expect(find.text('details'), findsNothing, reason: 'nothing was stacked');
+  });
+
+  testWidgets('a cold-launched signal takes a comment the same way',
+      (tester) async {
+    // A link opens the app straight onto the signal with a `go`, not a push;
+    // `replace` must still reuse that screen.
+    final router = await pump(tester);
+    router.go(Routes.signalDetails('abc123'));
+    await tester.pumpAndSettle();
+    _DetailsProbe.created = 0;
+
+    SignalNavigator.instance.open('abc123', commentId: 'c1');
+    await tester.pumpAndSettle();
+
+    expect(find.text('comment c1'), findsOneWidget);
+    expect(_DetailsProbe.created, 0);
+  });
+
+  testWidgets(
+      'a full screen pushed over the signal outside go_router — its photo '
+      'viewer — hides it, so a notification opens a copy the reader can see',
+      (tester) async {
+    final router = await pump(tester);
+    router.push(Routes.signalDetails('abc123'));
+    await tester.pumpAndSettle();
+    Navigator.of(tester.element(find.text('details'))).push(
+      MaterialPageRoute<void>(builder: (_) => const Text('photo')),
+    );
+    await tester.pumpAndSettle();
+    expect(SignalNavigator.instance.isShowingSignal, isFalse);
+
+    SignalNavigator.instance.open('abc123', commentId: 'c1');
+    await tester.pumpAndSettle();
+
+    expect(find.text('comment c1'), findsOneWidget,
+        reason: 'the copy on top is the one showing the comment');
+  });
+
+  testWidgets('a dialog over the signal does not hide it', (tester) async {
+    final router = await pump(tester);
+    router.push(Routes.signalDetails('abc123'));
+    await tester.pumpAndSettle();
+    showDialog<void>(
+      context: tester.element(find.text('details')),
+      builder: (_) => const Text('dialog'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(SignalNavigator.instance.isShowingSignal, isTrue);
   });
 
   testWidgets('a different signal over the one on top is still pushed',
@@ -294,4 +323,31 @@ void main() {
     expect(find.text('details'), findsOneWidget,
         reason: 'the first signal is still underneath');
   });
+}
+
+/// Stands in for SignalDetailsScreen: shows the comment it was given, and
+/// counts how many times a fresh State was built.
+class _DetailsProbe extends StatefulWidget {
+  const _DetailsProbe({super.key, required this.comment});
+
+  final String? comment;
+
+  static int created = 0;
+
+  @override
+  State<_DetailsProbe> createState() => _DetailsProbeState();
+}
+
+class _DetailsProbeState extends State<_DetailsProbe> {
+  @override
+  void initState() {
+    super.initState();
+    _DetailsProbe.created++;
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(children: [
+        const Text('details'),
+        if (widget.comment != null) Text('comment ${widget.comment}'),
+      ]);
 }
