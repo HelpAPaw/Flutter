@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/removed_signal.dart';
 import '../repositories/signal_repository.dart';
 import '../utils/chunk.dart';
+import '../utils/stream_merge.dart';
 import '../viewmodels/map_view_model.dart';
 import 'my_signals_service.dart';
 import 'signal_subscription_service.dart';
@@ -98,8 +99,10 @@ final watchingProvider = StreamProvider<WatchedPage>((ref) {
   final limit = ref.watch(watchingLimitProvider);
 
   // The follow list drives the query, so a follow or unfollow re-pages without
-  // the screen having to ask.
-  return SignalSubscriptionService.instance
-      .watchSubscriptions()
-      .asyncExpand((ids) => service.watch(ids.toList(), limit: limit));
+  // the screen having to ask. Switched rather than expanded: the query never
+  // completes, and `asyncExpand` would wait on it forever (#86).
+  return switchLatest(
+    SignalSubscriptionService.instance.watchSubscriptions(),
+    (Set<String> ids) => service.watch(ids.toList(), limit: limit),
+  );
 });

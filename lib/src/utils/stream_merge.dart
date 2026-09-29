@@ -76,3 +76,80 @@ Stream<List<T>> mergeLatestList<T>(List<Stream<T>> sources) {
 
   return controller.stream;
 }
+
+/// Maps every event of [source] to a stream and follows only the newest one:
+/// each new event cancels the previous inner stream before listening to the
+/// next. The same thing `rxdart` calls `switchMap`, hand-rolled for the reason
+/// given on [mergeLatestList].
+///
+/// Exists because `asyncExpand` is the tempting spelling and is wrong whenever
+/// the inner stream never completes (#86). It **pauses the outer stream until
+/// the inner one is done**, and a Firestore `snapshots()` stream is never done,
+/// so the Watching tab read the follow list once and then queued every later
+/// follow or unfollow behind a query that would not end.
+///
+/// Pausing is forwarded to the outer stream and to whichever inner stream is
+/// current, including one started while paused — Riverpod pauses a provider's
+/// subscription while nothing is watching it. The result closes once [source]
+/// and the current inner stream have both closed.
+Stream<R> switchLatest<T, R>(
+  Stream<T> source,
+  Stream<R> Function(T value) convert,
+) {
+  return Stream<R>.multi((out) {
+    StreamSubscription<R>? inner;
+    var sourceDone = false;
+
+    void closeIfDone() {
+      if (sourceDone && inner == null) out.close();
+    }
+
+    final outer = source.listen(
+      (value) {
+        // Cancelling stops delivery at once; awaiting it would only let the
+        // new stream's first event wait behind the old one's teardown.
+        unawaited(inner?.cancel());
+        inner = null;
+
+        final Stream<R> next;
+        try {
+          next = convert(value);
+        } catch (error, stack) {
+          out.addError(error, stack);
+          return;
+        }
+
+        late final StreamSubscription<R> sub;
+        sub = next.listen(
+          out.add,
+          onError: out.addError,
+          onDone: () {
+            if (!identical(inner, sub)) return;
+            inner = null;
+            closeIfDone();
+          },
+        );
+        if (out.isPaused) sub.pause();
+        inner = sub;
+      },
+      onError: out.addError,
+      onDone: () {
+        sourceDone = true;
+        closeIfDone();
+      },
+    );
+
+    out
+      ..onPause = () {
+        outer.pause();
+        inner?.pause();
+      }
+      ..onResume = () {
+        outer.resume();
+        inner?.resume();
+      }
+      ..onCancel = () async {
+        await Future.wait([outer.cancel(), if (inner != null) inner!.cancel()]);
+      };
+  });
+}
