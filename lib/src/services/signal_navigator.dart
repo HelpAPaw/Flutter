@@ -36,6 +36,18 @@ class SignalNavigator {
   /// `MapPage.build`.
   String? pendingFocusSignalId;
 
+  /// A comment to scroll to on a signal that is **already on screen**.
+  ///
+  /// Opening a signal with a comment puts the comment in the route, which the
+  /// new screen reads. But [open] deliberately does not stack a second copy of
+  /// the signal the user is already looking at — the common case for a push
+  /// about a new comment on the thread they have open — so there is no new
+  /// route to carry it. The open screen listens here instead, and sets this
+  /// back to null once it has taken the request, so the same comment can be
+  /// asked for twice.
+  final ValueNotifier<({String signalId, String commentId})?> commentFocus =
+      ValueNotifier(null);
+
   /// Pass to `GoRouter(observers: [...])` so this class can see the root
   /// navigator's stack.
   final SignalNavigatorObserver observer = SignalNavigatorObserver();
@@ -98,26 +110,36 @@ class SignalNavigator {
   /// Whether a tab is showing, with nothing pushed over it.
   bool get _shellIsOnTop => observer.topRoutePattern == null;
 
-  /// Shows [signalId], unless it is already on screen.
+  /// Shows [signalId], unless it is already on screen, scrolled to
+  /// [commentId] when one is given.
   ///
   /// Uses `push` so backing out returns wherever the user came from (normally
   /// the map, which then focuses the pin) rather than replacing that history.
-  void open(String signalId) {
+  void open(String signalId, {String? commentId}) {
     final router = _router;
     if (router == null) {
       debugPrint('SignalNavigator: no router attached, dropped $signalId');
       return;
     }
 
-    final location = Routes.signalDetails(signalId);
     // Re-tapping the same link or notification while already on that signal
     // should do nothing rather than stack a duplicate page. This also absorbs
     // the launch link that app_links replays on a cold start, which the
     // platform's built-in handling has already applied as the initial route —
     // hence both arms: a pushed signal is tracked by id, a cold-launched one
-    // shows up in the router's location.
+    // shows up in the router's location. Compared on the path: `_routerLocation`
+    // carries no query, so a comment must not make the same signal look new.
     if (isShowingSignal &&
-        (_openSignalId == signalId || _routerLocation == location)) {
+        (_openSignalId == signalId ||
+            _routerLocation == Routes.signalDetails(signalId))) {
+      // Still worth something when it names a comment: the screen that is
+      // already open scrolls to it instead.
+      if (commentId != null) {
+        // Through null first: a record compares by value, so asking for the
+        // same comment twice would otherwise not notify at all.
+        commentFocus.value = null;
+        commentFocus.value = (signalId: signalId, commentId: commentId);
+      }
       return;
     }
 
@@ -146,7 +168,7 @@ class SignalNavigator {
       _showMapBranch?.call();
     }
 
-    router.push(location);
+    router.push(Routes.signalDetails(signalId, commentId: commentId));
   }
 }
 

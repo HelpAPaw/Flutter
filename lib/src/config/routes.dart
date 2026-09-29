@@ -95,7 +95,19 @@ class Routes {
   static String userActivity(String uid, UserActivityKind kind) =>
       '/user/$uid/activity/${kind.name}';
 
-  static String signalDetails(String signalId) => '$signalDetailsPrefix$signalId';
+  /// A signal's screen, optionally scrolled to one of its comments.
+  ///
+  /// The comment rides as a **query parameter**, not a path segment, so the
+  /// route pattern — and every check on it, like
+  /// `SignalNavigator.isShowingSignal` — is the same with or without it. It is
+  /// a hint: a comment that no longer exists just opens the signal.
+  static String signalDetails(String signalId, {String? commentId}) =>
+      commentId == null
+          ? '$signalDetailsPrefix$signalId'
+          : '$signalDetailsPrefix$signalId?$commentQueryParam=${Uri.encodeQueryComponent(commentId)}';
+
+  /// The query parameter [signalDetails] puts a comment id in.
+  static const commentQueryParam = 'comment';
   static String editSignal(String signalId) => '/edit_signal/$signalId';
   static String clinicDetails(String clinicId) => '/clinic_details/$clinicId';
 

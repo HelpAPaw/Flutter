@@ -365,6 +365,14 @@ class _MyNotificationsPageState extends ConsumerState<MyNotificationsPage> {
                     final body = _body(l10n, data);
                     final read = data['read'] as bool? ?? false;
                     final signalId = data['signalId'] as String?;
+                    // A comment or mention entry is stored as `cmt_{commentId}`
+                    // (functions/src/index.ts, deterministic because triggers
+                    // are at-least-once), so the id already says which comment
+                    // the row is about — including on rows written before this
+                    // screen scrolled to comments.
+                    final commentId = doc.id.startsWith('cmt_')
+                        ? doc.id.substring(4)
+                        : null;
                     final createdAt = data['createdAt'] as Timestamp?;
                     final timeStr = createdAt != null
                         ? _formatTime(createdAt.toDate(), l10n)
@@ -467,7 +475,8 @@ class _MyNotificationsPageState extends ConsumerState<MyNotificationsPage> {
                             } catch (_) {}
                           }
                           if (signalId != null && mounted) {
-                            router.push(Routes.signalDetails(signalId));
+                            router.push(Routes.signalDetails(signalId,
+                                commentId: commentId));
                           }
                         },
                       ),

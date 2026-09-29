@@ -206,6 +206,7 @@ class NotificationService {
     required String? title,
     required String? body,
     required String? signalId,
+    String? commentId,
     String? groupKey,
   }) {
     return _localNotifications.show(
@@ -229,7 +230,9 @@ class NotificationService {
           threadIdentifier: groupKey,
         ),
       ),
-      payload: signalId,
+      payload: signalId == null
+          ? null
+          : SignalNotificationPayload.encode(signalId, commentId: commentId),
     );
   }
 
@@ -248,6 +251,7 @@ class NotificationService {
       title: notification.title,
       body: notification.body,
       signalId: message.data['signalId'],
+      commentId: message.data['commentId'],
     );
   }
 
@@ -258,7 +262,10 @@ class NotificationService {
 
     unawaited(_recordDeliveredSignal(message));
 
-    if (signalId != null) SignalNavigator.instance.open(signalId);
+    if (signalId != null) {
+      SignalNavigator.instance
+          .open(signalId, commentId: message.data['commentId']);
+    }
   }
 
   /// Routes a tap on a local notification that launched the app.
@@ -274,12 +281,13 @@ class NotificationService {
           await _localNotifications.getNotificationAppLaunchDetails();
       if (details == null || !details.didNotificationLaunchApp) return;
 
-      final payload = details.notificationResponse?.payload;
-      if (payload == null || payload.isEmpty) return;
+      final target =
+          SignalNotificationPayload.decode(details.notificationResponse?.payload);
+      if (target == null) return;
 
-      FirebaseCrashlytics.instance
-          .log('Notification: Launched app from local notification - $payload');
-      SignalNavigator.instance.open(payload);
+      FirebaseCrashlytics.instance.log(
+          'Notification: Launched app from local notification - ${target.signalId}');
+      SignalNavigator.instance.open(target.signalId, commentId: target.commentId);
     } catch (e) {
       debugPrint('Failed to read notification launch details: $e');
     }
@@ -288,9 +296,9 @@ class NotificationService {
   void _onNotificationResponse(NotificationResponse response) {
     debugPrint('Local notification tapped: ${response.payload}');
 
-    final signalId = response.payload;
-    if (signalId != null && signalId.isNotEmpty) {
-      SignalNavigator.instance.open(signalId);
+    final target = SignalNotificationPayload.decode(response.payload);
+    if (target != null) {
+      SignalNavigator.instance.open(target.signalId, commentId: target.commentId);
     }
   }
 
@@ -465,5 +473,35 @@ class NotificationService {
     } catch (e) {
       debugPrint('Error removing FCM token on logout: $e');
     }
+  }
+}
+
+/// What a local notification carries through a tap: the signal, and the
+/// comment to scroll to when the notification was about one.
+///
+/// A plugin payload is a single string, and every notification posted before
+/// comments could be targeted — including the arrival catch-up, which never
+/// names one — holds a bare signal id. So the comment is appended after a `#`,
+/// which a Firestore document id cannot contain, and a bare id still decodes.
+class SignalNotificationPayload {
+  SignalNotificationPayload._();
+
+  static const _separator = '#';
+
+  static String encode(String signalId, {String? commentId}) =>
+      commentId == null || commentId.isEmpty
+          ? signalId
+          : '$signalId$_separator$commentId';
+
+  /// Null for an empty or missing payload. A payload is written by this app,
+  /// but it outlives the build that wrote it, so it is read defensively.
+  static ({String signalId, String? commentId})? decode(String? payload) {
+    if (payload == null || payload.isEmpty) return null;
+    final separator = payload.indexOf(_separator);
+    if (separator < 0) return (signalId: payload, commentId: null);
+    final signalId = payload.substring(0, separator);
+    final commentId = payload.substring(separator + 1);
+    if (signalId.isEmpty) return null;
+    return (signalId: signalId, commentId: commentId.isEmpty ? null : commentId);
   }
 }

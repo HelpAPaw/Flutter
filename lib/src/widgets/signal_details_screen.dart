@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/services.dart';
 import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
@@ -35,6 +36,7 @@ import '../models/signal_doc_state.dart';
 import '../models/signal_status.dart';
 import '../models/help_tag.dart';
 import '../models/signal_urgency.dart';
+import '../services/signal_navigator.dart';
 import '../services/signal_subscription_service.dart';
 import 'follow_button.dart';
 import 'signal_owner_block.dart';
@@ -63,9 +65,18 @@ import '../utils/error_text.dart';
 import 'page_width.dart';
 
 class SignalDetailsScreen extends StatefulWidget {
-  const SignalDetailsScreen({super.key, required this.signalId});
+  const SignalDetailsScreen({
+    super.key,
+    required this.signalId,
+    this.focusCommentId,
+  });
 
   final String signalId;
+
+  /// A comment to scroll to and briefly highlight once it has loaded — set when
+  /// the screen is opened from a comment: the profile's comment list, an inbox
+  /// row, or a push about a comment. See [_SignalDetailsState._requestCommentFocus].
+  final String? focusCommentId;
 
   @override
   State<StatefulWidget> createState() => _SignalDetailsState();
@@ -151,6 +162,47 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   late final Listenable _composerSignals =
       Listenable.merge([_newCommentController, _composerFocus]);
   final ScrollController _scrollController = ScrollController();
+
+  /// The comment still waiting to be scrolled to.
+  ///
+  /// **Pending, not done, until its row exists.** The thread arrives from a
+  /// listener after the screen is up — and for a push about a brand-new
+  /// comment, the cached snapshot often predates it — so the request is held
+  /// across rebuilds and acted on by [_focusCommentWhenBuilt] the first time
+  /// the row is laid out. It is dropped, never acted on late, in two cases: the
+  /// server's comments answer does not contain it (deleted since), or the
+  /// reader has started scrolling themselves, after which yanking the page to a
+  /// comment would be taking it out of their hands.
+  String? _pendingCommentFocusId;
+
+  /// The comment this screen was last asked to show. Carries
+  /// [_focusedCommentKey], and keeps it after the highlight fades: taking a key
+  /// off a widget rebuilds it from scratch, which on this screen blanks the
+  /// row's name line until it re-resolves — the page jumps, found on device.
+  String? _focusedCommentId;
+
+  /// The comment currently drawn highlighted, for a moment after arriving.
+  String? _highlightedCommentId;
+  Timer? _highlightTimer;
+
+  /// On the [_focusedCommentId] row — only ever one, so a single key serves.
+  final GlobalKey _focusedCommentKey = GlobalKey();
+
+  /// On the page's own scroll view, which the focused row is measured against.
+  final GlobalKey _pageScrollKey = GlobalKey();
+
+  /// Whether a post-frame focus attempt is already queued, so a burst of
+  /// rebuilds queues one attempt rather than one each.
+  bool _commentFocusQueued = false;
+
+  /// Set for a moment after scrolling to a comment, while the page is still
+  /// settling. Names on this screen render nothing until they resolve, one
+  /// lookup per row, so every row above the comment grows by a line *after*
+  /// the scroll — found on device, where the comment ended up below the fold.
+  /// While this is set, any change in the page's height scrolls to it again.
+  bool _commentFocusSettling = false;
+  Timer? _commentFocusSettleTimer;
+
   final ImagePicker _imagePicker = ImagePicker();
   bool _isUploadingPhoto = false;
 
@@ -203,10 +255,132 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   @override
   void initState() {
     super.initState();
+    _pendingCommentFocusId = widget.focusCommentId;
+    _focusedCommentId = widget.focusCommentId;
+    SignalNavigator.instance.commentFocus.addListener(_onCommentFocusRequest);
     _subscribe();
     _roleSub = ModerationService.instance.watchIsModerator().listen((value) {
       if (mounted && value != _isModerator) {
         setState(() => _isModerator = value);
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(SignalDetailsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // The route is keyed by signal id, so opening this signal again with a
+    // different comment — a `go` to the same path with a new query — updates
+    // this State instead of building a new one.
+    final commentId = widget.focusCommentId;
+    if (commentId != null && commentId != oldWidget.focusCommentId) {
+      _requestCommentFocus(commentId);
+    }
+  }
+
+  /// A notification tap about a comment on the signal that is already open —
+  /// see [SignalNavigator.commentFocus].
+  void _onCommentFocusRequest() {
+    final request = SignalNavigator.instance.commentFocus.value;
+    if (request == null || request.signalId != widget.signalId) return;
+    // Taken: cleared so the same comment can be asked for again. Deferred,
+    // because notifying listeners from inside a notification is not allowed.
+    scheduleMicrotask(() => SignalNavigator.instance.commentFocus.value = null);
+    _requestCommentFocus(request.commentId);
+  }
+
+  void _requestCommentFocus(String commentId) {
+    if (!mounted) return;
+    _highlightTimer?.cancel();
+    setState(() {
+      _pendingCommentFocusId = commentId;
+      _focusedCommentId = commentId;
+      _highlightedCommentId = null;
+      // The "Events" filter hides every comment, so the row could never appear.
+      _historyFilter = SignalHistoryFilter.all;
+    });
+  }
+
+  /// Queues one attempt, after this frame, to act on [_pendingCommentFocusId].
+  ///
+  /// Called from `build` and from [_buildSignalHistory] while a request is
+  /// pending — between them, every event that could make the row appear (the
+  /// signal document, either history listener, the filter) ends in one of the
+  /// two. Post-frame because the row has to be laid out before it can be
+  /// scrolled to.
+  void _focusCommentWhenBuilt() {
+    if (_commentFocusQueued) return;
+    _commentFocusQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _commentFocusQueued = false;
+      final commentId = _pendingCommentFocusId;
+      if (!mounted || commentId == null) return;
+
+      final rowContext = _focusedCommentKey.currentContext;
+      if (rowContext == null) {
+        // Not on screen yet. Give up only once the server has answered for the
+        // comments without it; a cached snapshot is allowed to be behind.
+        final comments = _comments.entries;
+        final gone = _comments.error != null ||
+            (_comments.hasServerAnswer &&
+                comments != null &&
+                !comments.any((entry) => entry.id == commentId));
+        if (gone) _pendingCommentFocusId = null;
+        return;
+      }
+
+      _pendingCommentFocusId = null;
+      _scrollToFocusedComment(const Duration(milliseconds: 400));
+      _commentFocusSettling = true;
+      _commentFocusSettleTimer?.cancel();
+      // Generous, because it costs nothing: the reader's first scroll ends it.
+      // Two seconds was measured too short on the SM-J610FN, where the names
+      // were still arriving — and moving the comment down — after it.
+      _commentFocusSettleTimer = Timer(const Duration(seconds: 5), () {
+        _commentFocusSettling = false;
+      });
+      _highlightTimer?.cancel();
+      setState(() => _highlightedCommentId = commentId);
+      _highlightTimer = Timer(const Duration(milliseconds: 2500), () {
+        if (mounted) setState(() => _highlightedCommentId = null);
+      });
+    });
+  }
+
+  void _scrollToFocusedComment(Duration duration) {
+    final row = _focusedCommentKey.currentContext?.findRenderObject();
+    final page = _pageScrollKey.currentContext?.findRenderObject();
+    if (row is! RenderBox || page is! RenderBox || !_scrollController.hasClients) {
+      return;
+    }
+    // By hand rather than `Scrollable.ensureVisible`: the history is a
+    // shrink-wrapped ListView inside this page, so the row's nearest scrollable
+    // is that inner list, and on device ensureVisible left the comment at the
+    // bottom edge instead of where it was asked to put it.
+    final position = _scrollController.position;
+    final rowTop = row.localToGlobal(Offset.zero, ancestor: page).dy;
+    // A third of the way down rather than at the top edge, so the comment it
+    // answers is still in view above it.
+    final target = position.pixels +
+        rowTop -
+        0.3 * (position.viewportDimension - row.size.height);
+    final clamped =
+        target.clamp(position.minScrollExtent, position.maxScrollExtent);
+    if ((clamped - position.pixels).abs() < 1) return;
+    _scrollController.animateTo(
+      clamped,
+      duration: duration,
+      curve: Curves.easeInOut,
+    );
+  }
+
+  /// The page changed height. While settling, follow the comment — see
+  /// [_commentFocusSettling]. Post-frame: this arrives mid-layout.
+  void _onPageMetricsChanged() {
+    if (!_commentFocusSettling) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _commentFocusSettling) {
+        _scrollToFocusedComment(const Duration(milliseconds: 150));
       }
     });
   }
@@ -379,6 +553,7 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_pendingCommentFocusId != null) _focusCommentWhenBuilt();
     final l10n = AppLocalizations.of(context);
     final locale = Localizations.localeOf(context).languageCode;
     final dateFormat = DateFormat.yMd(locale).add_jm();
@@ -594,378 +769,401 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
             body: Column(
               children: [
                 Expanded(
-                  child: SingleChildScrollView(
-                    controller: _scrollController,
-                    // Selection is NOT wrapped around the page. Everything
-                    // anybody typed here is selectable, but each such string
-                    // owns its own `SelectionArea` inside [LinkifiedText] — so
-                    // a selection can only ever contain content, never the
-                    // labels, chips and headings around it. See that widget for
-                    // why that trade is worth losing the cross-widget drag.
-                    //
-                    // Selection is still what the comment rows' long-press was
-                    // spent on: it claims that gesture wherever it applies, so
-                    // the report action moved to a visible button. See
-                    // [_buildCommentRow].
-                    child: PageWidth(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            // A moderator's warning label (§18.3). Above the
-                            // photos on purpose: the whole point of "possible
-                            // duplicate" or "disputed" is to be read *before* the
-                            // content it qualifies, not after scrolling past it.
-                            _moderationLabelBanner(signal, l10n),
-                            if (signal.photoUrls.isNotEmpty || isAuthor)
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  SizedBox(
-                                    height: 170,
-                                    child: PageView.builder(
-                                      controller: _photoPageController,
-                                      onPageChanged: (index) {
-                                        setState(() {
-                                          _currentPhotoPage = index;
-                                        });
-                                      },
-                                      itemCount: signal.photoUrls.length +
-                                          (isAuthor && signal.photoUrls.length < 5 ? 1 : 0),
-                                      itemBuilder: (context, index) {
-                                        // Show "Add Photo" page if this is the last index and user is author
-                                        if (index >= signal.photoUrls.length) {
-                                          return Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                                            child: GestureDetector(
-                                              onTap: _isUploadingPhoto ? null : _showImageSourceDialog,
-                                              child: Container(
-                                                decoration: BoxDecoration(
-                                                  color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                                                  borderRadius: BorderRadius.circular(12),
-                                                  border: Border.all(
-                                                    color: Theme.of(context).colorScheme.primary,
-                                                    width: 2,
-                                                    style: BorderStyle.solid,
-                                                  ),
-                                                ),
-                                                child: Center(
-                                                  child: _isUploadingPhoto
-                                                      ? Column(
-                                                          mainAxisAlignment: MainAxisAlignment.center,
-                                                          children: [
-                                                            const CircularProgressIndicator(
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: (notification) {
+                      // Depth 0 is this page. The photo carousel is a
+                      // scrollable too, and swiping it is not scrolling away.
+                      if (notification.depth != 0) return false;
+                      // The reader took over: leave the page where they put
+                      // it, whether or not the comment has been reached yet.
+                      // See [_pendingCommentFocusId].
+                      if (notification is UserScrollNotification &&
+                          notification.direction != ScrollDirection.idle) {
+                        _pendingCommentFocusId = null;
+                        _commentFocusSettling = false;
+                      }
+                      return false;
+                    },
+                    child: NotificationListener<ScrollMetricsNotification>(
+                      onNotification: (notification) {
+                        if (notification.depth == 0) _onPageMetricsChanged();
+                        return false;
+                      },
+                      child: SingleChildScrollView(
+                        key: _pageScrollKey,
+                        controller: _scrollController,
+                        // Selection is NOT wrapped around the page. Everything
+                        // anybody typed here is selectable, but each such string
+                        // owns its own `SelectionArea` inside [LinkifiedText] — so
+                        // a selection can only ever contain content, never the
+                        // labels, chips and headings around it. See that widget for
+                        // why that trade is worth losing the cross-widget drag.
+                        //
+                        // Selection is still what the comment rows' long-press was
+                        // spent on: it claims that gesture wherever it applies, so
+                        // the report action moved to a visible button. See
+                        // [_buildCommentRow].
+                        child: PageWidth(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                // A moderator's warning label (§18.3). Above the
+                                // photos on purpose: the whole point of "possible
+                                // duplicate" or "disputed" is to be read *before* the
+                                // content it qualifies, not after scrolling past it.
+                                _moderationLabelBanner(signal, l10n),
+                                if (signal.photoUrls.isNotEmpty || isAuthor)
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      SizedBox(
+                                        height: 170,
+                                        child: PageView.builder(
+                                          controller: _photoPageController,
+                                          onPageChanged: (index) {
+                                            setState(() {
+                                              _currentPhotoPage = index;
+                                            });
+                                          },
+                                          itemCount: signal.photoUrls.length +
+                                              (isAuthor && signal.photoUrls.length < 5 ? 1 : 0),
+                                          itemBuilder: (context, index) {
+                                            // Show "Add Photo" page if this is the last index and user is author
+                                            if (index >= signal.photoUrls.length) {
+                                              return Padding(
+                                                padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                                                child: GestureDetector(
+                                                  onTap: _isUploadingPhoto ? null : _showImageSourceDialog,
+                                                  child: Container(
+                                                    decoration: BoxDecoration(
+                                                      color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                                                      borderRadius: BorderRadius.circular(12),
+                                                      border: Border.all(
+                                                        color: Theme.of(context).colorScheme.primary,
+                                                        width: 2,
+                                                        style: BorderStyle.solid,
+                                                      ),
+                                                    ),
+                                                    child: Center(
+                                                      child: _isUploadingPhoto
+                                                          ? Column(
+                                                              mainAxisAlignment: MainAxisAlignment.center,
+                                                              children: [
+                                                                const CircularProgressIndicator(
+                                                                ),
+                                                                const SizedBox(height: 16),
+                                                                Text(
+                                                                  l10n.uploadingPhoto,
+                                                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                                                ),
+                                                              ],
+                                                            )
+                                                          : Column(
+                                                              mainAxisAlignment: MainAxisAlignment.center,
+                                                              children: [
+                                                                Icon(
+                                                                  Icons.add_photo_alternate,
+                                                                  size: 48,
+                                                                  color: Theme.of(context).colorScheme.primary,
+                                                                ),
+                                                                const SizedBox(height: 8),
+                                                                Text(
+                                                                  signal.photoUrls.isEmpty ? l10n.addPhoto : l10n.addAnotherPhoto,
+                                                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.bold),
+                                                                ),
+                                                                const SizedBox(height: 4),
+                                                                Text(
+                                                                  l10n.photosCount(signal.photoUrls.length, 5),
+                                                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                                                ),
+                                                              ],
                                                             ),
-                                                            const SizedBox(height: 16),
-                                                            Text(
-                                                              l10n.uploadingPhoto,
-                                                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                                            ),
-                                                          ],
-                                                        )
-                                                      : Column(
-                                                          mainAxisAlignment: MainAxisAlignment.center,
-                                                          children: [
-                                                            Icon(
-                                                              Icons.add_photo_alternate,
-                                                              size: 48,
-                                                              color: Theme.of(context).colorScheme.primary,
-                                                            ),
-                                                            const SizedBox(height: 8),
-                                                            Text(
-                                                              signal.photoUrls.isEmpty ? l10n.addPhoto : l10n.addAnotherPhoto,
-                                                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.bold),
-                                                            ),
-                                                            const SizedBox(height: 4),
-                                                            Text(
-                                                              l10n.photosCount(signal.photoUrls.length, 5),
-                                                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                ),
-                                              ),
-                                            ),
-                                          );
-                                        }
-
-                                        // Show photo
-                                        return Padding(
-                                          padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                                          child: GestureDetector(
-                                            onTap: () {
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (context) => _FullScreenPhotoGallery(
-                                                    photoUrls: signal.photoUrls,
-                                                    initialIndex: index,
+                                                    ),
                                                   ),
                                                 ),
                                               );
-                                            },
-                                            child: Stack(
-                                              children: [
-                                                ClipRRect(
-                                                  borderRadius: BorderRadius.circular(12.0),
-                                                  child: CachedNetworkImage(
-                                                    imageUrl: signal.photoUrls[index],
-                                                    width: double.infinity,
-                                                    fit: BoxFit.cover,
-                                                    placeholder: (context, url) => Container(
-                                                      color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                                                      child: const Center(
-                                                        child: CircularProgressIndicator(),
+                                            }
+
+                                            // Show photo
+                                            return Padding(
+                                              padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                                              child: GestureDetector(
+                                                onTap: () {
+                                                  Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                      builder: (context) => _FullScreenPhotoGallery(
+                                                        photoUrls: signal.photoUrls,
+                                                        initialIndex: index,
                                                       ),
                                                     ),
-                                                    errorWidget: (context, url, error) => Container(
-                                                      color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                                                      child: Center(
-                                                        child: Column(
-                                                          mainAxisAlignment: MainAxisAlignment.center,
-                                                          children: [
-                                                            Icon(Icons.broken_image, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                                            const SizedBox(height: 8),
-                                                            Text(l10n.failedToLoadImage,
-                                                                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                                                          ],
+                                                  );
+                                                },
+                                                child: Stack(
+                                                  children: [
+                                                    ClipRRect(
+                                                      borderRadius: BorderRadius.circular(12.0),
+                                                      child: CachedNetworkImage(
+                                                        imageUrl: signal.photoUrls[index],
+                                                        width: double.infinity,
+                                                        fit: BoxFit.cover,
+                                                        placeholder: (context, url) => Container(
+                                                          color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                                                          child: const Center(
+                                                            child: CircularProgressIndicator(),
+                                                          ),
+                                                        ),
+                                                        errorWidget: (context, url, error) => Container(
+                                                          color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                                                          child: Center(
+                                                            child: Column(
+                                                              mainAxisAlignment: MainAxisAlignment.center,
+                                                              children: [
+                                                                Icon(Icons.broken_image, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                                                const SizedBox(height: 8),
+                                                                Text(l10n.failedToLoadImage,
+                                                                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                                                              ],
+                                                            ),
+                                                          ),
                                                         ),
                                                       ),
                                                     ),
-                                                  ),
-                                                ),
-                                                if (isAuthor)
-                                                  Positioned(
-                                                    top: 8,
-                                                    right: 8,
-                                                    child: Semantics(
-                                                      label: l10n.deletePhoto,
-                                                      button: true,
-                                                      enabled: true,
-                                                      child: IconButton(
-                                                        icon: const Icon(Icons.delete, color: Colors.white),  // theme-independent: over a photo
-                                                        style: IconButton.styleFrom(
-                                                          backgroundColor: Colors.red,
+                                                    if (isAuthor)
+                                                      Positioned(
+                                                        top: 8,
+                                                        right: 8,
+                                                        child: Semantics(
+                                                          label: l10n.deletePhoto,
+                                                          button: true,
+                                                          enabled: true,
+                                                          child: IconButton(
+                                                            icon: const Icon(Icons.delete, color: Colors.white),  // theme-independent: over a photo
+                                                            style: IconButton.styleFrom(
+                                                              backgroundColor: Colors.red,
+                                                            ),
+                                                            onPressed: () => _deletePhoto(signal.photoUrls[index]),
+                                                          ),
                                                         ),
-                                                        onPressed: () => _deletePhoto(signal.photoUrls[index]),
+                                                      ),
+                                                    Positioned(
+                                                      bottom: 8,
+                                                      right: 8,
+                                                      child: Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.black54,
+                                                          borderRadius: BorderRadius.circular(20),
+                                                        ),
+                                                        child: Text(
+                                                          '${index + 1}/${signal.photoUrls.length}',
+                                                          style: const TextStyle(
+                                                            color: Colors.white,  // theme-independent: over a photo
+                                                            fontSize: 12,
+                                                            fontWeight: FontWeight.bold,
+                                                          ),
+                                                        ),
                                                       ),
                                                     ),
-                                                  ),
-                                                Positioned(
-                                                  bottom: 8,
-                                                  right: 8,
-                                                  child: Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.black54,
-                                                      borderRadius: BorderRadius.circular(20),
-                                                    ),
-                                                    child: Text(
-                                                      '${index + 1}/${signal.photoUrls.length}',
-                                                      style: const TextStyle(
-                                                        color: Colors.white,  // theme-independent: over a photo
-                                                        fontSize: 12,
-                                                        fontWeight: FontWeight.bold,
-                                                      ),
-                                                    ),
-                                                  ),
+                                                  ],
                                                 ),
-                                              ],
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                  // Page indicator dots
-                                  if ((signal.photoUrls.length +
-                                          (isAuthor && signal.photoUrls.length < 5 ? 1 : 0)) >
-                                      1)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 8.0),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: List.generate(
-                                          signal.photoUrls.length +
-                                              (isAuthor && signal.photoUrls.length < 5 ? 1 : 0),
-                                          (index) => Container(
-                                            margin: const EdgeInsets.symmetric(horizontal: 4.0),
-                                            width: 8.0,
-                                            height: 8.0,
-                                            decoration: BoxDecoration(
-                                              shape: BoxShape.circle,
-                                              color: _currentPhotoPage == index
-                                                  ? Theme.of(context)
-                                                      .colorScheme
-                                                      .primary
-                                                  : Theme.of(context)
-                                                      .colorScheme
-                                                      .outline,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                      // Page indicator dots
+                                      if ((signal.photoUrls.length +
+                                              (isAuthor && signal.photoUrls.length < 5 ? 1 : 0)) >
+                                          1)
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 8.0),
+                                          child: Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: List.generate(
+                                              signal.photoUrls.length +
+                                                  (isAuthor && signal.photoUrls.length < 5 ? 1 : 0),
+                                              (index) => Container(
+                                                margin: const EdgeInsets.symmetric(horizontal: 4.0),
+                                                width: 8.0,
+                                                height: 8.0,
+                                                decoration: BoxDecoration(
+                                                  shape: BoxShape.circle,
+                                                  color: _currentPhotoPage == index
+                                                      ? Theme.of(context)
+                                                          .colorScheme
+                                                          .primary
+                                                      : Theme.of(context)
+                                                          .colorScheme
+                                                          .outline,
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ),
+                                      const SizedBox(height: 8),
+                                    ],
+                                  ),
+                                LinkifiedText(
+                                  signal.title,
+                                  style: Theme.of(context).textTheme.titleLarge,
+                                ),
+                                const SizedBox(height: 4),
+                                // Reporter and date in one line, resolved together.
+                                // They used to be a `spaceBetween` row, which on a
+                                // phone crammed them against both bezels and on a
+                                // tablet flung them apart. Built as one sentence
+                                // rather than two widgets because `_actorText`
+                                // renders nothing until the name lookup lands
+                                // (R4-OBS-01), and a separator that appears before
+                                // the name it separates is worse than a beat of
+                                // nothing.
+                                _actorText(
+                                  signal.reporter.id,
+                                  (name) =>
+                                      '$name \u00b7 ${dateFormat.format((signal.createdAt as Timestamp).toDate())}',
+                                  fallback: l10n.unknown,
+                                  maxLines: 1,
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                      ),
+                                ),
+                                const SizedBox(height: 10),
+                                LinkifiedText(
+                                  signal.description,
+                                  style: Theme.of(context).textTheme.bodyLarge,
+                                ),
+                                const SizedBox(height: 16),
+                                // The two things a volunteer opens a signal to do.
+                                // Equal width and a full 48dp tall: as bare
+                                // `TextButton`s pushed to the two ends of the row
+                                // they were the loudest colour on the screen and
+                                // the smallest targets on it at the same time.
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: FilledButton.icon(
+                                        style: FilledButton.styleFrom(
+                                          minimumSize: const Size.fromHeight(48),
+                                        ),
+                                        onPressed: () async {
+                                          GeoPoint location = signal.location['geopoint'];
+                                          final coords = Coords(location.latitude, location.longitude);
+                                          await NavigationService.navigateTo(
+                                            context: context,
+                                            coords: coords,
+                                            destinationTitle: signal.title,
+                                          );
+                                        },
+                                        icon: const Icon(Icons.directions, size: 20),
+                                        label: Text(
+                                          l10n.navigateMe,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
                                     ),
-                                  const SizedBox(height: 8),
-                                ],
-                              ),
-                            LinkifiedText(
-                              signal.title,
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                            const SizedBox(height: 4),
-                            // Reporter and date in one line, resolved together.
-                            // They used to be a `spaceBetween` row, which on a
-                            // phone crammed them against both bezels and on a
-                            // tablet flung them apart. Built as one sentence
-                            // rather than two widgets because `_actorText`
-                            // renders nothing until the name lookup lands
-                            // (R4-OBS-01), and a separator that appears before
-                            // the name it separates is worse than a beat of
-                            // nothing.
-                            _actorText(
-                              signal.reporter.id,
-                              (name) =>
-                                  '$name \u00b7 ${dateFormat.format((signal.createdAt as Timestamp).toDate())}',
-                              fallback: l10n.unknown,
-                              maxLines: 1,
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    if (signal.contactPhone.isNotEmpty) ...[
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: OutlinedButton.icon(
+                                          style: OutlinedButton.styleFrom(
+                                            minimumSize: const Size.fromHeight(48),
+                                          ),
+                                          onPressed: () async {
+                                            Uri phoneUri = Uri(scheme: 'tel', path: signal.contactPhone);
+                                            if (await canLaunchUrl(phoneUri)) {
+                                              launchUrl(phoneUri);
+                                            } else {
+                                              if (context.mounted) {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(
+                                                    content: Text(l10n.cannotCall(signal.contactPhone)),
+                                                  ),
+                                                );
+                                              }
+                                            }
+                                          },
+                                          icon: const Icon(Icons.phone, size: 20),
+                                          label: Text(
+                                            signal.contactPhone,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                // Urgency, status, who holds the signal and what the
+                                // animal needs, in one bounded surface — see
+                                // [SignalStateCard]. They were four sibling blocks
+                                // with four headings at three different type sizes,
+                                // and the editing controls for three of them were
+                                // inline, so a reader who could change nothing
+                                // still scrolled past a six-line radio group and a
+                                // full-width dropdown to reach the timeline.
+                                SignalStateCard(
+                                  signal: signal,
+                                  canCoordinate: canCoordinate,
+                                  busy: _isApplyingLevelChange,
+                                  onManage: () => showManageSignalSheet(
+                                    context,
+                                    signal: signal,
+                                    busy: _isApplyingLevelChange,
+                                    // Master spec §5.2 restricts marking a signal Red
+                                    // to "the original poster/case holder, a
+                                    // moderator or an admin"; `isSignalOwnerUpdate`
+                                    // in the rules enforces it, so gating the sheet
+                                    // on `canCoordinate` is UI courtesy rather than
+                                    // the security boundary. A moderator does NOT
+                                    // reach it here — they use the app-bar shield,
+                                    // which routes through `moderateAction` so the
+                                    // correction is audited (§5.3).
+                                    onUrgencyChanged: (value) =>
+                                        _updateSignalUrgency(signal.urgency, value),
+                                    onStatusChanged: (value) => _updateSignalStatus(
+                                      signal,
+                                      signal.status,
+                                      value,
+                                    ),
+                                    onEditTags: () => _editHelpTags(signal),
                                   ),
-                            ),
-                            const SizedBox(height: 10),
-                            LinkifiedText(
-                              signal.description,
-                              style: Theme.of(context).textTheme.bodyLarge,
-                            ),
-                            const SizedBox(height: 16),
-                            // The two things a volunteer opens a signal to do.
-                            // Equal width and a full 48dp tall: as bare
-                            // `TextButton`s pushed to the two ends of the row
-                            // they were the loudest colour on the screen and
-                            // the smallest targets on it at the same time.
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: FilledButton.icon(
-                                    style: FilledButton.styleFrom(
-                                      minimumSize: const Size.fromHeight(48),
-                                    ),
-                                    onPressed: () async {
-                                      GeoPoint location = signal.location['geopoint'];
-                                      final coords = Coords(location.latitude, location.longitude);
-                                      await NavigationService.navigateTo(
-                                        context: context,
-                                        coords: coords,
-                                        destinationTitle: signal.title,
-                                      );
-                                    },
-                                    icon: const Icon(Icons.directions, size: 20),
-                                    label: Text(
-                                      l10n.navigateMe,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
+                                  // Who is responsible, immediately above the
+                                  // control that responsibility gates.
+                                  owner: SignalOwnerBlock(
+                                    signal: signal,
+                                    signalId: widget.signalId,
+                                    uid: uid,
+                                    busy: _isApplyingLevelChange,
+                                    runGuarded: _runGuarded,
+                                    nameOf: _nameWidget,
+                                    onClaim: _claimCase,
+                                    onSignInRequired: _showSignInDialog,
                                   ),
                                 ),
-                                if (signal.contactPhone.isNotEmpty) ...[
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      style: OutlinedButton.styleFrom(
-                                        minimumSize: const Size.fromHeight(48),
-                                      ),
-                                      onPressed: () async {
-                                        Uri phoneUri = Uri(scheme: 'tel', path: signal.contactPhone);
-                                        if (await canLaunchUrl(phoneUri)) {
-                                          launchUrl(phoneUri);
-                                        } else {
-                                          if (context.mounted) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(
-                                                content: Text(l10n.cannotCall(signal.contactPhone)),
-                                              ),
-                                            );
-                                          }
-                                        }
-                                      },
-                                      icon: const Icon(Icons.phone, size: 20),
-                                      label: Text(
-                                        signal.contactPhone,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                                const SizedBox(height: 16),
+                                // Directly under "who is responsible", because the
+                                // question it answers — am I being told about this
+                                // one — is the same question one step out.
+                                //
+                                // Not in the app bar: that already carries up to
+                                // five actions, and an icon-only bell reads as
+                                // either "mute" or "subscribe" depending on who is
+                                // looking at it.
+                                FollowButton(
+                                  signalId: widget.signalId,
+                                  onSignInRequired: _showSignInDialog,
+                                ),
+                                const SizedBox(height: 22),
+                                _buildSignalHistory(signal, dateFormat),
+                                const SizedBox(height: 16),
                               ],
                             ),
-                            const SizedBox(height: 16),
-                            // Urgency, status, who holds the signal and what the
-                            // animal needs, in one bounded surface — see
-                            // [SignalStateCard]. They were four sibling blocks
-                            // with four headings at three different type sizes,
-                            // and the editing controls for three of them were
-                            // inline, so a reader who could change nothing
-                            // still scrolled past a six-line radio group and a
-                            // full-width dropdown to reach the timeline.
-                            SignalStateCard(
-                              signal: signal,
-                              canCoordinate: canCoordinate,
-                              busy: _isApplyingLevelChange,
-                              onManage: () => showManageSignalSheet(
-                                context,
-                                signal: signal,
-                                busy: _isApplyingLevelChange,
-                                // Master spec §5.2 restricts marking a signal Red
-                                // to "the original poster/case holder, a
-                                // moderator or an admin"; `isSignalOwnerUpdate`
-                                // in the rules enforces it, so gating the sheet
-                                // on `canCoordinate` is UI courtesy rather than
-                                // the security boundary. A moderator does NOT
-                                // reach it here — they use the app-bar shield,
-                                // which routes through `moderateAction` so the
-                                // correction is audited (§5.3).
-                                onUrgencyChanged: (value) =>
-                                    _updateSignalUrgency(signal.urgency, value),
-                                onStatusChanged: (value) => _updateSignalStatus(
-                                  signal,
-                                  signal.status,
-                                  value,
-                                ),
-                                onEditTags: () => _editHelpTags(signal),
-                              ),
-                              // Who is responsible, immediately above the
-                              // control that responsibility gates.
-                              owner: SignalOwnerBlock(
-                                signal: signal,
-                                signalId: widget.signalId,
-                                uid: uid,
-                                busy: _isApplyingLevelChange,
-                                runGuarded: _runGuarded,
-                                nameOf: _nameWidget,
-                                onClaim: _claimCase,
-                                onSignInRequired: _showSignInDialog,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            // Directly under "who is responsible", because the
-                            // question it answers — am I being told about this
-                            // one — is the same question one step out.
-                            //
-                            // Not in the app bar: that already carries up to
-                            // five actions, and an icon-only bell reads as
-                            // either "mute" or "subscribe" depending on who is
-                            // looking at it.
-                            FollowButton(
-                              signalId: widget.signalId,
-                              onSignInRequired: _showSignInDialog,
-                            ),
-                            const SizedBox(height: 22),
-                            _buildSignalHistory(signal, dateFormat),
-                            const SizedBox(height: 16),
-                          ],
+                          ),
                         ),
                       ),
                     ),
@@ -1177,6 +1375,11 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   /// The signal timeline (master spec §4.6): what happened to this signal, and
   /// what people said about it, in one chronological thread.
   Widget _buildSignalHistory(Signal signal, DateFormat dateFormat) {
+    // Here as well as in `build`: the history sits inside the signal's
+    // StreamBuilder, which rebuilds without this State's `build` running — and
+    // the comments usually arrive before the signal does, so the rebuild that
+    // finally lays the row out is one `build` never sees.
+    if (_pendingCommentFocusId != null) _focusCommentWhenBuilt();
     final l10n = AppLocalizations.of(context);
     // Only when BOTH sources are unreadable. If one still works the history is
     // incomplete rather than unavailable, and showing the half we have beats
@@ -1676,49 +1879,67 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
     // and that is the reporter's cascade or a moderator's job.
     final canReport = currentUid != null && entry.actorId != currentUid;
 
-    return _timelineRow(
-      icon: Icons.chat_bubble_outline,
-      iconBackground: Theme.of(context).colorScheme.surfaceContainerHigh,
-      iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
-      sentence: LinkifiedText(
-        entry.text ?? '',
-        mentions: entry.mentions,
-        onMentionTap: _openUserProfile,
+    // One row at most — a GlobalKey on two widgets throws — and a stable one.
+    // See [_focusedCommentId] for why the key outlives the highlight.
+    final isFocusTarget = entry.id == _focusedCommentId;
+    final scheme = Theme.of(context).colorScheme;
+
+    // Keyed while this is the comment the screen was opened for, and tinted for
+    // a moment after arriving — see [_focusCommentWhenBuilt]. The container is
+    // always there, so the tint fades out instead of the row being rebuilt.
+    return AnimatedContainer(
+      key: isFocusTarget ? _focusedCommentKey : null,
+      duration: const Duration(milliseconds: 600),
+      decoration: BoxDecoration(
+        color: entry.id == _highlightedCommentId
+            ? scheme.primary.withAlpha(40)
+            : scheme.primary.withAlpha(0),
+        borderRadius: BorderRadius.circular(8),
       ),
-      actorId: entry.actorId,
-      date: _formatDate(entry, dateFormat),
-      isLast: isLast,
-      // This was a long-press on the whole row, which was wrong twice over.
-      //
-      // It was the *only* route to reporting a comment — the flag in the app
-      // bar reports the signal — and it advertised itself nowhere, so the one
-      // safety valve on the one screen where strangers write to each other was
-      // reachable only by guessing. And it claimed the gesture that selecting
-      // text needs, which is why none of this screen's text could be copied.
-      //
-      // A button costs a gesture nobody could find and buys back the one
-      // everybody already knows. The original objection to it — that an
-      // overflow icon on every row turns a comment thread into an admin tool —
-      // is answered by placement rather than by hiding it: it rides on the
-      // existing name-and-date line (see [_timelineRow]), so it adds no gutter,
-      // and it appears only where there is something to do.
-      //
-      // A moderator gets a chooser rather than going straight to the report
-      // dialog, which is how they act on a comment without waiting for somebody
-      // to report it first.
-      onOptions: !canReport
-          ? null
-          : canModerateComments
-              ? () => _showCommentModeratorMenu(entry)
-              : () => showReportDialog(
-                    context,
-                    target: ReportTarget.comment(
-                      commentId: entry.id,
-                      signalId: widget.signalId,
-                      collection: AppPreferencesService().signalsCollectionName,
-                      reportedUserId: entry.actorId,
+      child: _timelineRow(
+        icon: Icons.chat_bubble_outline,
+        iconBackground: Theme.of(context).colorScheme.surfaceContainerHigh,
+        iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
+        sentence: LinkifiedText(
+          entry.text ?? '',
+          mentions: entry.mentions,
+          onMentionTap: _openUserProfile,
+        ),
+        actorId: entry.actorId,
+        date: _formatDate(entry, dateFormat),
+        isLast: isLast,
+        // This was a long-press on the whole row, which was wrong twice over.
+        //
+        // It was the *only* route to reporting a comment — the flag in the app
+        // bar reports the signal — and it advertised itself nowhere, so the one
+        // safety valve on the one screen where strangers write to each other was
+        // reachable only by guessing. And it claimed the gesture that selecting
+        // text needs, which is why none of this screen's text could be copied.
+        //
+        // A button costs a gesture nobody could find and buys back the one
+        // everybody already knows. The original objection to it — that an
+        // overflow icon on every row turns a comment thread into an admin tool —
+        // is answered by placement rather than by hiding it: it rides on the
+        // existing name-and-date line (see [_timelineRow]), so it adds no gutter,
+        // and it appears only where there is something to do.
+        //
+        // A moderator gets a chooser rather than going straight to the report
+        // dialog, which is how they act on a comment without waiting for somebody
+        // to report it first.
+        onOptions: !canReport
+            ? null
+            : canModerateComments
+                ? () => _showCommentModeratorMenu(entry)
+                : () => showReportDialog(
+                      context,
+                      target: ReportTarget.comment(
+                        commentId: entry.id,
+                        signalId: widget.signalId,
+                        collection: AppPreferencesService().signalsCollectionName,
+                        reportedUserId: entry.actorId,
+                      ),
                     ),
-                  ),
+      ),
     );
   }
 
@@ -1831,6 +2052,9 @@ class _SignalDetailsState extends State<SignalDetailsScreen> {
   @override
   void dispose() {
     _serverConfirmationTimer?.cancel();
+    _highlightTimer?.cancel();
+    _commentFocusSettleTimer?.cancel();
+    SignalNavigator.instance.commentFocus.removeListener(_onCommentFocusRequest);
     _roleSub?.cancel();
     for (final source in _historySources) {
       source.sub?.cancel();

@@ -472,6 +472,11 @@ final GoRouter _router = GoRouter(
       builder: (BuildContext context, GoRouterState state) => SignalDetailsScreen(
         key: ValueKey(state.pathParameters['signalId']),
         signalId: state.pathParameters['signalId']!,
+        // Validated like the signal id, and for the same reason: this route is
+        // reachable from outside. A malformed one is dropped, not an error —
+        // it only ever decided where to scroll.
+        focusCommentId: DeepLinkService.validSignalId(
+            state.uri.queryParameters[Routes.commentQueryParam] ?? ''),
       ),
     ),
     // Public shareable deep link (App Links / Universal Links). Reuses the

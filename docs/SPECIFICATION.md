@@ -1920,6 +1920,27 @@ rather than failing with an opaque `PERMISSION_DENIED`.
 Live `snapshots(includeMetadataChanges: true)` on the signal doc plus a live ordered
 stream of its comments. Both streams are created **once** in `initState`.
 
+**Opening at a comment.** `/signal_details/:id?comment=<commentId>` (built by
+`Routes.signalDetails(id, commentId:)`; the query leaves the route pattern, and so every
+"is a signal showing" check, unchanged) scrolls to that comment a third of the way down and
+tints it for 2.5 s. Reached from a push or inbox row about a comment (§7.6) and from the
+profile's comment list (§5.1). A tap about a comment on the signal **already open** does not
+stack a second copy — `SignalNavigator.open` still dedupes — but hands the comment to the open
+screen through `SignalNavigator.commentFocus`. Three things found on device shape it:
+- **The request is held until the row exists.** Comments usually arrive before the signal
+  document, and the history renders inside the signal's `StreamBuilder`, whose rebuilds do not
+  run the State's `build` — so the attempt is queued from `_buildSignalHistory` too.
+- **It follows the row for 5 s.** Names render nothing until they resolve, one lookup per row,
+  so rows above the comment grow after the scroll and pushed it below the fold; any change in
+  the page's height re-scrolls while settling. The reader's own scroll ends that at once, and
+  also drops a request that has not landed yet.
+- **The key never comes off the row** while the screen lives (only the tint fades): removing a
+  key rebuilds the row from scratch, which blanked its name line and jumped the page.
+
+The offset is computed against the page's own scroll view rather than with
+`Scrollable.ensureVisible`, whose nearest scrollable is the shrink-wrapped history list. A
+comment that no longer exists opens the signal normally.
+
 **All of its user-written text is selectable, and its links are live.** Everything a
 person typed goes through `LinkifiedText` — title, description, comment bodies, status and
 ownership notes, and `SignalOwnerBlock`'s takeover note — which turns URLs, email
@@ -2336,7 +2357,13 @@ Other rules of the service:
 
 **Tap routing:** every path (FCM tap, initial message, local-notification tap, launch
 from a local notification posted by a headless isolate) funnels into
-`SignalNavigator.open(signalId)`.
+`SignalNavigator.open(signalId, commentId:)`. A `new_comment`/`mention` push carries
+`commentId` in its data; the local notification the foreground path posts for it encodes
+the comment into its single-string payload as `signalId#commentId`
+(`SignalNotificationPayload` — `#` cannot occur in a document id, and a bare id from an
+older payload or the arrival catch-up still decodes). An inbox row reads the comment from
+its own document id, `cmt_{commentId}`, so rows written before the push carried it
+work too. See §7.5 for what the screen does with it.
 
 **Server fan-out** — see §9. Four push types: `new_signal` (nearby users),
 `status_change`, `urgency_change` and `new_comment` (subscribers).
@@ -3875,6 +3902,7 @@ silently breaks Auth/Firestore/FCM in release builds only.
 
 | Date | Change |
 |---|---|
+| 2026-09-29 | **Tapping a comment opens the thread at that comment** (§7.5, §7.6). From the profile's comment list, an inbox row, a push, or a foreground notification: the signal opens scrolled to the comment and briefly highlights it; on a signal already open, the open screen scrolls instead of a copy being stacked. `new_comment`/`mention` pushes now carry `commentId` (additive — older builds ignore it); inbox rows derive it from their `cmt_{commentId}` id. |
 | 2026-09-28 | **Profile stats open their lists** (§5.1; master spec §3.5.1). The three numbers on both profile screens were inert; each now opens `/user/:uid/activity/:kind` — the signals reported, the ones held right now, and the comments written, each row opening its signal. Signals and Comments are **shorter than their numbers by design** — the counts are contributions that outlive a removed or archived signal, the lists can only show what can still be opened — and a footer note says so rather than letting the gap read as a bug. The comments count is now **scoped to the current mode** by a document-name range on the collection-group query (verified against the emulator: `signals` sorts before `signals_test` segment-wise, so `signals_test/!` is the boundary); it previously mixed production and test comments. New composite index: `comments` `COLLECTION_GROUP` (`author`, `createdAt desc`). |
 | 2026-09-21 | **Made the native background path report its own failures** (§7.7, §13.2; issues #82, #83). Everything below the Dart isolate was invisible to Crashlytics: `main.dart`'s two handlers are isolate-level, and this path runs in a process where the isolate does not exist yet — and when this path is what failed, never will. Android's `HeadlessNearbyCheck` also went straight to `FlutterCallbackInformation.lookupCallbackInformation` in a **receiver-only process** where nothing had loaded `libflutter.so`, so that JNI call raised `UnsatisfiedLinkError` instead of returning null and **killed the process on every delivery that passed the gate** — 16 fatals in a day on one test device, and because `recordCheck` runs only on a successful return, the gate never advanced and each delivery retried and died again. `FlutterLoader` is now initialised before the lookup (the same two calls `FlutterEngine`'s constructor already makes, both idempotent), the catches are widened from `Exception` to **`Throwable`** (an `Error` escaping `startEngine` leaves `running` stuck true, silently disabling the check for the life of the process), and the **location write moved ahead of the check**, so a cold engine boot cannot delay the thing the fan-out depends on. `NativeCrashReporter` on both platforms records the six Android and four iOS failure paths as non-fatals — five of the six Android ones were already silent, and an unresolvable callback handle or an engine-boot timeout means the catch-up is **dead until the app is opened again**. iOS gives each path its own `NSError` code, because Crashlytics clusters by domain+code and a chronic *While Using* population would otherwise bury the rarer ones. Neither reporter can become the failure: Kotlin catches its own throw, Swift **guards** on `FirebaseApp.app()` first, since an unconfigured Firebase raises an `NSException` Swift cannot catch. `FlutterBootstrapGuardTest.kt` replaces the loud symptom — the condition exists only in a process with no Activity, which is exactly what `flutter run` and every QA pass hide — and `NativeFirestoreGuardTest.swift` fails the build if any hand-written source under `ios/Runner/` so much as names `Firestore` (§12.13). |
 | 2026-09-17 | **Bounded a signal's title and description on update, not just on create** (§4.1, §5.1, §12.5). `isSignalCreate()` checked the lengths; the update rule did not — and the edit screen writes both fields on every save, with no client-side cap of its own, so a reporter could edit any signal of theirs to an arbitrarily long title or description and the only ceiling was Firestore's 1 MiB document limit. The bounds moved into `isValidSignalContentBounds()` and are now applied to the update rules of **both** `signals` and `signals_test`, the wizard's `LengthLimitingTextInputFormatter` was added to the edit screen's fields, and both Dart writers read `Signal.maxTitleLength` / `Signal.maxDescriptionLength` instead of repeating the literals. No existing signal document exceeded the bounds — checked before deploying, because a rules tightening that fails on existing data locks its owner out of editing rather than failing loudly. Device-verified: the edit screen's title field hard-caps at 300. |

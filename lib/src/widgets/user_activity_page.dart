@@ -274,7 +274,8 @@ class _CommentTile extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
-        onTap: () => context.push(Routes.signalDetails(comment.signal.id)),
+        onTap: () => context.push(
+            Routes.signalDetails(comment.signal.id, commentId: comment.id)),
         title: Text(
           comment.text,
           maxLines: 3,

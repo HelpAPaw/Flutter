@@ -52,7 +52,13 @@ void main() {
           ),
           GoRoute(
             path: Routes.signalDetailsPath,
-            builder: (c, s) => const Text('details'),
+            builder: (c, s) {
+              final comment = s.uri.queryParameters[Routes.commentQueryParam];
+              return Column(children: [
+                const Text('details'),
+                if (comment != null) Text('comment $comment'),
+              ]);
+            },
           ),
         ],
       );
@@ -186,5 +192,48 @@ void main() {
     SignalNavigator.instance.open('def456');
     await tester.pumpAndSettle();
     expect(branchSwitches, ['map']);
+  });
+
+  testWidgets('a comment rides along in the pushed route', (tester) async {
+    await pump(tester);
+
+    SignalNavigator.instance.open('abc123', commentId: 'c1');
+    await tester.pumpAndSettle();
+
+    expect(find.text('details'), findsOneWidget);
+    expect(find.text('comment c1'), findsOneWidget);
+  });
+
+  testWidgets(
+      'a comment on the signal already open is handed to that screen, '
+      'not pushed as a second copy', (tester) async {
+    // The usual shape of a push about a new comment: the reader is on the
+    // thread already. The dedupe must still hold, but the comment must not be
+    // lost with it.
+    final router = await pump(tester);
+    SignalNavigator.instance.open('abc123');
+    await tester.pumpAndSettle();
+
+    final requests = <({String signalId, String commentId})?>[];
+    void record() => requests.add(SignalNavigator.instance.commentFocus.value);
+    SignalNavigator.instance.commentFocus.addListener(record);
+    addTearDown(() {
+      SignalNavigator.instance.commentFocus.removeListener(record);
+      SignalNavigator.instance.commentFocus.value = null;
+    });
+
+    SignalNavigator.instance.open('abc123', commentId: 'c1');
+    // The same comment again must notify again — a record compares by value.
+    SignalNavigator.instance.open('abc123', commentId: 'c1');
+    await tester.pumpAndSettle();
+
+    expect(requests.whereType<({String signalId, String commentId})>(), [
+      (signalId: 'abc123', commentId: 'c1'),
+      (signalId: 'abc123', commentId: 'c1'),
+    ]);
+    expect(find.text('details'), findsOneWidget);
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(find.text('details'), findsNothing, reason: 'nothing was stacked');
   });
 }
