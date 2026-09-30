@@ -78,8 +78,6 @@ describe("buildFeedbackEmail", () => {
   });
 
   it("renders a device field that is not a string as N/A instead of throwing", () => {
-    // The rules do not check deviceInfo, and the rate-limit slot is already
-    // booked when the email is built.
     const mail = buildFeedbackEmail(
       FEEDBACK_ID,
       feedback({ deviceInfo: { platform: 5, osVersion: null, appVersion: "7.0.0" } })

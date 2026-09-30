@@ -1758,11 +1758,9 @@ export const onFeedbackCreated = onDocumentCreated(
       return;
     }
 
-    const userId = feedbackData.userId as string | undefined;
-
     // Rate-limit per user before doing any work (M-2). The feedback doc is kept
     // regardless; we only suppress the email + SMTP cost when over quota.
-    const throttleKey = userId || "unknown";
+    const throttleKey = (feedbackData.userId as string | undefined) || "unknown";
     if (!(await reserveFeedbackEmailSlot(throttleKey))) {
       console.warn(
         `Feedback ${feedbackId} from user ${throttleKey} rate-limited; ` +

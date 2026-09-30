@@ -44,7 +44,7 @@ export interface FeedbackEmail {
 // Minimal, conservative email syntax check (mirrors the rules-layer regex).
 // We only need "is this safe to hand to nodemailer as replyTo / render as a
 // mailto link", not full RFC 5322 compliance.
-export function isValidEmail(email: string): boolean {
+function isValidEmail(email: string): boolean {
   return email.length <= 254 && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
 }
 
@@ -63,23 +63,22 @@ export function buildFeedbackEmail(
     (data.createdAt as { toDate?: () => Date } | undefined)?.toDate?.() ||
     new Date();
 
-  // Only trust the email if it passes a syntax check. It is rendered in the
-  // email and handed to nodemailer as replyTo, so invalid or spoofed values are
-  // dropped rather than propagated.
   const userEmail =
     typeof data.email === "string" && isValidEmail(data.email)
       ? data.email
       : undefined;
 
+  const info = data.deviceInfo as Record<string, unknown> | null | undefined;
   const device =
-    typeof data.deviceInfo === "object" && data.deviceInfo !== null
+    typeof info === "object" && info !== null
       ? DEVICE_FIELDS.map(([label, key]) => {
-          const value = (data.deviceInfo as Record<string, unknown>)[key];
+          const value = info[key];
           return [label, typeof value === "string" && value ? value : "N/A"];
         })
       : undefined;
 
   const typeLabel = FEEDBACK_TYPES[type] || type;
+  const consoleUrl = `https://console.firebase.google.com/project/help-a-paw-dev/firestore/data/~2Ffeedback~2F${encodeURIComponent(feedbackId)}`;
 
   const deviceInfoText = device
     ? `
@@ -101,7 +100,7 @@ ${deviceInfoText}
 
 ---
 Feedback ID: ${feedbackId}
-View in Firebase Console: https://console.firebase.google.com/project/help-a-paw-dev/firestore/data/~2Ffeedback~2F${feedbackId}
+View in Firebase Console: ${consoleUrl}
 `;
 
   // typeLabel/feedbackId/createdAt are escaped too, for consistency.
@@ -128,7 +127,7 @@ ${device.map(([label, value]) => `  <tr><td style="padding: 5px 10px;">${label}:
 <hr>
 <p style="color: #666; font-size: 12px;">
   Feedback ID: ${escapeHtml(feedbackId)}<br>
-  <a href="https://console.firebase.google.com/project/help-a-paw-dev/firestore/data/~2Ffeedback~2F${encodeURIComponent(feedbackId)}">View in Firebase Console</a>
+  <a href="${consoleUrl}">View in Firebase Console</a>
 </p>
 `;
 
