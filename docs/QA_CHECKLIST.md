@@ -18,7 +18,7 @@
 > | **Helper-tag onboarding gate** | A non-skippable full-screen picker on the map route for any account without `helperTags` — **including existing accounts**. | **§6.8 NEW** |
 > | **Fan-out rework** | Prioritise-then-backfill: tag matches in radius always notified, then C→B→D nearest-first to a floor of 10, with one widened 250 km re-scan. Candidates with no usable position are dropped. | §6.7 (rewritten) |
 > | **Notification settings** | Per-type checkboxes and Select all/Deselect all are gone; species + helper tags with a ≥1-of-each requirement while enabled, and a load-failure state that refuses to render an editor. | §6.4 |
-> | **Backend** | Functions on **Node 24**, nodemailer 9, first-ever `functions/` unit tests (jest). `ignore-scripts=true` in both npm trees. The dead CI workflow was deleted. | §17.1 |
+> | **Backend** | Functions on **Node 24**, nodemailer 10, first-ever `functions/` unit tests (jest). `ignore-scripts=true` in both npm trees. The dead CI workflow was deleted. | §17.1 |
 > | **Draft loss + photo race** | A finished draft no longer vanishes on one back press from the map; a mid-submit discard no longer drops the photo while reporting success. | §3.1 |
 >
 > **Added since this table was first written — five more merges landed in `dev`, and

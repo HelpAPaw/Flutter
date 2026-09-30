@@ -22,6 +22,8 @@ import {
   urgencyChangeOf,
 } from "./announcements";
 import { isRestoredSignal } from "./events";
+import { buildFeedbackEmail } from "./feedbackEmail";
+import { escapeHtml } from "./html";
 import { mentionedUids, splitCommentRecipients } from "./mentions";
 import { signalOwnerOf } from "./signalRefs";
 import { AUTO_APPROVE_DAYS, isOwnerStale } from "./signalOwnership";
@@ -1702,27 +1704,12 @@ export const onTestTakeoverWritten = onDocumentWritten(
   (event) => handleTakeoverWritten(event, true)
 );
 
-// Feedback type labels
-const FEEDBACK_TYPES: Record<string, string> = {
-  general: "General Feedback",
-  bug: "Bug Report",
-  feature: "Feature Request",
-  other: "Other",
-};
-
 // Per-user rate limit for feedback emails (M-2). Even though the rules pin
 // userId to the caller and require auth, an attacker can still churn anonymous
 // accounts, so we cap how many feedback emails a single user can trigger within
 // a sliding window to blunt email-bomb / SMTP-cost abuse.
 const FEEDBACK_RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 const FEEDBACK_RATE_MAX = 5; // emails per user per window
-
-// Minimal, conservative email syntax check (mirrors the rules-layer regex).
-// We only need "is this safe to hand to nodemailer as replyTo / render as a
-// mailto link", not full RFC 5322 compliance.
-function isValidEmail(email: string): boolean {
-  return email.length <= 254 && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
-}
 
 // Atomically reserves a feedback-email slot for `userId`. Returns false when the
 // user has exhausted their quota for the current window (caller should then skip
@@ -1771,22 +1758,9 @@ export const onFeedbackCreated = onDocumentCreated(
       return;
     }
 
-    const feedbackType = feedbackData.type as string;
-    const message = feedbackData.message as string;
-    const rawEmail = feedbackData.email as string | undefined;
-    const userId = feedbackData.userId as string | undefined;
-    const deviceInfo = feedbackData.deviceInfo as Record<string, string> | undefined;
-    const createdAt = feedbackData.createdAt?.toDate?.() || new Date();
-
-    // Only trust the email if it passes a syntax check — it's rendered in the
-    // email and handed to nodemailer as replyTo. Invalid/spoofed values are
-    // dropped rather than propagated.
-    const userEmail =
-      rawEmail && isValidEmail(rawEmail) ? rawEmail : undefined;
-
     // Rate-limit per user before doing any work (M-2). The feedback doc is kept
     // regardless; we only suppress the email + SMTP cost when over quota.
-    const throttleKey = userId || "unknown";
+    const throttleKey = (feedbackData.userId as string | undefined) || "unknown";
     if (!(await reserveFeedbackEmailSlot(throttleKey))) {
       console.warn(
         `Feedback ${feedbackId} from user ${throttleKey} rate-limited; ` +
@@ -1794,70 +1768,6 @@ export const onFeedbackCreated = onDocumentCreated(
       );
       return;
     }
-
-    // Build email content
-    const typeLabel = FEEDBACK_TYPES[feedbackType] || feedbackType;
-
-    let deviceInfoText = "";
-    if (deviceInfo) {
-      deviceInfoText = `
-Device Information:
-- Platform: ${deviceInfo.platform || "N/A"}
-- OS Version: ${deviceInfo.osVersion || "N/A"}
-- App Version: ${deviceInfo.appVersion || "N/A"}
-- Build: ${deviceInfo.buildNumber || "N/A"}`;
-    }
-
-    const emailBody = `
-New feedback submitted to Help a Paw
-
-Type: ${typeLabel}
-Date: ${createdAt.toISOString()}
-User ID: ${userId || "Anonymous"}
-User Email: ${userEmail || "Not provided"}
-
-Message:
-${message}
-${deviceInfoText}
-
----
-Feedback ID: ${feedbackId}
-View in Firebase Console: https://console.firebase.google.com/project/help-a-paw-dev/firestore/data/~2Ffeedback~2F${feedbackId}
-`;
-
-    // Every interpolated value below originates from client-controlled feedback
-    // data, so escape it to prevent HTML/markup injection into the email body
-    // (M-2). typeLabel/feedbackId/createdAt are effectively trusted but escaped
-    // anyway for consistency.
-    const htmlBody = `
-<h2>New feedback submitted to Help a Paw</h2>
-
-<table style="border-collapse: collapse; margin-bottom: 20px;">
-  <tr><td style="padding: 5px 10px; font-weight: bold;">Type:</td><td style="padding: 5px 10px;">${escapeHtml(typeLabel)}</td></tr>
-  <tr><td style="padding: 5px 10px; font-weight: bold;">Date:</td><td style="padding: 5px 10px;">${escapeHtml(createdAt.toISOString())}</td></tr>
-  <tr><td style="padding: 5px 10px; font-weight: bold;">User ID:</td><td style="padding: 5px 10px;">${escapeHtml(userId || "Anonymous")}</td></tr>
-  <tr><td style="padding: 5px 10px; font-weight: bold;">User Email:</td><td style="padding: 5px 10px;">${userEmail ? `<a href="mailto:${escapeHtml(userEmail)}">${escapeHtml(userEmail)}</a>` : "Not provided"}</td></tr>
-</table>
-
-<h3>Message:</h3>
-<p style="background: #f5f5f5; padding: 15px; border-radius: 5px; white-space: pre-wrap;">${escapeHtml(message)}</p>
-
-${deviceInfo ? `
-<h3>Device Information:</h3>
-<table style="border-collapse: collapse;">
-  <tr><td style="padding: 5px 10px;">Platform:</td><td style="padding: 5px 10px;">${escapeHtml(deviceInfo.platform || "N/A")}</td></tr>
-  <tr><td style="padding: 5px 10px;">OS Version:</td><td style="padding: 5px 10px;">${escapeHtml(deviceInfo.osVersion || "N/A")}</td></tr>
-  <tr><td style="padding: 5px 10px;">App Version:</td><td style="padding: 5px 10px;">${escapeHtml(deviceInfo.appVersion || "N/A")}</td></tr>
-  <tr><td style="padding: 5px 10px;">Build:</td><td style="padding: 5px 10px;">${escapeHtml(deviceInfo.buildNumber || "N/A")}</td></tr>
-</table>
-` : ""}
-
-<hr>
-<p style="color: #666; font-size: 12px;">
-  Feedback ID: ${escapeHtml(feedbackId)}<br>
-  <a href="https://console.firebase.google.com/project/help-a-paw-dev/firestore/data/~2Ffeedback~2F${encodeURIComponent(feedbackId)}">View in Firebase Console</a>
-</p>
-`;
 
     try {
       const transporter = nodemailer.createTransport({
@@ -1870,15 +1780,10 @@ ${deviceInfo ? `
         },
       });
 
-      const replyTo = userEmail || undefined;
-
       await transporter.sendMail({
         from: `"Help a Paw Feedback" <${smtpUser.value()}>`,
         to: feedbackRecipient.value(),
-        replyTo,
-        subject: `[Help a Paw] ${typeLabel}${userEmail ? ` from ${userEmail}` : ""}`,
-        text: emailBody,
-        html: htmlBody,
+        ...buildFeedbackEmail(feedbackId, feedbackData),
       });
 
       console.log(`Feedback email sent for ${feedbackId}`);
@@ -2536,15 +2441,6 @@ function androidIntentUrl(signalId: string): string {
 async function renderQrSvg(url: string): Promise<string> {
   const QRCode = await import("qrcode");
   return QRCode.toString(url, { type: "svg", margin: 1, width: 200 });
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
 }
 
 interface SignalPreview {
