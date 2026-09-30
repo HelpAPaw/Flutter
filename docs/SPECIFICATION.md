@@ -2,7 +2,7 @@
 
 **Status:** as-built description of the current codebase
 **App version at last update:** `7.0.0+135` (`pubspec.yaml`)
-**Last updated:** 2026-09-22
+**Last updated:** 2026-09-30
 
 ---
 
@@ -31,7 +31,8 @@ spec for a much larger platform and is not implemented here.)
 | Change any of the cross-implementation invariants | §12 Invariants (this is the one that bites) |
 | Ship a release | Bump the version line above |
 
-Also bump **§15 Document changelog** with a one-line entry.
+Describe current behaviour only. History (what changed, when, which issue, how it was
+verified) belongs in commit messages and issues, not here.
 
 Temporary/working documents (investigation notes, QA logs, one-off analyses) belong in
 **`docs/ai/`**, not here and not in the repo root.
@@ -140,8 +141,7 @@ field decides whether the server fan-out considers an account **at all** — the
 guard sits above the `inboxRecipients`/`userTokens` split (§9), so an unrecorded mode
 costs the inbox entry as well as the push, for a user whose only mistake was not
 enabling notifications. Absent reads as production, which is correct for every real user
-and silent for a test-mode one, so it must be written rather than inferred
-(HelpAPaw/Flutter#72). The mode guards log every drop for the same reason.
+and silent for a test-mode one, so it must be written rather than inferred. The mode guards log every drop for the same reason.
 
 Callers must **not** await it: a Firestore write's future only completes on server
 acknowledgement, so awaiting it hangs the caller for as long as the device is offline.
@@ -415,9 +415,9 @@ there would be one its own subject could set.
 
 Incremented once by `recordSignalPosted` inside `handleSignalCreated`, at the moment a
 signal is reported, and **never decremented**. That is the requirement — master spec
-§3.5.1: *"these stats remain even when old cases are deleted or archived"*. The profile
-used to run a live `count()` over `signals`, which measured *signals still visible*, so
-every way a signal can leave that collection took the credit with it: the reporter
+§3.5.1: *"these stats remain even when old cases are deleted or archived"*. A live
+`count()` over `signals` would measure *signals still visible*, so every way a signal can
+leave that collection would take the credit with it: the reporter
 removing it (§7.5), a moderator hiding it (§7.16), and the ~6-month archive of master spec
 §4.10 when it arrives. **Test-mode signals do not count** — they are isolated precisely so
 they cannot affect production, and an inflated statistic would be the one thing that
@@ -576,10 +576,10 @@ profile_photos/{uid}.jpg                    # avatar
 
 ### 4.4 Signal types — **retired**
 
-There used to be a `signalType` int (`0` Emergency · `1` Lost or Found ·
+`signalType` is a retired int (`0` Emergency · `1` Lost or Found ·
 `2` Blood donation · `3` Homeless · `4` Unneutered animals · `5` Wild animals ·
-`6` Other), chosen by the reporter alongside urgency, species and help tags. It
-is gone. **A signal's category is now `helpNeededTags[0]`** (`Signal.primaryTag`),
+`6` Other) that the reporter once chose alongside urgency, species and help tags.
+**A signal's category is `helpNeededTags[0]`** (`Signal.primaryTag`),
 which is what master spec §4.2 means by a main category: the top-priority need,
 with the secondary needs ordered behind it.
 
@@ -605,10 +605,10 @@ come out together once the installed base has moved on:
 |---|---|---|
 | `functions/src/tags.ts` | `primarySignalTag` + `RETIRED_SIGNAL_TYPE_TAGS` (`signalHeadline` is now `helpTagHeadline(primarySignalTag(…))`) | Without it `helpNeededTagsOf` substitutes the fallback for every untagged signal, so a Blood-donation report from a shipped build pushes as "Rescue needed" — the server discarding a category the client still sends and still means |
 | `functions/src/index.ts` | inbox entries mirror `signalType` when the signal has one | Shipped builds render the row from `signalType` and fall back to the stored **English** body without it, showing Bulgarian users English text |
-| `functions/src/index.ts` | inbox rows are written from `displayTagsOf`, not from the matched tag list | The entry used to be written from `signalTags`, which is what the fan-out *matched* on — and `helpNeededTagsOf` collapses anything untagged to the fallback. One event then announced the same document two ways: "Blood donation needed" on the lock screen, "Rescue needed" in the inbox row |
-| `functions/src/index.ts` (`loadSignalPreview`) | the public share page badges with `primarySignalTag` | The one page people see *before* they have the app; reading tags directly badged every pre-vocabulary signal "Rescue" whatever it was |
-| `lib/src/models/help_tag.dart` + `signal.dart` | `HelpTag.primaryOfSignal` + `retiredSignalTypeCodes`, fed by `Signal.legacySignalType` | The app had no equivalent of the retired table at all, so **every in-app surface** showed those signals as Rescue — details header, share text, My Signals icon and its empty-title fallback |
-| `lib/src/services/nearby_signal_checker.dart` | the arrival catch-up reads `Signal.legacySignalTypeFrom(data)` into `_NotifiableSignal`, headlines through `primaryOfSignal`, and stores `HelpTag.displayCodes` on the inbox row it writes | The one *client-written* notification for a signal. Reading only the codes made the catch-up say "Rescue needed" for a `signalType: 2` signal the server's push called "Blood donation needed" — and `HelpTag.displayCodes` (the Dart mirror of `displayTagsOf`) is needed for the row for exactly the reason the server needs it |
+| `functions/src/index.ts` | inbox rows are written from `displayTagsOf`, not from the matched tag list | Writing it from `signalTags` (what the fan-out *matched* on) would collapse anything untagged to the fallback via `helpNeededTagsOf`, and one event would announce the same document two ways: "Blood donation needed" on the lock screen, "Rescue needed" in the inbox row |
+| `functions/src/index.ts` (`loadSignalPreview`) | the public share page badges with `primarySignalTag` | The one page people see *before* they have the app; reading tags directly would badge every pre-vocabulary signal "Rescue" whatever it was |
+| `lib/src/models/help_tag.dart` + `signal.dart` | `HelpTag.primaryOfSignal` + `retiredSignalTypeCodes`, fed by `Signal.legacySignalType` | Without it **every in-app surface** shows those signals as Rescue — details header, share text, My Signals icon and its empty-title fallback |
+| `lib/src/services/nearby_signal_checker.dart` | the arrival catch-up reads `Signal.legacySignalTypeFrom(data)` into `_NotifiableSignal`, headlines through `primaryOfSignal`, and stores `HelpTag.displayCodes` on the inbox row it writes | The one *client-written* notification for a signal. Reading only the codes would make the catch-up say "Rescue needed" for a `signalType: 2` signal the server's push called "Blood donation needed" — and `HelpTag.displayCodes` (the Dart mirror of `displayTagsOf`) is needed for the row for exactly the reason the server needs it |
 | `firestore.rules` | the inbox `create` allow-list accepts **both** shapes, requires neither | This is a *client* write path (the arrival catch-up), and `NearbySignalChecker` swallows a denial — rejecting the old shape makes inbox entries silently stop appearing |
 
 Removal is tracked by **HelpAPaw/Flutter#70**, which lists every site.
@@ -622,16 +622,14 @@ signal asks for. `Signal.toJson()` also omits `legacySignalType` on purpose — 
 only ever used to *create* a signal (edits go through targeted `update({…})` maps), so
 a legacy document can never have its `signalType` rewritten or dropped by us.
 
-**Every display surface is now legacy-aware**, the arrival catch-up included (fixed
-2026-08-18). The two doors an untagged signal can come through are deliberately
+**Every display surface is legacy-aware**, the arrival catch-up included. The two doors an untagged signal can come through are deliberately
 different: `HelpTag.effectiveCodes` / `helpNeededTagsOf` is what you match with and
 resolves to the fallback, `HelpTag.displayCodes` / `displayTagsOf` is what you show
 and recovers the retired category. Reaching for the matching list to render text is
-the shape of the bug both times it happened.
+the mistake to avoid.
 
-The earlier plan dropped all three, arguing that four legacy documents did not
-justify a migration mechanism. That was right about existing documents and wrong
-about ongoing writes: the old build keeps creating them. Pinned by
+The shims exist for ongoing writes, not for existing documents: released builds keep
+creating legacy-shaped signals. Pinned by
 `'accepts the shape the currently-shipped build writes'` in
 `firestore-tests/rules.test.js` and the `signalHeadline` suite in
 `functions/src/__tests__/`.
@@ -639,15 +637,14 @@ about ongoing writes: the old build keeps creating them. Pinned by
 > **Deploy order.** Rules and functions are safe to deploy ahead of the client
 > *only* with the three shims above. Firestore rules deploys replace the whole
 > ruleset, so deploy from a branch that has every block — a deploy from a branch
-> missing `match /events/` silently removed it on 2026-08-15.
+> missing `match /events/` silently removes it.
 
 Documents created before the merge keep `signalType` and are simply not read;
 `firestore.rules` neither requires nor bounds it on signal create (a retired
 field must not be able to reject an old client's write).
 
-The four production signals that predated the merge were fixed by hand rather
-than by a derivation table or a backfill script; at four documents, two of them
-already resolved, a migration mechanism would have cost more than the data.
+There is no derivation table or backfill script for pre-merge documents; the handful
+in production were corrected by hand.
 
 ### 4.5 Signal status (`SignalStatus`, `models/signal_status.dart`)
 
@@ -657,12 +654,10 @@ already resolved, a migration mechanism would have cost more than the data.
 | 1 | `inProgress` | In progress | `sync` |
 | 2 | `resolved` | Resolved | `check_circle` |
 
-**Status has no colour.** It used to be red / orange / green — the same three hues as
-urgency, running in the *opposite* direction: red urgency means "act now", red status
-means "nobody has acted". A My Signals row stacked both as unlabelled traffic lights, so
-green+red, red+green, green+green and red+red were all reachable on one list and
-whichever the eye reached first taught the wrong thing about the other. Status now
-carries a **glyph** and a neutral outlined chip; urgency keeps the traffic light and the
+**Status has no colour.** Red / orange / green would be urgency's three hues running
+in the *opposite* direction: red urgency means "act now", red status would mean "nobody
+has acted", and a My Signals row would stack both as unlabelled traffic lights, each
+teaching the wrong thing about the other. Status carries a **glyph** and a neutral outlined chip; urgency keeps the traffic light and the
 filled chip (§4.6). The shapes differ before either label is read, and the status axis
 survives a reader who cannot separate red from green. See §7.17.2.
 
@@ -672,20 +667,15 @@ slotted where it should appear. `SignalStatus.openCodes` derives the "still need
 attention" set used as a Firestore `whereIn` filter. Unknown codes resolve to
 `needsHelp`. The server mirrors labels in `SIGNAL_STATUSES` keyed by code.
 
-**The labels were rewritten** in the same pass. "Needs help" became **"Waiting for
-help"**, because the old wording collided with urgency's: `urgencyAmber` was "Оранжево —
-нужна е помощ скоро" against `statusNeedsHelp` "Нужна е помощ" — three shared words in
-the primary language, near-homographs on two axes that answer different questions.
-
-Status 1 was briefly **"Someone is helping"** in the same pass and has been reverted to
-**"In progress"** ("В процес"). The helping phrasing read as *reassurance* — a signal
-someone had claimed but not resolved looked like a signal that no longer needed anyone,
-which suppresses exactly the second volunteer the status exists to recruit. "In progress"
-states the response stage and claims nothing about sufficiency.
-
-Only the ARB **values** changed in both passes; the keys are unchanged, so the wording
-can be revised again without touching code. The FAQ answer
-(`faqWhatStatusesMeanAnswer`) is part of the same copy and must move with it.
+**Label wording.** Status 0 is **"Waiting for help"**, not "Needs help", which would
+collide with urgency's "Оранжево — нужна е помощ скоро": near-homographs on two axes that
+answer different questions. Status 1 is **"In progress"** ("В процес"), not "Someone is
+helping", which reads as *reassurance*: a claimed but unresolved signal would look like
+it no longer needed anyone, suppressing exactly the second volunteer the status exists
+to recruit. "In progress" states the response stage and claims nothing about
+sufficiency. The ARB keys (`statusNeedsHelp`, …) are independent of the wording, so it
+can be revised without touching code; the FAQ answer (`faqWhatStatusesMeanAnswer`) is
+part of the same copy and must move with it.
 
 Map pins encode urgency and only urgency — see §4.6.
 
@@ -705,13 +695,11 @@ working on can still be Red; a resolved one is Green.
 it appears as a glyph chip on the details screen and in My Signals. The filter
 sheet has independent Urgency and Status sections.
 
-**Labels are one word each, because the field names itself now.** They used to be
-"Green — under control" / "Amber — support needed ASAP" / "Red — immediate critical
-help": the whole sentence, repeated in every chip. `LevelChip` was shaped around that —
-the Bulgarian form laid out at 403px on a 411dp phone and overflowed every My Signals
-row by 161px. Once the row *says* "Urgency", the value no longer has to, so the labels
-are **Low / Medium / Critical**, the chip fits, and the near-homograph problem with
-status disappears. `faqWhatUrgencyMeansAnswer` and the map legend (§7.3) carry the same
+**Labels are one word each, because the row names the field.** A sentence per level
+("Red — immediate critical help") repeated in every chip overflows a My Signals row in
+Bulgarian on a 411dp phone. The row *says* "Urgency", so the value does not have to: the
+labels are **Low / Medium / Critical**, the chip fits, and there is no near-homograph
+with status. `faqWhatUrgencyMeansAnswer` and the map legend (§7.3) carry the same
 words and must be revised with them. "Red Alert" is deliberately **not** renamed — it is
 the name of the confirmation rule in master spec §5.2.1, not a level.
 
@@ -725,10 +713,8 @@ Rules, mirrored by `SIGNAL_URGENCIES` (functions) and the backfill script:
   nullable and `isValid` gates submission, so nobody publishes a level they did
   not choose.
 - **Reporter or signal owner.** Master spec §5.2 limits it to "the original
-  poster/case holder, a moderator or an admin". This entry used to say
-  *reporter-only*, because with no ownership concept the reporter was the whole of
-  that set by default. Since §4.8 the signal owner is in it too, enforced by
-  `isSignalOwnerUpdate()` — which gates on `isSignalOwner()` and *then* allows
+  poster/case holder, a moderator or an admin", and the signal owner (§4.8) is in
+  that set alongside the reporter, enforced by `isSignalOwnerUpdate()` — which gates on `isSignalOwner()` and *then* allows
   `urgency`. A moderator's route is still `moderateAction`'s `setUrgency`, so their
   correction is audit-logged rather than silent. See §5.1.
 - **Red requires confirmation** (master spec §5.2.1): `RedAlertConfirmationDialog`
@@ -823,8 +809,7 @@ Rules, mirrored by `functions/src/tags.ts`:
   parses `tags.ts`. The drift it prevents is silent: a code on one side only is never
   matched, and nothing logs an error.
 
-Selection is required in a **non-skippable full-screen gate** (§7.15), so the
-vocabulary is only useful once that has shipped to the installed base.
+Selection is required in a **non-skippable full-screen gate** (§7.15).
 
 ---
 
@@ -850,8 +835,8 @@ silently, which is why the derivation exists in exactly three guarded places:
 `Signal.signalOwnerFrom` (Dart), `signalOwnerOf` (`functions/src/signalRefs.ts`) and
 `isSignalOwner()`'s default argument in the rules.
 
-**Nothing is backfilled, ever.** Builds released before this keep creating signals
-with no `signalOwner`, so no runtime may assume the field is present — the same
+**Nothing is backfilled, ever.** Older builds keep creating signals with no
+`signalOwner`, so no runtime may assume the field is present — the same
 permanent-derivation rule as `urgency` (§4.6). New clients *do* write
 `signalOwner == reporter` at creation so a future `where('signalOwner', …)` query has
 something to match, but such a query would still exclude every legacy signal
@@ -892,11 +877,9 @@ stray dog is not. A signal with no usable timestamp reads as **not** stale, and 
 request with no usable `createdAt` is **never** ripe: the safe direction is "nothing
 happens", never "hand the animal to a stranger".
 
-**Route 3 used to be instant, and that was the defect.** Fourteen days of silence
-made a signal claimable in one tap by anyone who happened to open it, and the first
-its owner heard was the notification saying it was gone — a dispossession decided
-entirely by a clock they could not see. The escalation now has a rung in it: the
-volunteer asks, `onTakeoverRequested` tells the owner *in those words* that silence
+**Route 3 is never instant.** If fourteen days of silence made a signal claimable in
+one tap, the first its owner heard would be the notification saying it was gone — a
+dispossession decided entirely by a clock they could not see. So the volunteer asks, `onTakeoverRequested` tells the owner *in those words* that silence
 will hand the signal over and when, and only then does the server act for them.
 
 **Two clocks, independent, and both must be satisfied.** That is what makes the
@@ -964,12 +947,12 @@ guard, and §12.5e's tolerance for that pair is unchanged — drift mis-draws a 
 grants nothing. A released signal gets no note, because nobody is there to be inactive.
 Covered by `test/widgets/signal_owner_block_test.dart`.
 
-**The note alone could not reach an owner who has stopped opening the app** — which is
-most of the population it describes — and that gap is what the auto-approval window
-closed. Staleness still has no outbound event of its own: it is a pure function of a
+**The note alone cannot reach an owner who has stopped opening the app** — which is
+most of the population it describes — and the auto-approval window covers that gap.
+Staleness has no outbound event of its own: it is a pure function of a
 timestamp, evaluated when someone renders the screen or when the sweep fires. But an
 *offer* does have one, so the moment a volunteer asks for a stale signal, its owner is
-pushed a message naming the deadline. The note is now the explanation a returning owner
+pushed a message naming the deadline. The note is the explanation a returning owner
 reads; the notification is what reaches one who has not returned. A warning that fires
 on staleness alone, with nobody asking, is still **not built** — and is worth much less
 now that no signal moves without an ask.
@@ -1034,9 +1017,7 @@ timeline and telling the loser they hold a signal they do not. The read has to h
 `signalOwnership` (`functions/src/signalOwnership.ts`) dispatches on `action`:
 `claim` / `release` / `approveRequest` / `declineRequest`, each with a **mandatory
 note** for the same reason a status change has one. It **rejects anonymous callers**,
-the only write path in the app that did so from day one — signal and comment creation
-took until the M-1 second half (#67) to catch up, because it had to wait on a client
-release, and this surface had nothing released to wait for.
+as signal and comment creation do (§5.1).
 
 **`claim` carries an optional `status`.** That is what makes claim-to-act one action:
 a volunteer moving a signal they do not hold confirms once, writes one note, and the
@@ -1056,40 +1037,16 @@ Moderator/admin case assignment (master spec §21.2) — that is the admin tier,
 does not exist. Assigned helpers and the rescue-coordination commitments (§4.3, §4.8
 of the master spec: "I can transport", "I am going to check") are a separate feature:
 signal ownership is the *one responsible person* axis, helpers are the *many
-volunteers* axis. Pinned comments (§9.1) are now unblocked by this field.
+volunteers* axis. Pinned comments (master spec §9.1) would build on this field.
 
-### 4.8a The case→signal rename
+### 4.8a Vocabulary: case vs signal
 
-The ownership feature (§4.8) took the master spec's vocabulary into the wire
-format. The app's word is **signal** and its word for the responsible person is
-**owner**, so the stored names were renamed to match:
-
-| Was | Is | Where |
-|---|---|---|
-| `caseHolder` | `signalOwner` | `signals/{id}`, `signals_test/{id}` |
-| `holderActiveAt` | `ownerActiveAt` | same |
-| `oldHolder` / `newHolder` | `oldOwner` / `newOwner` | `…/events/{id}` on `ownership_transfer` |
-| `"duplicateCase"` | `"duplicateSignal"` | `reports/{id}.reason` |
-| `caseOwnership` | `signalOwnership` | callable |
-
-**It carries no compatibility shim, and that is a measured decision rather than
-an oversight.** Ownership shipped 2026-08-20 and never reached a released build:
-`6.0.2+129`, the only release, contains no ownership feature at all — not the
-fields, not the callable, not the timeline — so it can neither read nor write any
-of these names. Counted on 2026-08-29, **production `signals` held six documents
-and not one carried a pre-rename name**; every legacy value lived in
-`signals_test` on the QA devices, plus a single report reason. That data was
-disposable, so the rename was taken straight rather than bridged, and there is no
-backfill.
-
-The one consequence: a device still running `7.0.0+131` reads `caseHolder`, which
-nothing writes any more, so it would derive every signal's owner back to its
-reporter. Update those devices rather than pointing them at ownership.
-
-Spec quotations elsewhere in this document are left in the spec's own words; the
-master spec's *case* is this app's **signal** and its *case holder* is the
-**signal owner**.
-
+The master spec says *case* and *case holder*; the app's words, in the UI and on the
+wire, are **signal** and **signal owner**: `signalOwner`, `ownerActiveAt`,
+`oldOwner`/`newOwner` on `ownership_transfer` events, the `"duplicateSignal"` report
+reason and the `signalOwnership` callable (`caseOwnership` remains as an alias, §9).
+Nothing reads the master spec's names, so there is no compatibility shim. Quotations
+from the master spec in this document keep its words.
 
 ## 5. Security model (`firestore.rules`, `storage.rules`)
 
@@ -1118,36 +1075,30 @@ and the ownership four: `isSignalOwner()`, `isParentSignalOwner()`,
 `isNotTouchingOwnership()`, `isValidOwnerStamp()`, `isValidInitialSignalOwner()`,
 `isTakeoverRequestCreate()`.
 
-> **The three cascade deletes are retiring, and the flip is a DEPLOY ORDER.**
-> `comments`, `events` and `takeoverRequests` each grant the parent signal's reporter a
-> delete for one reason only: the delete-signal cascade used to run on the client and had
-> to be able to empty them, or deleting a signal orphaned them forever. On `events` that
-> made the signal timeline tamper-*evident* rather than tamper-proof. On `comments` it is
-> worse than an audit problem — there is no author-delete rule at all, so the standing
-> effect is that **a comment's author cannot delete their own comment but the signal's
-> reporter can delete anyone's**, unaudited, which is precisely the power master spec
-> §18.3 routes through `moderateAction.deleteComment`.
+> **The three cascade-delete grants are legacy, and removing them is a deploy-order
+> question.** `comments`, `events` and `takeoverRequests` each grant the parent signal's
+> reporter a delete, only so that the client-side delete-signal cascade in builds
+> released before `signalRemoval` can empty them. The standing effect: the timeline is
+> tamper-*evident* rather than tamper-proof, and **a comment's author cannot delete their
+> own comment but the signal's reporter can delete anyone's**, unaudited, which is the
+> power master spec §18.3 routes through `moderateAction.deleteComment`.
 >
-> That cascade is gone: `signalRemoval` moves the document and `purgeRemoval` erases the
-> descendants with an Admin SDK `recursiveDelete`, which bypasses rules entirely. Nothing
-> in the new client deletes a subcollection document. **All three therefore become
-> `allow delete: if false`, and `isParentSignalReporter()` becomes dead code — but not in
-> the same deploy as the rest of #68.** Every already-released build still runs the old
-> cascade, whose one batch covers all three subcollections; denying it makes that batch
-> fail atomically, so nothing is deleted and the user gets `failedToRemoveSignal` on any
-> signal with history. Clean, but a broken Delete button until they update. Flip it only
-> once the release carrying `signalRemoval` is on the installed base — the same sequencing
-> #67 and #71 are waiting on. See §13.3.
+> The current client never deletes a subcollection document: `signalRemoval` moves the
+> document and `purgeRemoval` erases the descendants with an Admin SDK
+> `recursiveDelete`, which bypasses rules. All three grants should become
+> `allow delete: if false`, leaving `isParentSignalReporter()` dead code, but only once
+> the release carrying `signalRemoval` is on the installed base. The old cascade's one
+> batch covers all three subcollections, so denying it fails the batch atomically and
+> gives those users a broken Delete (`failedToRemoveSignal`) on any signal with history.
+> See §13.3.
 
 > **An event does not authorise the change it describes.** A `status_change` event
 > passes `isSignalEventCreate()`; the signal write next to it in the same batch still has
 > to pass `isSignalOwnerUpdate()` separately. The two are independent on purpose — a
 > client that writes only the event changes nothing.
 >
-> **The reporter can still delete events** until the flip described above lands, which
-> is what keeps the history tamper-*evident* rather than tamper-proof. The server-side
-> replacement is built (`signalRemoval`); what is outstanding is only the rules deploy,
-> and its ordering. Tracked as HelpAPaw/Flutter#68.
+> **The reporter can delete events** until the rules step described above, which is
+> what keeps the history tamper-*evident* rather than tamper-proof (§13.3).
 
 > **`isStatusOnlyUpdate` became `isSignalOwnerUpdate` with signal ownership (§4.8), and
 > the load-bearing clause moved.** The old function let *any* signed-in user change
@@ -1156,18 +1107,16 @@ and the ownership four: `isSignalOwner()`, `isParentSignalOwner()`,
 > "only the signal owner may mark a signal Red", and adding it would have let a stranger
 > escalate or quietly de-escalate someone else's signal.
 >
-> The new function gates on **`isSignalOwner()`** first, so `urgency` and
+> The function gates on **`isSignalOwner()`** first, so `urgency` and
 > `helpNeededTags` being in the list is master spec §5.2 and §4.2 being implemented,
-> not the old rule being weakened. **The clause that must never be dropped is now
-> `isSignalOwner()`.** Guarded by `firestore-tests/rules.test.js`, which also pins the
+> not a loosening. **The clause that must never be dropped is `isSignalOwner()`.** Guarded by `firestore-tests/rules.test.js`, which also pins the
 > absent-vs-null distinction on both sides.
 >
 > `isValidSignalContentBounds()` — title a non-empty string ≤300, description a string
 > ≤10 000 — is applied to **create and update alike**, on `signals` and `signals_test`.
-> Only create used to check it, while the edit screen (§7.5) writes both fields on *every*
-> save, so a reporter could edit a signal to an unbounded title or description. The same
-> `LengthLimitingTextInputFormatter` the wizard uses is now on the edit screen's fields
-> too, and both sides read `Signal.maxTitleLength` / `Signal.maxDescriptionLength` rather
+> Update needs it as much as create: the edit screen (§7.5) writes both fields on *every*
+> save. The edit screen's fields use the wizard's `LengthLimitingTextInputFormatter`, and
+> both sides read `Signal.maxTitleLength` / `Signal.maxDescriptionLength` rather
 > than repeating the literals (§12.5).
 >
 > `isValidUrgency()` bounds the value but deliberately does **not** require the field:
@@ -1179,10 +1128,9 @@ and the ownership four: `isSignalOwner()`, `isParentSignalOwner()`,
 > wakes every subscriber.
 
 **Rules do not cascade into subcollections.** `match /users/{userId}` covers the user
-document only. `users/{uid}/notifications/{id}` matched no rule for most of the project's
-life and was therefore denied outright, *including to its owner* — which is what kept the
-inbox non-functional (§7.13). It now has its own block. Any future subcollection under
-`users/` needs one too; a recursive `{document=**}` wildcard would also work but grants
+document only, so `users/{uid}/notifications/{id}` has its own block; without it the
+inbox is denied outright, *including to its owner* (§7.13). Any future subcollection
+under `users/` needs one too; a recursive `{document=**}` wildcard would also work but grants
 more than intended.
 
 The notification `create` rule is the only place a client may write the inbox: the
@@ -1211,16 +1159,14 @@ moderator-only reads. `moderationActions` is moderator-readable and client-unwri
 `moderationQuarantine` has **no match at all** and is denied by default — that absence is
 what makes hiding real rather than cosmetic.
 
-**M-1 second half (HelpAPaw/Flutter#67), closed:** signal and comment creation now
-require `isVerifiedCaller()` — `request.auth.token.email_verified == true`. It gates on
-that rather than `sign_in_provider` because an in-place upgrade (`linkWithCredential`)
-leaves a real, upgraded user reading as `'anonymous'` for the rest of the session. The
-claim is baked in at token-mint time, which is what forced the 2026-07-23 rollback: a
-user who verified mid-session carried a stale `false`. The client force-refresh that
-makes it safe (`633da3b`) shipped in **6.0.2+126**, so the clause could finally land.
-The client has blocked anonymous users via `canModifyData` since `17327ff`, and every
-app version seen in the field carries that gate, so this closes a server-side hole
-rather than changing what any released build can do.
+**Signal and comment creation require `isVerifiedCaller()`**:
+`request.auth.token.email_verified == true`. It gates on that rather than
+`sign_in_provider` because an in-place upgrade (`linkWithCredential`) leaves a real,
+upgraded user reading as `'anonymous'` for the rest of the session. The claim is baked
+in at token-mint time, so a user who verifies mid-session carries a stale `false` until
+the client force-refreshes the token after verification (§7.2); without that refresh
+the rule would lock them out. The client also blocks anonymous users itself
+(`canModifyData`); the rule closes the same hole on the server.
 
 ### 5.2 Storage
 
@@ -1265,39 +1211,19 @@ configured `storageBucket` on every platform, so `FirebaseStorage.instance` (use
 avatar code) and `FirebaseStorage.instanceFor(bucket: 'gs://help-a-paw-dev.appspot.com')`
 (used by the signal-photo code) resolve to one bucket governed by one ruleset.
 
-#### Three defects found and fixed (2026-08-01)
+#### What the rules and the upload path must handle
 
-**Deployment state:** the `storage.rules` change is **live in production** (deployed
-2026-08-01), so BUG-1 and BUG-2 are fixed for existing installs. BUG-3 is a client change
-and reaches users only with the next app release.
-
-**BUG-1 — avatar upload was always denied.** `profile_page.dart::_pickAndUploadPhoto`
-writes `profile_photos/{uid}.jpg`, but `storage.rules` had **no match block for that
-path**, and rules deny by default. Every avatar upload failed with
-`storage/unauthorized` and showed the `errorUploadingPhoto` snackbar — all users, all
-modes, since the feature shipped. It went unnoticed because Google-OAuth users get a
-Google-hosted `photoURL` and everyone else sees the fallback icon, so the QA rounds that
-"passed avatar" were checking exactly those two things; `QA_CHECKLIST.md:58`
-("Can upload profile photo") has never been ticked. *Fixed:* added the
-`profile_photos/{fileName}` block above.
-
-**BUG-2 — signal photo upload was always denied in test mode.** The Storage path
-(`signals/{signalId}/photos/…`) carries no notion of which collection the signal came
-from, but `isSignalReporter()` resolved it against `signals/{signalId}` only. For a
-signal created in test mode the document lives at `signals_test/{signalId}`, so
-`firestore.get()` returned null and `.data` raised a `Null value error` — the rule
-errored out and the write was denied. *Fixed:* the helper now checks both collections
-and null-guards the document before dereferencing it.
-
-**BUG-3 (client) — a denied upload was reported as full success.**
-`FirebaseStorageRepository.uploadSignalImage` catches `FirebaseException` and *returns*
-`UploadResult.failure`; it never throws. But `MapViewModel.submitSignal` only surfaced a
-problem from its `catch` block and simply skipped `addPhotoUrl` when the result was a
-failure, falling through to `return (true, null)` — **full success, no warning, photo
-silently dropped**. That is why BUG-2 was invisible on the create-signal path. (The
-details-screen "Add photo" path was unaffected: it calls Storage directly, so the throw
-propagated and the user did get an error.) *Fixed:* `submitSignal` now branches on
-`uploadResult.success` and returns `photo_upload_failed`, guarded by a regression test.
+- **Test-mode photos.** The signal-photo path (`signals/{signalId}/photos/…`) carries no
+  collection, so `isSignalReporter()` resolves the id against `signals/{signalId}`
+  **and** `signals_test/{signalId}`, null-guarding each document before dereferencing
+  it. Checking `signals` alone denies every test-mode upload.
+- **Avatars** need their own `profile_photos/{fileName}` block; rules deny by default.
+- **A denied upload is a failure, not a partial success.**
+  `FirebaseStorageRepository.uploadSignalImage` returns `UploadResult.failure` rather
+  than throwing, so `MapViewModel.submitSignal` branches on `uploadResult.success` and
+  returns `photo_upload_failed` instead of reporting success with the photo dropped;
+  guarded by a regression test. The details screen's "Add photo" calls Storage
+  directly, so there the exception propagates.
 
 #### Emulator caveat — read before touching `storage.rules`
 
@@ -1309,9 +1235,9 @@ whereas rules compare against the Firestore-rules shape
 a correct ruleset look like a total outage.
 
 `firestore-tests/storage.rules.test.js` rewrites only that comparison target, asserts
-the rewrite applied, and carries a canary test that fails once the emulator is fixed.
-Production is unaffected: prod uploads are device-verified, and live `signals`
-documents carry working photo URLs.
+the rewrite applied, and carries a canary test that fails once the emulator changes
+its representation. Production Storage uses the rules shape, so the unmodified ruleset
+is correct there.
 
 ### 5.3 Realtime Database
 
@@ -1451,7 +1377,7 @@ The sign-in page establishes the session in `initState` rather than at button-pr
 firebase_ui decides link-vs-create from `currentUser` itself at submit time with no hook
 to intercept, so waiting until the tap covers the Google button only. Without a session
 either button silently mints a second account instead of upgrading in place, orphaning
-whatever the anonymous user had (R6-004).
+whatever the anonymous user had.
 
 **Anonymous upgrade (the important flow).** The app *links in place* wherever possible
 so the UID and all its data survive:
@@ -1466,21 +1392,30 @@ so the UID and all its data survive:
 Residual orphans (an anonymous user signing into an existing *email* account, where
 Firebase requires a plain sign-in) are reaped weekly by `cleanupAnonymousUsers` (§9).
 
+**The anonymous user document is read before the identity switch.** Both merge paths
+need `users/{anonymousUid}`, and once Auth has switched, `request.auth.uid` is the new
+account and the rules deny that read. `AuthService.captureAnonymousData` snapshots it
+while the anonymous account is still the caller (started when the sign-in page prepares
+its session) and hands the snapshot to `mergeAnonymousIntoExisting` /
+`transferAnonymousData`, which never read Firestore themselves; a guard test enforces
+that. Deleting the abandoned anonymous documents is best-effort, since
+`cleanupAnonymousUsers` reaps them, and the merge is wrapped so that no failure in it
+can cost the user the sign-in.
+
 **Google Sign-In:** `google_sign_in` **v7** (Credential Manager on Android), integrated
-directly in `sign_in_page.dart::_signInWithGoogle`. v6's `SignInHubActivity` caused an
-NPE crash on process recreation. `GoogleSignIn.instance.initialize()` is memoized in
+directly in `sign_in_page.dart::_signInWithGoogle` (v6's `SignInHubActivity` crashes on
+process recreation). `GoogleSignIn.instance.initialize()` is memoized in
 `ensureGoogleSignInInitialized()` and kept off the startup critical path.
 
 Neither `signInWithCredential` nor `linkWithCredential` copies the provider's profile
-onto the top-level Auth record — `firebase_ui_oauth_google` used to, and the v7
-migration dropped it — so `user.displayName` was null and every downstream name fell
-back to the email's local part, including the public one other users see (R5-001).
-`AuthService.adoptProviderDisplayName()` closes that: it fills a **blank** Auth
+onto the top-level Auth record, so without help `user.displayName` stays null and every
+downstream name falls back to the email's local part, including the public one other
+users see. `AuthService.adoptProviderDisplayName()` closes that: it fills a **blank** Auth
 display name from the credential's profile or the linked provider record, never
 overwriting a name the user chose. It runs on all three Google outcomes (in-place
 link, plain sign-in, `credential-already-in-use` merge) and once at startup in
-`_bootstrapServices`, which repairs accounts created before the fix without needing
-them to sign in again. It mirrors the adopted name to `publicProfiles/{uid}` too —
+`_bootstrapServices`, which repairs an account whose name is still blank without
+needing it to sign in again. It mirrors the adopted name to `publicProfiles/{uid}` too —
 repairing only the Auth record would leave the name *other* users actually see on the
 email-derived fallback, which is the visible symptom. Safe because it runs only when the
 Auth name was blank, and Profile Completion writes both, so there is no user-typed name
@@ -1520,7 +1455,7 @@ yourself behaves the same however it was reached.
 
 **Reaching it.** `UserNameLink` (`user_name_link.dart`) renders a resolved display name
 inside a sentence and makes it tappable. Every other-user name on the signal screen goes
-through `_actorText`, which is now this widget — the reporter line, every timeline row's
+through `_actorText`, which is this widget — the reporter line, every timeline row's
 actor, the ownership hand-over sentence, and (through the `nameOf` adapter) the owner row
 and pending offers in `SignalOwnerBlock` — plus the "hidden by" line in the moderation
 tab, and every posted `@`-mention inside a comment (`LinkifiedText.onMentionTap`;
@@ -1579,12 +1514,11 @@ of them already open to any signed-in session:
 
 **Comments are mode-scoped on the server for the count** and on the client for the list.
 The list cannot do the server trick without a second composite index, so it reads in
-date order and filters, stopping after four raw pages per tap (`maxCommentScans`) so a QA
-account in production mode cannot walk its whole test history in one go. The count uses a
+date order and filters, stopping after four raw pages per tap (`maxCommentScans`) so an
+account with a long test-mode history cannot walk all of it in one go. The count uses a
 document-name range: names order segment by segment, so everything under `signals/…`
 sorts before `signals_test/!`, and the existing single-field `author` collection-group
-index serves an equality plus a `__name__` range with no composite index. Before this the
-number mixed both collections.
+index serves an equality plus a `__name__` range with no composite index.
 
 **Account deletion:** `AuthService.deleteAccount()` calls the `deleteAccount` callable
 over plain HTTPS (see §7.14 for why), then signs out. Server-side (§9) it strips phone
@@ -1597,10 +1531,8 @@ Auth user.
 **The `moderators/{uid}` delete has to precede the Auth delete**, and that ordering is the
 whole point of it. The roster is maintained only by `scripts/grant_moderator.js`, which
 resolves its subject through Firebase Auth, so an entry whose Auth user is already gone
-was unreachable by the one tool that manages it — production carried such an orphan from
-2026-08-17 to 2026-09-10, and it had to be deleted out from under the script (the script
-has since been fixed to skip that check on `--revoke`, but the orphan should not be
-created in the first place). `moderationActions` is deliberately **not** swept: every
+is hard to reach with the one tool that manages it (`--revoke` skips that check, but the
+orphan should not be created in the first place). `moderationActions` is deliberately **not** swept: every
 action is audit-logged with the actor's uid, and that history is a different fact from
 "who currently holds the role".
 
@@ -1670,10 +1602,10 @@ anonymous session is re-established there and then, not at the next launch.
   and production never assigns it. **The legend paints through the same routine**
   (`ClusterBubbleIcons.paintBubble`, via `_LegendBubblePainter`) instead of keeping its
   own copy of the drawing, so legend and marker cannot drift whatever style is in force.
-  Why it moved into Dart: the SDK's bubble was Google's navy and `ClusterManager` exposes
+  Why clustering is in Dart: the SDK's bubble is Google's navy and `ClusterManager` exposes
   nothing to restyle it — the Dart type is an id and a tap callback, and neither platform
   plugin overrides the bubble renderer — so at the opening zoom, where nearly every signal
-  sits in a bubble, the map could not say anything on it was critical (issue #76).
+  sits in a bubble, the map could not say that anything on it is critical.
   `_recluster` runs on every input change — stream emission, filter change, camera idle,
   a bubble opening or closing, a locale change, pins finishing loading — renders any
   missing bubble bitmaps first, then publishes the marker set; the **selected signal is
@@ -1702,21 +1634,21 @@ anonymous session is re-established there and then, not at the next launch.
   camera idle), read in `didChangeDependencies` so toggling the system theme with the map
   open restyles in place, and deliberately **not awaited in `main()`** (§12.11). A missing
   or malformed asset logs and leaves the map unstyled — an unstyled map is cosmetic, no
-  map is not. Road greys are chosen against the **pins**, not by eye: the first draft's
-  `#4a4a4a` motorway put a red pin at 2.41:1, so a critical signal on a motorway would
-  have been the hardest pin on the map to see. Roads step `2a`/`33`/`38`, worst case
+  map is not. Road greys are chosen against the **pins**, not by eye: a `#4a4a4a`
+  motorway would put a red pin at 2.41:1, making a critical signal on a motorway the
+  hardest pin on the map to see. Roads step `2a`/`33`/`38`, worst case
   3.18:1. POI labels and business pins are off — they competed with the only markers that
   matter here.
-- **Legend** (`map/map_legend_sheet.dart`, opened from the map's own app bar): nothing
-  anywhere in the app said what the pin colours meant, and a legend is what makes a
-  hue-only encoding at least *teachable*. Rows are built **from the real pin assets**, and
+- **Legend** (`map/map_legend_sheet.dart`, opened from the map's own app bar): the one
+  place that says what the pin colours mean, which is what makes a hue-only encoding at
+  least *teachable*. Rows are built **from the real pin assets**, and
   the cluster row from the marker bitmap's own painter, so the legend cannot drift from
   the map; most urgent is listed first, and the vet-clinic pin is included. The cluster
   row's example is deliberately **1 red / 4 amber / 2 green** (`_exampleCounts`) — the
   case worth teaching is a disc that is red for a cluster that mostly is not — and its
   parts are built by iterating `SignalUrgency.values.reversed`, the same ordering
   `signalBubbleKey` uses, so adding an urgency level cannot leave the legend disagreeing. `isScrollControlled: true` with a scrollable body — the default
-  half-screen sheet clipped the last row by 43px in Bulgarian at 411dp — and therefore
+  half-screen sheet clips the last row in Bulgarian at 411dp — and therefore
   `useSafeArea: true`, because that mode lets the sheet reach the top of the screen and
   `ModalBottomSheetRoute` strips the top padding the sheet's own `SafeArea` would need.
 - **Map bubbles** (`map/map_bubble.dart`). **No marker on this map carries a native
@@ -1772,21 +1704,14 @@ anonymous session is re-established there and then, not at the next launch.
   `ValueNotifier`, not in `setState`: a rebuild sixty times a second during a pan is not
   affordable. Android returns
   physical pixels from `ScreenCoordinate`, iOS logical — hence `_screenCoordToLogical`.
-- **Far-pin vanish (recurring bug, removed).** Tapping a distant pin still makes the SDK
-  recentre the camera on it — that is `GoogleMap`'s default marker-click behaviour, not
-  something the info window brought — and that pan still crosses the 30 km threshold,
-  re-queries, and rebuilds the marker set. What has gone is the last step: the recluster
-  used to tear the open native window down with it. Nothing removes a Flutter bubble but
-  the screen itself, so it simply rides the pan (projected per frame, reconciled on idle)
-  and is still there when the markers come back. `_reassertSelectedInfoWindow`
-  and its 350 ms follow-up re-show are gone with the window. The only reconciliation left
-  is dismissing the bubble when its signal is missing from the rebuilt marker set.
-  **Should this ever regress, do not "fix" it by lowering the re-query threshold.**
-  Device-verified 2026-09-06 on **Android** (Galaxy Tab A8, light + dark, bg) and **iOS**
-  (iPad 6th gen, light + dark, en, profile build driven over WDA): a pin roughly 30 km off-centre
-  panned, re-queried and kept its bubble correctly anchored; pan-tracking, edge clamping
-  with the tail sliding to stay on the pin, flip-below at the top edge, tap-through to
-  details, restore on return and dismiss-on-map-tap all behave identically on both.
+- **A far pin keeps its bubble.** Tapping a distant pin makes the SDK recentre the camera
+  on it (`GoogleMap`'s default marker-click behaviour), and that pan can cross the 30 km
+  threshold, re-query and rebuild the marker set. Nothing removes a Flutter bubble but the
+  screen itself, so it rides the pan (projected per frame, reconciled on idle) and is still
+  there when the markers come back; the only reconciliation is dismissing the bubble when
+  its signal is missing from the rebuilt set. A native InfoWindow would be torn down by
+  the rebuild, which is why the bubble is Flutter. **Do not lower the re-query threshold
+  to "fix" a vanishing bubble.**
 - **Filters** (`map/filter_bottom_sheet.dart` + `MapFilterState`): signal types (7),
   urgencies (3), statuses (3), and a time range (24h / 7d / 30d / all time, default
   **30 days**). Type/urgency/status filter client-side; the time range is pushed into
@@ -1796,26 +1721,22 @@ anonymous session is re-established there and then, not at the next launch.
   `test/map_filter_state_test.dart` fails the build if one drifts, which would otherwise
   silently filter a newly-added status/urgency off the map.
 
-  **Cancel restores; Done keeps.** Every toggle still applies to the map immediately —
-  that is the good part, you watch pins appear and disappear as you tick — but the sheet
-  had an "Apply Filters" button that only called `Navigator.pop`, and dismissing with the
-  back gesture left the edits applied just the same. Unticking Red and changing your mind
-  was unrecoverable except by re-ticking from memory. The sheet now **snapshots the state
-  it opened with** and restores it on Cancel, *including* a back-gesture or scrim
-  dismissal; Done keeps the edits. The header also wraps its title and both actions onto
-  two lines rather than one `Row` — in Bulgarian "Изчисти всички" ended up past the right
-  edge, so the one control that undoes a filter could not be reached at all.
+  **Cancel restores; Done keeps.** Every toggle applies to the map immediately, so you
+  watch pins appear and disappear as you tick. The sheet **snapshots the state it opened
+  with** and restores it on Cancel, *including* a back-gesture or scrim dismissal; Done
+  keeps the edits. The header wraps its title and both actions onto two lines rather than
+  one `Row`, because in Bulgarian "Изчисти всички" would otherwise sit past the right
+  edge.
 - **Pending focus:** `SignalNavigator.pendingFocusSignalId` is consumed in
   `MapPage.build`; the map animates to the pin at zoom 14 and opens its bubble,
   fetching the signal directly and force-recentering if it isn't in the current stream.
   On a cold launch the consuming post-frame callback runs **before** `onMapCreated`, so
   `_focusSignalOnMap` parks the id in `_deferredFocusSignalId` and `onMapCreated` replays
   it, falling back to the user's own location only if the replay reports it could not
-  focus (e.g. the signal was deleted). Without the park this dereferenced the
-  `late _mapController` and crashed (`LateInitializationError`, iOS 6.0.2+126).
-  `_mapController` is consequently a plain `GoogleMapController?`, not `late` beside a
-  `_mapControllerReady` bool — the bool was a convention the compiler could not enforce
-  and 7 of the 12 uses simply never checked it. Every use now states its assumption: `!`
+  focus (e.g. the signal was deleted); without the park the callback would dereference a
+  controller that does not exist yet. `_mapController` is a plain
+  `GoogleMapController?`, not `late` beside a readiness bool the compiler cannot
+  enforce. Every use states its assumption: `!`
   where a live map is a precondition (map-dispatched callbacks, marker taps), a null
   check where it is not (toolbar buttons, which are painted with the Scaffold and are
   tappable before the platform view comes up).
@@ -1830,10 +1751,8 @@ FAB → if `!canModifyData`, a sign-in dialog; otherwise the map enters
 `isAddingNewSignal` mode. From there it is a **seven-step wizard, one question per
 screen**, enumerated by `NewSignalStep` (`models/new_signal_step.dart`).
 
-It was eight until signal types were retired (§4.4). The `signalType` step sat
-between `animal` and `urgency`; its question is now answered by `urgency` and
-`helpTags` between them, so keeping it would have asked the reporter the same thing
-twice — the redundancy that retired the field in the first place.
+There is no signal-type step (§4.4): `urgency` and `helpTags` between them answer
+that question, and asking it too would ask the reporter the same thing twice.
 
 Step 1 stays on the live map — crosshair plus `NewSignalLocationBar`
 (`widgets/map/new_signal_location_bar.dart`) — so the pin is placed against the map
@@ -1881,20 +1800,17 @@ when the step is still on the location question — so re-confirming lands back 
 review.
 
 Leaving the wizard with anything entered (`isDirty`) prompts before discarding.
-`isDirty` used to carve out the pre-selected category; with that field gone every
-answer it tests is one somebody actively gave. The system back gesture is a step back, not an
+Every answer `isDirty` tests is one somebody actively gave. The system back gesture is a step back, not an
 exit, until the first step.
 
-**All three exits from a draft ask the same question**, because all three can now be
+**All three exits from a draft ask the same question**, because all three can be
 reached holding the same finished draft. The wizard owns one (its `×`); the map owns
 the other two, because step 1 lives there — the Android back gesture and the location
-bar's Cancel. The map's two discarded unconditionally until `57501ff`, which was
-harmless only while the map could not be reached with anything entered. It can be now:
-*Change* beside Location on the review step pops back to the map with photo, title,
-description, animal, urgency and tags all still held in the view model, so one back
-press threw away six answered steps with no prompt while the wizard's `×` asked about
-the very same draft. Both map exits now route through the same `isDirty`-gated confirm,
-so a fresh FAB tap still leaves in one press with no dialog.
+bar's Cancel. *Change* beside Location on the review step pops back to the map with
+photo, title, description, animal, urgency and tags all still held in the view model,
+so an unguarded map exit would throw away six answered steps with one back press.
+Both map exits route through the same `isDirty`-gated confirm, so a fresh FAB tap
+still leaves in one press with no dialog.
 
 Length limits mirror the Firestore rules so over-long input is capped at the keyboard
 rather than failing with an opaque `PERMISSION_DENIED`.
@@ -1908,10 +1824,9 @@ rather than failing with an opaque `PERMISSION_DENIED`.
    A failed upload returns *partial success* (`photo_upload_failed`) — the signal exists.
    **The `XFile` is captured before the first await**, like the location, because it is
    read *after* two of them: `cancelAddingNewSignal` resets `formState` to a blank one,
-   so tapping `×` → Discard mid-submit used to leave this reading null by the time the
-   upload block ran — the photo was skipped, `addPhotoUrl` never ran, and the submit
-   still reported full success. `×` is also disabled while submitting, the way Back and
-   Next already were; either alone closes the race.
+   so after `×` → Discard mid-submit a late read would find null, skip the photo and
+   still report full success. `×` is also disabled while submitting, like Back and Next;
+   either alone closes the race.
 5. On success the map opens the new signal's bubble once it appears in the stream
    (`_openBubbleWhenSignalArrives`, `fireImmediately` listener with a 10s safety timeout).
 
@@ -1939,8 +1854,8 @@ nothing, and so does nothing.) What shapes the scroll, all found on device:
   comment does; a latched "the server has answered" would drop the request at once. The reader's
   own scroll also drops it.
 - **Names reserve their line while they resolve.** `UserNameLink` renders an invisible line of
-  the same height rather than nothing, so rows above the comment no longer grow after the
-  scroll. (This replaced a 5-second follow-the-row window that also fought the reader's reply.)
+  the same height rather than nothing, so rows above the comment do not grow after the
+  scroll.
 - **The key never comes off the row** while the screen lives; only the tint fades, through a
   notifier that repaints that one row.
 
@@ -1969,17 +1884,14 @@ number by hand) and is bounded by a 6-digit floor and an E.164 ceiling. Link ink
 `colorScheme.secondary` — never `primary`, which is `#FF9800` in both schemes — with an
 underline, so the affordance survives a colour-blind reader.
 
-This is what the comment rows' long-press was spent on. Selection claims that gesture, so
-**comment actions moved to a visible `⋮`** on the row's name-and-date line: it adds no
-gutter, and it appears only where there is something to do — never on a status or
-ownership row, never on your own comment. Reporting a comment had been reachable *only*
-by long-pressing it, with nothing on screen to suggest so (§7.16).
+Selection claims the long-press gesture, so **comment actions live on a visible `⋮`** on
+the row's name-and-date line: it adds no gutter, and it appears only where there is
+something to do — never on a status or ownership row, never on your own comment (§7.16).
 
 What the listener is saying is classified by `resolveSignalDocState`
 (`models/signal_doc_state.dart`), a pure function unit-tested in
-`test/signal_doc_state_test.dart`. The ordering between its states is the invariant
-that has regressed repeatedly (R5-004, R6-001, R6-002), which is why it lives outside
-`build()`:
+`test/signal_doc_state_test.dart`. The ordering between its states is the fragile part,
+which is why it lives outside `build()`:
 
 - **Deleted while open** (`deletedWhileOpen` — server-confirmed absence after the signal
   had rendered): the screen pops back (or `go(/home)`) and shows a "no longer available"
@@ -1995,7 +1907,7 @@ that has regressed repeatedly (R5-004, R6-001, R6-002), which is why it lives ou
   so opening a signal offline waits instead of claiming a live signal was deleted.
   **`includeMetadataChanges: true` is what makes that wait terminate:** for a document
   the cache already knows is absent, the server confirmation differs only in metadata and
-  is otherwise never delivered — the spinner would be permanent (R6-001).
+  is otherwise never delivered — the spinner would be permanent.
 - **Server never answers** (`unreachable`): after **20 s** of `unknownYet` the device is
   treated as offline and gets `l10n.networkError` with Back-to-map and Retry, rather than
   an unbounded spinner. The listener stays subscribed, so a connection that returns on its
@@ -2010,7 +1922,7 @@ that has regressed repeatedly (R5-004, R6-001, R6-002), which is why it lives ou
 - **The author's own delete claims the exit before the write** (`_hasNavigatedAway = true`
   ahead of `delete()`), because the local cache applies the delete immediately and the
   `deletedWhileOpen` branch would otherwise pop a second route and replace the green
-  success snackbar with the other user's "no longer available" (R6-002). The claim is
+  success snackbar with the other user's "no longer available". The claim is
   released if the delete throws.
 - **Photos:** horizontal `PageView` with dot indicators, full-screen `PhotoView` gallery
   with pinch-zoom, cached via `cached_network_image`. The author gets an inline
@@ -2050,10 +1962,9 @@ full-width child sat left — so the page stopped centring half way down.
   neutral outlined treatment.
 - **`showManageSignalSheet`** (`manage_signal_sheet.dart`) owns every control that
   *changes* the signal — the urgency picker, the status dropdown and the Change-tags
-  affordance. Previously all three were laid out inline, so the majority of visitors, who
-  can change nothing, scrolled past a six-line radio group and a full-width dropdown to
-  reach the conversation. The affordance is now **one button, drawn only for someone who
-  may actually coordinate** (`canCoordinate` — a UI affordance only; `firestore.rules`
+  affordance, so the majority of visitors, who can change nothing, do not scroll past a
+  six-line radio group and a full-width dropdown to reach the conversation. The
+  affordance is **one button, drawn only for someone who may actually coordinate** (`canCoordinate` — a UI affordance only; `firestore.rules`
   draws the same line, so hiding it just means nobody meets the refusal). The sheet
   **applies nothing itself**: it calls back into the screen, which keeps the write guard,
   the update-note dialog and the timeline append. It closes on the way out, because the
@@ -2061,15 +1972,12 @@ full-width child sat left — so the page stopped centring half way down.
   over a screen that had already moved on.
 - **Status is a three-step track**, not a chip — a track cannot be mistaken for a badge,
   and it shows the steps either side without a trip to the FAQ.
-- **The timeline is one rail row per entry**, replacing four differently coloured cards
-  (one of them in raw `Colors.blue.shade50`) that repeated the actor's name on every row.
+- **The timeline is one rail row per entry**, with the actor's name stated once per row.
 - **The whole column is capped at 600dp** (`PageWidth`, §7.17.3) so a tablet stops laying
   the description out 800dp wide.
 - **The comment composer is a `Column` sibling of the scroll view**, not a
-  `Positioned(bottom: 0)` over it. It used to permanently hide the last ~90px with no
-  bottom padding underneath — at 1.3× text the entire "Red — immediate critical help"
-  option sat behind it. As a sibling the overlap cannot come back, and no padding constant
-  has to track the composer's height.
+  `Positioned(bottom: 0)` over it, so it can never hide the end of the scroll view, and no
+  padding constant has to track the composer's height.
 
 - **Status change:** dropdown over `SignalStatus.values`, inside the manage sheet. Asks
   for the mandatory update
@@ -2099,8 +2007,7 @@ full-width child sat left — so the page stopped centring half way down.
   wherever it explains the map — the markers, the legend and the filter sheet — and
   nowhere else: the state card's chip, the urgency picker's rows, the note dialog's badge
   and the timeline row all take the glyph. It lives on the model beside `pinAsset`,
-  mirroring `SignalStatus.icon`, so the next surface cannot pick up a literal the way the
-  inbox had.
+  mirroring `SignalStatus.icon`, so no surface picks up its own literal.
 - **Urgency change:** `UrgencyPicker`, in the manage sheet, for the **reporter or signal
   owner** (§4.8);
   everyone else sees the card's read-only urgency row (§4.6). Updates `urgency` + `lastUpdatedBy` and appends an
@@ -2114,9 +2021,8 @@ full-width child sat left — so the page stopped centring half way down.
 - **Coordination writes go through one writer** (`SignalOwnershipService.coordinationBatch`):
   the changed fields, the `coordinationStamp`, and the timeline events describing them, in
   one batch. The three write paths that share it — the status dropdown / urgency picker
-  (`_applyLevelChange`), the tag picker, and the edit screen's Save — each used to spell it
-  out, and the stamp was already extracted once *because the edit screen forgot it*. Field
-  names come off `SignalEventType.signalField`, so a write and the event describing it
+  (`_applyLevelChange`), the tag picker, and the edit screen's Save — would each otherwise
+  spell it out, and forgetting the stamp is the easy mistake. Field names come off `SignalEventType.signalField`, so a write and the event describing it
   cannot name different fields. Events are passed already-encoded, so each payload stays
   type-checked against its own subtype (§12.5a); taking the type and raw values here would
   need an `Object?` pair and undo that split. **Trip-wire:** the note dialog takes one
@@ -2126,7 +2032,7 @@ full-width child sat left — so the page stopped centring half way down.
   joining the note protocol should make the dialog take a list of pending changes instead
   of adding a sixth.
 - **Update note (master spec §4.6):** every timeline-writing change — both level changes
-  and a tag change (#80) — goes through
+  and a tag change — goes through
   `showUpdateNoteDialog` (`update_note_dialog.dart`) before anything is written. Confirm
   stays disabled until the *trimmed* note is non-empty, and the field is capped at
   `SignalEventType.maxNoteLength` (500) to match the rules. Returning null means the user
@@ -2145,22 +2051,20 @@ full-width child sat left — so the page stopped centring half way down.
   (each is a `_HistorySource`, so a third source would not mean three more fields):
   the history gives up only when neither can be read, and when exactly one fails it renders
   what it has above an inline "part of this history could not be loaded" row with a Retry.
-  One shared error slot blanked a perfectly readable comment thread the moment the `events`
-  read was denied — which is every device until the rules are deployed, and any future
-  single-collection rules mistake. Ties break by document id — Dart's `sort`
+  A shared error slot would blank a readable comment thread whenever one collection's read
+  is denied, e.g. by a single-collection rules mistake. Ties break by document id — Dart's `sort`
   is not stable, and the list would otherwise reshuffle between rebuilds. A document with
   an unknown `type` is **skipped, not thrown on**: it came from a newer build.
   *All* / *Events* chips filter in memory; both listeners stay subscribed either way.
-- **The opening row names the needs the signal was REPORTED with** (#80), derived by
+- **The opening row names the needs the signal was REPORTED with**, derived by
   `tagsAtReport` from the earliest `tags_change` event's `oldTags` — or, with no change yet,
   from the signal's current tags. Nothing stores it and nothing is backfilled. That line is
   what lets every later row say only what it changed *to*: "was X, now Y" on every row is
   the restatement the timeline exists to avoid. Only rendered once the `events` listener has
   actually delivered — this screen renders as soon as *either* source has, so deriving from
   a merely-empty list would name today's tags as the opening ones and correct itself a frame
-  later. The one knowingly approximate case is a signal whose tags were changed *before*
-  `tags_change` existed: no event records it, so the row reports today's tags. It degrades
-  with time rather than staying wrong.
+  later. The one knowingly approximate case is a signal whose tags changed with no
+  `tags_change` event recording it (older data): the row reports today's tags.
 - **Help tags:** a read-only row on `SignalStateCard`, plus a Change affordance **in the
   manage sheet** for the reporter or owner
   that opens `showHelpTagPicker` (`help_tag_picker_sheet.dart`, wrapping the existing
@@ -2171,8 +2075,8 @@ full-width child sat left — so the page stopped centring half way down.
   Changing them writes `helpNeededTags` + the coordination stamp **and a `tags_change`
   event, behind the same update-note dialog a status change uses** — §4.2 describes the
   case holder completing tags as needs are met, which makes this the working-the-case
-  gesture rather than a correction, and until #80 it was the only owner-editable field
-  that changed a signal leaving nothing behind saying who changed it or why. A
+  gesture rather than a correction, and like every other owner edit it must leave a
+  record of who changed it and why. A
   confirmation that changed nothing writes nothing (`listEquals`, so a *reordering*
   counts — order is priority). **The edit screen writes the same event**, and when one
   save changes urgency and tags together it asks for **one** note and writes **two**
@@ -2242,13 +2146,12 @@ full-width child sat left — so the page stopped centring half way down.
   the whole edit story: *a mention that no longer reads exactly as it was inserted stops
   being a mention*. Two participants sharing a display name are told apart only by position,
   which can mis-attribute one mention and costs exactly one mis-worded push.
-- **Remove signal** (#68): two dialogs, then one call to `signalRemoval`.
+- **Remove signal**: two dialogs, then one call to `signalRemoval`.
 
-  **The first dialog exists because of what people were actually using Delete for.** A
-  reporter whose animal has been helped reaches for Delete rather than Resolved — the signal
-  is finished, so the post feels like clutter. That threw away the outcome others could
-  have learned from and, while statistics were a live `count()`, the credit for having
-  reported it at all. So an **open** signal is asked *"Is this signal resolved?"* with
+  **The first dialog exists because of what people reach for Delete to do.** A reporter
+  whose animal has been helped reaches for Delete rather than Resolved — the signal is
+  finished, so the post feels like clutter — which throws away the outcome others could
+  learn from. So an **open** signal is asked *"Is this signal resolved?"* with
   **Mark as resolved** as the primary action; an already-resolved one goes straight to the
   removal confirmation and is not nagged. Resolving from here reuses `_updateSignalStatus`,
   so it asks for the same mandatory update note and offers claim-to-act exactly as the
@@ -2265,18 +2168,13 @@ full-width child sat left — so the page stopped centring half way down.
   else. The client shows `signalUnderReview` for that `failed-precondition` and
   `failedToRemoveSignal` for anything else.
 
-  **What this replaces**, and why none of it comes back: a client-side cascade of
-  best-effort Storage deletes plus one batch emptying `comments`, `events` and
-  `takeoverRequests` **by name**. It could not be finished (an app killed mid-cascade
-  orphaned them permanently — Firestore keeps subcollection documents when the parent goes,
-  and `isParentSignalReporter` then *errors* on the missing parent, so nothing could go
-  back for them), it forced three delete rules open (§5.1), and it carried a standing
-  hazard: *adding a subcollection to a signal meant remembering to add it to
-  `_deleteHistory`*. `recursiveDelete` has no list to forget.
+  **There is no client-side cascade.** Firestore keeps subcollection documents when the
+  parent goes, so a client deleting them *by name* could be killed mid-way and orphan them
+  permanently, and adding a subcollection would mean remembering to add it to the list.
+  `recursiveDelete` on the server has no list to forget.
 
-  **`_hasNavigatedAway` is still claimed before the call** (R6-002), for a changed reason:
-  the local cache no longer applies the delete instantly — the server does the write — but
-  the still-live listener does report the document missing the moment that lands, and the
+  **`_hasNavigatedAway` is claimed before the call**: the server does the write, the
+  still-live listener reports the document missing the moment that lands, and the
   `deletedWhileOpen` branch would pop a route of its own and replace the success message
   with the *other* user's "no longer available". The claim is released if the call throws.
 - **Leaving:** `_leaveScreen` is the single exit — it claims the exit
@@ -2296,7 +2194,7 @@ This is not hypothetical for one route only: `flutter_deeplinking_enabled` is on
 cold-launch as the only route. There the framework implies no back button; on iOS there
 is no hardware back either, and these screens' `PopScope(canPop: false)` disables the
 interactive edge swipe. Without a leading the screen is a dead end that only a force-quit
-escapes (R6-003). Used by signal details (all states) and clinic details (all states,
+escapes. Used by signal details (all states) and clinic details (all states,
 including its loading spinner).
 
 ### 7.6 Notifications
@@ -2376,7 +2274,12 @@ the push carried it work too. See §7.5 for what the screen does with it.
 `SignalNavigatorObserver` counts as "over the tabs" every named go_router page that is not a
 tab, **and** any full screen pushed straight onto the Navigator — the signal's photo viewer —
 so a comment push about the signal beneath it opens a copy the reader can see. Dialogs and
-sheets are popup routes and do not count.
+sheets are popup routes and do not count. It keys on `Routes.shellBranchNames` and
+`Routes.signalDetailsName`, because go_router names a page after the route's `name:`
+(the path is only a fallback for unnamed routes), and it tracks route objects, reading
+the open signal's id from the page's `arguments`. So it knows which signal is on top
+however it was opened, which is what lets a push about a thread already open scroll it
+instead of stacking a copy.
 
 **Server fan-out** — see §9. Four push types: `new_signal` (nearby users),
 `status_change`, `urgency_change` and `new_comment` (subscribers).
@@ -2430,7 +2333,7 @@ leaves every field null, so `getSettingsFromPigeon` skips `setLocalCacheSettings
 builds plain SDK defaults — identical to what `LocationUpdateReceiver`'s native write
 started the client with. Assigning **any** custom Firestore `Settings` in Dart breaks that
 equality, and the failure is silent: the headless isolate's geo query fails and
-`NearbySignalChecker` reports it as "no signals nearby". Two things defend this now —
+`NearbySignalChecker` reports it as "no signals nearby". Two things defend this:
 `test/firestore_settings_guard_test.dart` fails the build on any `.settings` assignment in
 `lib/`, and the geo query reports failures to Crashlytics instead of only `debugPrint`. The
 iOS half has its own guard: `ios/RunnerTests/NativeFirestoreGuardTest.swift` scans every
@@ -2447,8 +2350,8 @@ The geohash encoder therefore has **two production implementations** — Dart (v
 `geoflutterfire_plus`) and Kotlin — which must produce **byte-identical base32, precision
 9**: the fan-out matches users with a geohash *range* query, so a drifted encoder silently
 stops matching them with no error. Guarded by
-`android/app/src/test/kotlin/.../GeohashTest.kt`. `ios/Runner/Geohash.swift` survives only
-for `ios/RunnerTests/GeohashTest.swift`; it is no longer on any production path.
+`android/app/src/test/kotlin/.../GeohashTest.kt`. `ios/Runner/Geohash.swift` exists only
+for `ios/RunnerTests/GeohashTest.swift` and is on no production path.
 
 Native state (enabled flag, gate, test mode) lives in **native-owned preferences**, not
 Dart's `shared_preferences` — Dart stores doubles there as prefixed *strings* and newer
@@ -2459,9 +2362,9 @@ versions may use Jetpack DataStore, so a native read breaks silently.
 - `distanceFilterMeters = 500`, `LocationAccuracy.medium`.
 - `startLocationTracking()` **checks the permission and never asks for it**. Its caller
   (the settings toggle, the onboarding sheet) owns the prompt, because the method also
-  runs at launch — and because it used to re-request what its caller had just requested,
-  so one tap could raise two identical dialogs, and **on Android the second refusal is
-  the one that blocks the permission for good**. It returns
+  runs at launch, and re-requesting what its caller just requested would raise two
+  identical dialogs for one tap — **on Android the second refusal is the one that blocks
+  the permission for good**. It returns
   `LocationTrackingResult.{full, foregroundOnly, denied, deniedForever, serviceDisabled}`
   sourced from what the **native monitor actually started**, not re-derived from the
   permission enum. The settings screen explains `foregroundOnly` rather than appearing
@@ -2475,7 +2378,7 @@ versions may use Jetpack DataStore, so a native read breaks silently.
     `shouldShowRequestPermissionRationale` being false and only the *request* reports it.
     A caller that has just asked therefore passes what it got as `knownPermission`, which
     also spends one platform round-trip fewer. Without that, a permanently-blocked user
-    was told to try again on a dialog the OS will never show.
+    would be told to try again on a dialog the OS will never show.
   - `serviceDisabled` — location is off device-wide, which is not about this app's
     permission at all and wants the **device** location page. `requestPermission()`
     reports on the permission alone; `startLocationTracking` owns the service check.
@@ -2491,13 +2394,13 @@ versions may use Jetpack DataStore, so a native read breaks silently.
   **checks, never requests** (no tap is behind it) and turns the toggle on if the OS now
   agrees, persisting the preference. A refusal that is still a refusal leaves the marker
   set, so the next return tries again. `NotificationService.hasNotificationPermission()`
-  is the non-prompting check that makes this possible, and the onboarding sheet's own
-  copy of that authorization-status test now calls it.
-- **The onboarding sheet stores what actually started**, not the permission enum. It used
-  to count "location is off device-wide" and a background monitor that refused to arm as
-  success and write `locationTrackingEnabled: true` for someone whose position is never
-  written — the fan-out then drops that account for having no usable location while the
-  preference reads on. It reads `LocationTrackingResult` like the settings screen does.
+  is the non-prompting check that makes this possible; the onboarding sheet uses it too.
+- **The onboarding sheet stores what actually started**, not the permission enum: it reads
+  `LocationTrackingResult` like the settings screen does. Counting "location is off
+  device-wide" or a background monitor that refused to arm as success would write
+  `locationTrackingEnabled: true` for someone whose position is never written, and the
+  fan-out would drop that account for having no usable location while the preference
+  reads on.
 - Both toggles **report** platform-call exceptions instead of swallowing them.
 - `initialize()` runs on **every launch** and restores tracking if
   `locationTrackingEnabled` is true and permission is already held. It **checks, never
@@ -2537,16 +2440,16 @@ constructor makes the same two calls, and both are idempotent — it only has to
 here too because the lookup needs the library and runs first.
 
 The condition is exactly the one every test environment hides: `flutter run`, an
-instrumentation run and every QA pass all have an Activity.
+instrumentation run and every manual test pass all have an Activity.
 `android/app/src/test/.../FlutterBootstrapGuardTest.kt` replaces the loud symptom — it
 fails the build if a file calling into `FlutterJNI` omits the init, or if the init moves
 below the lookup.
 
 **Catches on this path are `Throwable`, not `Exception`.** `UnsatisfiedLinkError` is an
-`Error`, so it sailed straight through the receiver's old guard; and an `Error` escaping
-`startEngine` would run past that frame's reset and leave `running` stuck true, silently
-disabling the check for the life of the process. The **location write is now issued before
-the catch-up check**, so a cold engine boot cannot delay the thing the fan-out depends on.
+`Error`, so an `Exception` guard lets it through; and an `Error` escaping `startEngine`
+would run past that frame's reset and leave `running` stuck true, silently disabling the
+check for the life of the process. The **location write is issued before the catch-up
+check**, so a cold engine boot cannot delay the thing the fan-out depends on.
 
 **Native failures are Crashlytics non-fatals** (`NativeCrashReporter.kt`,
 `ios/Runner/NativeCrashReporter.swift`). `main.dart`'s `FlutterError.onError` and
@@ -2655,7 +2558,7 @@ every URL on the host, including the `.well-known` files.
 | Case | Path |
 |---|---|
 | Cold launch | Flutter's built-in deep linking (`flutter_deeplinking_enabled` / `FlutterDeepLinkingEnabled`) applies the link as the initial route before the first frame |
-| Warm start | Built-in handling **does not fire** — `DeepLinkService` listens on `app_links`' `uriLinkStream` and calls `SignalNavigator.open()`. Device-verified: cold start worked, warm start did nothing, before this existed. |
+| Warm start | `DeepLinkService` listens on `app_links`' `uriLinkStream` and calls `SignalNavigator.open()` (but see *Two handlers* below) |
 | Deferred (Android, post-install) | The hosted page appends `referrer=signal=<id>` to the Play URL; `DeferredDeepLinkService` reads it via the Install Referrer API **once per install** and opens the signal |
 | Deferred (iOS) | **Deliberately not implemented** — the only carrier is the clipboard, and reading it raises "Allow Paste" as a new user's first interaction. The Smart App Banner (`apple-itunes-app`) and re-tapping the link cover it. |
 
@@ -2670,6 +2573,18 @@ Flutter engine inside that app's task.
 **`SignalNavigator`** is the single seam: it `push`es (so back returns to the map, which
 then focuses the pin), no-ops when already on that signal (absorbing the launch link
 `app_links` replays on cold start), and records `pendingFocusSignalId`.
+
+**Two handlers see every link.** Both platforms enable Flutter's built-in deep linking
+*and* run the `app_links` listener. When the built-in handler takes a link it applies it
+as a new location (a `go`, not a `push`), which replaces the stack: a link arriving over
+the New Signal wizard destroys that route, and two links in a row leave only the second.
+`SignalNavigator.open` then dedupes. Its `_shellIsOnTop` guard protects the FCM-tap and
+deferred-install paths, which really call `open()`, but not links. The wizard survives
+because its draft *and its step* live in `mapViewModelProvider`, so re-entry resumes
+where the reporter was. The deferred-install hand-off asks `AppLinks.getInitialLink()`
+whether the launch came from a link, a question with no dependency on which handler
+installed the route first; otherwise it could open a stale stored signal instead of the
+one the user tapped.
 
 **Public fallback page** — the `signalLink` HTTPS function, reached via a Hosting
 rewrite of `/signal/**`. Only ever hit when the app *isn't* installed or from a desktop
@@ -2701,7 +2616,7 @@ can reach says otherwise.
 - **My Signals** — streams the active signals collection filtered by
   `reporter == users/{uid}`, ordered by `createdAt desc`, showing urgency colour, tag icon
   and date. Signed-out users get a sign-in prompt.
-- **Removed** (#68) — streams `removedSignals` filtered by `data.reporter`, which is the
+- **Removed** — streams `removedSignals` filtered by `data.reporter`, which is the
   only shape the rules permit (§4.1); the test-mode split is applied in memory rather than
   as a second `where`, so one composite index is enough. Each row carries **the purge date,
   not the removal date** — what the user needs from it is how long they still have — plus
@@ -2721,32 +2636,23 @@ can reach says otherwise.
 `/my_notifications` shows the newest 50 entries from `users/{uid}/notifications`
 ordered by `createdAt desc`: unread bold with an orange dot, swipe-to-delete,
 mark-all-read and clear-all, plus signed-out and empty states. It is **tab 4** of the
-bottom bar, whose icon carries a `Badge.count` of unread entries. (It was a drawer tile
-until the bar replaced the drawer; the badge moved with it, and its stream is now keyed on
-uid **and** test mode, because the bar is never disposed and the inbox query is scoped by
-`testMode` when the listener is created.)
+bottom bar, whose icon carries a `Badge.count` of unread entries. The badge's stream is
+keyed on uid **and** test mode, because the bar is never disposed and the inbox query is
+scoped by `testMode` when the listener is created.
 
-The feature was deferred on 2026-05-30 — the page and route were kept but deliberately
-left unreachable — and completed on 2026-08-04. The four gaps that had to close, all
-verified rather than assumed before the work started:
+**What it depends on:**
 
-1. **Nothing had ever written the subcollection** at any commit in the project's history;
-   pushes were fire-and-forget FCM. `writeInboxEntries` in `functions/src/index.ts` now
-   persists one document per recipient alongside every push. The two Admin-SDK *deletes*
-   in `deleteAccount` and `deleteAnonymousUserData` predated the writer and finally
-   operate on data that can exist.
-2. **The rules denied every operation the page performs**, because rules do not cascade
-   into subcollections (§5.1). There is now a `match /users/{userId}/notifications/{id}`
-   block, covered by `firestore-tests/rules.test.js`.
-3. **No UI entry point.** Added to the navigation drawer, deliberately *outside* the
-   signed-in branch: the arrival catch-up writes entries for anonymous users too. (Now a
-   bottom-bar tab, shown on the same terms.)
-4. **The `type` vocabularies diverged.** The page rendered `signal_update` / `comment` /
-   `status_change` / `nearby_signal`; the functions emitted `new_signal` /
-   `status_change` / `new_comment`. **The page moved, not the wire** — `data.type` is a
-   contract with every installed build, and `signal_update` was emitted by nothing. The
-   canonical set is now `new_signal | status_change | new_comment | nearby_signal`, used
-   identically by the FCM payload and the stored document.
+1. **A writer.** `writeInboxEntries` in `functions/src/index.ts` persists one document per
+   recipient alongside every push; `deleteAccount` and `deleteAnonymousUserData` delete
+   the subcollection.
+2. **Its own rules block.** Rules do not cascade into subcollections (§5.1), so
+   `match /users/{userId}/notifications/{id}` is explicit, covered by
+   `firestore-tests/rules.test.js`.
+3. **No sign-in wall.** The arrival catch-up writes entries for anonymous users too, so
+   the tab is shown on the same terms.
+4. **One `type` vocabulary.** The page renders the `type` values the FCM payload carries
+   (§7.6), used identically in the stored document. `data.type` is a contract with every
+   installed build, so the page follows the wire, never the reverse.
 
 **Rows are localized client-side.** The stored `title`/`body` are the English strings the
 push carried and are a *fallback only*: `_title`/`_body` in `my_notifications_page.dart`
@@ -2780,7 +2686,7 @@ surfacing in the production inbox would deep-link to an id that does not exist i
 `signals`. This needs the `notifications` composite index (`testMode ASC, createdAt DESC`)
 in `firestore.indexes.json` — the query is dead without it.
 
-**The iOS badge (F-008) is fixed by the same machinery.** `userCounters/{uid}` (§4) holds
+**The iOS badge uses the same machinery.** `userCounters/{uid}` (§4) holds
 the unread count; `_HelpAPawState` reconciles it and the OS badge on resume and the page
 does the same on open, through the native `org.helpapaw.helpapaw/app_badge` channel
 (`AppDelegate.setUpAppBadgeChannel`, no-op on Android where launchers read the shade).
@@ -2800,10 +2706,9 @@ and the three handlers pass that map to `sendNotificationsToUsers`; a uid with n
 falls back to `badge: 1`. If the inbox write fails the map is cleared, so a half-written
 batch cannot put a number on the icon that contradicts the inbox.
 
-⚠️ **Known consequence, accepted deliberately (owner decision, 2026-08-04).** iOS badges
-are sticky — only the app can clear one. On builds predating the client-side reset the
-count climbs and never comes back down, for as long as those users go without updating.
-The alternative was holding the badge at a permanently misleading `1`.
+⚠️ **Known consequence, accepted deliberately.** iOS badges are sticky — only the app can
+clear one — so on builds without the client-side reset the count climbs and never comes
+back down until those users update. The alternative is a permanently misleading `1`.
 
 **Cost.** One document write plus one counter write per recipient per event, on top of a
 fan-out that already dominates the projected bill (`COST_ANALYSIS.md`). Retention is 90
@@ -2881,8 +2786,8 @@ reason is required, free text is optional (a moderator triaging a queue needs th
 far more than prose, and demanding an explanation is what stops people reporting at all) —
 **except for `other`**, the one reason whose category says nothing, where the text becomes
 mandatory and Send stays disabled until it is non-blank. Entry points: a flag in the signal
-app bar for non-authors, and the `⋮` on a comment row. This is the affordance
-`faqReportInappropriateAnswer` had been pointing users at since before it existed.
+app bar for non-authors, and the `⋮` on a comment row; `faqReportInappropriateAnswer`
+points users at them.
 
 **Actions are Cloud Functions, not rules.** One callable, `moderateAction`, dispatching on
 an `action` field. Every action shares four steps that must never be skipped —
@@ -2962,7 +2867,7 @@ touch it.
 
 The sheet is target-shaped rather than report-shaped: `ModerationTarget`
 (`models/moderation_target.dart`) carries the `targetType`, `collection`, `signalId` and
-`targetId` that used to be read straight out of a raw report map, with
+`targetId` rather than reading them out of a raw report map, with
 `ModerationTarget.fromReport` holding the decoding for the queue path. It keeps that
 decoding's two safety properties — **`collection` is never defaulted to `'signals'`**, so a
 report whose collection cannot be read offers no signal-targeting action rather than acting
@@ -3011,14 +2916,12 @@ along with a parity test.
 
 ### 7.17 Presentation layer (`lib/src/theme/`, and the shared widgets under it)
 
-The app was themed as `ThemeData(primarySwatch: Colors.orange, useMaterial3: true)`,
-which does not do what it reads like: **Material 3 ignores `primarySwatch` entirely**,
-and with no `colorScheme` and no `colorSchemeSeed` `ThemeData` falls through to the M3
-baseline. So every unstyled widget rendered **purple `#6750A4` on a lavender `#FEF7FF`
-scaffold** — all 45 dialog "Cancel" buttons, switches, sliders, checkboxes, both
-`TabBar`s, focus rings, most spinners, the navigation drawer's selected tile and the whole
-`firebase_ui_auth` sign-in screen. The ~294 hardcoded colour literals scattered through
-`lib/` existed to paint around exactly that.
+**Material 3 ignores `primarySwatch` entirely.** With no `colorScheme` and no
+`colorSchemeSeed`, `ThemeData` falls through to the M3 baseline and every unstyled widget
+renders **purple `#6750A4` on a lavender `#FEF7FF` scaffold**: dialog buttons, switches,
+checkboxes, `TabBar`s, focus rings, spinners and the whole `firebase_ui_auth` sign-in
+screen. So the app defines a full `ColorScheme`, and widgets take colours from it rather
+than painting around the baseline with literals.
 
 #### 7.17.1 The theme (`theme/app_colors.dart`, `theme/app_theme.dart`)
 
@@ -3035,8 +2938,8 @@ split by role:
 
 White on `#FF9800` is 2.16:1 — below AA (4.5:1) and below even the 3:1 bar for large text
 and UI components. That is accepted **behind** content, because the app bar and FAB are
-the app's identity and are unchanged; it is not accepted **as** content. Secondary text
-moved off `grey[500]` (2.68:1) onto `#5F5F5F` (6.39:1).
+the app's identity and are unchanged; it is not accepted **as** content. Secondary text is `#5F5F5F`
+(6.39:1), not `grey[500]` (2.68:1).
 
 **Dark mode is on** (`darkTheme` + `themeMode`), and it works because the brand survives
 unchanged: the same `#FF9800` is simultaneously the worst foreground on white and one of
@@ -3047,72 +2950,59 @@ ground, white ink in both themes — a photograph does not want a theme), and Go
 tiles, which take a style asset instead (§7.3).
 
 > **A `ColorScheme` slot left unset falls back to its base.** `errorContainer` becomes
-> `error` and `onErrorContainer` becomes `onError` — silently. The dark scheme named
-> neither, so the background-location warning on Notification Settings rendered as a
-> **light salmon card with near-black text in the middle of a black screen**. Both are
-> declared now, and `test/theme_contrast_test.dart` is the durable half: it checks the
-> relationship between each surface and the ink named for it, in **both** brightnesses,
-> and would have failed on that card. It **pins** the one pair that does not pass —
-> white on brand orange, 2.16:1, in every app bar title and filled button — at its
-> measured value rather than skipping it, because that predates this work and is a brand
-> decision; the dark theme is held to the real 4.5.
+> `error` and `onErrorContainer` becomes `onError` — silently. A dark scheme that names
+> neither renders the background-location warning on Notification Settings as a **light
+> salmon card with near-black text in the middle of a black screen**, so both are
+> declared. `test/theme_contrast_test.dart` checks the relationship between each surface
+> and the ink named for it, in **both** brightnesses. It **pins** the one pair that does
+> not pass — white on brand orange, 2.16:1, in every app bar title and filled button — at
+> its measured value rather than skipping it, because that is a brand decision; the dark
+> theme is held to the real 4.5.
 
-**Type is on a named scale.** There were ~59 hardcoded `fontSize` values against 21 uses
-of `textTheme`, so the same kind of text was 16 on one screen and 18 on the next with
-nothing recording which was intended. `AppTheme` defines the scale and 55 `TextStyle`s
-ask for a **role**; the sizes in it are the ones the app already used, so this changed
-nothing visually — M3's own scale would have moved almost everything at once, which is a
-redesign, not a cleanup. The two remaining literals are the photo overlays.
+**Type is on a named scale.** `AppTheme` defines it and `TextStyle`s ask for a **role**,
+so the same kind of text is the same size on every screen. The sizes are the app's own,
+not M3's scale, which would move almost everything. The only literal sizes are the photo
+overlays.
 
 **One corner radius for floating surfaces.** Dialogs and modal sheets take `_radiusLarge`
-(20) from the theme. The app had 8, 10, 12 and 20 in use plus M3's un-set default of 28 —
-four answers to one question, and the filter sheet was visibly a different shape from
-every other sheet.
+(20) from the theme, never their own value or M3's un-set default of 28.
 
 `AppTheme.light` and `.dark` are `static final`, **not getters**: both are read from the
-root `build`, so getters rebuilt two whole `ThemeData` objects — a `ColorScheme` plus
-twenty component themes each — on every root rebuild, handing descendants a new theme
-identity to compare against.
+root `build`, so getters would rebuild two whole `ThemeData` objects — a `ColorScheme`
+plus twenty component themes each — on every root rebuild, handing descendants a new
+theme identity to compare against.
 
 #### 7.17.2 Colour means urgency, and nothing else
 
-See §4.5 and §4.6. `SignalStatus` traded its colour for a glyph and a neutral outlined
-chip; `SignalUrgency` keeps the traffic light, the filled chip and the map pin. The inbox
-made the same mistake in miniature — it had six accents, two of them red, so
-`nearby_signal` (`Colors.red`) meant the same thing to the eye as a Red Alert. **Only
-rows that announce an urgency are coloured**; the icon already says what kind of row it
-is.
+See §4.5 and §4.6. `SignalStatus` has a glyph and a neutral outlined chip;
+`SignalUrgency` has the traffic light, the filled chip and the map pin. The inbox follows
+the same rule: **only rows that announce an urgency are coloured** (a red `nearby_signal`
+row would read as a Red Alert); the icon already says what kind of row it is.
 
 #### 7.17.3 Layout: `PageWidth` and `AppBarTitle`
 
 - **`PageWidth`** (`widgets/page_width.dart`) caps a screen's content column at **600dp**
-  and aligns it `topCenter`. Six screens laid out as a single column across the full width
-  of an 800dp tablet — My Signals, the inbox, notification settings, feedback, FAQs and
-  profile — where a settings row put its switch a hand's width from its own label and the
-  description ran to ~110 characters a line. 600 is where a line of body text stops being
-  comfortable, and is the figure signal details had already arrived at on its own
-  (as a private `_pageWidth`). This is **not** a tablet layout — a list/detail split would
+  and aligns it `topCenter`, so on an 800dp tablet a settings row does not put its switch a
+  hand's width from its label. 600 is where a line of body text stops being comfortable.
+  It is used by My Signals, the inbox, notification settings, feedback, FAQs, profile and
+  signal details. This is **not** a tablet layout — a list/detail split would
   use the space rather than centre a column in it — but it is the difference between "not
   designed for this screen" and "designed for one column". `Align(topCenter)`, not
   `Center`: a `Scaffold` body gets loose height constraints, so a form shorter than the
   screen would otherwise float half way down with a gap above it.
 - **`AppBarTitle`** (`widgets/app_bar_title.dart`) is a `FittedBox(scaleDown)` that
   **shrinks the title rather than ellipsising it**, and is a no-op wherever the title
-  fits. In Bulgarian truncation was routine: "Детайли за сигнала" wants 252px against the
-  235px the signal-details bar leaves, so the screen announced itself as "Детайли за си…".
-  Applied to **all 15 app bars**, including the map's — whose title is also the seven-tap
+  fits. In Bulgarian truncation is routine: "Детайли за сигнала" wants 252px against the
+  235px the signal-details bar leaves. Used by **every app bar**, including the map's — whose title is also the seven-tap
   test-mode target (§3.2), so keeping the whole tap area matters beyond the reading.
 
 #### 7.17.4 Errors: `reportAndDescribe` (`utils/error_text.dart`)
 
-Fourteen `catch` blocks put the raw exception on screen —
-`l10n.failedToUploadPhoto(e.toString())` and its nine siblings — so a Storage rule denial
-read as *"Failed to upload photo: [firebase_storage/unauthorized] User does not have
-permission to access this object."* to a volunteer standing over an injured animal.
-Untranslated, unactionable, alarming. Meanwhile the exception itself went **nowhere**: no
-Crashlytics record, so the one party who could act on it never saw it. Both halves are the
-same mistake — the message went to the person who could do nothing with it and not to the
-people who could.
+A `catch` block sends the exception to Crashlytics and a sentence to the user, never the
+exception to the user. *"Failed to upload photo: [firebase_storage/unauthorized] User does
+not have permission to access this object."* is untranslated, unactionable and alarming to
+a volunteer standing over an injured animal, and an exception that is only shown is never
+seen by the people who could act on it.
 
 - **One call does both**, deliberately. Splitting it into a report and a describe would
   let a future `catch` block do one and not the other, and the one it would skip is the
@@ -3132,16 +3022,14 @@ people who could.
   a handled error becoming a crash report is the exact inversion of the point.
 - **A declined camera or photos permission is not reported.** It is a person saying no,
   and it would bury the reports that matter.
-- **The ARB strings lost their `{error}` placeholder** to match — a slot for an exception
-  is an invitation to pass one. `test/error_text_test.dart` fails the build if a
+- **ARB strings carry no `{error}` placeholder** — a slot for an exception is an invitation
+  to pass one. `test/error_text_test.dart` fails the build if a
   placeholder comes back (§12.15).
 
 #### 7.17.5 `StatusView` — one shape for empty and failed
 
-`StatusView` (`widgets/status_view.dart`) is promoted out of signal details, which was the
-only screen handling this properly. Everywhere else grew its own: three hand-rolled
-empty-state blocks (two of them in one file) and error handling that was a bare
-`Center(child: Text(snapshot.error.toString()))` — no retry, and a raw
+`StatusView` (`widgets/status_view.dart`) is the one empty/error block. A bare
+`Center(child: Text(snapshot.error.toString()))` offers no retry and puts
 `PERMISSION_DENIED: Missing or insufficient permissions` on screen, which is a fact about
 our security rules and not something a person can act on.
 
@@ -3152,47 +3040,38 @@ Signals (both tabs) and the inbox key their `StreamBuilder` on a **retry counter
 same dead stream. Signal details keeps its own way out (§7.5) because it is the screen a
 cold deep link can strand you on, but takes the shared block for the rest.
 
-The privacy-policy WebView had **no `onWebResourceError` at all**, so a tap in flight mode
-left a blank white page under a spinner that never stopped. It reports and retries now,
-and **only for main-frame failures** — a blocked font is not a reason to throw the page
-away. Its title was also `const Text('Privacy Policy')`, the app's last untranslated
-string, on the screen a Bulgarian user is most likely to reach from a consent prompt.
+The privacy-policy WebView handles `onWebResourceError` (without it, flight mode leaves a
+blank page under a spinner that never stops): it reports and retries, **only for
+main-frame failures** — a blocked font is not a reason to throw the page away. Its title
+is translated; it is the screen a Bulgarian user is most likely to reach from a consent
+prompt.
 
 #### 7.17.6 Smaller shared pieces
 
-- **`SectionHeader`** is now the only heading style. Notification settings had a private
-  copy that tinted headings with `primary`, feedback wrote ad-hoc `fontSize 16 / w500`,
-  and signal details indented headings with a **leading space inside the string**.
-- **`NewSignalProgress`** replaces two different progress treatments: step 1 on the map
-  drew a counter and a bar in the body, while the wizard welded a bar to the bottom of the
-  orange app bar with no step counter — white on pale orange, reading as a seam, so
-  progress appeared to vanish exactly where a user is deciding whether this will take all
-  day. One widget, on the page ground, in both places. (`NewSignalStep`'s own doc said
-  "Step 3 of 8" with seven steps.)
-- **`showSignInRequiredDialog`** — the dialog existed twice, identical apart from one
-  sentence, which is how its confirm ended up a `TextButton` on one screen and an
-  `ElevatedButton` on the next. One copy, taking the reason as a parameter.
-- **`utils/profile_validators.dart`** — the profile editor and "Complete your profile"
-  collect the same two fields and had drifted: completion required ≥2 characters and a
-  dialable number, inline under the field; the editor checked only that the name was not
-  blank, in a snackbar. So a name that could not be entered on one screen could be saved on
-  the other. One set of rules, shown the same way in both.
-- **`escapeLeading` is no longer overridden.** Eight screens hardcoded an `arrow_back`
-  leading, overriding the platform's own affordance — on iOS, a "Back" naming the screen
-  you came from. `escapeLeading` already returns null for a pushed route and draws an
-  arrow only for a cold-launched one (§7.5).
+- **`SectionHeader`** is the only heading style: no private copies, no ad-hoc sizes, no
+  leading spaces inside strings.
+- **`NewSignalProgress`** is the one progress treatment, a counter and a bar on the page
+  ground, used by step 1 on the map and by the wizard. A bar welded to the orange app bar
+  reads as a seam, and progress would seem to vanish exactly where a user is deciding
+  whether this will take all day.
+- **`showSignInRequiredDialog`** is the one sign-in-required dialog, taking the reason as
+  a parameter.
+- **`utils/profile_validators.dart`** holds one set of rules for the two fields the
+  profile editor and "Complete your profile" both collect, shown the same way (inline,
+  under the field) in both, so a name one screen refuses cannot be saved on the other.
+- **`escapeLeading` is not overridden.** A hardcoded `arrow_back` leading overrides the
+  platform's own affordance — on iOS, a "Back" naming the screen you came from.
+  `escapeLeading` returns null for a pushed route and draws an arrow only for a
+  cold-launched one (§7.5).
 - **Icon-only buttons carry a `tooltip`** — save, back, close, cancel, edit profile,
   change photo. `tooltip` sets the semantics label *and* gives a long-press hint in one
   argument, where a `Semantics` wrapper would only do the first.
-- **Deleting an inbox row offers Undo.** A swipe deleted the document outright while a
-  signal the user removes sits in a 30-day bin (§7.5); the row's data is kept in hand and
-  restored on Undo.
-- **The profile's X no longer discards silently.** It was a bare
-  `setState(_isEditing = false)`, one tap from Save. It compares against what was loaded
-  or last saved and asks only when there is something to lose.
-- **`AdaptiveContainer` (`adaptive_components`) is gone.** With no constraints passed it
-  rendered a `Container` with every argument null — a pass-through, plus a `LayoutBuilder`
-  on every rebuild and a nested `Scaffold` on two screens. The dependency was removed.
+- **Deleting an inbox row offers Undo**, as removing a signal does (§7.5); the row's data
+  is kept in hand and restored on Undo.
+- **The profile's X does not discard silently.** It compares against what was loaded or
+  last saved and asks only when there is something to lose.
+- **No `AdaptiveContainer`** (`adaptive_components`): with no constraints it is a
+  pass-through `Container` plus a `LayoutBuilder` on every rebuild.
 
 
 ### 7.18 The bottom bar (`home_shell.dart`, `home_bottom_bar.dart`, `menu_page.dart`, `watching_page.dart`)
@@ -3210,18 +3089,32 @@ The five tab roots take `automaticallyImplyLeading: false` and drop
 (it fires when `Navigator.canPop()` is false, which is a branch root's normal
 state).
 
-**The map's Firestore subscription is not paused off-tab, deliberately.** That is
-not a new cost — every drawer destination was already pushed *over* `/home`, so
-`MapScreen` has always survived the whole session — and resuming would re-read the
-entire geo window rather than a delta. The seam, if it ever changes, is one
-`isMapVisibleProvider` gating `signalsStreamProvider`.
+**The map's Firestore subscription is not paused off-tab, deliberately.** Resuming
+would re-read the entire geo window rather than a delta. The seam, if it ever changes,
+is one `isMapVisibleProvider` gating `signalsStreamProvider`.
 
-**What a permanent tab changes.** Four screens that used to be pushed and popped
-now live for the session, so anything they read *once* on open is now read once
+**The tabs live for the session**, so anything they read *once* on open is read once
 per launch. Every stream scoped by test mode is keyed on `testModeProvider`
 (My Signals, Watching, `MyNotificationsPage._inboxStream`, the unread badge), and
-the badge and the moderator stream are keyed on uid as well — the drawer was
-disposed on close, which had been silently repairing both.
+the badge and the moderator stream are keyed on uid as well; nothing disposes a tab
+to repair a stale key.
+
+**Mode and account are declared dependencies.** `lib/src/services/app_providers.dart`
+derives `signalsCollectionProvider` from `testModeProvider` and `sessionUidProvider`
+from `authStateChanges`, and the tab streams hang off them, so Riverpod disposes and
+rebuilds a query when either changes. The services take the mode or collection as a
+parameter (`NotificationInboxService.watchInbox`/`watchUnreadCount`,
+`SignalRemovalService.watchMine`), so a query that captures it at subscription time
+cannot be built without naming it.
+
+**`CachedUserDocStream`** is the one cached listener on `{collection}/{uid}` behind
+`ModerationService` and `SignalSubscriptionService`. It projects the document, fans it
+out, and re-points on `authStateChanges`, emitting `empty` on **any** account switch, so
+the previous account's follow set or moderator flag is never shown to the next.
+`watch()` returns a multi-listen stream (`Stream.multi` via `replayThenFollow`): every
+`listen` subscribes first and then replays the latest value, so nothing is dropped
+between the two, and a memoized stream can be listened to again, e.g. when a `ListView`
+re-creates an unkeyed `StreamBuilder` at a new index after an in-place account upgrade.
 
 **My Signals** is `reporter == me` merged with `signalOwner == me`
 (`MySignalsService`), deduped by id and sorted newest-first by `mergeMine`. Two
@@ -3244,9 +3137,17 @@ also how the test-mode/production id split takes care of itself. The follow list
 drives the query through `switchLatest` (`lib/src/utils/stream_merge.dart`): each
 new list cancels the previous query and starts the next, so a follow or unfollow
 anywhere re-pages a live tab; while the tab is hidden only the newest list and
-page are kept. **Never `asyncExpand`** — it waits for the inner stream to
-complete, a Firestore query never does, and the tab froze on the first list it
-saw (#86); a guard test enforces it.
+page are kept. **Never `asyncExpand`**: it waits for the inner stream to complete,
+a Firestore query never does, and the tab would freeze on the first list;
+`async_expand_guard_test.dart` enforces it. Paused, `switchLatest` keeps the newest value
+of each side rather than buffering. A buffering `switchMap` would replay stale pages on
+resume, and would cancel each query before FlutterFire's `onListen` finished
+registering, leaving it listening (and billing) for the life of the process. When the
+follow list changes, `watchingProvider` first emits the last page minus the unfollowed
+rows (`WatchedPage.retainOnly`), so an unfollowed row cannot reappear between the
+write's acknowledgement and the fresh page. The chunking, own-signal filter and paging
+live in `WatchingService`, and `hasMore` is counted *after* the filter, so a window
+made up entirely of the user's own signals pages on by itself.
 
 **Following is a notification subscription, not a bookmark**, and every label says
 so. `FollowButton` sits in the body under the owner block rather than in the app
@@ -3266,8 +3167,7 @@ titles, and the bar clamps its own text scaling to 1.2 while the rest of the app
 keeps scaling. `bulgarian_layout_test` covers it at 1.0 and 1.3.
 
 Note `NavigationBar` derives each destination's **accessibility name from the
-visible label, not the tooltip** (verified on device: the node reads
-"Мои, Раздел 2 от 5"), so the short form is what a screen reader announces and
+visible label, not the tooltip** (the node reads "Мои, Раздел 2 от 5"), so the short form is what a screen reader announces and
 what element-based device testing matches on. That is fine because every short
 form is a real word; it would stop being fine if one were abbreviated into
 something unreadable.
@@ -3287,28 +3187,25 @@ page is bilingual with a client-side language switch.
 
 The translations are Dart-side (`lib/l10n/*.arb`, compiled into `libapp.so`) and
 therefore **invisible to both platforms' packaging**. Three platform declarations sit
-beside them, and a Bulgarian user got an English app because one of them was missing:
+beside them, and if one is missing a Bulgarian user gets an English app:
 
 - **`android/app/build.gradle` → `bundle { language { enableSplit = false } }`.** Play
   splits an app bundle by language and installs only the splits matching the device's
-  locales **at install time**. Play's split logic cannot see the ARBs, so it decided from
-  Android resources — of which the app shipped none in Bulgarian. Someone who installed
-  while their phone was in English never received `split_config.bg.apk`, and switching the
-  system language afterwards does not reliably make Play backfill it; with no `bg` Android
-  resources present, Android resolves the activity config away from `bg` and Flutter's
-  `LocalizationPlugin` reads `en`. The Bulgarian strings sat in `libapp.so` the whole
-  time, correct and unreachable. Reproduced on build 132 by reinstalling the same splits
-  minus that one 25 KB file, and fixed by restoring it. **ABI and density splits are
-  untouched** — only the language dimension is disabled.
-- **`android/app/src/main/res/values-bg/strings.xml`** is the other half. That `bg` split
-  existed at all only because AndroidX and Play Services ship their own translations, so
-  whether Android considered `bg` supported rested entirely on the dependency set. The app
-  now owns Bulgarian resources.
+  locales **at install time**. Play's split logic cannot see the ARBs, so it decides from
+  Android resources. Someone who installs while their phone is in English never receives
+  `split_config.bg.apk`, and switching the system language afterwards does not reliably
+  make Play backfill it; with no `bg` Android resources present, Android resolves the
+  activity config away from `bg` and Flutter's `LocalizationPlugin` reads `en`, while the
+  Bulgarian strings sit in `libapp.so`, correct and unreachable. **ABI and density splits
+  are untouched** — only the language dimension is disabled.
+- **`android/app/src/main/res/values-bg/strings.xml`** is the other half: the app owns
+  Bulgarian resources, so whether Android considers `bg` supported does not rest on
+  AndroidX and Play Services happening to ship their own translations.
 - **`res/xml/locales_config.xml`** (Android 13+) and **`CFBundleLocalizations` +
   `knownRegions`** (iOS) declare the languages to the OS, which unlocks the **per-app
   Language picker** — Settings → Apps → Help a Paw → Language, and Settings → Help a Paw →
   Language. That is a convenience (run the app in a language other than the phone's, or
-  correct a mis-resolved locale without reinstalling), **not** the fix for the split bug.
+  correct a mis-resolved locale without reinstalling), **not** what fixes the language split.
   On iOS it is also what makes the App Store list Bulgarian as supported. It is *not* the
   iOS twin of the Play bug: a controlled A/B proved Flutter's iOS engine reads
   `NSLocale.preferredLanguages` — the system list, unfiltered by the bundle — so a build
@@ -3319,12 +3216,12 @@ beside them, and a Bulgarian user got an English app because one of them was mis
 
 `test/localization_config_guard_test.dart` fails the build when any of the four drift
 apart (§12). The compiler cannot see these relationships and every one of them fails
-without a log line, which is exactly how a fully translated app shipped an English UI.
+without a log line.
 
 **The map re-languages itself when the locale changes.** The Maps SDK picks its label
 language when the platform view is created and never revisits it, and there is no runtime
-setter — so changing language left Cyrillic labels under an English UI until a restart. A
-locale-keyed `Key` recreates the view. The camera is replayed from `onCameraMove`'s
+setter — so without help, changing language leaves Cyrillic labels under an English UI
+until a restart. A locale-keyed `Key` recreates the view. The camera is replayed from `onCameraMove`'s
 target/zoom/bearing/tilt, **not** from the view model's centre, which deliberately ignores
 moves under its 30 km re-query threshold and would teleport anyone who had panned a few
 streets. `onMapCreated` fires again, so its first-launch work (fly to the user, replay a
@@ -3332,8 +3229,8 @@ deferred deep link) is gated on `_mapController` still being null.
 
 **Bulgarian is where layouts break first**, and it is the primary language: its strings
 run 40–70% longer than the English ones, and a **release build hides the evidence** —
-`RenderFlex` only paints its overflow stripes in debug. Three overflows shipped in
-`7.0.0+131` and none was visible in English. `test/widgets/bulgarian_layout_test.dart`
+`RenderFlex` only paints its overflow stripes in debug, and none is visible in English.
+`test/widgets/bulgarian_layout_test.dart`
 pumps the affected widgets at **411dp in `bg`** (a Samsung J6) and fails on an overflow,
 on a chip wider than the screen, on an off-screen "Clear all", and on an app-bar title
 that truncates rather than scales. See §7.17.3.
@@ -3346,8 +3243,7 @@ invitation to pass one, and what gets passed is `e.toString()` (§7.17.4). Guard
 
 ## 9. Cloud Functions (`functions/src/index.ts`, Node 24, gen 2)
 
-> **Runtime.** `functions/package.json` pins `engines.node: "24"` — moved 20 → 22 → 24
-> on 2026-08-17, the last two in one sitting. Check what a local `node --version`
+> **Runtime.** `functions/package.json` pins `engines.node: "24"`. Check what a local `node --version`
 > actually reports before trusting it as evidence about the deployed runtime — the
 > default `node` on this machine is well ahead of it (a keg-only `node@24` is what
 > matches). `nodemailer` is on **10.x**. Its bundled type declarations
@@ -3370,7 +3266,7 @@ invitation to pass one, and what gets passed is `e.toString()` (§7.17.4). Guard
 | `getVetClinicDetails` | callable (App Check) | Places details (phone, rating, hours, Maps URI), 30-day cache per placeId |
 | `deleteAccount` | callable (App Check) | Anonymize + tombstone + delete (§7.2) |
 | `signalOwnership` | callable (App Check) | **Signal ownership** (§4.8) — claim / release / approveRequest / declineRequest. Rejects anonymous callers; writes the signal, the `ownership_transfer` event and the subscription in one batch. `functions/src/signalOwnership.ts` |
-| `caseOwnership` | callable (App Check) | **Compatibility alias for `signalOwnership`**, same handler, kept deployed only for builds released before the case→signal rename (§4.8a). Retire it with the other legacy shims |
+| `caseOwnership` | callable (App Check) | **Compatibility alias for `signalOwnership`**, same handler, kept deployed only for builds that still call it (§4.8a). Retire it with the other legacy shims |
 | `onTakeoverWritten` / `onTestTakeoverWritten` | **write** `…/takeoverRequests/{uid}` | **One** trigger per collection for both outcomes — tell the current owner somebody offered, or tell the requester they were answered. Audience of one either way, dispatched from the before/after pair with no read. `onDocumentWritten` rather than `onDocumentCreated` because a re-file after the cooldown makes a request pending without creating a document (§4.8); one trigger rather than two because a create and an update trigger on the same path would invoke two functions per write. A *withdrawal* matches neither branch — nobody needs telling that somebody changed their mind |
 | `autoApproveStaleTakeovers` | schedule `0 3 * * *` UTC (**daily**) | Hands over a signal whose stale owner never answered an offer: one `collectionGroup` query over `takeoverRequests` (`status == pending`, `createdAt <` now − `AUTO_APPROVE_DAYS`) covering **both** collections, ≤200 per run, each approval its own transaction that re-reads the signal and **re-checks staleness at sweep time** (§4.8). Daily rather than weekly because it is a deadline, not a cleanup. `retryCount: 0` — nothing here is cumulative |
 | `listQuarantined` | callable (App Check) | Lists hidden signals as **summaries** for the Hidden tab (§7.16). Separate from `moderateAction` because that endpoint's contract is a mandatory note plus an audit entry, and neither belongs on a read. Takes an optional `source` — `quarantine` (default, so an older client keeps getting the answer it always got) or `removed`, so a moderator investigating an account can see what it withdrew. The projection is what makes that safe: only title, actor and timestamp ever leave the server |
@@ -3393,7 +3289,7 @@ invitation to pass one, and what gets passed is `e.toString()` (§7.17.4). Guard
 2. Per candidate, apply the **hard gates** — the preferences the recipient floor below
    is never allowed to override: wrong `testMode`, the reporter, `enabled != true`,
    and a species they excluded (`animalTypes`, absent = all, empty = none). Species
-   is now the *only* hard preference gate — see the note in §4.2.
+   is the *only* hard preference gate — see the note in §4.2.
 3. Rank the survivors into four tiers by tag match (§4.7) and by whether the signal
    falls inside the radius they actually configured — Haversine to their tracked
    location vs `locationRadiusKm` (default 10), **or** to their region centre vs
@@ -3518,8 +3414,8 @@ Things that live in more than one place and fail **silently** when they drift.
 
 1. **Geohash encoders (×2 in production).** Dart (`geoflutterfire_plus`) and
    `android/.../Geohash.kt` — base32, precision 9, byte-identical. Guarded by
-   `GeohashTest.kt`. (`ios/Runner/Geohash.swift` is test-only since the iOS native
-   Firestore write was removed — see §7.)
+   `GeohashTest.kt`. (`ios/Runner/Geohash.swift` is test-only: iOS has no native
+   Firestore write — see §7.)
 2. **Help-tag and animal-type vocabularies (×2).** `HelpTag` / `AnimalType` (Dart) and
    `HELP_TAGS` / `ANIMAL_TYPES` (`functions/src/tags.ts`), plus the fallback tag, the
    per-signal cap, the suffix exemption, and an English name per code in
@@ -3656,9 +3552,8 @@ Things that live in more than one place and fail **silently** when they drift.
    **never appears in anyone's history**. All guarded by
    `test/signal_event_vocabulary_guard_test.dart`, which parses both files.
 
-   **The TypeScript copy is the dangerous one**, and it arrived with `moderateAction`'s `setUrgency`
-   (§7.16) — the first server-written event, which this invariant had been anticipating. A
-   server write goes through the Admin SDK and so **bypasses the rules entirely**: a wrong
+   **The TypeScript copy is the dangerous one** (`moderateAction`'s `setUrgency`, §7.16,
+   the server-written event). A server write goes through the Admin SDK and so **bypasses the rules entirely**: a wrong
    `type` or a wrong `old*`/`new*` key name is accepted, stored, and then dropped by the
    Dart decoder on read. The moderator's correction just never appears, and nothing logs
    it.
@@ -3763,23 +3658,18 @@ cd firestore-tests && npm ci && npm test  # Firestore + Storage rules — before
 firebase emulators:start        # auth 9099 · functions 5001 · firestore 8080 · storage 9199 · hosting 5000
 ```
 
-There is **no CI**. `.github/workflows/flutter.yml` was deleted 2026-08-17: it had
-never run (0 runs, `disabled_inactivity`) because its triggers pointed at a
-non-existent `main` branch, and it ran `flutter pub upgrade` — which ignores
-`pubspec.lock` — before executing package code via `flutter test`, on a public
-repo whose `GITHUB_TOKEN` defaulted to write. That repo default is now `read`.
-All checks are run locally; see the npm supply chain and pub upgrade sections of
-`CLAUDE.md`.
+There is **no CI**, deliberately: an automated job that runs `flutter pub upgrade`
+(which ignores `pubspec.lock`) and then executes package code via `flutter test` is a
+supply-chain hole. The repo's `GITHUB_TOKEN` defaults to `read`. All checks are run
+locally; see the npm supply chain and pub upgrade sections of `CLAUDE.md`.
 
 **npm hardening (both node trees).** `ignore-scripts=true` is committed in
 `functions/.npmrc` and `firestore-tests/.npmrc`; nearly every npm worm executes from a
 `preinstall`/`postinstall` hook and nothing in either tree needs one. `functions/.npmrc`
-**is** uploaded with the function source on deploy (verified 2026-08-17: inflating it
-grew the packaged payload 183.05 KB → 495.1 KB), so it disables scripts in the Cloud
+**is** uploaded with the function source on deploy, so it disables scripts in the Cloud
 Build install too — and therefore **must never hold a registry token**, which would ship
 to Cloud Build with the source. Install with `npm ci`, never `npm install`, unless
-deliberately changing versions. Both trees audited clean 2026-08-17: 0 malware
-advisories across 559 package versions, 804/804 registry signatures verified.
+deliberately changing versions.
 
 ### 13.2 Test suites
 
@@ -3811,66 +3701,20 @@ rules grant access to a subcollection no released build writes to. Reads degrade
 gracefully (§7.5 renders the half it can and offers a retry); **writes do not**, because
 atomicity is exactly what makes them all-or-nothing.
 
-⚠️ **Deployed 2026-08-15, reverted the next day, live again since.** A `firebase
-deploy --only firestore:rules` from a branch without the `events` block overwrote
-it — rules deploys replace the whole ruleset, so deploying an older file silently
-drops newer blocks. The symptom was the §7.5 partial-history notice on *every*
-signal (the `events` listen denied while `comments` still worked) and status and
-urgency changes failing outright. The moderation deploy carried the block back
-out; **verified against the live ruleset 2026-08-18** — `isSignalEventCreate`,
-`isValidEventNote`, `isValidLevel` and both `events` matches are deployed.
+⚠️ **Rules deploys replace the whole ruleset.** A `--only firestore:rules` from a branch
+missing a block silently drops it from production. Without the `events` block, for
+example, every signal shows the §7.5 partial-history notice and status and urgency
+changes fail outright. **Merge before deploying rules, and re-read the live ruleset
+afterwards**: do not assume the checkout matches what is deployed.
 
-**The drift now runs the other way, and it is the same hazard.** The live ruleset
-is `feature/moderator-role`'s, which is `dev`'s plus the moderation blocks
-(`isModerator`, `isCommentsLocked`, `isNotTouchingModeration`, `reports`,
-`moderationActions`, and `isCommentCreate` taking the parent collection). A
-`--only firestore:rules` from `dev` — or from any branch cut off it — reverts all
-of that: comment locks stop being enforced and a reporter can clear the
-`moderation` map a moderator wrote. **Merge before deploying rules; re-read the
-live rules afterwards.** Whichever way the drift points, the check is the same:
-read the deployed ruleset, do not assume the checkout matches it.
-
-**Removal (#68) ships in five steps, and step 5 is the one that waits.**
-
-1. **Deploy the functions** — `signalRemoval`, `purgeRemovedSignals`, the
-   `recordSignalPosted` increment, `deleteAccount`'s removal purge, `listQuarantined`'s
-   `source`. All additive; nothing released calls any of it.
-2. **Run `functions/scripts/backfill_signals_posted.js`** (dry run, then `--apply`).
-   **Before step 4, not after**: it counts the live `signals` collection, so once people
-   start removing signals the source it counts from is already gone and it would write
-   numbers *lower* than the ones it exists to restore.
-3. **Deploy the rules and indexes** — the `removedSignals` match plus its two indexes and
-   the `reports` one. Also additive: no released build touches that collection, and the
-   three cascade delete rules are **deliberately left as they are** at this point.
-4. **Release the app.**
-5. **Once that release is on the installed base**, flip `comments`, `events` and
-   `takeoverRequests` to `allow delete: if false`, delete `isParentSignalReporter()`, and
-   invert the corresponding assertions in `firestore-tests/rules.test.js` (they run once
-   per collection — see the loop at the top of the file).
-
-✅ **Steps 1 and 3 deployed to help-a-paw-dev 2026-08-21, and device-verified.** The live
-ruleset was byte-identical to this branch's baseline before the deploy (checked against the
-Rules API, not assumed), so the only effective change was the additive `removedSignals`
-block — no drift, nothing reverted. `signalRemoval` and `purgeRemovedSignals` were
-**created**; nothing was deleted (checked by diffing the deployed export list against the
-built one — the `listQuarantined` near-miss of the ownership deploy). The three new indexes
-built to READY and the `notifications` TTL policy survived (the deploy reported one
-unmanaged field override and, without `--force`, left it alone).
-
-**Step 2 is NOT done — it needs credentials this machine does not have.**
-`backfill_signals_posted.js` requires Application Default Credentials
-(`gcloud auth application-default login`); the same gap that leaves
-`grant_moderator.js` unverified. Harmless so far: nothing has removed a production
-signal, so the live-count source it reads is still complete. It must run **before** the
-app release.
-
-Step 5 cannot ride along with step 3, and that is the whole reason it is numbered
-separately: every already-released build still runs the old client cascade, whose single
-batch covers all three subcollections. Denying it makes that batch fail atomically — so
-nothing is deleted and the user gets an error rather than a half-deleted signal, which is
-clean but is still a Delete button that does not work until they update. This is the same
-sequencing #71 is waiting on; #67, the third such item, cleared it once `633da3b` reached
-a released build.
+**Signal removal's last rules step waits for a release.** Once the app release carrying
+`signalRemoval` is on the installed base, flip `comments`, `events` and
+`takeoverRequests` to `allow delete: if false`, delete `isParentSignalReporter()`, and
+invert the corresponding assertions in `firestore-tests/rules.test.js` (they run once
+per collection — see the loop at the top of the file). Earlier than that it breaks
+released builds' client-side cascade (§5.1): its single batch covers all three
+subcollections, so denying it fails the batch atomically and leaves those users with a
+Delete button that does not work until they update.
 
 ### 13.4 API key restrictions
 
@@ -3884,98 +3728,29 @@ silently breaks Auth/Firestore/FCM in release builds only.
 
 | Item | Status |
 |---|---|
-| Anonymous callers not blocked server-side on signal/comment create | Closed — M-1 second half landed once `633da3b` shipped in 6.0.2+126 (#67, §5.1) |
-| Avatar upload denied; test-mode signal photos denied; failed upload reported as success | Fixed 2026-08-01 (BUG-1/2/3, §5.2); rules deployed, BUG-3 needs an app release |
 | 5-photos-per-signal cap is UI-only | `firestore.rules` does not bound the `photoUrls` array length |
-| `/my_notifications` not functional | **Done 2026-08-04** (§7.13). Backend live in production (rules, `notifications` index, functions, 90-day TTL policy); device-verified on Android and iOS. The client half reaches users only with the next app release |
 | iOS deferred deep links | Deliberately not implemented (clipboard prompt cost) |
-| iOS unread badge count | **Fixed 2026-08-04** — real `badge: N` from `userCounters`, cleared on resume via the native badge channel. Accepted consequence: on pre-release builds the badge climbs and never clears (§7.13) |
 | In-app inbox retention | 90 days via a Firestore TTL policy on `expiresAt`; the policy is applied with `gcloud`, **not** by `firebase deploy` |
-| Signal history is client-written and reporter-deletable | **Fix built, deploy pending** (#68). `signalRemoval` moves removal server-side and `purgeRemoval` erases descendants with `recursiveDelete`, so nothing in the new client deletes a subcollection document. What remains is flipping `comments`, `events` and `takeoverRequests` to `if false` — **step 5 of §13.3**, which must wait for the release, because denying them breaks the old client's cascade batch. `comments` was the worse half all along: no author-delete rule exists, so a reporter can delete anyone's comment on their own signal, unaudited |
-| A removed signal is retained for 30 days | By design (#68), and the trade the recovery window buys. `REMOVED_RETENTION_DAYS` is enforced by `purgeRemovedSignals`, and "Delete permanently" plus `deleteAccount` are the immediate-erasure paths. **The privacy policy must state the window, and it is NOT in this repo** — `privacy_policy_page.dart` is a WebView onto `https://www.helpapaw.org/privacypolicy`, so this is an edit somebody has to make on the site, not a code change. Master spec §A2 still lists the data-retention policy as unwritten. A disclosed bounded window plus a purge that actually runs is the whole basis for this being a bin rather than indefinite retention; without the disclosure it is just retention |
+| Reporters can delete subcollection documents on their own signals | Open until the last rules step of §13.3. `comments`, `events` and `takeoverRequests` still grant the parent signal's reporter a delete for released builds' client-side cascade; the current client never uses it (§5.1). On `comments` it is the worse half: no author-delete rule exists, so a reporter can delete anyone's comment on their own signal, unaudited |
+| A removed signal is retained for 30 days | By design, and the trade the recovery window buys. `REMOVED_RETENTION_DAYS` is enforced by `purgeRemovedSignals`, and "Delete permanently" plus `deleteAccount` are the immediate-erasure paths. **The privacy policy must state the window, and it is NOT in this repo** — `privacy_policy_page.dart` is a WebView onto `https://www.helpapaw.org/privacypolicy`, so this is an edit somebody has to make on the site, not a code change. Master spec §A2 still lists the data-retention policy as unwritten. A disclosed bounded window plus a purge that actually runs is the whole basis for this being a bin rather than indefinite retention; without the disclosure it is just retention |
 | A removed signal's comments, events and photos stay readable | Open — the same two gaps hiding already has, now reachable more often. `signalRemoval` moves only the document; `comments`/`events` are `read: if true` and `storage.rules` grants signal photos `read: true` unconditionally, so anyone holding the signal id keeps them until the purge. Requires the id to exploit |
-| Contribution stats under-report for accounts that already removed signals | Open and permanent for those accounts. The backfill counts the live `signals` collection, so anything deleted under the old hard-delete path is not there to count. Nothing can recover it — the documents are gone |
+| Contribution stats under-report for accounts that removed signals under hard delete | Permanent for those accounts. `signalsPosted` was backfilled from the live `signals` collection, so signals hard-deleted before removal existed are not counted, and nothing can recover them |
 | Moderators cannot see removed signals in the app | Open — `listQuarantined` takes `source: 'removed'` and the Dart model carries `QuarantineSource`, but no tab renders it. The abuse case it would serve is already blocked at source: `signalRemoval` refuses while an open report names the signal |
 | Update note not in the push/inbox body | Open — a status-change push still reads `{signalTitle}: {status}` with no note. Needs `handleSignalUpdated` to query the newest event (safe: the batch is atomic) or a `lastStatusNote` field on the signal, which would widen `isSignalOwnerUpdate`'s allow-list |
-| Arrival catch-up headlines a legacy signal as "Rescue needed" | **Fixed 2026-08-18** (§4.4) — `_NotifiableSignal` now carries `Signal.legacySignalTypeFrom(data)`, the notification body resolves through `primaryOfSignal`, and the inbox row it writes stores `HelpTag.displayCodes` rather than the matched list. Matching is untouched. Disappears with the rest of the shim |
-| `events` rules block deployed then reverted | **Re-deployed** — the moderation deploy carried it back out; verified against the live ruleset 2026-08-18. The standing hazard is unchanged and now points at the moderation blocks instead: see §13.3 |
 | Comment photos | Storage path reserved, no write rule, no UI |
 | `signalLink` push text / server notifications | English only |
 | `Signal.phoneNumber` vs `contactPhone` | Duplicated legacy field, both written with the same value |
 | A hidden signal's photos stay readable by URL | Open — hiding moves the Firestore document to quarantine, but `storage.rules` grants `signals/{id}/photos/**` `read: true` unconditionally, so anyone holding a photo URL keeps it. Closing it means gating photo reads on the parent document existing, which costs a cross-service `firestore.get` on every photo load (§7.16) |
 | A hidden signal's comments and events stay readable | Open, and the flip side of what makes a restore lossless: subcollections survive the document's deletion, and `comments`/`events` are `read: if true`. Requires the signal id to exploit |
-| A hidden signal could not be restored from the app | **Fixed 2026-08-19** (§7.16). `hideSignal` resolves its report, which drops it out of the queue — and the queue was the only route to any moderator action, so the un-hide path disappeared with it. Closed with a `listQuarantined` callable and a Hidden tab, **not** by opening `moderationQuarantine` to client reads: the server projects each document to a summary, so the withheld content never reaches a client and the collection stays denied to everyone |
-| Signal ownership is not enforced until the rules ship | Open by design — the rules narrowing `status` to reporter-or-owner must be deployed **after** the app release that offers claim-to-act, or an already-released client that is neither gets a bare `permission-denied` behind a generic "could not update status" snackbar. Until then both the old and the new behaviour are permitted and the UI does the guiding. See the §4.8 rollout note |
-| A stale-claim displaces an owner with no appeal | Open — `STALE_OWNER_DAYS = 14` of silence makes a signal claimable and the displaced owner is only *told*. There is no "no, I am still on this" other than claiming it back, which works but reads as a tug of war. An owner who acts at all resets the clock, so this only bites someone genuinely absent |
+| Signal ownership is not enforced until the rules ship | Open by design — the rules narrowing `status` to reporter-or-owner must be deployed **after** the app release that offers claim-to-act, or an already-released client that is neither gets a bare `permission-denied` behind a generic "could not update status" snackbar. Until then both the old and the new behaviour are permitted and the UI does the guiding. See §4.8 |
+| A stale owner can be displaced | By design (§4.8): 14 days of silence *and* a week without answering an offer they were notified about. Once the offer is auto-approved, getting the signal back means asking for it like anyone else |
 | Ownership notifications are English only | Open, like every other server-written push (§8). The inbox rows render localized from the structured fields; the `title`/`body` fallback and the push text do not |
 | Takeover requests are readable by any signed-in user | Accepted — they name someone who volunteered but has not been accepted. Public read would have matched `comments`/`events`; signed-in is tighter and costs nothing, since every reader of this app holds at least an anonymous session |
 | Moderator appointment is a terminal script | By design until the admin tier exists — spec §3.6 puts appointment above the moderator level. `functions/scripts/grant_moderator.js` |
-| `grant_moderator.js` is unverified | Open — it needs Application Default Credentials, which this machine has not set up (`gcloud auth application-default login`). The 2026-08-17 grants were made through the Firebase MCP instead, so the script's own code path has never run |
-| Moderator actions have no entry point outside the queue | **Fixed 2026-08-20** (§7.16) — a shield in the signal details app bar and a chooser on a comment's `⋮` (a long-press until 2026-09-03 — see that date's entry) open the same action sheet with no `reportId`. The server already treated `reportId` as optional, so no rules change and no new callable were needed |
-| A moderator could moderate their own content | **Fixed 2026-08-20, deployed and device-verified 2026-08-21** (§7.16) — `requireNotOwnContent` inside `loadSignal` (plus `deleteComment` and `restoreSignal`, which load their own documents) refuses with `failed-precondition`. `addNote` and `resolveReport` are exempt, both confirmed on device. The client hides the affordance on your own content, so the queue path is the only way to reach the error |
+| `grant_moderator.js` needs Application Default Credentials | `gcloud auth application-default login` on the machine that runs it; the Firebase MCP can write `moderators/{uid}` directly instead |
 | No behaviour points, restrictions, bans or appeals | Deliberately out of scope for the first moderation slice (master spec §18.4–18.6) |
 | Moderator actions are not notified to the affected user | Open — master spec §18.7 says users are told when a behaviour flag is added. Nothing writes an inbox entry for a hide/lock/label yet |
-| White on brand orange is 2.16:1 | **Accepted, and asserted at its measured value** rather than skipped (§7.17.1). It is every app bar title and every filled button, it predates this work, and it is a brand decision. The dark theme puts black on the same orange for 9.74:1 and is held to the real 4.5. Fixing it means changing the app bar, not the test |
+| White on brand orange is 2.16:1 | **Accepted, and asserted at its measured value** rather than skipped (§7.17.1). It is every app bar title and every filled button, and it is a brand decision. The dark theme puts black on the same orange for 9.74:1 and is held to the real 4.5. Fixing it means changing the app bar, not the test |
 | Tablets get a capped column, not a tablet layout | By design for now (§7.17.3) — `PageWidth` stops a phone layout being stretched across 800dp; a real list/detail split would use the space instead |
-| Cluster bubbles re-form only at camera idle, without animation | Accepted (§7.3). The SDK animated its merge/split; Dart clustering snaps when the gesture ends. The trade was for bubbles that can carry urgency at all |
-| Dark mode has never had a full device QA pass | Open — it was wired up and the map style was device-verified on the Android 14 tablet, but the first release carrying `themeMode` reaches users who have had their OS in dark mode all along. Every screen is first contact |
-
----
-
-## 15. Document changelog
-
-
-| Date | Change |
-|---|---|
-| 2026-09-29 | **The Watching tab follows follow/unfollow again** (§7.18; issue #86). `watchingProvider` turned the follow list into a query with `asyncExpand`, which pauses the outer stream until the inner one completes — and a Firestore `snapshots()` query never completes. So once the user followed anything, the tab read the list once and queued every later change forever: unfollowing from the tab hid the row only while the write was in flight and then brought it back, Undo did nothing visible, and a signal followed from its details screen never appeared. Changes *to* listed signals still arrived, since the query itself stayed live. **Fixed with `switchLatest`**, a hand-rolled `switchMap` next to `mergeLatestList` (no rxdart, same reason): each new follow list cancels the previous query and listens to the next. **While paused it keeps only the newest value of each side**: a follow list that arrives meanwhile cancels the now-stale query at once and is switched to on resume. Riverpod pauses a provider's subscription when nothing is watching it, and a buffering `switchMap` (rxdart's or stream_transform's, both already in the lockfile transitively) would do two bad things here. It would replay every stale page on resume, since a paused Firestore query keeps listening natively anyway. And it would switch through the buffered follow lists a microtask apart, cancelling each query before FlutterFire's `onListen` finished its `await`. FlutterFire's `onCancel` only removes a listener that is already registered, so each of those queries would keep listening, and billing, for the life of the process. That closes one path into the race, not the race: any `snapshots()` listener in the app cancelled within a platform round-trip of `listen` has the same exposure, and it is not addressed here. `test/stream_merge_test.dart` feeds `replayThenFollow` into a never-completing inner stream (under `asyncExpand` it saw only the first list, as the issue predicted), and drives a fake with FlutterFire's `onListen`/`onCancel` shape through a paused burst, which fails against the buffering version. `test/async_expand_guard_test.dart` fails the build on any `asyncExpand` under `lib/`. **Two follow-ups from the review of this fix:** `CachedUserDocStream` now emits `empty` on *any* account switch, not only a sign-out. Signing straight into another account used to replay the previous account's follow set, and the moderator flag, until the new document arrived. `watchingProvider` also emits the last page minus any unfollowed rows (`WatchedPage.retainOnly`) the moment the follow list changes, before the fresh query answers. That answer can arrive after the write's own acknowledgement, and the tab's in-flight set would otherwise release the row too early and show it again in between. **Device-verified on SM-J610FN (debug, test mode, `helpapaw.qa+pr83`)**, before and after in one session: on the old code, unfollowing from the tab brought the row back next to the *Unfollowed* snackbar while Firestore held one follow and the tab showed two. After a hot restart onto the fix: following from signal details added the row to the already-live tab, unfollowing from the tab kept it gone after the write landed, and Undo brought it back. **Re-verified after the review and simplify passes** (same phone and account): a signal followed from its details screen while Watching was hidden behind the Map tab was listed on return, and unfollow from the tab and Undo both held. The account was left following what it followed before. 630 Dart tests. |
-| 2026-09-29 | **Registering from an anonymous session no longer red-screens the Menu tab** (issue #84). `MenuPage` memoizes the moderator stream per uid, and `CachedUserDocStream.watch()` returned a *single-subscription* stream. An anonymous → email registration is an in-place link upgrade, so the uid — and therefore the memoized object — does not change, while the list does: *Sign In* becomes *Profile* + *Sign out* and the unkeyed moderator `StreamBuilder` moves from index 1 to 2. `ListView` matches children by position, so a new element listened to the memoized stream a second time, and a single-subscription stream refuses any second listen — cancelling the first does not free it → "Stream has already been listened to" (debug: red screen; release: a grey `ErrorWidget` row; the upgrade itself always completed). **Fixed in the primitive, not the widget:** `watch()` now returns a `Stream.multi` (via `replayThenFollow`), so every `listen` on the same object gets its own subscribe-then-replay, and no caller that memoizes the stream has to reason about element identity. Keying the `StreamBuilder` would have fixed this one call site only. `MenuPage`'s per-uid memo is gone too: the primitive already follows `authStateChanges`, so one stream held for the State's life is enough, and the memo's stated reason (a stale account's moderator state) had stopped being true when `CachedUserDocStream` was extracted. `test/cached_user_doc_stream_test.dart` now drives the real helper instead of a copy, and reproduces the exact `ListView` shift — it failed with the issue's `StateError` before the change. Device-verified on SM-J610FN (debug): sign-out, then Register from the Menu tab (`Linking email account` in the log, i.e. same uid) → Verify Email with no error, and the Menu showed *Profile* + *Sign out* after verification (before the memo removal, which the widget test covers). 622 Dart tests after merging into dev. |
-| 2026-09-29 | **Review pass on the profile lists and comment focus** (§5.1, §7.5, §7.6). A comment push about a thread already open no longer loses its scroll to a latched "server has answered" (only a newer answer may declare the comment gone), and no longer scrolls a screen hidden under the photo viewer (the observer now counts pageless full screens). Same-signal focus goes through `router.replace` instead of a global notifier; names reserve their line while resolving, which removed the 5-second follow-scroll. The lists drop a "Load more" that lands after a refresh; coming back from a list re-reads only the numbers and keeps any it could not re-read. The payload separator is `/`, not `#` (which a document id can contain). The Helping-now list and count share one query; comments decode through `SignalHistoryEntry.fromDocument`. |
-| 2026-09-29 | **`SignalNavigator`'s route observer never matched on device — fixed** (§7.6). It compared the names go_router gives pages against route *paths*, but go_router names a page after the route's `name:` (falling back to the path only for an unnamed route) and every route in `main.dart` is named. So a tab read as a screen pushed over the tabs and a signal never read as showing: a re-tapped notification stacked a duplicate, a notification tap never put the map under the signal, and `isShowingSignal` was always false. Its tests used unnamed routes, where the fallback hid it. The observer now keys on `Routes.shellBranchNames`/`Routes.signalDetailsName` (which `main.dart` uses) and tracks route objects, reading the open signal's id from the page's `arguments` — so it knows which signal is on top however it was opened, which is what lets a comment push scroll the thread already open from the inbox instead of stacking it. The tests now name their routes as production does; against the old observer, 7 of them fail. |
-| 2026-09-29 | **Tapping a comment opens the thread at that comment** (§7.5, §7.6). From the profile's comment list, an inbox row, a push, or a foreground notification: the signal opens scrolled to the comment and briefly highlights it; on a signal already open, the open screen scrolls instead of a copy being stacked. `new_comment`/`mention` pushes now carry `commentId` (additive — older builds ignore it); inbox rows derive it from their `cmt_{commentId}` id. |
-| 2026-09-28 | **Profile stats open their lists** (§5.1; master spec §3.5.1). The three numbers on both profile screens were inert; each now opens `/user/:uid/activity/:kind` — the signals reported, the ones held right now, and the comments written, each row opening its signal. Signals and Comments are **shorter than their numbers by design** — the counts are contributions that outlive a removed or archived signal, the lists can only show what can still be opened — and a footer note says so rather than letting the gap read as a bug. The comments count is now **scoped to the current mode** by a document-name range on the collection-group query (verified against the emulator: `signals` sorts before `signals_test` segment-wise, so `signals_test/!` is the boundary); it previously mixed production and test comments. New composite index: `comments` `COLLECTION_GROUP` (`author`, `createdAt desc`). |
-| 2026-09-21 | **Made the native background path report its own failures** (§7.7, §13.2; issues #82, #83). Everything below the Dart isolate was invisible to Crashlytics: `main.dart`'s two handlers are isolate-level, and this path runs in a process where the isolate does not exist yet — and when this path is what failed, never will. Android's `HeadlessNearbyCheck` also went straight to `FlutterCallbackInformation.lookupCallbackInformation` in a **receiver-only process** where nothing had loaded `libflutter.so`, so that JNI call raised `UnsatisfiedLinkError` instead of returning null and **killed the process on every delivery that passed the gate** — 16 fatals in a day on one test device, and because `recordCheck` runs only on a successful return, the gate never advanced and each delivery retried and died again. `FlutterLoader` is now initialised before the lookup (the same two calls `FlutterEngine`'s constructor already makes, both idempotent), the catches are widened from `Exception` to **`Throwable`** (an `Error` escaping `startEngine` leaves `running` stuck true, silently disabling the check for the life of the process), and the **location write moved ahead of the check**, so a cold engine boot cannot delay the thing the fan-out depends on. `NativeCrashReporter` on both platforms records the six Android and four iOS failure paths as non-fatals — five of the six Android ones were already silent, and an unresolvable callback handle or an engine-boot timeout means the catch-up is **dead until the app is opened again**. iOS gives each path its own `NSError` code, because Crashlytics clusters by domain+code and a chronic *While Using* population would otherwise bury the rarer ones. Neither reporter can become the failure: Kotlin catches its own throw, Swift **guards** on `FirebaseApp.app()` first, since an unconfigured Firebase raises an `NSException` Swift cannot catch. `FlutterBootstrapGuardTest.kt` replaces the loud symptom — the condition exists only in a process with no Activity, which is exactly what `flutter run` and every QA pass hide — and `NativeFirestoreGuardTest.swift` fails the build if any hand-written source under `ios/Runner/` so much as names `Firestore` (§12.13). |
-| 2026-09-17 | **Bounded a signal's title and description on update, not just on create** (§4.1, §5.1, §12.5). `isSignalCreate()` checked the lengths; the update rule did not — and the edit screen writes both fields on every save, with no client-side cap of its own, so a reporter could edit any signal of theirs to an arbitrarily long title or description and the only ceiling was Firestore's 1 MiB document limit. The bounds moved into `isValidSignalContentBounds()` and are now applied to the update rules of **both** `signals` and `signals_test`, the wizard's `LengthLimitingTextInputFormatter` was added to the edit screen's fields, and both Dart writers read `Signal.maxTitleLength` / `Signal.maxDescriptionLength` instead of repeating the literals. No existing signal document exceeded the bounds — checked before deploying, because a rules tightening that fails on existing data locks its owner out of editing rather than failing loudly. Device-verified: the edit screen's title field hard-caps at 300. |
-| 2026-09-17 | **A cluster bubble's ring now splits between the urgencies inside it** (§7.3, §7.8). The disc's colour and the printed count described different things: a red "12" was anywhere between one red signal and twelve, and at the zoom the map opens at — where most signals sit in one or two bubbles — amber and green were invisible whenever a red was anywhere near. The disc keeps its most-urgent fill, so the across-the-screen "worst thing here" read is untouched, and the halo becomes a ring of arcs in proportion to the members at each urgency: a bubble now says both *the worst thing here is critical* and *it is two of twelve*. **Clustering per urgency instead was rejected** — the merge rule only separates within one clustering run, so three runs would stack three bubbles on near-identical centroids and, since bubble markers consume taps, make the lower-urgency one unreachable, which is the defect the cluster sheet exists to prevent. A slice under 15° is lifted to that floor (one red among forty must be visible, not a scratch) and sweeps are quantised to 5° *before* the cache key, so identical-looking bubbles share a bitmap and the cache grows with the data, not the palette. `ClusterBubbleStyle` keeps the five alternatives reachable and test-covered rather than deleted, and the legend now paints through the marker bitmap's own routine. |
-| 2026-09-17 | **A stale signal is now asked for, not taken** (§4.8). Staleness was an *instant* dispossession: fourteen days of silence made a signal claimable in one tap by anyone who happened to open it, and the first its owner heard of it was the notification saying it was gone — decided entirely by a clock they could not see. Route 3 of the escape hatch now goes through the request path like every other held signal, and what staleness changes is what an offer *means*: `autoApproveStaleTakeovers` approves an unanswered one after **`AUTO_APPROVE_DAYS = 7`**, so an abandoned signal moves 21 days after its owner last did anything, having been asked for first. **Two clocks, independent, both required** — fourteen days of silence *and* a week to answer an offer they were pushed a notification about, which names the deadline in those words. `isRequestRipe` is about the offer's age alone so the two cannot be conflated, and **staleness is re-checked when the sweep fires, not when the offer was filed**, which is what makes posting an update the way an owner keeps a signal somebody has asked for. `claim` now refuses every held signal, stale or not; **released** keeps the instant path, because there is nobody to ask. The sweep is **daily**, not weekly like the project's two cleanup schedules: it decides when a volunteer may start helping an animal, and weekly would turn "seven days" into "somewhere between seven and fourteen". One `collectionGroup` query covers **both** collections, so test-mode offers auto-approve rather than silently never firing — the failure QA would have taken longest to notice — behind a new `takeoverRequests` COLLECTION_GROUP index on `status, createdAt`. Each approval is its own transaction re-reading everything (signal deleted, owner returned, offer already answered, requester already holding it), and writes `pending` → `approved`, which `handleTakeoverWritten` already fires on, so the volunteer's "you are now responsible" push comes from the same trigger an owner's own approval uses; `autoApproved: true` marks the row. The UI follows: a stale signal draws **Offer to take over**, the stale note and the pending-offer line both name a **date** rather than saying "eventually", and the day count is interpolated from the mirrored constant so copy cannot promise a week the server does not keep (third guard in `takeover_cooldown_guard_test.dart`). **`SignalOwnerBlock` now takes its `SignalOwnershipService` as a parameter**, null meaning the singleton so no call site changed: the two request streams were the only collaborators it reached for globally, which cost nothing while a stale signal short-circuited to a button and became the *entire* testable surface the moment staleness routed through the offer path. 595 Dart tests, 127 functions tests, 286 rules tests (rules unchanged — the request path already existed, so this needed no new grant). **Deployed to help-a-paw-dev 2026-09-17, index first, then the four functions** (`autoApproveStaleTakeovers` created; `signalOwnership`, `onTakeoverWritten`, `onTestTakeoverWritten` updated) — targeted rather than a blanket functions deploy, which is what once deleted `listQuarantined`; 20 live functions before, 21 after, none lost. The index set was diffed both ways beforehand (17 live, 18 in file, **0 deletions**) and re-read after; rules compiled but were **not** deployed, since the request path needed no new grant. `npm audit signatures` verified 575 registry signatures with no malware advisory and the lockfile untouched. Cloud Scheduler registered at `0 3 * * *` UTC. A pre-deploy check reported **zero `takeoverRequests` documents** database-wide; that reading was **unsound and is retracted** — neither MCP Firestore query does collection-group scope, and both return an empty result for a subcollection document that demonstrably exists, as the device pass later proved. The claim behind it still holds (ownership has never reached a released build, so only QA could have filed one) but it was not verified. **Device-verified end to end on SM-X205 2026-09-17** (debug, test mode, Bulgarian) against a forged 28-day-stale `signals_test` signal held by another account: the stale signal offered **Предложи да поемеш сигнала** and not the old one-tap claim; the note interpolated the 7; the offer wrote a request carrying exactly the four rule-permitted keys; the pending line named **24.09.2026**, seven days out; and the owner's inbox document read *"…asked to take responsibility. It passes to them in 7 days unless you reply."* — the **deployed** function, not the local build. With `createdAt` back-dated to eight days the sweep logged **`Auto-approve: 1 handed over, 0 left pending, of 1 past the window.`** and wrote, in one transaction: `signalOwner` moved, a fresh `ownerActiveAt`, `lastUpdatedBy`, the `ownership_transfer` event carrying the requester's own note, the request `approved` with `autoApproved: true`, the subscription, and the requester's *"You are now responsible for a signal"* notification through the existing `pending`→`approved` trigger. The open screen re-rendered live to **Вие отговаряте за този сигнал**. Every document was restored afterwards and the test subscription removed through the app's own unfollow. **The app half is NOT released**, so #71's regression window stays open. |
-| 2026-09-17 | **A stale owner now says so, instead of being inferred from which button appeared** (§4.8). Staleness was visible only as a swap — a viewer got *Take responsibility* instead of *Offer to take over* — which is a state you can read only if you know both buttons exist, and the **owner** is offered neither of them. So the one person able to end the staleness by posting an update was the one person with no way to learn their signal had become claimable. `SignalOwnerBlock._buildStaleNote` now says it under the owner's name, in **two wordings split by audience** — which is how every other element in that block splits, and gating the note on state alone had made it the one that ignored the split. Bystanders get *"Hasn't been active since {date}. Anyone with an account can take this signal on."*, explaining the button beneath it; the owner gets *"You haven't updated this signal since {date}. Anyone with an account can take it on — post an update to keep it."* A single shared string could not carry that last clause, and as third-person prose under *"You are responsible for this signal"* it read as being about somebody else — in English only, since Bulgarian's subject-neutral phrasing hid the defect rather than avoiding it. **"With an account" is not padding**: `claim` runs `requireRealAccount`, and by the anonymous-session invariant a signed-out reader *is* anonymous, so the unqualified sentence was false for them. The date is `Signal.ownerLastActiveAt`, the `ownerActiveAt`-then-`createdAt` fallback that `isOwnerStale` itself judges on, so the note and the gate that drew it cannot disagree — deliberately a narrower claim than "matches the server", since `ownerActiveAtOf` is a separate implementation with no cross-language guard and §12.5e's tolerance for that pair is unchanged. A **released** signal gets no note, since nobody is there to be inactive. The unused `signalOwnerStale` string — shipped in both locales, referenced by no widget — became the two placeholder-carrying keys. Found alongside it and fixed: the re-ask cooldown line built its date with a bare `DateFormat.yMMMd()`, giving a Bulgarian reader an English date, which is that sentence's whole content; both dates now go through one `_dayFormat` helper. **Deliberately not built: the outbound half.** Staleness has no event — it is a pure function of a timestamp, evaluated only when someone renders the screen or calls `claim` — so this note reaches an owner who comes back, which is the very thing their being stale says they have not done. A scheduled day-12 warning down the existing inbox/push fan-out is the other half and is not in this change. Tests build the block for a viewer who is neither owner nor reporter, the one path that touches no Firestore stream; the *active*-owner gate is pinned against `SignalOwnershipService.isOwnerStale` and the owner's wording against the strings in both locales, because an owner also sees the offers list and that subscribes through `SignalOwnershipService.instance`, which this project has no fake for. **Bulgarian phrasing is load-bearing here and the device pass proved it**: `DateFormat.yMMMd('bg')` ends the date with `г.`, so a sentence that closed on the placeholder rendered *"от 20.08.2026 г.."* — a double period, invisible in English and in every unit test, since the year is all they assert. Both bg strings now open with the date instead of ending on it. 590 Dart tests. Client-only — no rules, functions or deploy. **Device-verified on SM-X205 2026-09-17** (debug, test mode, Bulgarian), all three states against back-dated `ownerActiveAt` values in `signals_test`: the **owner** of a stale signal read *"От 20.08.2026 г. не сте обновявали този сигнал. Всеки с регистрация може да го поеме — публикувайте обновление, за да го запазите."* under *"Вие отговаряте за този сигнал"*; a **bystander** on a signal held by someone else read the *"няма активност по сигнала"* wording with **Поеми отговорност** beneath it; and restoring the real timestamp made the note disappear and the button revert to **Предложи да поемеш сигнала** live on the open screen, through the snapshot stream. All three documents were restored afterwards, including deleting the `ownerActiveAt` that one of them had never had. |
-| 2026-09-17 | **"Something else" now has to say what else** (§5.1, §7.16). The report dialog required a reason and left the free text optional for all twelve reasons, including `other` — so a report could reach the queue saying only that somebody objected to something, with no category to triage it by and no prose to read. The text is now mandatory for `other` alone: Send stays disabled until `details.trim()` is non-empty, the label switches to a "(required)" variant and a helper line says why, and both revert the moment another reason is picked. **Which reasons need text is the enum's business** — `ReportReason.requiresDetails`, exhaustive like `label()`, so a reason added later cannot inherit "optional" by saying nothing — and the dialog only asks. Deliberately **not** a rules clause: the absence of a server-side allow-list on `reason` exists so an older deployed ruleset can never reject a newer client, and a min-length-on-`other` rule would do the mirror-image damage, failing reports from every already-released build. The helper line is a `helper` **widget**, not `helperText`, for the reason `update_note_dialog` documents at length — `helperText` is clipped to one line with a hardcoded ellipsis, which would have eaten the end of the Bulgarian sentence at any font scale; unlike that dialog's copy this one is conditional, which is safe only because it appears on a *radio tap*, never on a keystroke, so it cannot shift the field under a typing finger. Guard tests pin the asymmetry at both levels: `report_reason_test` that `other` is the only reason demanding text, and `report_dialog_test` that a named reason still submits with an empty box, that whitespace is not an explanation, and that switching away drops the requirement. 584 Dart tests. Client-only — no rules, functions or deploy. **Device-verified on SM-X205 2026-09-17** (debug, test mode, Bulgarian): the dialog opened from the signal-details flag on a signal this account did not report; "Спам" enabled Send with the box empty; switching to "Друго" re-greyed it, swapped the label to "Опишете какъв е проблемът (задължително)" and rendered the helper sentence in full, unclipped; three typed spaces left Send disabled; real text enabled it, and the report landed as `reason: "other"` with its `details` intact. The QA report was deleted afterwards so it does not sit in the moderator queue. |
-| 2026-09-12 | **Deep links replace the navigation stack, and that is survivable — the install hand-off's launch check was not** (§6, §7.18). Investigating how the bottom bar behaves when a link arrives over a screen hierarchy turned up that **both** platforms enable Flutter's built-in deep linking (`flutter_deeplinking_enabled`, `FlutterDeepLinkingEnabled`) **and** run an app_links listener — two handlers for one link. The built-in one wins and treats the link as a new *location*, so it replaces the configuration rather than pushing: device-verified on SM-X205, a link arriving over the New Signal wizard destroys that route, and two links in a row leave only the second. `SignalNavigator.open`'s `_shellIsOnTop` guard therefore protects the FCM-tap and deferred-install paths, which really do call `open()`, but not the link path — which also means `signal_navigator_branch_test`'s wizard-preservation case asserts a guarantee the app does not deliver on Android, because it drives the seam directly. **The damage is bounded and the cheap mitigation is the right one:** the wizard keeps its draft *and its step* in `mapViewModelProvider` by design (see the class doc on `NewSignalWizardPage`), so re-entry resumes exactly where the reporter was — verified: a link fired at step 3 of 7 destroyed the route, and tapping Continue on the map returned to step 3 with the draft intact. Turning the flag off would restore push semantics but is a bigger change than it looks, so it stays open. What *was* fixed is the real hazard behind it: `DeferredDeepLinkService.resolve` took `launchedFromLink` from `SignalNavigator.isShowingSignal` in a post-frame callback, which is only reliable while the built-in path installs the route before that frame. Any asynchronous delivery makes it read false on a genuine link launch, and the hand-off then opens a **stale stored signal instead of the one the user tapped**. It now asks `AppLinks.getInitialLink()` — a direct question with no ordering dependency, correct under either arrangement. Also fixed, and found the same way: `CachedUserDocStream.watch` was `async*`, so `yield*` subscribed a turn after `yield _latest` and a broadcast controller dropped anything landing in between; the follow button offered "Follow" for a signal Firestore said was followed. Subscribe-then-replay closes it (device-verified: the button now reads "Следвате" on entry). 551 Dart tests. |
-| 2026-09-11 | **Made test mode and the account declared dependencies, and gave the navigator a real stack** (§6, §7.18). Three follow-ups from reviewing the bottom-bar work, done rather than deferred. `NotificationInboxService.watchInbox`/`watchUnreadCount` now take the mode and `SignalRemovalService.watchMine` takes the collection, so a query that captures either at *subscription* time cannot be constructed without naming it — the compiler located all three call sites. `lib/src/services/app_providers.dart` derives `signalsCollectionProvider` from `testModeProvider` and `sessionUidProvider` from `authStateChanges`, and the five screen streams hang off them, so Riverpod's disposal replaces the nullable key fields and rebuild-if-changed checks four screens were each hand-rolling; a sixth mode-dependent query now inherits the behaviour instead of having to remember it. **`CachedUserDocStream` extracted** and both `ModerationService` and `SignalSubscriptionService` point at it — they were the same machine (watch `{collection}/{uid}`, project, fan out, re-point on account change) and had already drifted on the invisible half: one re-pointed on `authStateChanges`, the other only when next asked, so they disagreed about what a sign-out does. **`SignalNavigator` reads a `NavigatorObserver`** instead of `currentConfiguration.uri`, which is the last `go()` location and does not move on an imperative push — so all three questions asked of it disagreed with reality, and two were wrong: `isShowingSignal` returned false while details was open over a tab, and the re-tap dedupe never fired for a pushed signal. Two things the probes settled and the comments now record: the observer is handed the tab branches' own routes as well, so the over-shell stack is discriminated by `Routes.shellBranchPaths`; and go_router names a page after its *declared path*, so a pushed signal reports `/signal_details/:signalId` and the id is tracked beside it. **`WatchingService` extracted** — the chunking, the own-signal filter and the paging were inline in a `StreamBuilder` closure and unreachable without a widget and a Firestore, and the filter re-derived the `signalOwner` tri-state from the raw map where `MySignalsService` expresses it as a query; it asks the parsed `Signal` now, and `hasMore` is counted *after* the filter, so a window that is entirely the user's own signals pages on by itself instead of making them tap Load More once per empty page. 549 Dart tests. **iPad re-verified 2026-09-11** (profile build, dark, en): the re-tap dedupe proven on device — the same link fired twice pushed one page, and a single back returned to a focused map, which the old build could not do; and the seven-tap gesture re-pointed **all four** tabs, with My Signals and Watching dropping their test-mode rows and the inbox badge clearing, the exact failure the hand-keyed version existed to prevent. **Android re-verified on SM-X205 2026-09-12** (debug, light, bg), matching: the same link fired twice from the **Menu** tab pushed one page and a single back landed on the map with the pin focused; the seven-tap gesture re-pointed My Signals, its **Removed** sub-tab, Watching and the map, all through the providers. Both devices left in test mode as found. |
-| 2026-09-11 | **Replaced the navigation drawer with a five-tab bottom bar** (§6, §7.13, §7.18). Every destination that was not the map lived behind a hamburger on the map's app bar, which made the map the only screen most people ever found — and there was no list anywhere of the signals a user follows. The bar is **Map / My signals / Watching / Inbox / Menu**, held in a `StatefulShellRoute.indexedStack`; `home_route_drawer.dart` is deleted and its remaining tiles are `MenuPage`. `indexedStack` rather than a plain `ShellRoute` because a shared Navigator would tear down the `GoogleMap` platform view on every tab switch; the map branch is `preload: true` so `pendingFocusSignalId` always has a `MapScreen.build` to consume it, and `SignalNavigator.open` now moves the branch underneath to the map before pushing, so backing out of a notification still lands on a focused pin (an inbox row, which pushes directly, deliberately still returns you to the inbox). **Only the five tab roots are branches** — every other route stays outside the shell and renders over the bar, which is why not one `context.push` call site changed. `extendBody` stays false, and that single choice is what leaves every `Positioned(bottom:)` item on the map, the `centerFloat` FAB, Google's own controls and the bubble projection working with no coordinate changes; the bar hides entirely while a signal is being placed, since `NewSignalLocationBar` owns that strip. **Making four screens permanent broke an assumption nobody had written down**: they used to be pushed and popped, so each re-read `signalsCollectionName` on open, and as tabs they outlive the seven-tap gesture — so My Signals, Watching, the inbox stream and the unread badge are all now keyed on `testModeProvider`, and the badge and the moderator stream on uid as well (the drawer was disposed on close, which had been silently repairing both). **My signals now means reported *or* held** — two queries merged client-side rather than a `Filter.or`, which would need the same per-disjunct indexes and could not be unit-tested; the owner side degrades to empty on error so a still-building index costs missing rows, not a dead screen. New `signalOwner ASC, createdAt DESC` index on **both** collections, with `signal_index_guard_test` now failing the build if `signals` and `signals_test` ever diverge — the drift that only breaks for people using test mode. **Watching** reads `users/{uid}.signalSubscriptions`, which until now had no reader in the app at all, and excludes the user's own by comparing `reporter`/`signalOwner` on documents already in hand; ids are fetched in `whereIn` chunks of 30 newest-followed-first and capped at 60 per page, so the tab costs a bounded read however long the (unbounded, unpruned) array is, and ids that resolve to nothing — removed signals, the other collection's ids — simply drop out. **Following is now explicit in both directions**: `FollowButton` on signal details finally gives `unsubscribeFromSignal` its first call site, and the Watching rows carry an unfollow with undo. Commenting still re-subscribes you — suppressing that would need a second array the fan-out would also have to honour — but it no longer does so silently: the auto-subscribe announces itself with an Undo. Bar labels are abbreviated in Bulgarian (`Следени`, `Мои`) with the full names as tooltips and as the screens' app-bar titles, the bar clamps its own text scaling to 1.2, and `bulgarian_layout_test` covers five labels at 411dp at 1.0 and 1.3. One thing the device pass corrected: `NavigationBar` takes a destination's accessibility name from the **visible label**, not the tooltip, so the short form is what a screen reader and appium see — acceptable only because each short form is a real word. 537 Dart tests, 286 rules tests. **Indexes deployed to help-a-paw-dev 2026-09-11** (`--only firestore:indexes`; the live set was verified beforehand to contain nothing missing from the file, so the deploy created 2 and deleted 0, and rules were compiled but not deployed). **Device-verified on SM-X205 the same day**, in test mode and in Bulgarian: all five tabs, no hamburger and no stray back arrows; My Signals' merged stream resolved without error against the new index; Watching correctly *excluded* the user's own signal (creating one auto-subscribes you) and showed the empty state; back from Menu returned to the map with the camera preserved; the FAB tap hid the bar entirely and back cancelled placement instead of switching tabs (the map's `PopScope` winning, as designed); a signal bubble opened above its pin and details pushed over the shell with the bar hidden; Follow flipped to "Следвате", the signal appeared under Watching, the ⋮ unfollow showed its SnackBar **above** the bar with Undo restoring the row; and a cold relaunch reopened on Watching. **The external-link hand-off was verified last**, from the Menu tab: firing `link.helpapaw.org/signal/{id}` at the running app opened details over the shell, and backing out landed on the **map** — not Menu — with the camera panned to the pin and its bubble open, i.e. `attachShell` moved the branch and `MapScreen.build` consumed `pendingFocusSignalId`. That exercises the shared `SignalNavigator.open` seam; the FCM-specific entry (`onMessageOpenedApp`) is unchanged code that funnels into the same call, and was not separately driven because sending a `data` push needs a credential this environment would not mint. **iPad (6th gen, iOS 17.7.11, profile build) verified 2026-09-11**, in **dark mode** and English — which also covers the dark `NavigationBarThemeData` and the tablet width, where `PageWidth` caps the list rows: all five tabs, no back arrows on tab roots, the inbox badge (5) on the tab icon, Watching listing a genuinely-followed signal that the account did not report, the Follow button and its hint rendering in the details body, placement hiding the bar and Cancel restoring it, the same external-link hand-off landing back on a focused map, and a terminate/relaunch reopening on the Inbox tab. iOS has no system back button, so the shell's `PopScope` rule is Android-only by nature. |
-| 2026-09-11 | **Tag changes are on the signal timeline** (§4.1, §4.6, §12.5a; issue #80). What a signal *needs* was the only owner-editable coordination field that changed with nothing recording it — and by master spec §4.2 it is the working-the-case field, the one the case holder completes as needs are met, so the sequence of tag changes is the record of the signal being worked. Both writers (the manage sheet's picker and the edit screen) now batch the field write with a **`tags_change` event**, behind the same mandatory update note a status change carries. **A third payload shape, not a third int pair**: `TagsEventType` joins `LevelEventType` and `OwnerEventType` in the sealed hierarchy, and the TypeScript side narrows `buildEventData` to `LEVEL_SIGNAL_EVENT_TYPES` so the same mistake — two ints stamped into `newTags`, stored happily by the Admin SDK, dropped by the Dart decoder on read — stops compiling there too, which it previously did not. The rules' `isValidTagList` is **asymmetric on purpose**: `newTags` is 1–3, `oldTags` 0–3, because a signal created before the tag vocabulary has none and requiring one there would make the first tag change on a legacy signal the one change nobody could record; it deliberately does not enumerate the codes, taking the same position `isValidHelpTags` already takes on the signal document. A confirmation that changed nothing writes nothing, and since array order is priority (§4.4) a **reordering counts as a change** (`listEquals`). One save on the edit screen that changes urgency and tags asks for **one** note and writes **two** events under it. No new notification path: `handleSignalUpdated` ignores `helpNeededTags` and `events` has no trigger, so this is purely additive. 286 rules tests, 487 Dart tests, 122 functions tests. **Rollout: rules first, then the app release** — the event and the field write share one batch, so a client writing `tags_change` against undeployed rules fails the batch atomically and the tag change itself stops working. **Rules deployed to help-a-paw-dev 2026-09-11** (the live ruleset was byte-identical to this branch's base beforehand, so the deploy added the new clause and nothing else) and **device-verified on SM-G975F the same day**, in test mode: confirming the picker unchanged wrote nothing and showed no dialog; dropping `vetCare` for `foster` produced the note dialog headlined "Changing needs to: Rescue, Fostering" with Confirm disabled until the note was non-empty, then one `tags_change` document (`oldTags:[rescue,vetCare]`, `newTags:[rescue,foster]`, note, `actor`) and the row "Needs set to Rescue, Fostering" carrying its note, surviving the Events filter; one edit-screen save moving urgency Low→Medium **and** adding `transport` asked for **one** note under the combined headline and wrote **two** events sharing it, in one batch (identical `createTime`). `onTestSignalUpdated` fired for the tags-only change and sent nothing, and no inbox document was written. **Bulgarian verified the same day** — "Подаде този сигнал / Нужна помощ: Спасяване, Ветеринарна помощ", "Нуждите са променени на …", and the dialog headline "Промяна на нуждите на: …" — by pinning `locale` in `MaterialApp.router` for one run and reverting it, since the test phone is Android 12 (no `LocaleManager`, and this One UI build offers no per-app language for the app). **The post-cleanup build was re-verified on the same device** once `coordinationBatch` had taken over all three write paths: a status change wrote `status`, a fresh server `ownerActiveAt`, `lastUpdatedBy` and its `status_change` event, and a tag change wrote its own — the refactor is behaviour-identical where it matters, and the glyph reached the state card's chip and the picker's rows. |
-| 2026-09-10 | **Closed the M-1 second half: signal and comment creation now require a verified, non-anonymous caller** (§5.1, §14; issue #67). `isVerifiedCaller()` gates on `request.auth.token.email_verified`, *not* `sign_in_provider` — an in-place `linkWithCredential` upgrade leaves a real user's token reading `'anonymous'` for the rest of the session, so `sign_in_provider` would lock out precisely the people the clause is meant to admit. The claim is baked in at mint time, which is why the first attempt was rolled back on 2026-07-23: `reload()` does not re-mint, and a restart inside the token's ~1h life reuses the stale one, so a user who verified mid-session was denied their first writes. The client force-refresh (`633da3b`) shipped in **6.0.2+126**, and every app version Crashlytics has seen in the field (120–132) also carries the client-side `canModifyData` gate from `17327ff`, so no released build could reach this rule anonymously anyway — this closes a server-side hole rather than removing a capability. The rules suite now carries the rollback case as a test (`allows an in-place-upgraded caller whose provider still reads anonymous`), and every other test had to start presenting a verified token, which is what a real caller has. 276 rules tests. |
-| 2026-09-10 | **@-mentions in comments** (§4.1, §7.5, §7.13, §9, §12.5g, §12.5h). The details screen is where strangers coordinate about an animal and the thread was flat: no way to address one person in it, so a reporter answering a volunteer had to hope they were reading. Typing `@` now offers the people who have **already interacted with this signal** — reporter, current owner, every past owner, every commenter — and the comment carries a `mentions` array beside its text. Three decisions carry the design. **The roster is derived, not stored**: those uids are already in the screen's own snapshot and its two history streams, so there is no `participants` field, no trigger to maintain it, no backfill and no read — and past owners fall out of the transfers' `ownerId` without an ownership-history field. It is also the only roster that can exist, because `publicProfiles` denies `list` on purpose and nothing may search the user base by name. **The offsets live beside the text, not inside it**: inline markup would render verbatim on every already released build, forever, since nothing here is backfilled; a parallel array those builds ignore renders as `@Ivan Petrov`, which is what the author typed. **A mention re-words a notification rather than sending one** — the fan-out intersects the named uids with the signal's subscribers, so it reaches nobody new, which is precisely what lets a client-written array stay safe under rules that can bound its length and nothing else. The accepted limit is the mirror of that: a participant who unsubscribed cannot be reached by naming them. Rendered mentions are styling only — no underline, no recognizer, because underline is this screen's "this opens something" and a mention opens nothing. The composer recomputes offsets from `(uid, "@Name")` instead of maintaining them, so the whole edit story is one rule (*a mention that no longer reads as it was inserted stops being one*) rather than a diff to get wrong. Three new guards: the mention cap (**×3** — Dart, rules and TypeScript), the inbox `type` vocabulary against the TypeScript union (which closes a documented silent failure that had been waiting for a fourth type to arrive), and the suggestion list's height against a short viewport. The list caps itself against the **window** height rather than the body's, because a `Scaffold` strips `viewInsets` from its body's `MediaQuery` and the only thing that can see the keyboard — a `LayoutBuilder` around the body — re-runs on every frame of the keyboard animation. Rows carry up to two initials (`mentionInitials`), whitespace-separated with dots as a fallback, so the email-local-part names the `publicProfiles` gap leaves behind do not all collapse to one letter. **Device-verified on SM-X205 2026-09-10** in test mode, in Bulgarian: the roster showed exactly the signal's participants with the viewer excluded, `@vol` narrowed it to one, the pick highlighted in the composer and rendered styled in the thread, the stored document carried `mentions:[{uid,start:0,end:19}]`, and `onTestCommentCreated` logged `1 subscriber(s), 1 mentioned` → two differently-worded pushes and two inbox documents (`type: mention` with `mentionedByName` vs an unchanged `new_comment`) sharing one `cmt_{id}` id; a plain comment logged `2 subscriber(s), 0 mentioned`. **Functions deployed to help-a-paw-dev 2026-09-10**, ahead of the app — safe because a comment with no `mentions` takes exactly the old path. |
-| 2026-09-10 | **Public community profiles, and a tappable name everywhere** (§4.1, §5.1, §7.2, §12; master spec §3.5.1). Names of other volunteers were everywhere in the app and inert — the reporter on a signal, the owner, every comment author, every timeline actor — so there was no way to judge someone offering to take a signal on. **`/user/:uid`** shows an avatar, a display name and three numbers; your own uid never reaches it, redirected to the editable profile **in the router** so a link to yourself behaves the same however it was reached. **One tap target, not four**: `_actorText` in the signal screen was already the funnel every other-user name passed through, so replacing its body with `UserNameLink` made names tappable everywhere at once. The *name* is coloured and underlined (the `LinkifiedText` treatment, for the same reason — colour alone is not an affordance); the *line* is the target, because a name alone is a sub-48dp hit area on a dense meta row — except inside a `ListTile` that already has an `onTap`, where `NameTapTarget.name` keeps the row's own gesture (a moderator reaching for the widest part of a Hidden-tab row was getting a profile instead of the restore dialog). The name's position comes from building the sentence around a **NUL sentinel** rather than searching for the name in the result: a name can be a substring of the words around it, and the localized templates put it where the translation wants. **The avatar needed a home** — Firebase Auth's `photoURL` is readable only by its owner, so an avatar existed that nobody else could see. `publicProfiles` gains **`photoUrl`**, host-restricted to the app's own Storage bucket under the caller's own uid and to Google account photos (`lh[0-9]+`, because Google has served account photos from lh3 through lh6 and older accounts still carry the earlier hosts); the value is handed to an image loader on every viewer's device, so an unrestricted URL would let one user aim every other user's phone at a resource of their choosing. That allow-list had been three independent copies — rules, Dart, and the backfill script, which is the one that matters because the Admin SDK bypasses rules entirely — and now lives in `functions/src/publicProfilePhoto.ts` with `test/public_photo_url_guard_test.dart` parsing the rules and comparing both copies (`maxNameLength` too). Widening that write allow-list is also the change that could have let `signalsPosted` through, so a test pins that it still cannot. Mirrored on sign-in and launch behind a local write-avoidance cache (the `syncTestMode` shape) and **separately from `adoptProviderDisplayName`**, which returns early when Auth already has a name — a fresh Google sign-in always does, so folding it in there would have covered almost nobody. A `permission-denied` is cached as the verdict it is rather than re-submitted at every boot; removing an avatar reaches the public copy; `backfill_public_photo_urls.js` fills in the installed base. **Stats**: signals reported (the server-owned counter), comments posted, and signals **held right now** — the third is a live query deliberately, because the other two are past contributions that must survive the signal disappearing while this is a present commitment that has to fall to zero when the signals resolve; a counter would need four decrement paths against one increment. It under-counts pre-ownership signals, whose absent `signalOwner` means the reporter, and Firestore cannot query for an absent field; the gap only shrinks. **"Signals resolved" is deliberately absent**: the data is in `events`, which has no collection-group rule and no `actor` index, so a server counter could only start from its own deploy and a stat reading zero for everyone who has ever resolved a signal is worse than no stat. `UserStatsService` is shared with the own-profile screen, and `StatCard`/`UserStatsRow` own the tile *and* the icon/label/field pairing, because two screens drawing the same three numbers is how they end up disagreeing about which glyph belongs to which. Two device-found defects fixed with it: `updatePhotoURL` does not refresh the in-memory `User`, so routing the upload through `mirrorProviderPhoto(user)` published "this account has no avatar" and **cached that verdict** — `mirrorPhotoUrl(uid, url)` now takes the URL; and `CrossAxisAlignment.stretch` inside a `SingleChildScrollView` threw `BoxConstraints forces an infinite height`, so the three stat cards painted **nothing at all** on both profile screens, with the exception only in the log (`IntrinsicHeight` fixes it, and the test now pumps into a scroll view, which is the constraint the widget actually meets). 467 Dart tests, 270 rules tests, 121 functions tests. |
-| 2026-09-10 | **Carried the anonymous session's data across the sign-in, not after it** (§7.2; fixes #79). Signing in from an anonymous session left the user **sitting on the sign-in screen**. Auth had already switched, but both merge paths open by reading `users/{anonymousUid}` — and by then `request.auth.uid` is the new account, so the rules deny it. The `permission-denied` escaped `_onSignedIn` (a `try`/`finally` with no `catch`) and skipped the navigation below it, taking the anonymous session's notification preferences and subscriptions with it. `AuthService.captureAnonymousData` now snapshots the anonymous user document **while that account is still the caller** — started when the sign-in page prepares its session — and hands it to `mergeAnonymousIntoExisting` / `transferAnonymousData` instead of letting them read; a guard test fails the build if either method reads Firestore again. The remaining denied write, deleting the abandoned anonymous documents, is best-effort in both paths now and `cleanupAnonymousUsers` reaps them. The merge is wrapped so no future failure in it can cost the user their sign-in again. |
-| 2026-09-10 | **Revoked the moderator role when the account is deleted** (§7.2, §7.16). `deleteAccount` cleaned up every other per-uid document — notifications, `userLocations`, `userCounters`, the user doc, the public profile, the avatar — but left **`moderators/{uid}`** behind, so deleting a moderator's account left a grant on the roster with no account attached. Not a privilege-escalation risk (Firebase does not reuse uids), but it breaks any "who holds the role" audit, and the orphan was **unreachable**: `scripts/grant_moderator.js` resolved its subject through Firebase Auth, so the one tool that manages the roster could not remove the entries only it should be removing. Production carried such an orphan from 2026-08-17 to 2026-09-10 and it had to be deleted out from under the script; `6c1b3b6` fixed the script, `31b12e8` fixed the cause. The delete sits in **step 2c, before step 5 deletes the Auth user**, so it happens while the subject still exists. `moderationActions` is deliberately **not** swept — every action is audit-logged with the actor's uid, and erasing a departed moderator's trail would be the harm, not the fix. |
-| 2026-09-09 | **Said which permission refusal it was, and where to fix it** (§7.6, §7.7). Turning on location tracking answered three different situations with one sentence — *"Location permission is required for this feature"* — and turning on notifications answered its refusal with **nothing at all**, the switch just flicking back. The three situations need three answers: refused once (the OS will ask again, so tapping the switch again is the way back), refused permanently (only the app's settings page can grant it), and location off device-wide (not about this app's permission at all, and wanting the **device** location page — offered on **Android only**, because `geolocator_apple` routes `openLocationSettings` to the same page as `openAppSettings`, which on iOS has no Location Services switch). `LocationTrackingResult` gained `deniedForever` and `serviceDisabled`, since the service is the only thing that can classify it. Two conflations removed: `requestPermission()` reported a disabled location service as `denied`, and `startLocationTracking()` **re-requested the permission its caller had just requested**, so one tap could raise two identical dialogs — and on Android the second refusal is the one that blocks the permission for good. It now checks and never asks, which also lets `initialize()` drop its pre-check. **`deniedForever` was unreachable on Android**, found on the device: geolocator's `checkPermission` can never answer it there, because "permanently" is `shouldShowRequestPermissionRationale` being false, which only the *request* reports — so a permanently-blocked user was told to try again on a dialog the OS will never show. Callers that have just asked pass what they got as `knownPermission`. **Returning from Settings now finishes the job**: `_pendingGrant` records which toggle sent the user out, and the resume checks (never requests — no tap is behind it) and turns the toggle on if the OS now agrees, leaving the marker set on a still-refusing return. The **onboarding sheet stores what actually started** rather than the permission enum; it had counted a device-wide-off location and a background monitor that refused to arm as success, writing `locationTrackingEnabled: true` for someone whose position is never written — the fan-out then drops that account for having no usable location while the preference reads on. `SystemSettings` holds the two settings-page openers so notification code does not reach through `LocationService`; both toggles report platform-call exceptions instead of swallowing them. **Device-verified on SM-X205** (Android 14, Bulgarian): notification refusal, location blocked, location off device-wide, and the full return-from-Settings path turning the toggle on and persisting it. |
-| 2026-09-08 | **Replaced the map's native InfoWindow with a Flutter bubble, and gave clinics the same one** (§7.3, §7.8, §7.17). Tapping a pin showed the platform's own InfoWindow: two lines of text, no photo, no needs, no styling we control — and its `onTap` never fires for clustered markers (flutter/flutter#159636), so the map already carried an **invisible `GestureDetector` laid on top of it** just to be tappable, positioned from `getScreenCoordinate` on every camera idle. `SignalInfoCard` replaces it — 64×64 photo, title, one pill per `helpNeededTags` entry — as a Flutter widget the map screen positions itself. It takes its own taps, so the invisible target goes; and **reclustering can no longer tear it down**, so the far-pin-vanish workaround (`_reassertSelectedInfoWindow` and its 350 ms follow-up re-show) goes with it. The SDK still recentres the camera on a marker tap and the 30 km re-query still fires — that is `GoogleMap`'s default, not the window's doing, and it is kept deliberately because it drags an edge pin into view. Position is projected **in Dart per camera frame** (`map_projection.dart`, plain Web Mercator) and reconciled against `getScreenCoordinate` on idle, because a method-channel hop per frame makes the bubble trail the map; the projection is affine and so returns null for a tilted camera, and **`tiltGesturesEnabled` is now false**, which costs no behaviour since nothing here tilts. The anchor lives in a `ValueNotifier` rather than `setState`, because `_buildScaffold` rebuilds the entire marker set and a pan must not do that sixty times a second. Placement is `bubbleLayoutFor`, a **pure function**, so the edge cases are unit-tested instead of tapped for by hand: a bubble clamped against the side slides its tail to keep pointing at the pin, a pin too near the top flips the bubble below it, and a pin panned off the map gets **no bubble at all** rather than one parked against the edge navigating to a signal nobody can see. Extracted along the way, each about to become a second copy: `HelpTagPill` (from `SignalStateCard`), `UrgencyTagAvatar` and `Signal.displayTitle` (both from My Signals). **Vet clinics then joined it** — they were still on the platform InfoWindow, so one map had two window styles and read as two different apps. `MapBubble` is the shared shell (surface, pointer, fixed width, tap target) with `SignalInfoCard` and `ClinicInfoCard` supplying content; the clinic bubble shows the clinic **pin asset** rather than a themed icon, because the map teaches blue = clinic and a brand-orange badge hanging off a blue pin said the two were unrelated. Clinic pins are 24 px against a signal pin's 29 px, so the bubble offset is per marker type. **Exactly one bubble is open at a time**, and the reconcile pass now covers both layers — switching the clinic layer off used to leave `_selectedClinic` set, so the bubble stayed on a map with no clinics on it and still navigated. `ClinicInfoCard.maxHeightFor` was **~50% high** (the name was counted in both halves of the estimate, and the badge added to the text beside it rather than compared with it — 154 px against 102 px real), which decides whether a bubble fits above its pin, so it was flipping bubbles below pins they would have cleared. **Needs pills carry the brand now**, filled with the *tonal* container rather than `primary` itself: a solid #FF9800 pill manages 2.16:1 on a light ground, while the container pair is 10.38:1 and 8.66:1 — and it stays clear of the map's own colour language, where saturated orange means amber urgency. Species tags stay neutral: they describe the animal, they are not the ask. The "Loading clinics…" card lost its `// theme-independent: over the map` marker, which was the wrong call; the two literals left in that file are the placement crosshair, which genuinely is a graphic drawn on map imagery. **Device-verified** on Android (Galaxy Tab A8, light and dark, bg) and iOS (iPad 6th gen, dark, en): render, pan-tracking, edge clamping, flip-below, tap-through, restore on return, dismiss on map tap, the off-screen hide, pill contrast, the clinic bubble and its pin icon, and one-bubble-at-a-time. |
-| 2026-09-06 | **Moved map clustering into Dart, so a bubble can carry urgency** (§7.3, §7.8, §14; issue #76 / COLOR-4). The SDK's `ClusterManager` drew every bubble in Google's navy and gave Dart nothing to restyle it with — the Dart type is an id and a tap callback, and neither platform plugin overrides the bubble renderer — so at the opening zoom, where nearly every signal sits in a bubble, the map could not say anything on it was critical; keeping red out of clustering had been the one lever, and it left amber reading as navy. `clusterPoints` merges points within 60px of each other at the camera's rounded zoom (the SDK's own distance-based idea, a grid only as the index); bubbles are canvas bitmaps cached per (fill, label) and drawn as ordinary markers. **A bubble takes the colour of its most urgent member**, by declaration order, so every urgency clusters now — red included — and a cluster with one critical signal is red at every zoom. The selected signal is held out of clustering while its bubble is open. Two things the SDK could never do came with it: **a cluster too tight to split opens a sheet** listing its members (four co-located `signals_test` signals at pl. Sv. Nedelya used to zoom to 21 and stay an unopenable "4"; identical coordinates never separate, and max zoom resolves ~5 m), and **vet clinics cluster too**, separately, in the pin's blue. The legend gained bubble rows. Lost: the SDK's animated merge/split — bubbles re-form at camera idle. 376 Dart tests (`map_clusterer_test`, `map_marker_builder_test`, `cluster_items_sheet_test` new; `map_clustering_test` and its "red never clusters" assertion retired). Client-only — no rules, functions or deploy. **Device-verified on SM-X205 2026-09-06** (bg, light): amber 4 → zoom → amber 3 over the co-located trio → sheet → details; the lone red merging into the city cluster turned it red; clinic bubbles blue and separate, gone with the toggle; the selected pin stayed out of its cluster with its bubble and rejoined on dismiss; **dark mode** on the tablet 2026-09-08 (map, legend, sheet). **iPad 6th gen (profile build, dark, en) 2026-09-09**: amber 4 → amber 3 → sheet → details, blue clinic bubbles with the amber signal bubble drawn above them, clinic-bubble zoom, layer-off, legend, red 10 merge. |
-| 2026-09-04 | **Shipped Bulgarian to the users who were silently getting English** (§8, §8.1, §12). A user whose phone was in Bulgarian saw the app in English, and nothing was wrong with the translations — `supportedLocales`, the delegates and the ARBs were all correct, and the same build on the same system locale was fully Bulgarian on the test tablet. **What differed was packaging.** Play splits an app bundle by language and installs only the splits matching the device's locales *at install time*; Play's split logic cannot see Dart-side ARBs, so it decided from Android resources, of which the app shipped none in Bulgarian. Someone who installed while their phone was in English never received `split_config.bg.apk`, and switching the system language afterwards does not reliably make Play backfill it — with no `bg` Android resources present, Android resolves the activity config away from `bg` and Flutter's `LocalizationPlugin` reads `en`. The Bulgarian strings sat in `libapp.so` the whole time, correct and unreachable. **Proven on the tablet against the shipped build 132**: reinstalling the same splits minus that one 25 KB file reproduced the report exactly, and restoring it fixed it. Fixed by `bundle { language { enableSplit = false } }` (ABI and density splits untouched) plus **app-owned `values-bg/strings.xml`** — that split had existed only because AndroidX and Play Services ship their own translations, so whether Android considered `bg` supported rested entirely on the dependency set. Separately, both platforms now **declare their languages to the OS** (`res/xml/locales_config.xml`, `CFBundleLocalizations` + `knownRegions`), which unlocks the per-app **Language picker** on Android 13+ and on iOS, and is what makes the App Store list Bulgarian as supported — a convenience, and a self-service correction if a locale ever resolves wrong again, **not** the fix for the split bug. Stated plainly because the opposite was believed first: the iOS key is **not** the twin of the Play bug — a controlled A/B with the system language set to Bulgarian shows a build *without* it renders fully in Bulgarian, because Flutter's iOS engine reads `NSLocale.preferredLanguages` (the system list, unfiltered by the bundle), not `preferredLocalizations`. **Do not verify it with `-AppleLanguages "(bg)"`**, which writes the app's `NSUserDefaults` directly, bypasses the filtering under test, passes either way, and leaves a per-app override that then outranks the system language. `test/localization_config_guard_test.dart` fails the build when the four declarations drift apart — adding a locale to the ARBs is the half that gets remembered. **The map re-languages itself** on a locale change: the Maps SDK picks its label language at platform-view creation and never revisits it, and there is no runtime setter, so a locale-keyed `Key` recreates the view — with the camera replayed from `onCameraMove` (target, zoom, bearing, tilt) rather than the view model's centre, which ignores moves under its 30 km re-query threshold and would teleport anyone who had panned a few streets. `onMapCreated` fires again, so its first-launch work is gated on `_mapController` still being null, and the invisible InfoWindow tap target is torn down with the view (left alone it hovered over nothing and the reconcile pass re-asserted through a disposed controller, raising `MissingPluginException`, which is not a `PlatformException` and escaped the existing catch). The **"locate me" button** now shows whenever the app may show a location. Device-verified on the tablet: changing the app locale on a running app re-languages the labels with no restart, centre, zoom and clusters intact, and back again. |
-| 2026-09-04 | **Launcher icons regenerated, and the update note's helper sentence given room to wrap** (§7.17). Every `ic_launcher_foreground.png` held a hard-edged **opaque white square** (232×232 inside the 432 canvas) with the logo at only 44% of the canvas — the signature of a padded white-square image fed to an icon generator instead of the logo itself. On the launcher the defect was invisible, because the background layer is white too; the same bad source is what makes the Play Store listing show a small logo floating in a white tile. `ic_launcher_monochrome.png` was a byte-for-byte copy of the colour one. All regenerated from the 1024 master. Separately, the sentence explaining why the update note is mandatory rendered as *"Please say what changed — everyone following this signal se…"* at a large system font scale: `helperText` is drawn with a hardcoded `TextOverflow.ellipsis` clipped to `helperMaxLines`, and **dropping `helperMaxLines` is not the fix** — null means *one* line there, which clipped the Bulgarian string harder. The sentence moved to the `helper` **widget** slot where it can simply wrap, and the dialog became `scrollable`, because three lines of helper plus the field plus the keyboard exceeds the content box on a phone at the largest accessibility text size. The regression test asserts the **laid-out paragraph's `didExceedMaxLines`** rather than the widget's `maxLines` — the latter passes while the device still shows an ellipsis, which is exactly how the first attempt looked correct and wasn't. Verified on the SM-X205 at font scale 1.5 and 2.0, in Bulgarian. Version bumped to **`7.0.0+133`**. |
-| 2026-09-03 | **Made the signal's text selectable, and its links tappable** (§4.5, §7.16). Every piece of user-written text on the details screen — title, description, comments, status and ownership notes, a takeover request's note — was a plain `Text`. None of it could be selected or copied, and a URL or phone number somebody pasted was dead characters a volunteer had to retype by hand, on the one screen whose entire job is passing information between strangers coordinating a rescue. Fixing it collided with the comment rows' **long-press**, because Flutter's selection claims that gesture and the inner recognizer wins the arena, so making comments selectable would have silently killed reporting them. That collision was worth having: long-press was the *only* route to reporting a comment (the app-bar flag reports the signal), it advertised itself nowhere, and it was nine days old — so the safety valve on the one screen where strangers write to each other was reachable only by guessing. **Comment actions moved to a visible `⋮`**, and the freed gesture pays for selection. Each user-written string owns its own `SelectionArea` inside `LinkifiedText` rather than one wrap around the page: the single wrap made every label, heading and chip selectable too, so "Select all" buried the two or three lines of content in furniture. That costs the cross-widget drag and buys a selection that can only contain what somebody typed. The original objection to a per-row button (an overflow icon on every row reads as an admin tool) is answered by placement, not by hiding it: the `⋮` rides on the existing name-and-date line, so it adds no gutter and appears only on rows that have something to offer — never on a status or ownership row, never on your own comment. Detection is a hand-rolled `link_parser.dart` rather than a `linkify` package, because the matching is one regex and the part worth owning is the **scheme allowlist**: only `http`/`https` are launched, and a scheme'd URL is matched for *any* scheme so `intent://evil.example/x` is swallowed whole and emitted as plain text instead of having its host mined out by the bare-domain branch. Phone numbers are matched too, with false positives accepted by decision — over-matching costs a wasted tap, under-matching costs retyping — bounded by a 6-digit floor (so years, house numbers and prices are not phones) and an E.164 ceiling. Results are **not** memoised: the only caller is `LinkifiedText`, which parses in `initState` and again only when the text changes, so its `State` already is the memo (corrected 2026-09-10 — this entry had claimed a 64-entry LRU that `link_parser.dart` has never had). Link ink is `colorScheme.secondary`, **not** `primary`: primary is `#FF9800` in both schemes and 2.16:1 on white, the exact bug `theme_contrast_test` exists to catch — plus an underline, since colour alone is invisible to a colour-blind reader. `LinkifiedText` is stateful because a `TextSpan`'s `TapGestureRecognizer` has to be disposed; building them in `build()` allocates a set per frame and frees none. 323 Dart tests (30 new: 20 on the parser, including adversarial 2000-char inputs guarding against catastrophic backtracking, and 10 on the widget — recognizer ownership, the link ink in both themes, the selection staying scoped to the content, and the rail still stretching with a `SelectableRegion` inside its `IntrinsicHeight`). **Device-verified on SM-X205 2026-09-03** (and first on an emulator), in test mode against a seeded `signals_test` signal since deleted. `www.helpapaw.org`, `maps.app.goo.gl/x7Qp`, `0888 123 456` and an address all rendered as links and dispatched to Chrome, the `tel:` chooser (separators stripped) and Gmail; `intent://evil.example/x` and `javascript://evil.example/y` stayed plain text, as did `mill.She`, `version 1.2.3` and `2026`. "Select all" on the description highlighted the description and nothing around it — not the title, the chips, the card labels or the comment. The `⋮` appeared on the comment row and **not** on the `Reported this signal` event row, and opened the report dialog — on the tablet this ran against a **real signed-in session**, so the `canReport` gate was exercised as written rather than forced. Links render inside comment rows and wrap across lines with the connector rail intact, and in **dark mode** they are the plain brand orange on black (9.74:1), underlined. Client-only — no rules, functions or deploy. |
-| 2026-08-30 | **Gave the app a design system, and turned dark mode on** (§7.17, and §4.5/§4.6/§7.3/§7.5 for what it changed on screen). `ThemeData(primarySwatch: …, useMaterial3: true)` does not do what it reads like — **M3 ignores `primarySwatch`** — so every unstyled widget had been rendering M3 purple on a lavender scaffold, and the ~294 colour literals scattered through `lib/` existed to paint around that. Replaced with a real `ColorScheme` in `lib/src/theme/`, the literals deleted, and `darkTheme`/`themeMode` wired up: the brand `#FF9800` survives unchanged because it is simultaneously the worst foreground on white (2.16:1) and one of the best on black (9.74:1), with the ink on it flipped. Type moved off ~59 loose `fontSize` numbers onto a named scale (deliberately at the sizes already in use — M3's own scale would be a redesign), and four corner radii became one. **Colour now means urgency and nothing else**: status traded its traffic light for a glyph and a neutral chip, both scales were relabelled (Low/Medium/Critical, Waiting for help/Someone is helping) because the old wording was three shared words away from urgency's in Bulgarian, **red opts out of clustering** because `ClusterManager` gives Dart no way to restyle the native bubble, and the map gained a **legend** and a **dark tile style** whose road greys are picked against the pins rather than by eye. Signal details was restructured from eight peer blocks into one `SignalStateCard` plus a `ManageSignalSheet`, so the majority of visitors — who can change nothing — no longer scroll past a radio group and a dropdown to reach the conversation. Six screens took `PageWidth` (600dp) so a tablet stops stretching a phone layout; all 15 app bars took `AppBarTitle`, which shrinks rather than truncating. **Fourteen `catch` blocks stopped putting the raw exception on screen and started recording it** — `reportAndDescribe` does both in one call, the ARB strings lost their `{error}` placeholders, and `StatusView` gave every empty and failed screen one shape with a retry that actually re-subscribes. Four controls that looked live were made live (filter Cancel/Done, the feedback contact button, a drawer `FutureBuilder` never mounted, the comment composer overlapping its own scroll view). **Four new guard tests carry the durable half**, because all four regressions are invisible to anyone testing in English, in light mode, on a happy path: `theme_contrast_test` (which would have caught the light-salmon-on-black warning card an unset `errorContainer` produced), `theme_literal_guard_test`, `error_text_test` and `bulgarian_layout_test`. `adaptive_components` removed — it was a pass-through. §0.1, §4.5, §4.6, §7.3, §7.5, §7.17, §8, §12.14–16, §13.2, §14. |
-| 2026-08-29 | **Renamed the master spec's "case" vocabulary to the app's own (§4.8a).** The ownership feature had carried the spec's words into the wire format; user-facing copy in both locales, every identifier, and the stored names now say **signal** and **signal owner**. Renamed on the wire: `caseHolder`→`signalOwner`, `holderActiveAt`→`ownerActiveAt`, the `ownership_transfer` payload's `oldHolder`/`newHolder`→`oldOwner`/`newOwner`, `reports.reason` `"duplicateCase"`→`"duplicateSignal"`, and the `caseOwnership` callable→`signalOwnership`. **Taken straight, with no compatibility shim and no backfill** — a decision made by counting rather than assuming: ownership shipped 2026-08-20 and never reached a released build, `6.0.2+129` has no ownership feature at all, and production `signals` was measured to hold six documents carrying zero pre-rename names. The only legacy values were in `signals_test` on the QA devices plus one report reason, all disposable. A first pass did build the full bridge — dual writes, three read fallbacks, a two-phase backfill and a callable alias — and it was removed once the data said none of it had anything to protect. Deployed to help-a-paw-dev the same day, export list diffed both ways and live rules re-read byte-identical. Spec quotations stay in the spec's own words. 270 Dart tests, 112 functions tests, 258 rules tests. |
-| 2026-08-22 | **Showed the pending takeover offers to the reporter, read-only** (§4.8). The offer list was gated on `_isOwner` alone, which matched `requireCurrentOwner` on the callable but over-applied it: a reporter who had handed their case on — or released it — could not see that anyone was offering to pick it up, on their own report. The rows name people volunteering to take responsibility for that reporter's animal, and a case going quiet is exactly when that matters. **Answering stays the owner's**, so the reporter gets the list without Hand over / Decline; the split is one `answerable` flag on `SignalOwnerBlock._buildPendingOffers`. **No new access and no deploy** — `takeoverRequests` is already `read: if request.auth != null`, so this is a client-only change to what is drawn. `requireCurrentOwner` is now **exported and pinned by five tests** (owner passes, a legacy signal's derived-owner reporter passes, the handed-on reporter is refused, a stranger is refused, and a released case refuses everyone), because showing somebody a list they cannot act on is a standing invitation to wire up the buttons later. Also deleted a stale duplicate of the audience table that had been left above `_actorText` in `signal_details_screen.dart` when the block was extracted, and which had drifted to claim the reporter already saw the offers. 260 Dart tests, 112 functions tests. §4.8. |
-| 2026-08-21 | **Made an account's test mode a recorded fact rather than a side effect of push (#72).** `users/{uid}.testMode` decides whether the server fan-out considers an account **at all** — the mode guard sits above the `inboxRecipients`/`userTokens` split — and it had exactly two writers: the 7-tap toggle, for whichever account happened to be signed in at that moment, and the FCM token stamp. Neither fires for an account that arrives on a test-mode device with notifications off, so the field stayed absent, which reads as production and drops the account **including its inbox entry** — precisely the thing that split exists to preserve for users without push. Found during case-ownership device verification, where a `takeover_approved` notification and its inbox row both vanished with nothing logged. The toggle cannot cover it alone, because the device preference outlives the session it was set in: signing out mints a new anonymous uid, and upgrading that one in place carries no `testMode` forward because there never was one; the reverse — an account left stamped `true` and invisible to the *production* fan-out — is equally silent. **`AuthService.syncTestMode()` is now the single writer** (§3.2.1), called at launch (which also backfills accounts predating it), when a new anonymous session is minted, above `onUserLogin`'s notification-preference early return, and from the toggle. A `(uid, mode)` cache in `AppPreferencesService` keeps the ordinary launch at zero writes and **fails towards writing**; callers must not await it, since a Firestore write's future only completes on server ack. The three mode guards now log every drop and say whether the field was *absent* rather than false — this class of bug is otherwise indistinguishable from "no notification was due". §3.2, §3.2.1, §4.1, §7.1, §7.6, §9. **Android-verified 2026-08-21; the functions-side logging is not yet deployed.** |
-| 2026-08-21 | **Replaced deleting a signal with removing it (#68).** Deleting was a client-side cascade — best-effort Storage deletes, then one batch emptying `comments`, `events` and `takeoverRequests` **by name**. It could not be finished (an app killed mid-cascade orphaned the subcollections permanently, and `isParentSignalReporter` then *errors* on the missing parent, so nothing could go back for them), it forced three delete rules open, and it carried the standing hazard that adding a subcollection meant remembering to add it to `_deleteHistory`. **`signalRemoval` moves the document to `removedSignals`** and leaves the subcollections and photos where they are — the same move-not-a-flag shape as `hideSignal`, for the same reasons, and a separate collection because these expire, the *reporter* restores them, and `listQuarantined` is a 50-item moderator worklist ordinary removals would swamp. `purgeRemovedSignals` erases everything after `REMOVED_RETENTION_DAYS = 30`, deleting the removal record **last** so a failed run is resumable; `deleteAccount` purges a departing user's removals outright rather than anonymizing them, so there is no fourth place for a phone number to survive. **The motivating problem was not audit but statistics**: people reached for Delete to mean "this case is finished", and the profile counted signals with a live `count()` over `signals` — so it measured *signals still visible*, and every removal, hide or future §4.10 archive took the credit with it. Master spec §3.5.1 requires the opposite. Counting moved to a server-written `publicProfiles.signalsPosted`, which needs **no rules change** because that document already restricts clients to `name` (`userCounters` would have been forgeable). Hiding alone would not have fixed it, since a hidden signal has to leave `signals` too. An open case is now asked "is this resolved?" first, reusing the ordinary status path so the history is identical; removal is refused while an open report names the signal, which is the one abuse a recoverable removal invites. **The three cascade delete rules are deliberately left permissive here** — flipping them breaks every released build's cascade batch, so it is step 5 of §13.3, behind the app release, alongside #67 and #71. 258 rules tests, 260 Dart tests, 107 functions tests. §4.1, §5.1, §7.2, §7.5, §7.11, §9, §11, §13.3, §14. **Functions, rules and indexes deployed 2026-08-21 and verified on SM X205 + SM J610FN (2026-08-21) and the iPad (2026-08-22)** in test mode: the resolve-first dialog appears on an open case and is skipped on a resolved one; resolving from it writes the same `status_change` event with its note; a removal moves the document and leaves `comments` behind; **restore logged "Skipping fan-out for restored signal"**, so the reporter path inherits the guard that stops a re-notification; Delete permanently erased the document, the orphaned `comments` and a planted Storage object under the photos prefix; removal was refused with `signalUnderReview` while an open report named the signal and allowed once only a closed one did; and the Removed tab rendered for an anonymous account with no permission error. Profile stats took the legacy fallback, correctly — the counter skips test mode, so verification did not inflate a real account's number. **iOS was verified on a Profile build** driven through WebDriverAgent over plain HTTP — the debug build cannot run there (plugin-registration SIGSEGV) and iOS 17 will not launch a debug build without the debugger, so `flutter build ios --profile` plus `devicectl install/launch` is the working path. It launched clean, the tabs and both dialogs rendered, removal and restore round-tripped, and the restore logged the same fan-out skip. |
-| 2026-08-20 | **Built signal ownership (master spec §4.5)** — the "who is responsible for this animal right now" axis the app had never had, and the thing several later spec features (pinned comments §9.1, tag completion §4.2, Red Alert authority §5.2, fundraising verification §13) all attach to. Before this, *any* signed-in user could move *any* stranger's signal to Resolved with nothing recording that they had taken it on. **`signalOwner` has three states and the distinction is the whole design**: absent = written before ownership, reporter holds it by derivation (permanent, never backfilled — the `urgency` precedent); a ref = held; explicit `null` = *released*. Both ways of collapsing that fail silently and in opposite directions, so the derivation is a guarded ×3 invariant (§12.5d). **Status/urgency/tags moved to reporter-or-owner**: `isStatusOnlyUpdate` became `isSignalOwnerUpdate` and the load-bearing clause moved from the *field list* to `isSignalOwner()` — which is why `urgency` may now be in that list without weakening §5.2. Non-owners get **claim-to-act**: the dropdown stays live and choosing a status offers to take the signal on, one confirmation and one note, applied by the server in one batch (so one tap is also one notification — the ownership branch of `handleSignalUpdated` outranks the status branch and carries `statusCode`). **Transfers are a callable, not rules**, because they are two documents that must land together, because the timeline entry has to be unforgeable, and because staleness needs a server clock: `ownership_transfer` is the first `serverOnly` event type and is deliberately *absent* from `isSignalEventCreate()`, with a guard test asserting the absence so nobody makes the vocabulary test pass by removing the property. **The deadlock a silent owner would otherwise create has three escapes** — ask (`takeoverRequests`, uid-keyed so the id is the rate limit), take a released signal, or take one stale past `STALE_OWNER_DAYS = 14` — none of which needs a moderator. `signalOwnership` is also the first write path to reject anonymous callers outright, which a *new* surface can afford where #67 cannot. **Every action runs in a transaction**, because deciding from a plain read and then committing a batch takes no read lock and lets two simultaneous claims both win. **A declined request can be re-filed after a one-day cooldown** — permanence would be wrong (a signal looks different two weeks on) but re-asking notifies the owner, so it has to cost something; the cooldown is only real because withdrawing is an *update* and the requester has no delete at all, otherwise withdraw-and-refile is an unlimited loop straight past it, and `onTakeoverRequested` is an `onDocumentWritten` because a re-file creates no document. `functions/src/signalRefs.ts` extracted from `moderation.ts` on its second caller. 251 rules tests, 234 Dart tests, 75 functions tests. §4.1, §4.6, §4.8, §5.1, §7.5, §9, §12, §14. **Rollout inverts the usual order** — functions, then the app release, then the rules — because the rules change narrows who may write `status`, and a released client that is neither reporter nor owner would otherwise get a bare `permission-denied`. |
-| 2026-08-20 | **Let moderators act on their own judgement, and stopped them acting on themselves** (§7.16, §14). Every moderator power was reachable only from a report: the action sheet took a non-nullable `reportId` and read each row's target out of the raw report document, and its one call site was the queue tile. So a moderator who came across a problem post while browsing had to report it — to themselves — before they could touch it, which master spec §18.3 never intended. Closed **client-side only**: `moderateAction` already treated `reportId` as optional and skipped the report half when absent, so no rules change, no new callable, no rules deploy. The sheet is now target-shaped (`ModerationTarget`, with `fromReport` keeping the never-default-`'signals'` and unknown-`targetType` safety properties), entered from a shield in the signal details app bar and from a Report/Delete chooser on a comment's long-press (moved to a visible `⋮` on 2026-09-03); "Dismiss report" renders only when there *is* a report. Hiding from the details screen returns `targetRemoved` so the screen leaves rather than reporting the signal as deleted. Added in the same pass, since the browsing entry point makes it reachable: **`requireNotOwnContent`**, refusing any action on the moderator's own signal or comment with `failed-precondition` — placed inside `moderation.ts`'s own `loadSignal` so no future moderator action can forget it, with `deleteComment` and `restoreSignal` calling it directly and `addNote` exempt. (That wrapper sits over the shared `signalRefs.loadSignal`, which signal ownership also uses — the self-check deliberately does **not** live in the shared helper, because acting on your own signal is `signalOwnership`'s normal path, not an abuse.) Guarded by a source-reading coverage test, because a new action that skipped the check would compile perfectly and fail silently. 234 Dart tests, 67 functions tests, 197 rules tests. **`moderateAction` deployed to help-a-paw-dev and device-verified on SM X205 + SM J610FN 2026-08-21** — six actions performed with an empty report queue, each audited with **no `reportId`**; lock/unlock and label set/clear round-tripped (the direction the queue path could never reach); hide popped to the map and restore skipped the fan-out; and a report filed against the moderator's *own* signal was refused `failed-precondition` with the signal left byte-identical. |
-| 2026-08-01 | Initial specification, written from the codebase at `6.0.1+125` (branch `dev`). |
-| 2026-08-01 | Investigated the `storage.rules` note: confirmed BUG-1 (avatar upload always denied), BUG-2 (test-mode signal photos denied) and BUG-3 (failed upload reported as success). Recorded the emulator's project-prefixed reference representation as a testing caveat. §5.2, §14. |
-| 2026-08-01 | Fixed all three, added `firestore-tests/storage.rules.test.js` (27 cases) and size/content-type limits (5 MB signal photos, 2 MB avatars, `image/*`). Client now declares `contentType` on every upload; avatar reads are public. **`storage.rules` deployed to production.** §5.2, §13.2, §14. |
-| 2026-08-04 | **Fixed an iOS launch crash (SIGABRT) introduced by the background-location merge.** `BackgroundLocationManager.writeLocation` started the native Firestore client before Dart ran; `cloud_firestore` then assigned settings to that already-started client and the uncaught `IllegalState` aborted the process. The iOS `userLocations` write moves to Dart (`LocationService._onBackgroundLocation`); Android keeps its native write. Never reached users — the shipped `v6.0.1+125` (2026-06-19) predates the offending code by six weeks, and all 10 Crashlytics events came from the test iPad — but it was a blocker for the next iOS build. §7, §12. |
-| 2026-08-01 | Investigated `/my_notifications`. It is a deliberate deferral (owner decision 2026-05-30, keep the code); verified the previously-assumed gap list — no writer has ever existed, the subcollection is denied because rules don't cascade into subcollections, and the page's `type` vocabulary doesn't match the functions'. Documented the schema and the iOS-badge link. §5.1, §7.13, §14. |
-| 2026-08-04 | **Built the in-app inbox.** Server writer (`writeInboxEntries`) alongside every push; `users/{uid}/notifications` + `userCounters` rules with 15 new emulator tests; drawer entry with unread badge; client-side localized rendering from structured fields; `nearby_signal` entries from the arrival catch-up (incl. the headless isolate); `userCounters` + native badge channel + resume reconciliation for F-008. Recipients now include users with no FCM token. Adjacent fix: the fan-out's un-chunked `sendEachForMulticast` silently lost every notification past 500 tokens — now `sendEach` chunked at 500. §4, §5.1, §7.13, §9, §14. |
-| 2026-08-04 | Enabled real `badge: N` in the fan-out (F-008 closed). Owner accepted the known consequence that pre-release iOS builds have no reset path, so their badge climbs monotonically. §7.13, §14. |
-| 2026-08-12 | **Built the help-tag system.** One nine-code vocabulary shared by signals (`helpNeededTags`, 1–3, mandatory) and users (`helperTags`, ≥1), plus `animalType` as an independent axis rather than species-crossed tags. The fan-out is now prioritise-then-backfill: all tag matches in radius are notified, then C→B→D nearest-first up to `MIN_RECIPIENTS` (lowered to 10 before release), with one widened re-scan at 250 km when the pool is thin — ranking extracted to `recipientSelection.ts` with 20 unit tests (the first tests `functions/` has had). Non-skippable onboarding gate implemented as a widget wrapper on the map route, not a router redirect; a failed preferences read renders the app rather than locking the user out. Settings now require ≥1 animal type and helper tag while enabled, and "Deselect all" is gone (stored empty `signalTypes` still means none and is never migrated). Rules validate the new fields but do **not** require them — tightening is a later, separate deploy. §4.1, §4.2, §4.7, §5.1, §7.4, §7.5, §7.6, §7.15, §9, §12. |
-| 2026-08-15 | **Built the signal timeline (master spec §4.6, "Case Timeline").** Status and urgency changes now require a mandatory update note and are written to a new `signals/{id}/events` subcollection instead of `comments` — the two differ in who may write them (later event types must be server-written) and who may delete them, and mixing them was also counting status changes as comments on the profile screen. The details screen merges both collections into one chronological history, opened by a synthetic "reported this signal" row derived from the signal document, with All/Events filter chips. Nothing is backfilled: legacy system entries stay in `comments` and keep rendering, and `handleCommentCreated`'s type guard stays with them. Rules validate a closed event vocabulary with a **required** 1–500 char note, deny updates, and (for now) still let the reporter delete events so the client-side delete cascade works — the tamper hole is recorded as a known gap, HelpAPaw/Flutter#68. No functions change. §4.1, §5.1, §7.5, §12, §14. |
-| 2026-08-19 | **Closed the restore gap** (§7.16, §14). A hidden signal could not be un-hidden from the app: `hideSignal` resolves its report, the queue lists only open reports, and the action sheet reached from that queue was the only entry point to any moderator action — the `restoreSignal` callable worked but nothing could reach it. Added a `listQuarantined` callable and a `Hidden` tab beside the report queue. **Deliberately not** by granting moderators a client read of `moderationQuarantine`: that would ship the withheld content and would make this the only moderator power that bypasses a callable, so instead the server projects each document to a summary and the collection stays denied to every client — the existing rules test asserting that is unchanged, and no rules deploy was needed. Hiding still resolves its report, because the report genuinely has been actioned; "currently hidden" is different state and the quarantine collection *is* that set, with no derivation. Also makes `ModerationService.restoreSignal` live, which the reuse review had flagged as dead code. §7.16, §9, §11, §14. |
-| 2026-08-17 | **Built the moderator role (master spec §3.6.1, §18)** — the first tier of the governance hierarchy, and the thing three separate code comments had been deferring to (`firestore.rules` on `isStatusOnlyUpdate`, the urgency picker, and §14 of this document). Role is a server-only `moderators/{uid}` **document, not an Auth custom claim**: a claim survives in the ID token until it expires, so a revoked moderator would keep every power for up to an hour, and it would be a second copy of the value. User reporting (`reports`, 12 reasons from §18.1) writes directly with a **deterministic document id as the rate limit** — `create` allowed, `update` denied, so one report per user per target needs no throttle collection. All eight moderator actions go through one `moderateAction` callable so the authorization check, the mandatory note, the unforgeable `moderationActions` audit entry and the report resolution cannot be skipped per-branch. **Hiding moves the signal document to `moderationQuarantine`** rather than setting a flag: subcollections survive a document delete, so a restore is lossless, and no client rule match means genuinely unreadable — where a `hidden: true` field would have needed a backfill of every signal plus an index, and hidden it from the app and nobody else. Two traps handled: restoring re-fires `onSignalCreated` (guarded on `moderation.restoredAt`), and the reporter could otherwise clear their own moderation (`isNotTouchingModeration` on both update branches). Invariant 5a came due — `moderateSetUrgency` is the first server-written event, so `functions/src/events.ts` and its parity test now exist. The plain-HTTPS callable transport (§7.14) was extracted to `services/callable_client.dart` on its third call site. 191 rules tests, 202 Dart tests, 48 functions tests. §4.1, §5.1, §6, §7.16, §9, §11, §12, §14. |
-| 2026-08-15 | **Folded `signalType` into the help-tag vocabulary.** Four of its seven values restated fields that now exist in their own right (Emergency = red urgency, Blood donation / Unneutered animals = tags, Wild animals = `animalType`), so reporters answered the same question twice and the answers could contradict. The deciding case was an injured animal, which master spec §5 makes the worked example of Red urgency and gives no category at all. `helpNeededTags[0]` is now the case's category (master spec §4.2); the vocabulary grew to 13 with `bloodDonation`, `neutering`, `lostFound` and `dangerWarning`. Push and inbox text is now urgency + the primary tag's "needed" form ("Urgent · Rescue needed — …"), as a second localized label per tag rather than a `+ " needed"` suffix, because Bulgarian does not build that phrase by suffixing. The `signalTypes` notification gate is gone — **removing the only negative filter users had** (§4.2), which cost nothing because no user had ever excluded a type. The map filter sheet swapped its type section for tag + species, closing the browse-vs-notify asymmetry. No migration: `signalType` is simply never read, and the four production signals predating tags were fixed by hand. §4.2, §4.4, §4.7, §5.1, §7.4, §7.13, §9, §12. |
-| 2026-08-16 | **Made the legacy category survive everywhere it is shown, not just in the push.** The retired-type table became a table of *tag codes* rather than of headline strings (`primarySignalTag`, with `signalHeadline` derived from it), so the mapping exists once instead of as a parallel list, and the public share page — the one thing people see before they have the app — stopped badging every pre-vocabulary signal "Rescue". §4.4, §12. |
-| 2026-08-17 | **Closed the rest of the legacy-category gap, on both sides.** The inbox row was written from the tag list the fan-out *matched* on, so one event announced the same document as "Blood donation needed" on the lock screen and "Rescue needed" in the inbox; `displayTagsOf` now supplies the display copy, deliberately not the matching one. The app had no equivalent of the retired table at all, so `HelpTag.primaryOfSignal` + `Signal.legacySignalType` mirror the server across the details header, share text and My Signals. The map filter and the fan-out's matching site are unchanged on purpose. One surface remains uncovered — the arrival catch-up's local notification (§14). §4.4, §12. |
-| 2026-08-17 | **Stopped a finished draft vanishing on one back press.** Step 1 of the wizard lives on the map, so the map owns two of the three exits from a draft, and both discarded unconditionally — harmless only until *Change* beside Location on the review step made it reachable with six steps answered. Both now route through the wizard's own `isDirty` confirm. The submit path had the mirror bug: `submitSignal` read `selectedImage` after two awaits, so `×` → Discard mid-submit skipped the upload and still reported full success; the `XFile` is now captured up front and `×` is disabled while submitting. §7.4. |
-| 2026-08-17 | **Functions runtime to Node 24** (via 22), **nodemailer to 9.x**, jest pinned to 29 so the lockfile installs on Linux. §9. |
-| 2026-08-17 | **npm supply-chain hardening.** `ignore-scripts=true` committed in both node trees and verified to ship with the function source (so it also covers the Cloud Build install, and must never hold a registry token); both trees audited clean. The dead `.github/workflows/flutter.yml` was deleted — it had never run, pointed at a non-existent branch, and ran `flutter pub upgrade` before executing package code, on a public repo whose token defaulted to write. §13.1. |
-| 2026-08-18 | **Made the last display surface legacy-aware, and re-checked the rules that were reverted.** The arrival catch-up — the only notification the *client* writes — still headlined from the matched tag list, so a `signalType: 2` signal reached one user as "Blood donation needed" (fan-out) and another as "Rescue needed" (catch-up), for one document. It now carries `Signal.legacySignalTypeFrom(data)` and renders through `primaryOfSignal`, and the inbox row it writes stores `HelpTag.displayCodes` — the Dart mirror of `displayTagsOf`, added so the show-list and the match-list are two named things on this side too. Matching is deliberately unchanged. The `events` rules block reported as reverted is **live again** (the moderation deploy carried it back out, verified against the deployed ruleset); the drift now points the other way — `dev`'s `firestore.rules` is behind live by the whole moderation block, so a rules deploy from `dev` would revert it. §4.4, §13.3, §14. |
+| Cluster bubbles re-form only at camera idle, without animation | Accepted (§7.3). Dart clustering snaps when the gesture ends; the trade is bubbles that can carry urgency at all |
+| Dark mode has not had a full device pass | Open. The first release carrying `themeMode` reaches users who have had their OS in dark mode all along, so every screen is first contact |
