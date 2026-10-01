@@ -228,7 +228,9 @@ class ModerationService {
         'note': note,
       }, reportId: reportId);
 
-  /// Corrects a misused urgency label (spec 5.3). Writes a timeline event.
+  /// Moves a signal's urgency, up or down (master spec 5.2/5.3). Writes a
+  /// timeline event, and a raise pushes "urgency raised" to every subscriber.
+  /// Refused with `aborted` when the signal is already at [urgency].
   Future<void> setUrgency({
     required String collection,
     required String signalId,

@@ -10,6 +10,7 @@ import '../models/report_reason.dart';
 import '../models/signal_urgency.dart';
 import '../services/callable_client.dart';
 import '../services/moderation_service.dart';
+import 'red_alert_confirmation_dialog.dart';
 import 'section_header.dart';
 
 /// What happened to the content, for the screen the moderator acted from.
@@ -84,6 +85,13 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
   final TextEditingController _note = TextEditingController();
   bool _busy = false;
 
+  /// Why the last action failed, shown inside the sheet until the next one.
+  ///
+  /// Inside, not as a SnackBar: a failure leaves the sheet open, and a SnackBar
+  /// belongs to the screen *behind* it, so it would render under the sheet
+  /// where nobody can see it and a refusal would look like a dead tap.
+  String? _error;
+
   /// Current moderation state of the target signal, loaded once when the sheet
   /// opens unless the caller supplied it.
   ///
@@ -92,9 +100,12 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
   /// and takes it out of the queue, so a second report only ever re-offered the
   /// same one-way rows. A lock applied by mistake was permanent.
   ///
-  /// Null while loading and on failure; the rows then default to their "apply"
-  /// direction, which is the safe reading — a moderator who cannot see the
-  /// current state should not be told the content is already locked.
+  /// Null while loading and on failure; the toggles then default to their
+  /// "apply" direction, which is the safe reading — a moderator who cannot see
+  /// the current state should not be told the content is already locked. The
+  /// urgency rows are left out instead: "raise" and "lower" mean nothing
+  /// without a starting point, and a guess could put a no-op change on the
+  /// public timeline.
   ///
   /// Held as a parsed [Signal] rather than the raw map, so these predicates are
   /// the model's and cannot drift from the details screen's.
@@ -164,10 +175,15 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
     super.dispose();
   }
 
-  /// Runs [action], reporting the outcome and closing the sheet on success.
+  /// Runs [action]: on success closes the sheet and confirms on the screen
+  /// behind it; on failure keeps the sheet open and says why in [_error].
+  ///
+  /// [confirm], when given, is asked first — with the sheet already busy, so a
+  /// second tap landing before its dialog's barrier cannot stack a second one —
+  /// and a false answer leaves the sheet open and unchanged.
   ///
   /// One funnel so no action can forget the busy guard, the mounted check or
-  /// the error mapping. Two codes get their own message because both have a
+  /// the error mapping. Three codes get their own message because each has a
   /// specific and actionable meaning here:
   ///
   /// - `permission-denied` — the role was revoked while the sheet was open,
@@ -177,16 +193,28 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
   ///   UI does not offer that, so reaching it means the content changed hands
   ///   or the caller skipped the check; either way "you cannot moderate your
   ///   own content" is the honest answer rather than a generic failure.
+  /// - `aborted` — the row acted on a sheet that went stale: the signal changed
+  ///   after the sheet opened, so the row is now a no-op. "Try again" would
+  ///   only repeat it, so the message says to reopen, which re-reads it.
   Future<void> _run(
     ModerationOutcome outcome,
-    Future<void> Function() action,
-  ) async {
+    Future<void> Function() action, {
+    Future<bool> Function()? confirm,
+  }) async {
     if (!_canAct) return;
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
 
     final l10n = AppLocalizations.of(context);
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
+
+    if (confirm != null && !await confirm()) {
+      if (mounted) setState(() => _busy = false);
+      return;
+    }
 
     try {
       await action();
@@ -200,18 +228,16 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
       );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _busy = false);
       final code = e is CallableException ? e.code : null;
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(switch (code) {
-            'permission-denied' => l10n.moderationPermissionDenied,
-            'failed-precondition' => l10n.moderationSelfBlocked,
-            _ => l10n.moderationActionFailed,
-          }),
-          backgroundColor: Colors.red,
-        ),
-      );
+      setState(() {
+        _busy = false;
+        _error = switch (code) {
+          'permission-denied' => l10n.moderationPermissionDenied,
+          'failed-precondition' => l10n.moderationSelfBlocked,
+          'aborted' => l10n.moderationTargetChanged,
+          _ => l10n.moderationActionFailed,
+        };
+      });
     }
   }
 
@@ -227,6 +253,7 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
     final hasSignal = _target.canActOnSignal;
     final collection = _target.collection;
     final signalId = _target.signalId;
+    final currentUrgency = SignalUrgency.tryFromCode(_signal?.urgency);
 
     return Padding(
       // Lifts the sheet above the keyboard — the note field is the first thing
@@ -266,6 +293,25 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
                   border: const OutlineInputBorder(),
                 ),
               ),
+              if (_error case final error?)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.error_outline,
+                          size: 20, color: Theme.of(context).colorScheme.error),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          error,
+                          style: TextStyle(
+                              color: Theme.of(context).colorScheme.error),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               const SizedBox(height: 8),
               if (hasSignal && _target.type == ReportTargetType.signal) ...[
                 _action(
@@ -319,21 +365,33 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
                             reportId: reportId,
                           )),
                 ),
-                // Spec §5.3: downgrading a misused urgency is the moderator
-                // power the rules have been describing all along.
-                _action(
-                  icon: Icons.low_priority,
-                  label: l10n.moderationSetUrgency,
-                  onTap: () => _run(
-                      ModerationOutcome.applied,
-                      () => service.setUrgency(
-                            collection: collection!,
-                            signalId: signalId!,
-                            urgency: SignalUrgency.green.code,
-                            note: note,
-                            reportId: reportId,
-                          )),
-                ),
+                // Master spec §5.2/§5.3: a moderator may change urgency in
+                // either direction — downgrading a misused level, or escalating
+                // one the reporter underrated. One row per other level, so the
+                // moderator picks the destination rather than the sheet
+                // assuming one. A raise also pushes "urgency raised" to every
+                // subscriber (see `setUrgency` in functions/src/moderation.ts).
+                if (currentUrgency != null)
+                  for (final urgency in SignalUrgency.values)
+                    if (urgency != currentUrgency)
+                      _action(
+                        icon: urgency.icon,
+                        iconColor: urgency.color,
+                        label: urgency.isMoreUrgentThan(currentUrgency)
+                            ? l10n.moderationRaiseUrgencyTo(urgency.label(l10n))
+                            : l10n.moderationLowerUrgencyTo(urgency.label(l10n)),
+                        onTap: () => _run(
+                            ModerationOutcome.applied,
+                            () => service.setUrgency(
+                                  collection: collection!,
+                                  signalId: signalId!,
+                                  urgency: urgency.code,
+                                  note: note,
+                                  reportId: reportId,
+                                ),
+                            confirm: () => confirmUrgencyChange(context,
+                                from: currentUrgency.code, to: urgency)),
+                      ),
               ],
               if (hasSignal && _target.type == ReportTargetType.comment)
                 _action(
@@ -392,12 +450,14 @@ class _ModerationActionSheetState extends State<_ModerationActionSheet> {
   /// flight — a double tap here would apply the action twice and audit it twice.
   Widget _action({
     required IconData icon,
+    Color? iconColor,
     required String label,
     required VoidCallback onTap,
   }) {
     final enabled = _canAct;
     return ListTile(
       enabled: enabled,
+      iconColor: iconColor,
       leading: Icon(icon),
       title: Text(label),
       onTap: enabled ? onTap : null,

@@ -926,7 +926,23 @@
   "moderationRestoreSignal": "Restore signal",
   "moderationLockComments": "Lock comments",
   "moderationUnlockComments": "Unlock comments",
-  "moderationSetUrgency": "Correct urgency",
+  "moderationTargetChanged": "This signal has just changed. Reopen to see its current state.",
+  "moderationRaiseUrgencyTo": "Raise urgency to {urgency}",
+  "@moderationRaiseUrgencyTo": {
+    "placeholders": {
+      "urgency": {
+        "type": "String"
+      }
+    }
+  },
+  "moderationLowerUrgencyTo": "Lower urgency to {urgency}",
+  "@moderationLowerUrgencyTo": {
+    "placeholders": {
+      "urgency": {
+        "type": "String"
+      }
+    }
+  },
   "moderationDeleteComment": "Delete comment",
   "moderationSetLabel": "Add warning label",
   "moderationClearLabel": "Remove warning label",

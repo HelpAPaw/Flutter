@@ -1845,7 +1845,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get moderationUnlockComments => 'Unlock comments';
 
   @override
-  String get moderationSetUrgency => 'Correct urgency';
+  String get moderationTargetChanged =>
+      'This signal has just changed. Reopen to see its current state.';
+
+  @override
+  String moderationRaiseUrgencyTo(String urgency) {
+    return 'Raise urgency to $urgency';
+  }
+
+  @override
+  String moderationLowerUrgencyTo(String urgency) {
+    return 'Lower urgency to $urgency';
+  }
 
   @override
   String get moderationDeleteComment => 'Delete comment';

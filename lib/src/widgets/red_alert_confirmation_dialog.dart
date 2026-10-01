@@ -1,6 +1,30 @@
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../models/signal_urgency.dart';
+
+/// Whether a move from [from] to [to] may go ahead: false when it is no move
+/// at all, and behind the Red Alert confirmation when it is a move into a level
+/// that requires one (spec 5.2.1).
+///
+/// **The one place the rule is applied.** `UrgencyPicker` and the moderation
+/// sheet both move a signal between levels, with different widgets; routing
+/// both through here keeps a change to the rule from reaching one and silently
+/// skipping the other. [from] is a code rather than a level so the create
+/// form's "nothing chosen yet" (null) passes straight through.
+///
+/// False too once [context] is gone: the dialog is awaited, and callers act on
+/// the result with a State that may have been disposed behind it.
+Future<bool> confirmUrgencyChange(
+  BuildContext context, {
+  required int? from,
+  required SignalUrgency to,
+}) async {
+  if (to.code == from) return false;
+  if (!to.requiresConfirmation) return true;
+  final confirmed = await showRedAlertConfirmationDialog(context);
+  return confirmed && context.mounted;
+}
 
 /// Mandatory confirmation shown before a signal is published or promoted to
 /// Red (spec 5.2.1).

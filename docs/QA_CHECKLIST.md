@@ -2149,13 +2149,16 @@
 - [ ] **Hide signal** — the signal leaves the map for everyone in real time and becomes unreadable (§16.4)
 - [ ] **Restore signal** — §16.4
 - [ ] **Lock comments** / **Unlock comments** — both directions round-trip. With comments locked, readers see "A moderator has locked comments on this signal." and the input is gone; a **direct** comment write is denied by the rules too (§11.11)
-- [ ] **Correct urgency** — changes the level **and writes an `events` row** that appears in the signal history (§3.4). This is the first server-written event: a wrong type or key name there is accepted by the Admin SDK, stored, and then silently dropped by the app's decoder — the correction just never appears (invariant §12.5a).
+- [ ] **Raise urgency to … / Lower urgency to …** — one row per level other than the current one, least urgent first (Medium signal: *Lower urgency to Low*, *Raise urgency to Critical*). Each changes the level **and writes an `events` row** that appears in the signal history (§3.4). This is the first server-written event: a wrong type or key name there is accepted by the Admin SDK, stored, and then silently dropped by the app's decoder — the correction just never appears (invariant §12.5a).
+  - [ ] **Raise urgency to Critical** shows the Red Alert confirmation (tick-box required); **Cancel** leaves the sheet open and changes nothing. Raising to Medium and every lowering act without it.
+  - [ ] A raise pushes **"urgency raised"** to the signal's subscribers — not to the moderator. A lowering pushes nothing.
+  - [ ] With the sheet open, change the level from another device to the row's target, then tap that row: refused with **"This signal has just changed. Reopen to see its current state."** and nothing is written.
 - [ ] **Delete comment** — the comment is gone for everyone
 - [ ] **Add warning label** / **Remove warning label** — `unverified`, `duplicate`, `disputed`. Each renders a banner on the signal; clearing it removes the banner. ⚠️ A label the server accepts but the app cannot render is **silent** — the moderator believes the signal is annotated and every reader sees an unannotated one (`test/moderation_label_vocabulary_guard_test.dart`, §17.1).
 - [ ] **Dismiss report** — closes the report, content untouched
 - [ ] **Add internal note** — audit-only, changes nothing user-visible
 - [ ] Every action writes a `moderationActions` entry with the actor, the target, the note and a **small before/after summary** — never a whole document copy (the audit log must not become a permanently readable copy of content that was hidden precisely so it would not be read)
-- [ ] Success shows "Done."; failure shows "That did not work. Please try again."
+- [ ] Success closes the sheet and shows "Done."; a failure keeps the sheet open and shows its reason **inside the sheet**, under the note (e.g. "That did not work. Please try again.") — never as a snackbar, which would render behind the sheet where nobody sees it
 
 ### 16.7 Self-moderation is refused
 > Without this, a moderator could clear a `disputed` label off their own signal, lock the
