@@ -719,7 +719,9 @@ Rules, mirrored by `SIGNAL_URGENCIES` (functions) and the backfill script:
   correction is audit-logged rather than silent. See §5.1.
 - **Red requires confirmation** (master spec §5.2.1): `RedAlertConfirmationDialog`
   has a mandatory tick-box and fires only on a *transition into* Red.
-  `UrgencyPicker` owns this so no call site can skip it.
+  `confirmUrgencyChange` applies it, and both places that move a signal between
+  levels go through it: `UrgencyPicker`, and the moderation sheet's *Raise
+  urgency to Critical* row (§7.16).
 - **Legacy documents.** `urgency` is optional on the wire; readers derive
   `status == resolved ? green : amber` (`Signal.urgencyFrom`,
   `SignalUrgency.fromLegacyStatus`, `urgencyOf()` in functions — keep in step).
@@ -2803,7 +2805,7 @@ value is the reasoning.
 | `hideSignal` | moves the signal document to `moderationQuarantine` | refused |
 | `restoreSignal` | writes it back with `moderation.restoredAt` | refused |
 | `setCommentsLocked` | `moderation.commentsLocked`; also enforced in the rules | refused |
-| `setUrgency` | §5.3 urgency correction — **writes an `events` row** | refused |
+| `setUrgency` | urgency change in either direction (master spec §5.2; a downgrade is the master spec §5.3 correction) — **writes an `events` row**. The sheet offers one *Raise urgency to …* / *Lower urgency to …* row per other level, in display order, and none while the current level is unknown (not loaded, or a code this build cannot decode). A raise to Critical goes through the Red Alert confirmation first, and any raise fires the usual "urgency raised" push to subscribers. The server derives the "before" level with `urgencyOf` (§4.6) and refuses a move to the level the signal is already at with `aborted` (`urgencyChangeFrom`), since the sheet's rows come from the signal as it was when the sheet opened | refused |
 | `deleteComment` | deletes one comment | refused |
 | `setLabel` | `moderation.label` — `unverified` / `duplicate` / `disputed` | refused |
 | `resolveReport` | closes a report as actioned/dismissed | n/a |

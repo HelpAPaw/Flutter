@@ -3362,11 +3362,23 @@ abstract class AppLocalizations {
   /// **'Unlock comments'**
   String get moderationUnlockComments;
 
-  /// No description provided for @moderationSetUrgency.
+  /// No description provided for @moderationTargetChanged.
   ///
   /// In en, this message translates to:
-  /// **'Correct urgency'**
-  String get moderationSetUrgency;
+  /// **'This signal has just changed. Reopen to see its current state.'**
+  String get moderationTargetChanged;
+
+  /// No description provided for @moderationRaiseUrgencyTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Raise urgency to {urgency}'**
+  String moderationRaiseUrgencyTo(String urgency);
+
+  /// No description provided for @moderationLowerUrgencyTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Lower urgency to {urgency}'**
+  String moderationLowerUrgencyTo(String urgency);
 
   /// No description provided for @moderationDeleteComment.
   ///

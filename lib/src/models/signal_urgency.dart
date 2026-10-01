@@ -78,13 +78,29 @@ enum SignalUrgency {
   /// all three.
   static const IconData glyph = Icons.priority_high;
 
-  /// Resolve a persisted [code] to an urgency.
+  /// Resolve a persisted [code] to an urgency, for *showing* it.
   ///
   /// Unknown/legacy values fall back to [amber] — deliberately not [green],
   /// which would hide a signal that might be real, and not [red], which would
   /// cry wolf and erode the whole signal.
-  static SignalUrgency fromCode(int code) =>
-      values.firstWhere((u) => u.code == code, orElse: () => amber);
+  static SignalUrgency fromCode(int code) => tryFromCode(code) ?? amber;
+
+  /// Resolve a persisted [code] to an urgency, or null when this build cannot
+  /// decode it (or there is none) — for *acting on* it.
+  ///
+  /// [fromCode]'s amber is the right guess for drawing a level and the wrong
+  /// one for moving from it: "raise" and "lower" from a newer build's level
+  /// would be judged against Medium, and the move to Medium would vanish.
+  static SignalUrgency? tryFromCode(int? code) {
+    for (final urgency in values) {
+      if (urgency.code == code) return urgency;
+    }
+    return null;
+  }
+
+  /// Whether this level is more urgent than [other], by declaration order —
+  /// the one severity ordering, never [code].
+  bool isMoreUrgentThan(SignalUrgency other) => index > other.index;
 
   /// Urgency for a signal document that predates this field.
   ///
@@ -105,7 +121,7 @@ enum SignalUrgency {
     var highest = values.first;
     for (final code in codes) {
       final urgency = fromCode(code);
-      if (urgency.index > highest.index) highest = urgency;
+      if (urgency.isMoreUrgentThan(highest)) highest = urgency;
     }
     return highest;
   }

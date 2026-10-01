@@ -7,6 +7,8 @@ import 'package:help_a_paw/src/models/vet_clinic.dart';
 import 'package:help_a_paw/src/repositories/signal_repository.dart';
 import 'package:help_a_paw/src/widgets/map/cluster_items_sheet.dart';
 
+import '../mocks/fake_document_reference.dart';
+
 /// The sheet that opens for a cluster the camera cannot split. Its whole job is
 /// to make every member reachable, so the tests are about the rows: one per
 /// member, named like the member, and a tap that reports which one.
@@ -17,7 +19,7 @@ void main() {
       description: 'description',
       phoneNumber: '',
       location: const {},
-      reporter: _FakeDocumentReference(),
+      reporter: FakeDocumentReference(),
       contactPhone: '',
       createdAt: null,
       urgency: 1,
@@ -164,9 +166,4 @@ void main() {
 
     expect(find.text('2 сигнала тук'), findsOneWidget);
   });
-}
-
-class _FakeDocumentReference implements DocumentReference<Map<String, dynamic>> {
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

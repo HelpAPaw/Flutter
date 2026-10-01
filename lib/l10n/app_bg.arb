@@ -692,7 +692,23 @@
   "moderationRestoreSignal": "Възстановяване на сигнала",
   "moderationLockComments": "Заключване на коментарите",
   "moderationUnlockComments": "Отключване на коментарите",
-  "moderationSetUrgency": "Корекция на спешността",
+  "moderationTargetChanged": "Сигналът току-що беше променен. Отворете отново, за да видите текущото му състояние.",
+  "moderationRaiseUrgencyTo": "Повишаване на спешността до {urgency}",
+  "@moderationRaiseUrgencyTo": {
+    "placeholders": {
+      "urgency": {
+        "type": "String"
+      }
+    }
+  },
+  "moderationLowerUrgencyTo": "Понижаване на спешността до {urgency}",
+  "@moderationLowerUrgencyTo": {
+    "placeholders": {
+      "urgency": {
+        "type": "String"
+      }
+    }
+  },
   "moderationDeleteComment": "Изтриване на коментара",
   "moderationSetLabel": "Добавяне на предупреждение",
   "moderationClearLabel": "Премахване на предупреждението",

@@ -20,7 +20,18 @@ import {
   quarantineSummary,
   requireId,
   requireNotOwnContent,
+  urgencyChangeFrom,
 } from "../moderation";
+
+/** The `HttpsError` code [fn] throws, or null when it returns normally. */
+function thrownCode(fn: () => unknown): string | null {
+  try {
+    fn();
+    return null;
+  } catch (e) {
+    return (e as { code?: string }).code ?? "unknown";
+  }
+}
 
 /** Whether `requireId` accepts a value, as a boolean rather than a throw. */
 function accepts(raw: unknown): boolean {
@@ -194,13 +205,9 @@ describe("requireNotOwnContent", () => {
     // messages, and `permission-denied` there means "your role was revoked".
     // Reporting a revoked role to a moderator who still has one would send them
     // to the wrong person for help.
-    let code: string | undefined;
-    try {
-      requireNotOwnContent(userRef("mod-uid"), "mod-uid");
-    } catch (e) {
-      code = (e as { code?: string }).code;
-    }
-    expect(code).toBe("failed-precondition");
+    expect(
+      thrownCode(() => requireNotOwnContent(userRef("mod-uid"), "mod-uid"))
+    ).toBe("failed-precondition");
   });
 
   it("does not trip on ownerless or malformed content", () => {
@@ -268,5 +275,34 @@ describe("self-moderation guard coverage", () => {
     // context the audit log wants. If this ever starts failing, the exemption
     // was removed on purpose or addNote grew a write it should not have.
     expect(bodyOf("addNote")).not.toContain("requireNotOwnContent");
+  });
+});
+
+describe("urgencyChangeFrom", () => {
+  const refusal = (
+    signal: { urgency?: unknown; status?: unknown },
+    requested: number
+  ) => thrownCode(() => urgencyChangeFrom(signal, requested));
+
+  it("returns the stored level as the one being moved from", () => {
+    expect(urgencyChangeFrom({ urgency: 1, status: 0 }, 2)).toBe(1);
+    expect(urgencyChangeFrom({ urgency: 2, status: 0 }, 0)).toBe(2);
+  });
+
+  it("derives a legacy signal's level the way the app shows it", () => {
+    // No stored urgency: Medium unless resolved, as `urgencyOf` and the app's
+    // `Signal.urgencyFrom` both derive it — the level the moderator was shown.
+    expect(urgencyChangeFrom({ status: 0 }, 0)).toBe(1);
+    expect(urgencyChangeFrom({ status: 1 }, 2)).toBe(1);
+    expect(urgencyChangeFrom({ status: 2 }, 1)).toBe(0);
+  });
+
+  it("refuses a move to the level the signal is already at", () => {
+    // The stale-sheet case: the level moved while the moderator wrote the note.
+    expect(refusal({ urgency: 2, status: 0 }, 2)).toBe("aborted");
+    expect(refusal({ urgency: 0, status: 0 }, 0)).toBe("aborted");
+    // Including the derived level of a legacy signal.
+    expect(refusal({ status: 0 }, 1)).toBe("aborted");
+    expect(refusal({ urgency: 1, status: 0 }, 0)).toBeNull();
   });
 });

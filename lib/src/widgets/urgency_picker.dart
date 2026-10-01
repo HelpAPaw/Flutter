@@ -8,10 +8,10 @@ import 'red_alert_confirmation_dialog.dart';
 /// Urgency selector used by the create form, the edit screen and the details
 /// screen.
 ///
-/// Owns the Red Alert confirmation rule (spec 5.2.1) so no caller can forget
-/// it: [onChanged] is only called once a promotion to Red has been confirmed.
-/// Selecting a level that is already selected, or moving *down* from Red, never
-/// prompts.
+/// Applies the Red Alert confirmation rule (spec 5.2.1, [confirmUrgencyChange])
+/// so no caller can forget it: [onChanged] is only called once a promotion to
+/// Red has been confirmed. Selecting a level that is already selected, or
+/// moving *down* from Red, never prompts.
 class UrgencyPicker extends StatelessWidget {
   /// Currently selected urgency, or null if the user has not chosen yet
   /// (create form only — urgency is a required field, so there is no default).
@@ -35,17 +35,7 @@ class UrgencyPicker extends StatelessWidget {
   });
 
   Future<void> _select(BuildContext context, SignalUrgency urgency) async {
-    if (urgency.code == value) return;
-
-    if (urgency.requiresConfirmation) {
-      final confirmed = await showRedAlertConfirmationDialog(context);
-      if (!confirmed) return;
-      // The dialog is awaited, so the owning screen can be gone by now (a
-      // back gesture behind it, a deep link). Callers setState, so firing
-      // into a disposed State would throw.
-      if (!context.mounted) return;
-    }
-
+    if (!await confirmUrgencyChange(context, from: value, to: urgency)) return;
     onChanged(urgency.code);
   }
 

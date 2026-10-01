@@ -1,7 +1,3 @@
-// A test double has to implement DocumentReference to stand in for one; the
-// block only ever reads `.id` off it.
-// ignore_for_file: subtype_of_sealed_class
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +6,8 @@ import 'package:help_a_paw/l10n/app_localizations.dart';
 import 'package:help_a_paw/src/models/signal.dart';
 import 'package:help_a_paw/src/services/signal_ownership_service.dart';
 import 'package:help_a_paw/src/widgets/signal_owner_block.dart';
+
+import '../mocks/fake_document_reference.dart';
 
 /// The stale-owner note.
 ///
@@ -24,8 +22,8 @@ import 'package:help_a_paw/src/widgets/signal_owner_block.dart';
 /// the offers list belongs to those two, and the pending-request listener only
 /// runs on the held-and-active branch.
 void main() {
-  final reporter = _FakeRef('reporter-uid');
-  final owner = _FakeRef('owner-uid');
+  final reporter = FakeDocumentReference('reporter-uid');
+  final owner = FakeDocumentReference('owner-uid');
 
   Signal signalWith({
     Object? signalOwner = _absent,
@@ -340,13 +338,3 @@ class _FakeOwnershipService implements SignalOwnershipService {
 /// Sentinel for "no `signalOwner` argument given", distinct from an explicit
 /// null — the same distinction the field itself carries.
 const Object _absent = Object();
-
-class _FakeRef implements DocumentReference<Map<String, dynamic>> {
-  _FakeRef(this.id);
-
-  @override
-  final String id;
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}

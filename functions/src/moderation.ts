@@ -37,7 +37,7 @@ import {
   SignalCollection,
   withheldSignalId,
 } from "./signalRefs";
-import { URGENCY_GREEN, URGENCY_RED } from "./urgency";
+import { URGENCY_GREEN, URGENCY_RED, urgencyOf } from "./urgency";
 import { REMOVED_COLLECTION } from "./removeSignal";
 
 // Signal addressing (`db`, the collection list, `requireId`, the note bound, and
@@ -444,7 +444,43 @@ async function setCommentsLocked(
 }
 
 /**
- * Correct a misused urgency label (spec 5.3, "Downgrade urgency level").
+ * The level a `setUrgency` call moves a signal FROM — refusing a call that
+ * would not move it.
+ *
+ * The level is derived exactly as everywhere else (`urgencyOf`): a legacy
+ * signal with no stored urgency is Medium unless resolved, which is the level
+ * the app showed the moderator and so the "before" the event must record.
+ *
+ * The refusal is the server's half of the sheet offering only *other* levels:
+ * the sheet works from the signal as it was when it opened, so if the level
+ * moves underneath it (the reporter raising it to Critical while the moderator
+ * writes the note), the row it offers can now be a no-op. Writing it would put
+ * a Critical → Critical change on the public timeline and in the audit log.
+ * `aborted` — a concurrency conflict, and a code the app maps to its own
+ * message — rather than `failed-precondition`, which the app already reads as
+ * "you cannot moderate your own content".
+ */
+export function urgencyChangeFrom(
+  signal: { urgency?: unknown; status?: unknown },
+  requested: number
+): number {
+  const current = urgencyOf(signal);
+  if (current === requested) {
+    throw new HttpsError(
+      "aborted",
+      "The signal is already at that urgency."
+    );
+  }
+  return current;
+}
+
+/**
+ * Move a signal's urgency (master spec 5.2) — in either direction: downgrading
+ * a misused level (5.3, "Downgrade urgency level") or escalating one the
+ * reporter underrated. A raise reaches people: `onSignalUpdated` sees it as an
+ * escalation and pushes "urgency raised" to every subscriber, exactly as when
+ * the reporter raises it. The app puts the Red Alert confirmation in front of a
+ * raise to Red; this callable cannot, and does not try to.
  *
  * This is the power the rules comment on `isStatusOnlyUpdate()` has been
  * describing all along: urgency is deliberately excluded from the non-reporter
@@ -477,8 +513,7 @@ async function setUrgency(
   }
 
   const { collection, signalId, ref, snapshot } = await loadSignal(uid, data);
-  const previous = snapshot.data()?.urgency;
-  const oldValue = typeof previous === "number" ? previous : MIN_URGENCY;
+  const oldValue = urgencyChangeFrom(snapshot.data() ?? {}, urgency);
 
   const actor = db().collection("users").doc(uid);
   // Field name from the shared table rather than a literal, so the event and

@@ -1873,7 +1873,18 @@ class AppLocalizationsBg extends AppLocalizations {
   String get moderationUnlockComments => 'Отключване на коментарите';
 
   @override
-  String get moderationSetUrgency => 'Корекция на спешността';
+  String get moderationTargetChanged =>
+      'Сигналът току-що беше променен. Отворете отново, за да видите текущото му състояние.';
+
+  @override
+  String moderationRaiseUrgencyTo(String urgency) {
+    return 'Повишаване на спешността до $urgency';
+  }
+
+  @override
+  String moderationLowerUrgencyTo(String urgency) {
+    return 'Понижаване на спешността до $urgency';
+  }
 
   @override
   String get moderationDeleteComment => 'Изтриване на коментара';
