@@ -7,7 +7,7 @@ import {
 import { onCall, HttpsError, onRequest } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
-import { geohashQueryBounds, geohashForLocation } from "geofire-common";
+import { geohashQueryBounds } from "geofire-common";
 import * as nodemailer from "nodemailer";
 // Urgency is SEPARATE from status: status is how far along the response is,
 // urgency is how bad it is if nobody acts. These live in their own module so
@@ -60,6 +60,7 @@ export { signalOwnership, autoApproveStaleTakeovers } from "./signalOwnership";
 // initializeApp() ordering constraint as the two above.
 export { signalRemoval, purgeRemovedSignals } from "./removeSignal";
 import { purgeRemovalsFor } from "./removeSignal";
+import { placesWithin, planVetClinicSearch } from "./vetClinicSearch";
 
 const db = admin.firestore();
 
@@ -1803,11 +1804,17 @@ function isPlacesCacheFresh(
   return Date.now() - cachedAt.toMillis() < PLACES_CACHE_TTL_MS;
 }
 
+/** One place from Nearby Search, as far as `searchVetClinics` looks into it. */
+interface VetClinicPlace {
+  location?: { latitude?: unknown; longitude?: unknown };
+}
+
 /**
  * Cloud Function to search for nearby vet clinics via Places API.
  * Keeps the API key server-side so it cannot be extracted from client apps.
- * Results are cached in Firestore (keyed by ~5km geohash cell + radius bucket)
- * to avoid repeat Places API charges for overlapping searches of the same area.
+ * Results are cached in Firestore per geohash cell and radius bucket, searched
+ * wide enough to answer anyone in the cell (see vetClinicSearch.ts), to avoid
+ * repeat Places API charges for overlapping searches of the same area.
  */
 export const searchVetClinics = onCall(
   {
@@ -1828,25 +1835,35 @@ export const searchVetClinics = onCall(
       );
     }
 
-    if (radius < 0 || radius > 50000) {
+    if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
       throw new HttpsError(
         "invalid-argument",
-        "radius must be between 0 and 50000 meters"
+        "latitude and longitude must be valid coordinates"
       );
     }
 
-    // Cache key: ~5km geohash cell (precision 5) + radius rounded to the km.
-    // Overlapping searches of the same area reuse a cached result.
-    const cellHash = geohashForLocation([latitude, longitude]).slice(0, 5);
-    const cacheKey = `${cellHash}_${Math.round(radius / 1000)}`;
-    const cacheRef = db.collection("vetClinicCache").doc(cacheKey);
+    // Only a non-positive radius is refused. One past Nearby Search's 50 km
+    // limit is capped by the plan instead, because a client zoomed far out
+    // asks for up to 100 km.
+    if (radius <= 0) {
+      throw new HttpsError(
+        "invalid-argument",
+        "radius must be a positive number of meters"
+      );
+    }
+
+    const plan = planVetClinicSearch(latitude, longitude, radius);
+    const cacheRef = db.collection("vetClinicCache").doc(plan.cacheKey);
+    // The stored search covers the whole cell; each caller gets their circle.
+    const nearCaller = (places: VetClinicPlace[]) =>
+      placesWithin(places, latitude, longitude, plan.radiusMeters);
 
     const cached = await cacheRef.get();
     if (cached.exists) {
       const cachedData = cached.data();
       if (isPlacesCacheFresh(cachedData?.cachedAt)) {
-        console.log(`searchVetClinics cache hit: ${cacheKey}`);
-        return { places: cachedData?.places || [] };
+        console.log(`searchVetClinics cache hit: ${plan.cacheKey}`);
+        return { places: nearCaller(cachedData?.places || []) };
       }
     }
 
@@ -1858,8 +1875,8 @@ export const searchVetClinics = onCall(
       maxResultCount: 20,
       locationRestriction: {
         circle: {
-          center: { latitude, longitude },
-          radius,
+          center: plan.center,
+          radius: plan.searchRadiusMeters,
         },
       },
     };
@@ -1901,7 +1918,7 @@ export const searchVetClinics = onCall(
       }
 
       const data = await response.json();
-      const places = data.places || [];
+      const places: VetClinicPlace[] = data.places || [];
 
       // Cache for subsequent searches of the same cell (best-effort - a cache
       // write failure must not fail an otherwise successful search).
@@ -1914,7 +1931,7 @@ export const searchVetClinics = onCall(
           console.error("Failed to cache vet clinic search:", error)
         );
 
-      return { places };
+      return { places: nearCaller(places) };
     } catch (error) {
       if (error instanceof HttpsError) {
         throw error;

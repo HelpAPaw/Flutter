@@ -811,6 +811,27 @@ void main() {
 
       expect(viewModel.state.vetClinicState.showSearchThisAreaButton, false);
     });
+
+    test('search radius halves with each zoom level', () {
+      expect(MapViewModel.vetClinicSearchRadiusKm(10), closeTo(19.53, 0.01));
+      expect(MapViewModel.vetClinicSearchRadiusKm(12), closeTo(4.88, 0.01));
+    });
+
+    test('search radius never drops below 1 km', () {
+      expect(MapViewModel.vetClinicSearchRadiusKm(15), 1.0);
+      expect(MapViewModel.vetClinicSearchRadiusKm(21), 1.0);
+    });
+
+    // Nearby Search searches no wider than 50 km; a server that refuses rather
+    // than caps a wider request fails every search at zoom 8 or further out.
+    test('search radius never exceeds Nearby Search\'s 50 km limit', () {
+      for (var zoom = 0; zoom <= 9; zoom++) {
+        expect(MapViewModel.vetClinicSearchRadiusKm(zoom.toDouble()),
+            lessThanOrEqualTo(50.0),
+            reason: 'zoom $zoom');
+      }
+      expect(MapViewModel.vetClinicSearchRadiusKm(8), 50.0);
+    });
   });
 
   group('MapFilterState immutability', () {
