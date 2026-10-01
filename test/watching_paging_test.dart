@@ -1,9 +1,10 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:help_a_paw/src/models/signal.dart';
 import 'package:help_a_paw/src/repositories/signal_repository.dart';
 import 'package:help_a_paw/src/utils/chunk.dart';
 import 'package:help_a_paw/src/services/watching_service.dart';
+
+import 'mocks/fake_document_reference.dart';
 
 /// The paging arithmetic that used to live inside a StreamBuilder closure, where
 /// it could not be reached without a widget and a Firestore.
@@ -55,15 +56,10 @@ SignalWithId signalWith(String id) => SignalWithId(
         description: '',
         phoneNumber: '',
         location: const {},
-        reporter: _FakeDocumentReference(),
+        reporter: FakeDocumentReference(),
         contactPhone: '',
         createdAt: null,
         urgency: 0,
       ),
       rawData: const {},
     );
-
-class _FakeDocumentReference implements DocumentReference<Map<String, dynamic>> {
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}

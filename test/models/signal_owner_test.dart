@@ -1,10 +1,8 @@
-// A test double has to implement DocumentReference to stand in for one; the
-// derivation only ever reads `.id` off it, or compares it for identity.
-// ignore_for_file: subtype_of_sealed_class
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:help_a_paw/src/models/signal.dart';
+
+import '../mocks/fake_document_reference.dart';
 
 /// The signal-owner derivation (master spec §4.5).
 ///
@@ -22,8 +20,8 @@ import 'package:help_a_paw/src/models/signal.dart';
 ///    absent case hands the signal straight back to the one person who just
 ///    stepped away from it, and they would have no way to refuse it.
 void main() {
-  final reporter = _FakeRef('reporter-uid');
-  final owner = _FakeRef('owner-uid');
+  final reporter = FakeDocumentReference('reporter-uid');
+  final owner = FakeDocumentReference('owner-uid');
 
   Map<String, dynamic> signalJson([Map<String, dynamic> overrides = const {}]) =>
       {'reporter': reporter, ...overrides};
@@ -123,13 +121,3 @@ void main() {
 /// Sentinel for "no `signalOwner` argument given", distinct from an explicit
 /// null — the same distinction the field itself carries.
 const Object _absent = Object();
-
-class _FakeRef implements DocumentReference<Map<String, dynamic>> {
-  _FakeRef(this.id);
-
-  @override
-  final String id;
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}

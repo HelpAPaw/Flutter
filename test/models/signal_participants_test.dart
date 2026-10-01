@@ -1,12 +1,10 @@
-// A test double has to implement DocumentReference to stand in for one; the
-// roster only ever reads `.id` off it.
-// ignore_for_file: subtype_of_sealed_class
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:help_a_paw/src/models/signal.dart';
 import 'package:help_a_paw/src/models/signal_event.dart';
 import 'package:help_a_paw/src/models/signal_participants.dart';
+
+import '../mocks/fake_document_reference.dart';
 
 /// Who may be mentioned in a signal's comments (§7.5).
 ///
@@ -16,8 +14,8 @@ import 'package:help_a_paw/src/models/signal_participants.dart';
 /// somebody who worked on this signal cannot be addressed, too large and the
 /// composer offers a name it has no business knowing.
 void main() {
-  final reporter = _FakeRef('reporter-uid');
-  final owner = _FakeRef('owner-uid');
+  final reporter = FakeDocumentReference('reporter-uid');
+  final owner = FakeDocumentReference('owner-uid');
 
   Signal signalWith({Object? signalOwner = _absent}) => Signal(
         title: 'Injured dog near the park',
@@ -77,7 +75,7 @@ void main() {
   // owner of an earlier transfer, so the transfers alone name all of them.
   test('past owners come out of the transfers, without an oldOwner', () {
     final roster = signalParticipantUids(
-      signal: signalWith(signalOwner: _FakeRef('third-uid')),
+      signal: signalWith(signalOwner: FakeDocumentReference('third-uid')),
       history: [
         transfer(actorId: 'reporter-uid', toUid: 'first-uid'),
         transfer(actorId: 'first-uid', toUid: 'second-uid'),
@@ -118,13 +116,3 @@ void main() {
 /// Sentinel for "no `signalOwner` argument given", distinct from an explicit
 /// null — the same distinction the field itself carries.
 const Object _absent = Object();
-
-class _FakeRef implements DocumentReference<Map<String, dynamic>> {
-  _FakeRef(this.id);
-
-  @override
-  final String id;
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}

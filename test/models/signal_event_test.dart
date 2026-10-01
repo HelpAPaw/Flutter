@@ -1,10 +1,8 @@
-// A test double has to implement DocumentReference to stand in for one; the
-// decoder only ever reads `.id` off it.
-// ignore_for_file: subtype_of_sealed_class
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:help_a_paw/src/models/signal_event.dart';
+
+import '../mocks/fake_document_reference.dart';
 
 /// The signal history is assembled from two collections that will never be
 /// reconciled — `events` for everything written since the signal timeline
@@ -15,7 +13,7 @@ void main() {
   // A DocumentReference is only ever read for its `.id` here, and building a
   // real one needs a live Firestore. This is the smallest thing that satisfies
   // the decoder.
-  final actor = _FakeRef('u1');
+  final actor = FakeDocumentReference('u1');
 
   Map<String, dynamic> statusEvent({
     String type = 'status_change',
@@ -269,7 +267,7 @@ void main() {
       test('decodes a handover to a new owner', () {
         final entry = SignalHistoryEntry.fromDocument(
           'o1',
-          ownershipEvent(oldOwner: actor, newOwner: _FakeRef('u2')),
+          ownershipEvent(oldOwner: actor, newOwner: FakeDocumentReference('u2')),
         )!;
 
         expect(entry.kind, SignalHistoryKind.ownershipTransfer);
@@ -297,7 +295,7 @@ void main() {
       test('decodes a claim of a released signal, with no previous owner', () {
         final entry = SignalHistoryEntry.fromDocument(
           'o3',
-          ownershipEvent(oldOwner: null, newOwner: _FakeRef('u3')),
+          ownershipEvent(oldOwner: null, newOwner: FakeDocumentReference('u3')),
         )!;
 
         expect(entry.ownerId, 'u3');
@@ -596,16 +594,4 @@ void main() {
       ]);
     });
   });
-}
-
-/// Stands in for the `users/{uid}` reference an event carries. Only `.id` is
-/// ever read, and building a real one needs a live Firestore.
-class _FakeRef implements DocumentReference<Map<String, dynamic>> {
-  _FakeRef(this.id);
-
-  @override
-  final String id;
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

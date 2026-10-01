@@ -10,6 +10,8 @@ import 'package:help_a_paw/src/widgets/help_tag_pill.dart';
 import 'package:help_a_paw/src/widgets/map/map_bubble.dart';
 import 'package:help_a_paw/src/widgets/map/signal_info_card.dart';
 
+import '../mocks/fake_document_reference.dart';
+
 /// The bubble that replaced the native Maps InfoWindow. It renders whatever a
 /// signal happens to carry, and most of what it carries is optional: signals
 /// are commonly reported with no photo, often with no title, and everything
@@ -27,7 +29,7 @@ void main() {
       description: 'description',
       phoneNumber: '',
       location: const {},
-      reporter: _FakeDocumentReference(),
+      reporter: FakeDocumentReference(),
       contactPhone: '',
       createdAt: null,
       urgency: urgency,
@@ -172,12 +174,3 @@ void main() {
 }
 
 void _noop() {}
-
-/// A signal's `reporter` is a [DocumentReference], which cannot be built
-/// without an initialised Firebase app. The bubble never reads it — and this
-/// throws rather than returning null so that an accidental read shows up as a
-/// failure instead of silently rendering nothing.
-class _FakeDocumentReference implements DocumentReference<Map<String, dynamic>> {
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
