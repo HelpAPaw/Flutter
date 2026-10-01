@@ -14,16 +14,24 @@
  *   caller in the cell can be from that centre.
  *
  * By the triangle inequality, everything within the bucket radius of any
- * caller in the cell is then inside the stored circle. The handler trims that
- * superset back down to each caller's own circle with `placesWithin`.
+ * caller in the cell is then inside the stored circle, so every caller sharing
+ * the key gets the stored answer as it is. That holds below Nearby Search's
+ * 50 km cap; at the cap the padding cannot be added (see planVetClinicSearch).
  *
- * The cell is the coarsest geohash whose half-diagonal is at most a quarter of
- * the bucket radius, so the padding grows the searched area by at most
- * 1.25² ≈ 1.56×. Nearby Search returns at most 20 places, and a much wider
- * circle would crowd the caller's own area out of them.
+ * The cell is the coarsest geohash whose half-diagonal is at most half the
+ * bucket radius, and the bucket is the radius rounded up to 100 m, so the
+ * searched radius stays within 1.5 × (asked + 100 m). That ratio trades two
+ * costs: Nearby Search returns at most 20 places, so a much wider circle crowds
+ * the caller's own area out of them, while a finer cell is shared by fewer
+ * callers — at half, the map's opening zoom still gets ~5 km cells.
  */
 
-import { distanceBetween, geohashForLocation } from "geofire-common";
+import {
+  BASE32,
+  distanceBetween,
+  geohashForLocation,
+  validateGeohash,
+} from "geofire-common";
 
 /** Nearby Search's own limit on a circle's radius, in metres. */
 export const MAX_SEARCH_RADIUS_M = 50000;
@@ -34,10 +42,11 @@ export const MAX_SEARCH_RADIUS_M = 50000;
  */
 const CACHE_KEY_VERSION = "v2";
 
+/** Radii round up to a multiple of this, in metres. */
+const RADIUS_BUCKET_M = 100;
+
 /** Geohash precisions tried, coarsest first: ~4.9 km, ~1.2 km, ~150 m cells. */
 const PRECISIONS = [5, 6, 7];
-
-const BASE32 = "0123456789bcdefghjkmnpqrstuvwxyz";
 
 export interface LatLng {
   latitude: number;
@@ -58,14 +67,19 @@ export interface VetClinicSearchPlan {
   center: LatLng;
   /** The radius Nearby Search is asked for, padded to cover the whole cell. */
   searchRadiusMeters: number;
-  /** The caller's own radius, capped at Nearby Search's limit. */
-  radiusMeters: number;
+}
+
+export function metresBetween(a: LatLng, b: LatLng): number {
+  return (
+    distanceBetween([a.latitude, a.longitude], [b.latitude, b.longitude]) * 1000
+  );
 }
 
 /**
  * The rectangle a geohash names. geofire-common encodes but has no decoder.
  */
 export function geohashBounds(hash: string): CellBounds {
+  validateGeohash(hash);
   let minLat = -90;
   let maxLat = 90;
   let minLng = -180;
@@ -74,9 +88,6 @@ export function geohashBounds(hash: string): CellBounds {
   let isLng = true;
   for (const char of hash) {
     const value = BASE32.indexOf(char);
-    if (value < 0) {
-      throw new Error(`Invalid geohash character: ${char}`);
-    }
     for (let bit = 4; bit >= 0; bit--) {
       const upper = ((value >> bit) & 1) === 1;
       if (isLng) {
@@ -95,31 +106,25 @@ export function geohashBounds(hash: string): CellBounds {
 }
 
 /**
- * The centre of [bounds] and the distance from it to the farthest point of
- * the cell, in metres. On a sphere that point is a corner — the two on the
- * equator side are farther apart than the two on the pole side — so the max
- * over all four is exact.
+ * The centre of [cell] and the distance from it to the farthest point of the
+ * cell, in metres. On a sphere that point is a corner — the two on the equator
+ * side are farther apart than the two on the pole side — so the max over all
+ * four is exact.
  */
-function centreAndHalfDiagonal(bounds: CellBounds): {
-  center: LatLng;
-  halfDiagonalMeters: number;
-} {
+function cellGeometry(cell: string) {
+  const bounds = geohashBounds(cell);
   const center = {
     latitude: (bounds.minLat + bounds.maxLat) / 2,
     longitude: (bounds.minLng + bounds.maxLng) / 2,
   };
-  const corners: Array<[number, number]> = [
-    [bounds.minLat, bounds.minLng],
-    [bounds.minLat, bounds.maxLng],
-    [bounds.maxLat, bounds.minLng],
-    [bounds.maxLat, bounds.maxLng],
-  ];
-  const halfDiagonalKm = Math.max(
-    ...corners.map((corner) =>
-      distanceBetween([center.latitude, center.longitude], corner)
+  const halfDiagonalMeters = Math.max(
+    ...[bounds.minLat, bounds.maxLat].flatMap((latitude) =>
+      [bounds.minLng, bounds.maxLng].map((longitude) =>
+        metresBetween(center, { latitude, longitude })
+      )
     )
   );
-  return { center, halfDiagonalMeters: halfDiagonalKm * 1000 };
+  return { cell, center, halfDiagonalMeters };
 }
 
 /**
@@ -136,48 +141,30 @@ export function planVetClinicSearch(
   longitude: number,
   radiusMeters: number
 ): VetClinicSearchPlan {
-  const radius = Math.min(radiusMeters, MAX_SEARCH_RADIUS_M);
   // Rounded *up*, and the bucket's radius is what gets searched, so every
   // radius sharing the key is covered by the one stored search.
-  const bucketKm = Math.ceil(radius / 1000);
-  const bucketMeters = bucketKm * 1000;
+  const bucketMeters =
+    Math.ceil(Math.min(radiusMeters, MAX_SEARCH_RADIUS_M) / RADIUS_BUCKET_M) *
+    RADIUS_BUCKET_M;
 
-  for (let i = 0; i < PRECISIONS.length; i++) {
-    const cell = geohashForLocation([latitude, longitude], PRECISIONS[i]);
-    const { center, halfDiagonalMeters } = centreAndHalfDiagonal(
-      geohashBounds(cell)
-    );
-    const isFinest = i === PRECISIONS.length - 1;
-    if (halfDiagonalMeters <= bucketMeters / 4 || isFinest) {
-      return {
-        cacheKey: `${CACHE_KEY_VERSION}_${cell}_${bucketKm}`,
-        center,
-        searchRadiusMeters: Math.min(
-          bucketMeters + halfDiagonalMeters,
-          MAX_SEARCH_RADIUS_M
-        ),
-        radiusMeters: radius,
-      };
-    }
-  }
-  // Unreachable: the finest precision always returns.
-  throw new Error("No geohash precision chosen");
-}
+  // Geohashes nest: each coarser cell is a prefix of the finest one.
+  const finest = geohashForLocation(
+    [latitude, longitude],
+    PRECISIONS[PRECISIONS.length - 1]
+  );
+  const cells = PRECISIONS.map((precision) =>
+    cellGeometry(finest.slice(0, precision))
+  );
+  const { cell, center, halfDiagonalMeters } =
+    cells.find((c) => c.halfDiagonalMeters <= bucketMeters / 2) ??
+    cells[cells.length - 1];
 
-/**
- * The [places] within [radiusMeters] of ([latitude], [longitude]).
- *
- * A place without a usable location is kept, as it was before the cache
- * trimmed anything — there is nothing to measure.
- */
-export function placesWithin<
-  T extends { location?: { latitude?: unknown; longitude?: unknown } },
->(places: T[], latitude: number, longitude: number, radiusMeters: number): T[] {
-  return places.filter((place) => {
-    const lat = place.location?.latitude;
-    const lng = place.location?.longitude;
-    if (typeof lat !== "number" || typeof lng !== "number") return true;
-    return distanceBetween([lat, lng], [latitude, longitude]) * 1000 <=
-      radiusMeters;
-  });
+  return {
+    cacheKey: `${CACHE_KEY_VERSION}_${cell}_${bucketMeters}`,
+    center,
+    searchRadiusMeters: Math.min(
+      bucketMeters + halfDiagonalMeters,
+      MAX_SEARCH_RADIUS_M
+    ),
+  };
 }

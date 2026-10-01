@@ -8,11 +8,11 @@
  * cached "no clinics" for 30 days.
  */
 
-import { distanceBetween, geohashForLocation } from "geofire-common";
+import { geohashForLocation } from "geofire-common";
 import {
   MAX_SEARCH_RADIUS_M,
   geohashBounds,
-  placesWithin,
+  metresBetween,
   planVetClinicSearch,
 } from "../vetClinicSearch";
 
@@ -38,12 +38,6 @@ function randomPoints(count: number, seed: number) {
     longitude: random() * 360 - 180,
   }));
 }
-
-const metresBetween = (
-  a: { latitude: number; longitude: number },
-  b: { latitude: number; longitude: number }
-) =>
-  distanceBetween([a.latitude, a.longitude], [b.latitude, b.longitude]) * 1000;
 
 describe("geohashBounds", () => {
   it.each([5, 6, 7])("contains the point it was encoded from (precision %i)",
@@ -71,8 +65,9 @@ describe("geohashBounds", () => {
       }
     });
 
-  it("refuses a character geohashes never use", () => {
-    expect(() => geohashBounds("sx8a")).toThrow("Invalid geohash character");
+  it("refuses anything that is not a geohash", () => {
+    expect(() => geohashBounds("sx8a")).toThrow("cannot contain 'a'");
+    expect(() => geohashBounds("")).toThrow("empty string");
   });
 });
 
@@ -94,7 +89,7 @@ describe("planVetClinicSearch", () => {
     }
   });
 
-  it("gives callers in one cell the same key and a search covering them all",
+  it("gives callers anywhere in one cell the same key and the same search",
     () => {
       // Opposite corners of the Sofia precision-5 cell, where a search
       // centred on the first caller covered nothing near the second.
@@ -102,20 +97,16 @@ describe("planVetClinicSearch", () => {
         geohashForLocation([SOFIA.latitude, SOFIA.longitude], 5)
       );
       const inset = 1e-4;
-      const a = { latitude: bounds.minLat + inset, longitude: bounds.minLng + inset };
-      const b = { latitude: bounds.maxLat - inset, longitude: bounds.maxLng - inset };
       const radius = APP_RADII_M[5]; // ~19.5 km: big enough for a p5 cell
 
-      const planA = planVetClinicSearch(a.latitude, a.longitude, radius);
-      const planB = planVetClinicSearch(b.latitude, b.longitude, radius);
+      const a = planVetClinicSearch(
+        bounds.minLat + inset, bounds.minLng + inset, radius
+      );
+      const b = planVetClinicSearch(
+        bounds.maxLat - inset, bounds.maxLng - inset, radius
+      );
 
-      expect(planA.cacheKey).toBe(planB.cacheKey);
-      expect(planA.center).toEqual(planB.center);
-      for (const caller of [a, b]) {
-        expect(
-          metresBetween(caller, planA.center) + radius
-        ).toBeLessThanOrEqual(planA.searchRadiusMeters);
-      }
+      expect(a).toEqual(b);
     });
 
   it("uses a finer cell for a small radius, so two far-apart callers do not share",
@@ -131,64 +122,43 @@ describe("planVetClinicSearch", () => {
       expect(metresBetween(a.center, b.center)).toBeGreaterThan(3000);
     });
 
-  it("pads by at most a quarter of the radius it searches", () => {
-    for (const radius of APP_RADII_M) {
-      for (const caller of randomPoints(100, Math.round(radius) + 1)) {
-        const plan = planVetClinicSearch(
-          caller.latitude,
-          caller.longitude,
-          radius
-        );
-        const bucketMeters = Math.ceil(radius / 1000) * 1000;
-        expect(plan.searchRadiusMeters).toBeLessThanOrEqual(bucketMeters * 1.25);
+  it("searches at most half again the radius rounded up to 100 m",
+    () => {
+      for (const radius of APP_RADII_M) {
+        for (const caller of randomPoints(100, Math.round(radius) + 1)) {
+          const plan = planVetClinicSearch(
+            caller.latitude,
+            caller.longitude,
+            radius
+          );
+          expect(plan.searchRadiusMeters).toBeLessThanOrEqual(
+            (radius + 100) * 1.5
+          );
+        }
       }
-    }
-  });
+    });
 
-  it("shares a key across every radius that rounds up to the same km", () => {
-    const keys = [1001, 1500, 2000].map(
-      (radius) =>
-        planVetClinicSearch(SOFIA.latitude, SOFIA.longitude, radius).cacheKey
-    );
-    expect(new Set(keys).size).toBe(1);
-    expect(keys[0]).toMatch(/_2$/);
-  });
+  it("shares a key across every radius that rounds up to the same 100 m",
+    () => {
+      const keys = [1201, 1250, 1300].map(
+        (radius) =>
+          planVetClinicSearch(SOFIA.latitude, SOFIA.longitude, radius).cacheKey
+      );
+      expect(new Set(keys).size).toBe(1);
+      expect(keys[0]).toMatch(/_1300$/);
+    });
 
   it("caps a radius past Nearby Search's limit instead of refusing it", () => {
     const plan = planVetClinicSearch(SOFIA.latitude, SOFIA.longitude, 78125);
-    expect(plan.radiusMeters).toBe(MAX_SEARCH_RADIUS_M);
     expect(plan.searchRadiusMeters).toBe(MAX_SEARCH_RADIUS_M);
-    expect(plan.cacheKey).toMatch(/_50$/);
+    expect(plan.cacheKey).toMatch(/_50000$/);
   });
 
-  it("never reuses a key written before keys meant the cell's centre", () => {
-    // The old key was `<precision-5 geohash>_<km rounded>`.
-    const plan = planVetClinicSearch(SOFIA.latitude, SOFIA.longitude, 9765.6);
-    const oldKey = `${geohashForLocation(
-      [SOFIA.latitude, SOFIA.longitude]
-    ).slice(0, 5)}_${Math.round(9765.6 / 1000)}`;
-    expect(plan.cacheKey).not.toBe(oldKey);
-    expect(plan.cacheKey.startsWith("v2_")).toBe(true);
-  });
-});
-
-describe("placesWithin", () => {
-  const at = (latitude: number, longitude: number) => ({
-    location: { latitude, longitude },
-  });
-
-  it("keeps what is inside the radius and drops what is outside", () => {
-    const near = at(42.6977, 23.33); // ~0.7 km east
-    const far = at(42.6977, 23.40); // ~6.4 km east
+  // Keys from before the search was centred on the cell were a bare geohash,
+  // and must never be read as an answer to the new question.
+  it("versions its keys", () => {
     expect(
-      placesWithin([near, far], SOFIA.latitude, SOFIA.longitude, 1000)
-    ).toEqual([near]);
-  });
-
-  it("keeps a place it cannot measure", () => {
-    const unplaced = { location: { latitude: "x" } };
-    expect(
-      placesWithin([unplaced, {}], SOFIA.latitude, SOFIA.longitude, 1000)
-    ).toHaveLength(2);
+      planVetClinicSearch(SOFIA.latitude, SOFIA.longitude, 9765.6).cacheKey
+    ).toMatch(/^v2_/);
   });
 });

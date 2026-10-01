@@ -60,7 +60,7 @@ export { signalOwnership, autoApproveStaleTakeovers } from "./signalOwnership";
 // initializeApp() ordering constraint as the two above.
 export { signalRemoval, purgeRemovedSignals } from "./removeSignal";
 import { purgeRemovalsFor } from "./removeSignal";
-import { placesWithin, planVetClinicSearch } from "./vetClinicSearch";
+import { planVetClinicSearch } from "./vetClinicSearch";
 
 const db = admin.firestore();
 
@@ -1804,11 +1804,6 @@ function isPlacesCacheFresh(
   return Date.now() - cachedAt.toMillis() < PLACES_CACHE_TTL_MS;
 }
 
-/** One place from Nearby Search, as far as `searchVetClinics` looks into it. */
-interface VetClinicPlace {
-  location?: { latitude?: unknown; longitude?: unknown };
-}
-
 /**
  * Cloud Function to search for nearby vet clinics via Places API.
  * Keeps the API key server-side so it cannot be extracted from client apps.
@@ -1854,16 +1849,13 @@ export const searchVetClinics = onCall(
 
     const plan = planVetClinicSearch(latitude, longitude, radius);
     const cacheRef = db.collection("vetClinicCache").doc(plan.cacheKey);
-    // The stored search covers the whole cell; each caller gets their circle.
-    const nearCaller = (places: VetClinicPlace[]) =>
-      placesWithin(places, latitude, longitude, plan.radiusMeters);
 
     const cached = await cacheRef.get();
     if (cached.exists) {
       const cachedData = cached.data();
       if (isPlacesCacheFresh(cachedData?.cachedAt)) {
         console.log(`searchVetClinics cache hit: ${plan.cacheKey}`);
-        return { places: nearCaller(cachedData?.places || []) };
+        return { places: cachedData?.places || [] };
       }
     }
 
@@ -1918,7 +1910,7 @@ export const searchVetClinics = onCall(
       }
 
       const data = await response.json();
-      const places: VetClinicPlace[] = data.places || [];
+      const places = data.places || [];
 
       // Cache for subsequent searches of the same cell (best-effort - a cache
       // write failure must not fail an otherwise successful search).
@@ -1931,7 +1923,7 @@ export const searchVetClinics = onCall(
           console.error("Failed to cache vet clinic search:", error)
         );
 
-      return { places: nearCaller(places) };
+      return { places };
     } catch (error) {
       if (error instanceof HttpsError) {
         throw error;

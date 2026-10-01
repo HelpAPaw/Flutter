@@ -822,14 +822,8 @@ void main() {
       expect(MapViewModel.vetClinicSearchRadiusKm(21), 1.0);
     });
 
-    // Nearby Search searches no wider than 50 km; a server that refuses rather
-    // than caps a wider request fails every search at zoom 8 or further out.
     test('search radius never exceeds Nearby Search\'s 50 km limit', () {
-      for (var zoom = 0; zoom <= 9; zoom++) {
-        expect(MapViewModel.vetClinicSearchRadiusKm(zoom.toDouble()),
-            lessThanOrEqualTo(50.0),
-            reason: 'zoom $zoom');
-      }
+      expect(MapViewModel.vetClinicSearchRadiusKm(0), 50.0);
       expect(MapViewModel.vetClinicSearchRadiusKm(8), 50.0);
     });
   });

@@ -565,7 +565,10 @@ class MapViewModel extends Notifier<MapScreenState> {
   }
 
   /// The radius `loadVetClinics` searches at [zoomLevel], in km: about half the
-  /// visible width, clamped between 1 km and Nearby Search's 50 km limit.
+  /// visible width, clamped between 1 km and Nearby Search's 50 km limit. The
+  /// server owns that limit (`MAX_SEARCH_RADIUS_M` in
+  /// `functions/src/vetClinicSearch.ts`) and caps anything wider; asking for
+  /// more only asks for what it cannot search.
   @visibleForTesting
   static double vetClinicSearchRadiusKm(double zoomLevel) {
     final radiusKm = 20000 / (1 << zoomLevel.round());

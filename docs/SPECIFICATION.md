@@ -523,7 +523,7 @@ under `removedSignals`. Same trick, same trap, as §7.16.
 | Collection | Purpose |
 |---|---|
 | `feedbackThrottle/{uid}` | `{ windowStart, count, updatedAt }` — 5 emails/hour/user |
-| `vetClinicCache/v2_{geohash}_{radiusKm}` | `{ places[], cachedAt }`, 30-day TTL. One search answering every caller in the cell (§7.8) |
+| `vetClinicCache/v2_{geohash}_{radiusM}` | `{ places[], cachedAt }`, 30-day TTL. One search answering every caller in the cell (§7.8) |
 | `vetClinicDetails/{placeId}` | `{ place, cachedAt }`, 30-day TTL |
 | `moderationQuarantine/{collection}__{signalId}` | `{ data, collection, signalId, hiddenBy, hiddenAt, note }` — where a hidden signal's document goes (§7.16) |
 
@@ -2541,14 +2541,17 @@ open-in-Google-Maps.
 
 Both calls are cached server-side for 30 days (§4.1) so repeat searches of the same area
 cost no Places API charges. A search is shared by every caller whose point falls in the
-same geohash cell with the same radius rounded **up** to the km, so it is stored for the
+same geohash cell with the same radius rounded **up** to 100 m, so it is stored for the
 cell rather than for whoever asked first: searched from the **cell's centre**, with the
 radius widened by the cell's half-diagonal, which by the triangle inequality covers every
-such caller's circle. Each caller then gets only the places within their own radius of
-their own point. The cell is the coarsest geohash (precision 5–7) whose half-diagonal is at
-most a quarter of the radius, keeping the searched area within ~1.56× of the asked one,
-since Nearby Search returns at most 20 places. A radius past 50 km is capped, not refused.
-The plan is `functions/src/vetClinicSearch.ts`, a pure tested module.
+such caller's circle, and returned to each of them as stored (the client merges every
+search into its session map anyway). The cell is the coarsest geohash (precision 5–7)
+whose half-diagonal is at most half the rounded radius, so the searched radius stays
+within 1.5 × (asked + 100 m) — Nearby Search returns at most 20 places — while zoom ≤ 11
+still shares ~5 km cells; zoom 12–14 uses ~1 km cells and 15+ ~150 m. A radius past
+50 km is capped, not refused, and at the cap the padding cannot be added, so a caller off
+the cell's centre loses a sliver of at most one half-diagonal at the far edge. The plan is
+`functions/src/vetClinicSearch.ts`, a pure tested module.
 
 ### 7.9 Sharing and deep links
 
@@ -3272,7 +3275,7 @@ invitation to pass one, and what gets passed is `e.toString()` (§7.17.4). Guard
 | `onCommentCreated` / `onTestCommentCreated` | create comment | Push `new_comment` (body truncated to 50 chars) to subscribers, skipping the author. **Returns early on `type === 'status_change'`** — those have no `text`, and on any comment whose `text` is not a string, since the rules permit one. Recipients are then split by the comment's `mentions` (§7.5): the named ones get a `mention` instead, everyone else the unchanged `new_comment`. The split is an **intersection with the subscriber list**, so it can only re-word — never widen — and both halves keep the same `cmt_{commentId}` inbox id. Decoding lives in `functions/src/mentions.ts` as a pure, tested module |
 | `onUserTokensWritten` | write `users/{uid}` | Token dedupe: removes this device's token from every other user doc. Only runs when `tokenLastSaved` changed, so location/subscription writes don't trigger it |
 | `onFeedbackCreated` | create `feedback/{id}` | Rate-limited SMTP email via nodemailer, built in `feedbackEmail.ts`: HTML-escaped, Reply-To only for a re-validated `email`, non-string `deviceInfo` fields as "N/A", **line endings normalised to LF** |
-| `searchVetClinics` | callable (App Check) | Places `searchNearby`, key server-side, 30-day cache per geohash cell + radius rounded up to the km, searched from the cell's centre wide enough for anyone in it, trimmed to each caller's circle (§7.8). Radius > 0, capped at 50 000 m |
+| `searchVetClinics` | callable (App Check) | Places `searchNearby`, key server-side, 30-day cache per geohash cell + radius rounded up to 100 m, searched from the cell's centre wide enough for anyone in it (§7.8). Radius > 0, capped at 50 000 m |
 | `getVetClinicDetails` | callable (App Check) | Places details (phone, rating, hours, Maps URI), 30-day cache per placeId |
 | `deleteAccount` | callable (App Check) | Anonymize + tombstone + delete (§7.2) |
 | `signalOwnership` | callable (App Check) | **Signal ownership** (§4.8) — claim / release / approveRequest / declineRequest. Rejects anonymous callers; writes the signal, the `ownership_transfer` event and the subscription in one batch. `functions/src/signalOwnership.ts` |
