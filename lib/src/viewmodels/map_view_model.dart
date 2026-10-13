@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -497,7 +498,7 @@ class MapViewModel extends Notifier<MapScreenState> {
     );
 
     try {
-      final radiusKm = _calculateSearchRadius(zoomLevel);
+      final radiusKm = vetClinicSearchRadiusKm(zoomLevel);
       final radiusMeters = radiusKm * 1000;
 
       final clinics = await _vetClinicService.searchNearby(center, radiusMeters);
@@ -563,10 +564,14 @@ class MapViewModel extends Notifier<MapScreenState> {
     );
   }
 
-  // Private helper methods
-
-  double _calculateSearchRadius(double zoomLevel) {
+  /// The radius `loadVetClinics` searches at [zoomLevel], in km: about half the
+  /// visible width, clamped between 1 km and Nearby Search's 50 km limit. The
+  /// server owns that limit (`MAX_SEARCH_RADIUS_M` in
+  /// `functions/src/vetClinicSearch.ts`) and caps anything wider; asking for
+  /// more only asks for what it cannot search.
+  @visibleForTesting
+  static double vetClinicSearchRadiusKm(double zoomLevel) {
     final radiusKm = 20000 / (1 << zoomLevel.round());
-    return radiusKm.clamp(1.0, 100.0);
+    return radiusKm.clamp(1.0, 50.0);
   }
 }

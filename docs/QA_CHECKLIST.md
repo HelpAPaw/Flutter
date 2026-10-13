@@ -1070,7 +1070,7 @@
 - [ ] Requires Firebase Auth token and App Check token (verify the onCall envelope is accepted)
 - [ ] 15-second timeout on requests
 - [ ] Rate limit handling (429 → "Too many searches" message)
-- [ ] **Server-side cache**: repeating a search of the same area (same ~5km cell + radius) returns results **without** a new Places API call — served from `vetClinicCache` (check function logs for "cache hit")
+- [ ] **Server-side cache**: repeating a search of the same area (same geohash cell + radius — ~5 km cells at zoom ≤ 11, ~1 km at 12–14, ~150 m at 15+) returns results **without** a new Places API call — served from `vetClinicCache` (check function logs for "cache hit")
 - [ ] **Details cache**: opening the same clinic's details twice calls the Places details API once, then serves from `vetClinicDetails`
 - [ ] Cached entries refresh after the 30-day TTL (stale entries trigger a fresh Places call)
 - [ ] Results are unchanged from the user's perspective whether served fresh or cached
