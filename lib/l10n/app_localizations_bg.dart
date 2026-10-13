@@ -420,7 +420,7 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get newSignalHintUrgency =>
-      'Червената тревога известява всички доброволци наблизо, така че я пазете за истински спешни случаи.';
+      'Червената спешност известява всички доброволци наблизо, така че я пазете за истински спешни случаи.';
 
   @override
   String get newSignalHintReview => 'Проверете всичко и изпратете.';
