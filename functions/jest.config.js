@@ -9,4 +9,8 @@ module.exports = {
   testEnvironment: "node",
   roots: ["<rootDir>/src"],
   testMatch: ["**/__tests__/**/*.test.ts"],
+  // jose 6 is ESM-only and jest 29 can't require() it; see the stub.
+  moduleNameMapper: {
+    "^jose$": "<rootDir>/src/__tests__/stubs/jose.js",
+  },
 };
