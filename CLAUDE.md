@@ -58,6 +58,21 @@ npm run serve
 npm run logs
 ```
 
+**The `firebase` CLI must run on Node ≥ 22 to deploy or emulate functions.**
+`firebase-admin` 14 → `jwks-rsa` 4 does `require("jose")`, and jose 6 ships
+only as an ES module. Before deploying, the CLI loads `lib/index.js` locally
+to discover the functions.
+- The standalone binary at `/usr/local/bin/firebase` (15.25.1) bundles Node
+  20.18.2, and its own `require` can't load an ES module. It stops at "Functions
+  codebase could not be analyzed" with `ERR_REQUIRE_ESM`, before uploading
+  anything. `NODE_OPTIONS=--experimental-require-module` does not help.
+- What works is the npm package run on Node 24, the runtime's version. Install
+  it with the supply-chain rules below (`--ignore-scripts`, `--before`), then run
+  `node <prefix>/node_modules/firebase-tools/lib/bin/firebase.js deploy …`. That
+  is how the 2026-10-13 full deploy went out. Node 24 is
+  `/opt/homebrew/opt/node@24/bin`.
+- The deployed functions are unaffected: nodejs24 loads jose natively.
+
 ### npm supply chain (IMPORTANT)
 
 npm is under sustained worm-style supply-chain attack (Shai-Hulud and successors;
