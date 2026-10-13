@@ -95,6 +95,18 @@ When choosing a *new* dependency, prefer one published with provenance (the npm
 provenance badge) — it proves the tarball was built by CI from a known commit
 rather than uploaded from a maintainer's laptop with a stolen token.
 
+`npm run audit` in `functions/` deliberately runs `npm audit` twice:
+- **The shipped tree** (`--omit=dev`) must have no `high` or `critical` advisory.
+- **The whole tree** must have no `critical` one. GitHub's npm *malware* advisories
+  ("Malicious code in X") are always `critical` and do come back from `npm audit`.
+  This second pass is therefore what still catches a compromised jest/ts-jest/
+  typescript. Those run on this machine, with the deploy credentials, during
+  `npm test` and `npm run build`.
+
+So a dev-only `high` (e.g. a ReDoS in a test-tooling glob library) no longer blocks
+a deploy. **Never collapse the two passes into a single `--omit=dev`.** That makes the
+gate blind to malware in the dev tree, which is over half the lockfile.
+
 ### Upgrading pub (Dart/Flutter) dependencies
 
 Do it **manually, on a branch** — never from an automated job that also runs
