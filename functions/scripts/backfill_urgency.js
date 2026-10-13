@@ -51,7 +51,8 @@
  * application-default login`.
  */
 
-const admin = require("firebase-admin");
+const { initializeApp } = require("firebase-admin/app");
+const { FieldPath, getFirestore } = require("firebase-admin/firestore");
 
 // Shared with the Cloud Functions rather than re-declared, so the mapping
 // cannot drift from `urgencyOf()` — see the SAFETY note above for why that
@@ -103,8 +104,8 @@ async function main() {
     process.exit(1);
   }
 
-  admin.initializeApp({ projectId: args.project });
-  const db = admin.firestore();
+  initializeApp({ projectId: args.project });
+  const db = getFirestore();
 
   const mode = args.apply ? "APPLY (writing)" : "DRY RUN (no writes)";
   console.log(`Collection : ${args.collection}`);
@@ -131,7 +132,7 @@ async function main() {
   for (;;) {
     let query = db
       .collection(args.collection)
-      .orderBy(admin.firestore.FieldPath.documentId())
+      .orderBy(FieldPath.documentId())
       // Only these two fields are read. Without the projection every scanned
       // document drags its `description` (up to 10 000 chars) and `photoUrls`
       // over the wire for nothing. Billed document count is unchanged; a

@@ -22,7 +22,7 @@
  * which its own test suite imports by that path.
  */
 
-import * as admin from "firebase-admin";
+import { getFirestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
 
 import { MAX_EVENT_NOTE_LENGTH } from "./events";
@@ -30,12 +30,12 @@ import { MAX_EVENT_NOTE_LENGTH } from "./events";
 /**
  * Lazy handle on Firestore.
  *
- * NOT a module-level `admin.firestore()`: this module is imported (transitively)
- * by `index.ts`, so its top level runs *before* `admin.initializeApp()` there.
+ * NOT a module-level `getFirestore()`: this module is imported (transitively)
+ * by `index.ts`, so its top level runs *before* `initializeApp()` there.
  * Grabbing the instance at call time is the difference between working and
  * throwing at deploy.
  */
-export const db = () => admin.firestore();
+export const db = () => getFirestore();
 
 /** The two signal collections a client can address. */
 export const SIGNAL_COLLECTIONS = ["signals", "signals_test"] as const;
