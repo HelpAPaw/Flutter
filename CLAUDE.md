@@ -361,7 +361,14 @@ The testing infrastructure is documented in detail in:
    cd /Users/milen/.appium/node_modules/appium-xcuitest-driver/node_modules/appium-webdriveragent
    xcodebuild -project WebDriverAgent.xcodeproj -scheme WebDriverAgentRunner -destination 'platform=iOS,id=6c602c36e83e447ac48c4477f18fac43d1e00175' test
    ```
-5. Start tunneling: `ios tunnel start --userspace`
+5. Start tunneling: `ios tunnel start --userspace --pair-record-path=$HOME/.go-ios`
+   **Always pass `--pair-record-path`.** Without it, go-ios writes its pairing
+   identity, `selfIdentity.plist` (an Ed25519 *private key* the iPad trusts),
+   into whatever directory it runs from. One ended up in `functions/` and was
+   uploaded with every functions deploy until 2026-10-13, so the iPad had to be
+   re-paired. `~/.go-ios` is mode 700. If a tunnel fails with `InvalidHostID`,
+   the iPad no longer trusts the Mac's USB pairing: run
+   `ios pair --udid <udid>`, tap Trust on the iPad, and run it again.
 6. Port forward: `ios forward 8100 8100 --udid 6c602c36e83e447ac48c4477f18fac43d1e00175`
 7. **Approve UI Automation on the iPad.** The first `xcodebuild ... test` puts a
    *"Touch ID for 'XCTest' — Enable UI Automation"* prompt on the device. Until
