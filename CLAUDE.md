@@ -66,11 +66,13 @@ to discover the functions.
   20.18.2, and its own `require` can't load an ES module. It stops at "Functions
   codebase could not be analyzed" with `ERR_REQUIRE_ESM`, before uploading
   anything. `NODE_OPTIONS=--experimental-require-module` does not help.
-- What works is the npm package run on Node 24, the runtime's version. Install
-  it with the supply-chain rules below (`--ignore-scripts`, `--before`), then run
-  `node <prefix>/node_modules/firebase-tools/lib/bin/firebase.js deploy …`. That
-  is how the 2026-10-13 full deploy went out. Node 24 is
-  `/opt/homebrew/opt/node@24/bin`.
+- **On this Mac it is already fixed.** `~/.local/bin/firebase`, first on
+  `PATH`, is a wrapper that runs the npm `firebase-tools` installed in
+  `~/.local/share/firebase-tools` on Node 24 (`/opt/homebrew/opt/node@24/bin`).
+  It was installed with `ignore-scripts` and `--before`, and its signatures
+  verified. It shadows the standalone binary, so plain `firebase …` and
+  `npm run deploy` / `serve` work. `which firebase` should print the
+  `~/.local/bin` path. The wrapper's header has the upgrade command.
 - The deployed functions are unaffected: nodejs24 loads jose natively.
 
 ### npm supply chain (IMPORTANT)
