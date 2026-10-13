@@ -62,7 +62,10 @@ class MapViewModel extends Notifier<MapScreenState> {
   Timer? _searchButtonDebounce;
 
   @override
-  MapScreenState build() => const MapScreenState();
+  MapScreenState build() {
+    ref.onDispose(() => _searchButtonDebounce?.cancel());
+    return const MapScreenState();
+  }
 
   // ============================================================
   // Location Management
@@ -532,7 +535,13 @@ class MapViewModel extends Notifier<MapScreenState> {
 
     _searchButtonDebounce?.cancel();
     _searchButtonDebounce = Timer(const Duration(milliseconds: 1000), () {
-      final lastCenter = state.vetClinicState.lastSearchCenter!;
+      // Re-read, don't trust the check above: hiding the clinics during the
+      // debounce clears the last search, and the button must not come back for
+      // a layer that is off.
+      final vetClinicState = state.vetClinicState;
+      final lastCenter = vetClinicState.lastSearchCenter;
+      if (!vetClinicState.showVetClinics || lastCenter == null) return;
+
       final distance = Geolocator.distanceBetween(
             lastCenter.latitude,
             lastCenter.longitude,
@@ -541,13 +550,12 @@ class MapViewModel extends Notifier<MapScreenState> {
           ) /
           1000; // Convert to km
 
-      final zoomDiff = state.vetClinicState.lastSearchZoom != null
-          ? (currentZoom - state.vetClinicState.lastSearchZoom!).abs()
-          : 0.0;
+      final lastZoom = vetClinicState.lastSearchZoom;
+      final zoomDiff = lastZoom != null ? (currentZoom - lastZoom).abs() : 0.0;
 
       if (distance > 2.0 || zoomDiff > 2.0) {
         state = state.copyWith(
-          vetClinicState: state.vetClinicState.copyWith(
+          vetClinicState: vetClinicState.copyWith(
             showSearchThisAreaButton: true,
           ),
         );

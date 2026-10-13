@@ -5,6 +5,7 @@ import 'package:firebase_crashlytics_platform_interface/firebase_crashlytics_pla
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator_platform_interface/geolocator_platform_interface.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart' show LatLng;
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:image_picker/image_picker.dart' show XFile;
 import 'package:help_a_paw/src/models/animal_type.dart';
@@ -804,6 +805,46 @@ void main() {
 
       expect(viewModel.state.vetClinicState.clinics, isEmpty);
       expect(viewModel.state.vetClinicState.lastSearchCenter, isNull);
+    });
+
+    // A search has run at Sofia's centre; the check below is made from Plovdiv,
+    // far enough away to qualify for the "Search this area" button.
+    void showClinicsSearchedAtSofia() {
+      viewModel.state = viewModel.state.copyWith(
+        vetClinicState: const VetClinicState(
+          showVetClinics: true,
+          lastSearchCenter: LatLng(42.6977, 23.3219),
+          lastSearchZoom: 12,
+        ),
+      );
+    }
+
+    const plovdiv = LatLng(42.1354, 24.7453);
+
+    testWidgets('a pending search-button check shows the button',
+        (tester) async {
+      showClinicsSearchedAtSofia();
+
+      await viewModel.checkVetClinicSearchButton(
+          currentCenter: plovdiv, currentZoom: 12);
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(viewModel.state.vetClinicState.showSearchThisAreaButton, true);
+    });
+
+    // Crashlytics 64a7d50e: the debounced check force-unwrapped a search centre
+    // that hiding the clinics had cleared in the meantime.
+    testWidgets('hiding clinics while the search-button check is pending is safe',
+        (tester) async {
+      showClinicsSearchedAtSofia();
+
+      await viewModel.checkVetClinicSearchButton(
+          currentCenter: plovdiv, currentZoom: 12);
+      viewModel.toggleVetClinics(); // off, inside the debounce
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(tester.takeException(), isNull);
+      expect(viewModel.state.vetClinicState.showSearchThisAreaButton, false);
     });
 
     test('hideSearchThisAreaButton hides button', () {
