@@ -41,7 +41,8 @@
  * take away the ability to remove their own report.
  */
 
-import * as admin from "firebase-admin";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 
@@ -213,7 +214,7 @@ async function remove(uid: string, data: Record<string, unknown>) {
       collection,
       signalId,
       removedBy: uid,
-      removedAt: admin.firestore.FieldValue.serverTimestamp(),
+      removedAt: FieldValue.serverTimestamp(),
     }
   );
   batch.delete(ref);
@@ -257,7 +258,7 @@ async function restore(uid: string, data: Record<string, unknown>) {
     ...stored,
     moderation: {
       ...priorModeration,
-      restoredAt: admin.firestore.FieldValue.serverTimestamp(),
+      restoredAt: FieldValue.serverTimestamp(),
       restoredBy: uid,
     },
   });
@@ -316,8 +317,7 @@ async function purgeRemoval(
     db().recursiveDelete(db().collection(collection).doc(signalId)),
     // Photos live at `signals/{id}/photos/**` for BOTH collections — the
     // Storage path has never carried the test-mode split (see storage.rules).
-    admin
-      .storage()
+    getStorage()
       .bucket()
       // Trailing slash on purpose: this is a *prefix* match feeding a bulk
       // delete, and without it `signals/X/photos` would also match a sibling
@@ -395,7 +395,7 @@ export const purgeRemovedSignals = onSchedule(
     retryCount: 0,
   },
   async () => {
-    const cutoff = admin.firestore.Timestamp.fromMillis(
+    const cutoff = Timestamp.fromMillis(
       Date.now() - REMOVED_RETENTION_DAYS * 24 * 60 * 60 * 1000
     );
 

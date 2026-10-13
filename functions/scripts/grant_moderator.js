@@ -53,7 +53,9 @@
  * application-default login`.
  */
 
-const admin = require("firebase-admin");
+const { initializeApp } = require("firebase-admin/app");
+const { getAuth } = require("firebase-admin/auth");
+const { FieldValue, getFirestore } = require("firebase-admin/firestore");
 
 const COLLECTION = "moderators";
 
@@ -107,11 +109,11 @@ async function resolveUid(args) {
     // landing on an account that cannot use it; a revoke of a document that
     // is already there cannot be wrong in that way.
     if (!args.revoke) {
-      await admin.auth().getUser(args.uid);
+      await getAuth().getUser(args.uid);
     }
     return args.uid;
   }
-  const user = await admin.auth().getUserByEmail(args.email);
+  const user = await getAuth().getUserByEmail(args.email);
   return user.uid;
 }
 
@@ -126,7 +128,7 @@ async function list(db) {
     const data = doc.data();
     let email = "(unknown)";
     try {
-      email = (await admin.auth().getUser(doc.id)).email ?? "(no email)";
+      email = (await getAuth().getUser(doc.id)).email ?? "(no email)";
     } catch {
       email = "(auth user deleted)";
     }
@@ -142,8 +144,8 @@ async function main() {
     process.exit(args.help ? 0 : 1);
   }
 
-  admin.initializeApp({ projectId: args.project });
-  const db = admin.firestore();
+  initializeApp({ projectId: args.project });
+  const db = getFirestore();
 
   if (args.list) {
     await list(db);
@@ -185,7 +187,7 @@ async function main() {
   }
 
   await ref.set({
-    grantedAt: admin.firestore.FieldValue.serverTimestamp(),
+    grantedAt: FieldValue.serverTimestamp(),
     // Who ran the script. Best effort: the ADC identity is not always a person.
     grantedBy: process.env.USER ?? "unknown",
     ...(args.note ? { note: args.note } : {}),

@@ -1,4 +1,22 @@
-import * as admin from "firebase-admin";
+import { initializeApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
+import {
+  DocumentReference,
+  DocumentSnapshot,
+  FieldValue,
+  GeoPoint as FirestoreGeoPoint,
+  Query,
+  Timestamp,
+  WriteBatch,
+  getFirestore,
+} from "firebase-admin/firestore";
+import {
+  BatchResponse,
+  Message,
+  SendResponse,
+  getMessaging,
+} from "firebase-admin/messaging";
+import { getStorage } from "firebase-admin/storage";
 import {
   onDocumentCreated,
   onDocumentUpdated,
@@ -42,7 +60,7 @@ import {
   selectRecipients,
 } from "./recipientSelection";
 
-admin.initializeApp();
+initializeApp();
 
 // Moderator actions (master spec 3.6.1, 18). Re-exported so `firebase deploy`
 // picks it up; the implementation lives in its own module because it is a
@@ -62,7 +80,7 @@ export { signalRemoval, purgeRemovedSignals } from "./removeSignal";
 import { purgeRemovalsFor } from "./removeSignal";
 import { planVetClinicSearch } from "./vetClinicSearch";
 
-const db = admin.firestore();
+const db = getFirestore();
 
 /**
  * The display name behind a uid, or undefined when there is not one.
@@ -92,7 +110,7 @@ const smtpPort = defineSecret("SMTP_PORT");
 const smtpUser = defineSecret("SMTP_USER");
 const smtpPass = defineSecret("SMTP_PASS");
 const feedbackRecipient = defineSecret("FEEDBACK_RECIPIENT");
-const messaging = admin.messaging();
+const messaging = getMessaging();
 
 // Signal status names, keyed by the stable Firestore status `code` (NOT array
 // position). Source of truth is the app's SignalStatus enum
@@ -230,7 +248,7 @@ function toRad(deg: number): number {
  * Clean up invalid FCM tokens from user documents
  */
 async function cleanupInvalidTokens(
-  response: admin.messaging.BatchResponse,
+  response: BatchResponse,
   tokens: string[],
   userTokens: Map<string, string[]>
 ): Promise<void> {
@@ -265,7 +283,7 @@ async function cleanupInvalidTokens(
   // notifications have already gone out, where it reads as a send failure.
   await commitInChunks(stale, (batch, { userId, token }) =>
     batch.update(db.collection("users").doc(userId), {
-      fcmTokens: admin.firestore.FieldValue.arrayRemove(token),
+      fcmTokens: FieldValue.arrayRemove(token),
     })
   );
 }
@@ -279,7 +297,7 @@ async function cleanupInvalidTokens(
  */
 async function commitInChunks<T>(
   items: T[],
-  apply: (batch: admin.firestore.WriteBatch, item: T) => void,
+  apply: (batch: WriteBatch, item: T) => void,
   chunkSize = 450
 ): Promise<void> {
   for (let i = 0; i < items.length; i += chunkSize) {
@@ -397,8 +415,8 @@ async function writeInboxEntries(
   // push, the one thing the catch below says must never happen. Nothing between
   // here and the return is allowed to reach the caller.
   try {
-    const now = admin.firestore.Timestamp.now();
-    const expiresAt = admin.firestore.Timestamp.fromMillis(
+    const now = Timestamp.now();
+    const expiresAt = Timestamp.fromMillis(
       now.toMillis() + INBOX_RETENTION_DAYS * 24 * 60 * 60 * 1000
     );
 
@@ -439,7 +457,7 @@ async function writeInboxEntries(
         batch.set(
           db.collection("userCounters").doc(uid),
           {
-            unread: admin.firestore.FieldValue.increment(1),
+            unread: FieldValue.increment(1),
             updatedAt: now,
           },
           { merge: true }
@@ -496,7 +514,7 @@ export const onUserTokensWritten = onDocumentWritten(
         if (doc.id === userId) continue;
 
         batch.update(doc.ref, {
-          fcmTokens: admin.firestore.FieldValue.arrayRemove(token),
+          fcmTokens: FieldValue.arrayRemove(token),
         });
         hasUpdates = true;
         console.log(
@@ -554,7 +572,7 @@ async function sendNotificationsToUsers(
   }: {
     token: string;
     uid: string;
-  }): admin.messaging.Message => ({
+  }): Message => ({
     token,
     notification,
     data: {
@@ -593,7 +611,7 @@ async function sendNotificationsToUsers(
 
   try {
     const sentTokens: string[] = [];
-    const responses: admin.messaging.SendResponse[] = [];
+    const responses: SendResponse[] = [];
     let successCount = 0;
     let failureCount = 0;
 
@@ -644,7 +662,7 @@ async function collectCandidates(
   locationRadiusKm: number,
   regionRadiusKm: number,
   usersById: Map<string, UserData>,
-  currentLocationByUid: Map<string, admin.firestore.GeoPoint>,
+  currentLocationByUid: Map<string, FirestoreGeoPoint>,
   // Per-range read cap. The narrow pass leaves this off; the widened pass sets
   // it, because at 250 km the bounds cover most of the country and nothing else
   // limits what comes back. `WIDEN_MAX_CANDIDATES` only gates whether to widen
@@ -652,7 +670,7 @@ async function collectCandidates(
   // wide one, which is where the reads actually are.
   perRangeLimit?: number
 ): Promise<void> {
-  const capped = <T extends admin.firestore.Query>(q: T) =>
+  const capped = <T extends Query>(q: T) =>
     perRangeLimit ? q.limit(perRangeLimit) : q;
 
   // Path 1: users whose tracked location is near the signal.
@@ -692,7 +710,7 @@ async function collectCandidates(
   for (const snap of locSnaps) {
     for (const doc of snap.docs) {
       const geopoint = doc.data().geopoint as
-        | admin.firestore.GeoPoint
+        | FirestoreGeoPoint
         | undefined;
       if (geopoint) {
         currentLocationByUid.set(doc.id, geopoint);
@@ -710,7 +728,7 @@ async function collectCandidates(
   const missingUids = [...currentLocationByUid.keys()].filter(
     (uid) => !usersById.has(uid)
   );
-  const chunks: Promise<admin.firestore.DocumentSnapshot[]>[] = [];
+  const chunks: Promise<DocumentSnapshot[]>[] = [];
   for (let i = 0; i < missingUids.length; i += 300) {
     const refs = missingUids
       .slice(i, i + 300)
@@ -751,7 +769,7 @@ async function collectCandidates(
  * gets notified about.
  */
 async function recordSignalPosted(
-  reporterRef: admin.firestore.DocumentReference | undefined,
+  reporterRef: DocumentReference | undefined,
   isTestMode: boolean
 ): Promise<void> {
   if (isTestMode || !reporterRef) return;
@@ -760,7 +778,7 @@ async function recordSignalPosted(
       .collection("publicProfiles")
       .doc(reporterRef.id)
       .set(
-        { signalsPosted: admin.firestore.FieldValue.increment(1) },
+        { signalsPosted: FieldValue.increment(1) },
         { merge: true }
       );
   } catch (error) {
@@ -816,18 +834,18 @@ async function handleSignalCreated(
   // as far as this trigger is concerned, and counting it again would credit the
   // reporter twice for one report.
   await recordSignalPosted(
-    signalData.reporter as admin.firestore.DocumentReference | undefined,
+    signalData.reporter as DocumentReference | undefined,
     isTestMode
   );
 
   const signalLocation = signalData.location;
   const signalGeopoint = signalLocation?.geopoint as
-    | admin.firestore.GeoPoint
+    | FirestoreGeoPoint
     | undefined;
   const signalGeohash = signalLocation?.geohash as string | undefined;
   const signalTitle = signalData.title as string;
   const reporterRef = signalData.reporter as
-    | admin.firestore.DocumentReference
+    | DocumentReference
     | undefined;
 
   if (!signalGeopoint || !signalGeohash) {
@@ -848,7 +866,7 @@ async function handleSignalCreated(
 
   // Candidate user docs keyed by uid, plus each candidate's live location (if any).
   const usersById = new Map<string, UserData>();
-  const currentLocationByUid = new Map<string, admin.firestore.GeoPoint>();
+  const currentLocationByUid = new Map<string, FirestoreGeoPoint>();
 
   await collectCandidates(
     center,
@@ -1129,7 +1147,7 @@ async function handleSignalUpdated(
   const signalTitle = afterData.title as string;
   const newStatus = afterData.status as number;
   const updatedByRef = afterData.lastUpdatedBy as
-    | admin.firestore.DocumentReference
+    | DocumentReference
     | undefined;
 
   // Find users subscribed to this signal
@@ -1298,7 +1316,7 @@ async function handleCommentCreated(
   }
 
   const authorRef = commentData.author as
-    | admin.firestore.DocumentReference
+    | DocumentReference
     | undefined;
 
   // The guard above is an allow-list of the two system shapes we know about,
@@ -1733,9 +1751,9 @@ async function reserveFeedbackEmailSlot(userId: string): Promise<boolean> {
     }
 
     tx.set(ref, {
-      windowStart: admin.firestore.Timestamp.fromMillis(windowStart),
+      windowStart: Timestamp.fromMillis(windowStart),
       count: count + 1,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
     return true;
   });
@@ -1798,7 +1816,7 @@ export const onFeedbackCreated = onDocumentCreated(
  * Whether a cached Places result is still within the freshness TTL.
  */
 function isPlacesCacheFresh(
-  cachedAt: admin.firestore.Timestamp | undefined
+  cachedAt: Timestamp | undefined
 ): boolean {
   if (!cachedAt) return false;
   return Date.now() - cachedAt.toMillis() < PLACES_CACHE_TTL_MS;
@@ -1917,7 +1935,7 @@ export const searchVetClinics = onCall(
       await cacheRef
         .set({
           places,
-          cachedAt: admin.firestore.FieldValue.serverTimestamp(),
+          cachedAt: FieldValue.serverTimestamp(),
         })
         .catch((error) =>
           console.error("Failed to cache vet clinic search:", error)
@@ -2000,7 +2018,7 @@ export const getVetClinicDetails = onCall(
       await cacheRef
         .set({
           place: data,
-          cachedAt: admin.firestore.FieldValue.serverTimestamp(),
+          cachedAt: FieldValue.serverTimestamp(),
         })
         .catch((error) =>
           console.error("Failed to cache vet clinic details:", error)
@@ -2141,7 +2159,7 @@ export const deleteAccount = onCall(
       await userRef.set({
         name: "Deleted user",
         deleted: true,
-        deletedAt: admin.firestore.FieldValue.serverTimestamp(),
+        deletedAt: FieldValue.serverTimestamp(),
       });
 
       // 3b. Overwrite the public profile so the deleted user's name no longer
@@ -2150,13 +2168,12 @@ export const deleteAccount = onCall(
       await db.collection("publicProfiles").doc(uid).set({
         name: "Deleted user",
         deleted: true,
-        deletedAt: admin.firestore.FieldValue.serverTimestamp(),
+        deletedAt: FieldValue.serverTimestamp(),
       });
 
       // 4. Delete the user's profile photo from Storage (ignore if missing).
       try {
-        await admin
-          .storage()
+        await getStorage()
           .bucket()
           .deleteFiles({ prefix: `profile_photos/${uid}` });
       } catch (error) {
@@ -2164,7 +2181,7 @@ export const deleteAccount = onCall(
       }
 
       // 5. Delete the Firebase Auth user (irreversible).
-      await admin.auth().deleteUser(uid);
+      await getAuth().deleteUser(uid);
 
       return { success: true };
     } catch (error) {
@@ -2254,7 +2271,7 @@ export const cleanupAnonymousUsers = onSchedule(
     let deleted = 0;
 
     do {
-      const result = await admin.auth().listUsers(1000, nextPageToken);
+      const result = await getAuth().listUsers(1000, nextPageToken);
       nextPageToken = result.pageToken;
 
       const staleAnonUids: string[] = [];
@@ -2303,7 +2320,7 @@ export const cleanupAnonymousUsers = onSchedule(
       // deleteUsers removes up to 1000 Auth accounts per call.
       for (let i = 0; i < cleanedUids.length; i += 1000) {
         const chunk = cleanedUids.slice(i, i + 1000);
-        const res = await admin.auth().deleteUsers(chunk);
+        const res = await getAuth().deleteUsers(chunk);
         deleted += res.successCount;
         if (res.failureCount > 0) {
           console.error(

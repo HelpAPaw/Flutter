@@ -49,7 +49,8 @@
  * application-default login`.
  */
 
-const admin = require("firebase-admin");
+const { initializeApp } = require("firebase-admin/app");
+const { FieldPath, getFirestore } = require("firebase-admin/firestore");
 
 // Firestore caps a batch at 500 writes; leave headroom.
 const BATCH_SIZE = 400;
@@ -81,8 +82,8 @@ async function main() {
     return;
   }
 
-  admin.initializeApp({ projectId: args.project });
-  const db = admin.firestore();
+  initializeApp({ projectId: args.project });
+  const db = getFirestore();
 
   const mode = args.apply ? "APPLY (writing)" : "DRY RUN (no writes)";
   console.log(`Project : ${args.project || "(from credentials)"}`);
@@ -100,7 +101,7 @@ async function main() {
   for (;;) {
     let query = db
       .collection("signals")
-      .orderBy(admin.firestore.FieldPath.documentId())
+      .orderBy(FieldPath.documentId())
       // Only the owner is read. Without the projection every scanned document
       // drags its description and photo URLs over the wire for nothing.
       .select("reporter")

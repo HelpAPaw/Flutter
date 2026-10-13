@@ -24,7 +24,7 @@
  * the plain-HTTPS transport quirk in docs/SPECIFICATION.md §7.14).
  */
 
-import * as admin from "firebase-admin";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 
 import { buildEventData, SIGNAL_EVENT_FIELDS } from "./events";
@@ -254,7 +254,7 @@ export const moderateAction = onCall(
       ...(result.before ? { before: result.before } : {}),
       ...(result.after ? { after: result.after } : {}),
       note,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
     });
 
     // `resolveReport` sets the status itself (that IS the action), and
@@ -267,7 +267,7 @@ export const moderateAction = onCall(
         // OUTCOMES inside the file that defines it.
         status: OUTCOMES[0],
         resolvedBy: uid,
-        resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
+        resolvedAt: FieldValue.serverTimestamp(),
       });
     }
 
@@ -339,7 +339,7 @@ async function hideSignal(
     collection,
     signalId,
     hiddenBy: uid,
-    hiddenAt: admin.firestore.FieldValue.serverTimestamp(),
+    hiddenAt: FieldValue.serverTimestamp(),
     note,
   });
   batch.delete(ref);
@@ -406,7 +406,7 @@ async function restoreSignal(
     ...stored,
     moderation: {
       ...priorModeration,
-      restoredAt: admin.firestore.FieldValue.serverTimestamp(),
+      restoredAt: FieldValue.serverTimestamp(),
       restoredBy: uid,
       restoreNote: note,
     },
@@ -531,7 +531,7 @@ async function setUrgency(
       newValue: urgency,
       note,
       actor,
-      createdAt: admin.firestore.Timestamp.now(),
+      createdAt: Timestamp.now(),
     })
   );
 
@@ -608,7 +608,7 @@ async function setLabel(
     "moderation.label": label,
     "moderation.labelSetBy": label === null ? null : uid,
     "moderation.labelSetAt":
-      label === null ? null : admin.firestore.FieldValue.serverTimestamp(),
+      label === null ? null : FieldValue.serverTimestamp(),
   });
 
   return {
@@ -641,7 +641,7 @@ async function resolveReport(
   batch.update(ref, {
     status: outcome,
     resolvedBy: uid,
-    resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
+    resolvedAt: FieldValue.serverTimestamp(),
   });
 
   return {

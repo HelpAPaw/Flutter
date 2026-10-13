@@ -48,7 +48,9 @@
  * application-default login`.
  */
 
-const admin = require("firebase-admin");
+const { initializeApp } = require("firebase-admin/app");
+const { getAuth } = require("firebase-admin/auth");
+const { getFirestore } = require("firebase-admin/firestore");
 
 // Shared with the server rather than restated here, the way backfill_urgency
 // requires ../lib/urgency — the Admin SDK bypasses rules, so this check is the
@@ -87,8 +89,8 @@ async function main() {
     return;
   }
 
-  admin.initializeApp({ projectId: args.project });
-  const db = admin.firestore();
+  initializeApp({ projectId: args.project });
+  const db = getFirestore();
 
   const mode = args.apply ? "APPLY (writing)" : "DRY RUN (no writes)";
   console.log(`Project : ${args.project || "(from credentials)"}`);
@@ -103,7 +105,7 @@ async function main() {
 
   let pageToken;
   do {
-    const page = await admin.auth().listUsers(PAGE_SIZE, pageToken);
+    const page = await getAuth().listUsers(PAGE_SIZE, pageToken);
     for (const user of page.users) {
       scanned += 1;
       // An anonymous session has no provider and no avatar; it also gets reaped

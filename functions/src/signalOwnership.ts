@@ -36,7 +36,7 @@
  * moderators are scarce and a stray dog is not.
  */
 
-import * as admin from "firebase-admin";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 
@@ -108,7 +108,7 @@ export function isRequestRipe(
   now: number = Date.now()
 ): boolean {
   const created = data?.createdAt;
-  if (!(created instanceof admin.firestore.Timestamp)) return false;
+  if (!(created instanceof Timestamp)) return false;
   return now - created.toMillis() > AUTO_APPROVE_DAYS * 24 * 60 * 60 * 1000;
 }
 
@@ -158,9 +158,9 @@ export function ownerActiveAtOf(
   data: Record<string, unknown> | undefined
 ): FirebaseFirestore.Timestamp | null {
   const active = data?.ownerActiveAt;
-  if (active instanceof admin.firestore.Timestamp) return active;
+  if (active instanceof Timestamp) return active;
   const created = data?.createdAt;
-  if (created instanceof admin.firestore.Timestamp) return created;
+  if (created instanceof Timestamp) return created;
   return null;
 }
 
@@ -266,7 +266,7 @@ export const signalOwnership = onCall({ enforceAppCheck: true }, async (request)
       actor,
       // Inside the transaction so a retry re-stamps rather than reusing the
       // timestamp of the attempt that lost.
-      now: admin.firestore.Timestamp.now(),
+      now: Timestamp.now(),
       tx,
     });
   });
@@ -343,7 +343,7 @@ function subscribe(ctx: ActionContext, uid: string): void {
   ctx.tx.set(
     db().collection("users").doc(uid),
     {
-      signalSubscriptions: admin.firestore.FieldValue.arrayUnion(ctx.signalId),
+      signalSubscriptions: FieldValue.arrayUnion(ctx.signalId),
     },
     { merge: true }
   );
@@ -579,7 +579,7 @@ export const autoApproveStaleTakeovers = onSchedule(
     retryCount: 0,
   },
   async () => {
-    const cutoff = admin.firestore.Timestamp.fromMillis(
+    const cutoff = Timestamp.fromMillis(
       Date.now() - AUTO_APPROVE_DAYS * 24 * 60 * 60 * 1000
     );
 
@@ -666,7 +666,7 @@ async function autoApproveOne(
     // is the whole point of re-checking here rather than at request time.
     if (!isOwnerStale(signal)) return false;
 
-    const now = admin.firestore.Timestamp.now();
+    const now = Timestamp.now();
     const newOwner = db().collection("users").doc(requesterId);
 
     // The requester is the actor. Not a service identity: they are the person
