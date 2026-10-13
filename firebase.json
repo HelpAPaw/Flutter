@@ -39,7 +39,8 @@
         ".git",
         "firebase-debug.log",
         "firebase-debug.*.log",
-        "*.local"
+        "*.local",
+        "selfIdentity.plist"
       ]
     }
   ],
